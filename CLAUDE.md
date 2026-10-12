@@ -4,13 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this repo is
 
-A documentation-only repo: Markdown files for a custom tabletop BattleTech campaign ("Refusal War") inspired by the MechWarrior 2 video game, a conflict between Clan Wolf and Clan Jade Falcon. There is no code, build, lint, or test tooling.
+A documentation-only repo of custom tabletop BattleTech campaigns, one per top-level folder. There is no code, build, lint, or test tooling. The only campaign so far is `RefusalWar/` ("Refusal War", inspired by the MechWarrior 2 video game, a conflict between Clan Wolf and Clan Jade Falcon); expect more, so keep campaign-specific rules inside the campaign's folder and put only genuinely shared things (like `data/units.json`) at the top level.
 
 ## Structure
 
-- `RefusalWar/Intro.md` – campaign introduction (currently empty).
-- `RefusalWar/Keywords.md` – registry of every keyword scenarios can grant or require, one bullet per keyword ID.
-- `RefusalWar/Scenario_NNN/` – one folder per scenario, zero-padded and numbered sequentially, containing `Setup.md` (fluff, map, forces, special rules) and `Outcome.md` (victory conditions and rewards). `Scenario_000` is the "Trial of Position", a one-off graduation mission whose kill count determines each pilot's starting SP. Later sorties are referred to as "Sortie 001", etc.
+Every campaign folder (shown for `RefusalWar/`) has the same shape:
+
+- `RefusalWar/Intro.md` - campaign introduction (currently empty).
+- `RefusalWar/Keywords.md` - registry of every keyword scenarios can grant or require, one bullet per keyword ID.
+- `RefusalWar/Scenario_NNN/` - one folder per scenario, zero-padded and numbered sequentially, containing `Setup.md` (fluff, map, forces, special rules) and `Outcome.md` (victory conditions and rewards). `Scenario_000` is the "Trial of Position", a one-off graduation mission whose kill count determines each pilot's starting SP. Later sorties are referred to as "Sortie 001", etc.
 
 ## Long-term direction
 
