@@ -10,7 +10,11 @@ images: []
 
 # Scenario 000: Trial of Position
 
-> *Fluff TBD*
+> A Call to Trial has been sounded. You are summoned to the Circle of Equals to contest the rank of MechWarrior.
+>
+> Three machines have been set against each of you. Zellbrigen binds the field.
+>
+> "If you are victorious, so be it. The Clan will be bettered by having a new, competent, MechWarrior. If you are not, the death of the incompetent is the death of a feeble progeny and a testament to our glorious method."
 
 ## Overview
 
