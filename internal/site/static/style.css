@@ -1,0 +1,237 @@
+/* Dark by default; the toggle sets data-theme on <html>. */
+:root {
+  color-scheme: dark;
+  --bg: #0d0e0f;
+  --panel: #16181a;
+  --panel-2: #1d2022;
+  --line: #34383b;
+  --text: #e8e4d6;
+  --muted: #9a978b;
+  --accent: #f2b800;
+  --accent-ink: #14110a;
+  --link: #ffd24a;
+  --display: "Bahnschrift", "Arial Narrow", "Roboto Condensed", "Helvetica Neue", Arial, sans-serif;
+  --body: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #efece2;
+  --panel: #fbf9f2;
+  --panel-2: #e6e2d4;
+  --line: #bdb8a6;
+  --text: #1b1c1d;
+  --muted: #5d5b52;
+  --accent: #d99e00;
+  --accent-ink: #14110a;
+  --link: #8a6200;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.6 var(--body);
+}
+
+/* Hazard-stripe bar */
+.hazard {
+  height: 10px;
+  background: repeating-linear-gradient(-45deg, var(--accent) 0 14px, #111 14px 28px);
+}
+
+.top {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+  padding: 0.9rem 1.25rem;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.brand {
+  font: 700 1.1rem/1 var(--display);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+  text-decoration: none;
+}
+.brand .mark { font-size: 0.8em; margin-right: 0.3em; }
+
+.crumbs {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  font: 0.85rem var(--display);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.crumbs a { color: var(--muted); text-decoration: none; }
+.crumbs a:hover { color: var(--accent); }
+.crumbs .sep { color: var(--line); }
+
+#theme {
+  font: 0.8rem var(--display);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid var(--line);
+  padding: 0.35rem 0.8rem;
+  cursor: pointer;
+}
+#theme:hover { border-color: var(--accent); color: var(--accent); }
+
+main {
+  max-width: 62rem;
+  margin: 0 auto;
+  padding: 2rem 1.25rem 3rem;
+}
+
+h1, h2, h3 {
+  font-family: var(--display);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  line-height: 1.15;
+}
+h1 { font-size: clamp(2rem, 6vw, 3.2rem); margin: 0.1em 0 0.4em; }
+h2 { font-size: 1.35rem; margin: 2rem 0 0.75rem; color: var(--accent); }
+h3 { font-size: 1.05rem; margin: 1.5rem 0 0.5rem; }
+
+.kicker {
+  margin: 0;
+  font: 0.85rem var(--display);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.lede { color: var(--muted); font-size: 1.1rem; }
+.muted { color: var(--muted); }
+
+a { color: var(--link); }
+a:hover { color: var(--accent); }
+
+/* Angular, clipped-corner panels */
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--accent);
+  padding: 0.5rem 1.4rem 1rem;
+  clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 18px, 100% 100%, 0 100%);
+}
+.panel > :first-child { margin-top: 1rem; }
+
+/* Collapsible Outcome: arrow points right when closed, rotates down when open. */
+details.outcome { margin-top: 2.5rem; }
+details.outcome > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.35rem 2rem 0.35rem 0.9rem;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font: 700 1.35rem var(--display);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  list-style: none;
+  clip-path: polygon(0 0, 100% 0, calc(100% - 12px) 100%, 0 100%);
+}
+details.outcome > summary::-webkit-details-marker { display: none; }
+details.outcome > summary::before {
+  content: "";
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 0.4rem 0 0.4rem 0.65rem;
+  border-color: transparent transparent transparent currentColor;
+  transition: transform 0.15s ease;
+}
+details.outcome[open]:not(.is-closing) > summary::before { transform: rotate(90deg); }
+details.outcome > summary:hover { filter: brightness(1.12); }
+details.outcome > summary:focus-visible { outline: 2px solid var(--text); outline-offset: 3px; }
+details.outcome .panel { margin-top: 0.5rem; }
+
+/* The open/close animation is driven by the script in layout.html (works in every browser);
+   without it the section simply toggles. */
+details.outcome > .outcome-body { overflow: hidden; }
+
+@media (prefers-reduced-motion: reduce) {
+  details.outcome > summary::before { transition: none; }
+}
+
+.cards { list-style: none; margin: 1.25rem 0; padding: 0; display: grid; gap: 0.75rem; }
+.card {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.9rem 1.1rem;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  text-decoration: none;
+  color: var(--text);
+}
+.card:hover { border-color: var(--accent); background: var(--panel-2); }
+.card .num {
+  font: 700 1.5rem var(--display);
+  color: var(--accent);
+  min-width: 3ch;
+}
+.card .name { font: 1.15rem var(--display); letter-spacing: 0.05em; text-transform: uppercase; }
+.card .go { font: 0.8rem var(--display); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+
+blockquote {
+  margin: 1rem 0;
+  padding: 0.4rem 1rem;
+  border-left: 3px solid var(--line);
+  color: var(--muted);
+}
+
+/* Tables scroll inside their own container on narrow screens */
+table { border-collapse: collapse; margin: 1rem 0; display: block; overflow-x: auto; max-width: 100%; }
+th, td { padding: 0.45rem 0.9rem; border: 1px solid var(--line); text-align: left; }
+th {
+  background: var(--panel-2);
+  font: 0.85rem var(--display);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.downloads { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+.button {
+  display: inline-block;
+  padding: 0.6rem 1.1rem;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font: 700 0.9rem var(--display);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  text-decoration: none;
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%);
+}
+.button:hover { color: var(--accent-ink); filter: brightness(1.12); }
+
+figure { margin: 1rem 0; }
+img { max-width: 100%; height: auto; }
+code { background: var(--panel-2); padding: 0.1em 0.35em; }
+
+.next { margin-top: 2rem; font: 1rem var(--display); letter-spacing: 0.08em; text-transform: uppercase; }
+
+footer {
+  padding: 1.5rem 1.25rem 2rem;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+@media (max-width: 30rem) {
+  .card { grid-template-columns: auto 1fr; }
+  .card .go { display: none; }
+}

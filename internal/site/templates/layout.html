@@ -1,0 +1,55 @@
+{{define "layout"}}<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.Title}}</title>
+<script>try{var t=localStorage.getItem('theme');if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="hazard" aria-hidden="true"></div>
+<header class="top">
+  <a class="brand" href="/"><span class="mark">&#9632;</span> BattleTech Campaigns</a>
+  <nav class="crumbs" aria-label="Breadcrumb"><a href="/">Campaigns</a>{{range .Crumbs}}<span class="sep">/</span><a href="{{.URL}}">{{.Label}}</a>{{end}}</nav>
+  <button id="theme" type="button" aria-label="Toggle light and dark theme">Theme</button>
+</header>
+<main>
+{{template "content" .}}
+</main>
+<footer>Unofficial fan project. BattleTech and MechWarrior are trademarks of their respective owners.</footer>
+<script>
+document.getElementById('theme').addEventListener('click',function(){
+  var r=document.documentElement,n=r.dataset.theme==='light'?'dark':'light';
+  r.dataset.theme=n;try{localStorage.setItem('theme',n)}catch(e){}
+});
+</script>
+<script>
+// Animated open/close for <details class="outcome">. Without this script (or without the Web
+// Animations API) the browser's plain toggle still works.
+document.querySelectorAll('details.outcome').forEach(function(d){
+  var s=d.querySelector('summary'),b=d.querySelector('.outcome-body'),a=null;
+  if(!s||!b||!b.animate)return;
+  var reduce=window.matchMedia('(prefers-reduced-motion: reduce)');
+  function height(){return b.getBoundingClientRect().height}
+  s.addEventListener('click',function(e){
+    e.preventDefault();
+    var opening=!d.open||d.classList.contains('is-closing');
+    if(reduce.matches){d.classList.remove('is-closing');d.open=opening;return}
+    var from=a?height():(opening?0:height());
+    if(a)a.cancel();
+    if(opening){
+      d.classList.remove('is-closing');d.open=true;
+      a=b.animate({height:[from+'px',b.scrollHeight+'px']},{duration:300,easing:'ease'});
+      a.onfinish=function(){a=null};
+    }else{
+      d.classList.add('is-closing');
+      var cur=a=b.animate({height:[from+'px','0px']},{duration:300,easing:'ease',fill:'forwards'});
+      a.onfinish=function(){a=null;d.open=false;d.classList.remove('is-closing');cur.cancel()};
+    }
+  });
+});
+</script>
+</body>
+</html>
+{{end}}

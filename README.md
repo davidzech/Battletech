@@ -1,6 +1,6 @@
 # BattleTech Campaigns
 
-A collection of custom BattleTech tabletop campaigns, each in its own top-level folder.
+A collection of custom BattleTech tabletop campaigns, each in its own folder under `campaigns/`.
 
 Campaigns are plain Markdown, YAML front matter and MegaMek force files. They are meant to be easy to read and write by hand, and structured enough to drive a campaign website later (scenario pages, branching between scenarios, and campaign-wide keywords).
 
@@ -8,14 +8,14 @@ Campaigns are plain Markdown, YAML front matter and MegaMek force files. They ar
 
 | Folder | Campaign |
 |---|---|
-| [`RefusalWar/`](RefusalWar) | The Refusal War between Clan Wolf and Clan Jade Falcon, inspired by *MechWarrior 2* |
+| [`campaigns/RefusalWar/`](campaigns/RefusalWar) | The Refusal War between Clan Wolf and Clan Jade Falcon, inspired by *MechWarrior 2* |
 
 ## Campaign layout
 
 Each campaign folder follows the same shape:
 
 ```
-<Campaign>/
+campaigns/<Campaign>/
   Intro.md              Campaign introduction
   Keywords.md           Registry of campaign-wide keywords
   Scenario_NNN/
@@ -40,6 +40,16 @@ The `.mul` files are in MegaMek's force format, so they can be loaded into [MekB
 ```bash
 curl --compressed -o data/units.json https://db.mekbay.com/units.json
 ```
+
+## Website
+
+A small Go web server renders the campaign folders. It needs [Go](https://go.dev/dl/) 1.23 or newer:
+
+```bash
+go run .     # then open http://localhost:8080
+```
+
+It re-reads the Markdown on every request, so edits show up when you refresh. Use `-addr` to change the port and `-content` to point at a different campaigns folder (default `campaigns`).
 
 ## Notes
 

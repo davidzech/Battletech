@@ -1,0 +1,7 @@
+{{define "content"}}<p class="kicker">Mission briefing</p>
+<h1>BattleTech Campaigns</h1>
+<p class="lede">Custom tabletop campaigns, scenario by scenario.</p>
+<ul class="cards">
+{{range .Cards}}<li><a class="card" href="{{.URL}}"><span class="num">{{.Num}}</span><span class="name">{{.Name}}</span><span class="go">Open &rsaquo;</span></a></li>
+{{end}}</ul>
+{{end}}

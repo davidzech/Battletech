@@ -1,0 +1,9 @@
+{{define "content"}}<p class="kicker">Campaign</p>
+<h1>{{.Campaign.Label}}</h1>
+<section class="panel">{{if .Campaign.IntroHTML}}{{.Campaign.IntroHTML}}{{else}}<p class="muted">Campaign briefing coming soon.</p>{{end}}</section>
+<h2>Scenarios</h2>
+<ul class="cards">
+{{range .Cards}}<li><a class="card" href="{{.URL}}"><span class="num">{{.Num}}</span><span class="name">{{.Name}}</span><span class="go">Open &rsaquo;</span></a></li>
+{{end}}</ul>
+<p><a href="/{{.Campaign.Slug}}/keywords/">Campaign keywords &rsaquo;</a></p>
+{{end}}
