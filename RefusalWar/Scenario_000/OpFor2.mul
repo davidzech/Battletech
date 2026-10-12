@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<unit>
+	<entity chassis="Uller (Kit Fox)" model="J" type="Biped" commander="false">
+		<pilot size="1" name="Sorrel" nick="" gender="RANDOMIZE" clanperson="true" gunnery="3" piloting="4" ejected="false" edge="" autoeject="true"/>
+		<Game id="1"/>
+	</entity>
+
+	<entity chassis="Shadow Cat" model="A" type="Biped" commander="false">
+		<pilot size="1" name="Kelan" nick="" gender="RANDOMIZE" clanperson="true" gunnery="3" piloting="4" ejected="false" edge="" autoeject="true"/>
+		<Game id="2"/>
+	</entity>
+
+	<entity chassis="Loki (Hellbringer)" model="Prime" type="Biped" commander="false">
+		<pilot size="1" name="Ulrik" nick="" gender="RANDOMIZE" clanperson="true" gunnery="3" piloting="4" ejected="false" edge="" autoeject="true"/>
+		<Game id="3"/>
+	</entity>
+
+</unit>

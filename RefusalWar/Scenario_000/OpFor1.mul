@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<unit version="mekbay-0.4.4109 (main/5a70c38e) 2026-10-11T18:56:53.381Z">
+	<entity chassis="Koshi (Mist Lynx)" model="E" type="Biped" commander="false" offboard="false" hidden="false" deployment="0" deploymentZone="-1" deploymentZoneWidth="3" deploymentZoneOffset="0" deploymentZoneAnyNWx="-1" deploymentZoneAnyNWy="-1" deploymentZoneAnySEx="-1" deploymentZoneAnySEy="-1" neverDeployed="true" externalId="01a12f69-da77-7bd8-9884-8e7f89867187" quirks="Improved Sensors::Narrow/Low Profile">
+		<pilot size="1" name="Tyra" nick="" gender="RANDOMIZE" clanperson="true" gunnery="3" piloting="4" externalId="01a12f6a-883a-7fe6-ab0b-b9938b33350c" ejected="false" edge="" autoeject="true"/>
+		<Game id="1"/>
+	</entity>
+
+	<entity chassis="Grizzly" model="" type="Biped" commander="false" offboard="false" hidden="false" deployment="0" deploymentZone="-1" deploymentZoneWidth="3" deploymentZoneOffset="0" deploymentZoneAnyNWx="-1" deploymentZoneAnyNWy="-1" deploymentZoneAnySEx="-1" deploymentZoneAnySEy="-1" neverDeployed="true" externalId="01a12f68-e486-771f-b1c5-235b93535c1b" quirks="Difficult to Maintain::Exposed Actuators">
+		<pilot size="1" name="Drusus" nick="" gender="RANDOMIZE" clanperson="true" gunnery="3" piloting="4" externalId="01a12f6a-883a-7fe6-ab0b-b993cb33350c" ejected="false" edge="" autoeject="true"/>
+		<Game id="2"/>
+	</entity>
+
+	<entity chassis="Mad Cat (Timber Wolf)" model="H" type="Biped" commander="false" offboard="false" hidden="false" deployment="0" deploymentZone="-1" deploymentZoneWidth="3" deploymentZoneOffset="0" deploymentZoneAnyNWx="-1" deploymentZoneAnyNWy="-1" deploymentZoneAnySEx="-1" deploymentZoneAnySEy="-1" neverDeployed="true" externalId="01a12f6a-5928-701c-84b3-4506f4f61153" quirks="Improved Targeting (Medium)::Weak Head Armor (1)">
+		<pilot size="1" name="Brandt" nick="" gender="RANDOMIZE" clanperson="true" gunnery="3" piloting="4" externalId="01a12f6a-883a-7fe6-ab0b-b9940b33350c" ejected="false" edge="" autoeject="true"/>
+		<Game id="3"/>
+	</entity>
+
+</unit>

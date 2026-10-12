@@ -1,0 +1,37 @@
+# Scenario 000: Trial of Position
+
+> *Fluff TBD*
+
+## Overview
+
+Each player faces three OpFor mechs in sequence under zellbrigen.
+
+## Map & Deployment
+
+Layout both parts of the Circles of Equals battlemat.
+
+Each player spawns their mech on the road intersection.
+
+## Forces
+
+### Player Forces
+
+You may pick any medium or heavy mech available to your touman.
+
+### OpFor 1
+
+- [Mist Lynx E](https://mekbay.com/?gs=cbt&shareUnit=BMKoshi_E&tab=Sheet) (3/4)
+- [Grizzly](https://mekbay.com/?gs=cbt&shareUnit=BMGrizzly&tab=Sheet) (3/4)
+- [Timber Wolf H](https://mekbay.com/?gs=cbt&shareUnit=BMMadCat_H&tab=Sheet) (3/4)
+
+### OpFor 2
+
+- [Kit Fox J](https://mekbay.com/?gs=cbt&shareUnit=BMUller_J&tab=Sheet) (3/4)
+- [Shadow Cat A](https://mekbay.com/?gs=cbt&shareUnit=BMShadowCat_A&tab=Sheet) (3/4)
+- [Loki Prime](https://mekbay.com/?gs=cbt&shareUnit=BMLoki_Prime&tab=Sheet) (3/4)
+
+## Special Rules
+
+**Trial of Position:** Each player faces 3 mechs, sequentially in order. Zellbrigen is in effect: you must only engage your target. Failure to do so will result in a free-for-all.
+
+Each player rolls 2d6. The higher roll must face OpFor 1.
