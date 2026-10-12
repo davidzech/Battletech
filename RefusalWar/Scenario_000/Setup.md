@@ -1,3 +1,13 @@
+---
+id: scenario_000
+title: Trial of Position
+map: Circles of Equals
+forces:
+  opfor1: OpFor1.mul
+  opfor2: OpFor2.mul
+images: []
+---
+
 # Scenario 000: Trial of Position
 
 > *Fluff TBD*

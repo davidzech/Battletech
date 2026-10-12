@@ -1,3 +1,8 @@
+---
+id: scenario_000
+default_next: scenario_001
+---
+
 # Scenario 000: Trial of Position - Outcome
 
 ## Victory & Rewards
