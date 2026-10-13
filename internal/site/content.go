@@ -25,11 +25,18 @@ type Scenario struct {
 	Map          string
 	Planet       string
 	Images       []string
+	Readout      []ReadoutRow  // planet readout overlaid on the first image
 	Forces       []ForceFile   // downloadable .mul files from front matter
 	Next         string        // id of the default next scenario
 	BriefingHTML template.HTML // the fluff: a leading blockquote in Setup.md
 	SetupHTML    template.HTML
 	OutcomeHTML  template.HTML
+}
+
+// ReadoutRow is one line of the technical readout drawn over a scenario's image.
+type ReadoutRow struct {
+	Label string
+	Value string
 }
 
 // ForceFile is a .mul force file offered for download on a scenario page.
@@ -85,13 +92,14 @@ func humanize(name string) string {
 }
 
 type frontData struct {
-	ID          string            `yaml:"id"`
-	Title       string            `yaml:"title"`
-	Map         string            `yaml:"map"`
-	Planet      string            `yaml:"planet"`
-	Images      []string          `yaml:"images"`
-	Forces      map[string]string `yaml:"forces"`
-	DefaultNext string            `yaml:"default_next"`
+	ID          string              `yaml:"id"`
+	Title       string              `yaml:"title"`
+	Map         string              `yaml:"map"`
+	Planet      string              `yaml:"planet"`
+	Images      []string            `yaml:"images"`
+	Readout     []map[string]string `yaml:"readout"`
+	Forces      map[string]string   `yaml:"forces"`
+	DefaultNext string              `yaml:"default_next"`
 }
 
 // readMarkdown splits optional YAML front matter from a Markdown file. A missing file yields zero values.
@@ -182,6 +190,7 @@ func (l Library) load(name string) (*Campaign, bool) {
 			Map:          setup.Map,
 			Planet:       setup.Planet,
 			Images:       setup.Images,
+			Readout:      readoutRows(setup.Readout),
 			Forces:       forceFiles(setup.Forces),
 			Next:         outcome.DefaultNext,
 			BriefingHTML: renderBriefing(briefing),
@@ -205,6 +214,18 @@ func (l Library) load(name string) (*Campaign, bool) {
 	c.IntroHTML = renderMarkdown(intro, false)
 	c.KeywordsHTML = renderMarkdown(kw, true)
 	return c, true
+}
+
+// readoutRows turns the front matter `readout` list (each item a single `Label: value` pair) into rows,
+// keeping the file's order.
+func readoutRows(items []map[string]string) []ReadoutRow {
+	var out []ReadoutRow
+	for _, item := range items {
+		for label, value := range item {
+			out = append(out, ReadoutRow{Label: label, Value: value})
+		}
+	}
+	return out
 }
 
 // forceFiles turns the front matter `forces` map (opfor1: OpFor1.mul) into an ordered list.
@@ -253,11 +274,12 @@ func splitBriefing(body string) (briefing, rest string) {
 }
 
 // renderBriefing renders the fluff, marking any paragraph that opens with a quotation mark as a
-// pull quote so it can be styled as one.
+// pull quote and any that opens with an em dash as its attribution, so they can be styled.
 func renderBriefing(src string) template.HTML {
 	html := string(renderMarkdown(src, false))
 	for _, open := range []string{"<p>&quot;", "<p>&ldquo;", "<p>\""} {
 		html = strings.ReplaceAll(html, open, `<p class="pull">`+open[len("<p>"):])
 	}
+	html = strings.ReplaceAll(html, "<p>—", `<p class="cite">`+"—")
 	return template.HTML(html)
 }

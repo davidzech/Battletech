@@ -1,6 +1,12 @@
 {{define "content"}}<p class="kicker">Scenario {{.Scenario.Number}}{{if .Scenario.Planet}} &middot; {{.Scenario.Planet}}{{end}}{{if .Scenario.Map}} &middot; {{.Scenario.Map}}{{end}}</p>
 <h1 class="scenario-title">{{.Scenario.Title}}</h1>
-{{range .Images}}<figure><img src="{{.}}" alt=""></figure>
+{{range $i, $img := .Images}}<figure class="scenario-art"><img src="{{$img}}" alt="">{{if and (eq $i 0) $.Scenario.Readout}}
+<div class="readout">
+<p class="readout-head">Planetary survey<span>{{$.Scenario.Planet}}</span></p>
+<dl>
+{{range $.Scenario.Readout}}<div><dt>{{.Label}}</dt><dd>{{.Value}}</dd></div>
+{{end}}</dl>
+</div>{{end}}</figure>
 {{end}}{{if .Scenario.BriefingHTML}}<section class="briefing" aria-label="Mission briefing">
 <p class="briefing-tag">Incoming transmission</p>
 <div class="briefing-text">{{.Scenario.BriefingHTML}}</div>

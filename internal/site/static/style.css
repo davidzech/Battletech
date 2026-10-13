@@ -1,4 +1,10 @@
 /* Dark only. */
+/* Share Tech Mono (SIL Open Font License), for the planet readout's terminal look. */
+@font-face {
+  font-family: "Share Tech Mono";
+  src: url("/static/sharetechmono.ttf") format("truetype");
+  font-display: swap;
+}
 @font-face {
   font-family: "BT Oldstyle";
   src: url("/static/bt_oldstyle.ttf") format("truetype");
@@ -198,6 +204,38 @@ th {
 .button:hover { color: var(--accent-ink); filter: brightness(1.12); }
 
 figure { margin: 1rem 0; }
+/* Scenario art: a wide banner cropped to the top, so dark space at the bottom of the image fades into the page.
+   Framed like a targeting display, kept translucent so the picture stays the focus: corner brackets over the
+   picture and a row of tick marks along the bottom. */
+.scenario-art {
+  --frame: rgb(242 184 0 / 0.5);
+  position: relative;
+  margin: 1rem 0 1.25rem;
+  border: 1px solid var(--line);
+  background: #000;
+}
+.scenario-art img { display: block; width: 100%; aspect-ratio: 3 / 1; object-fit: cover; object-position: top; }
+.scenario-art::before {
+  content: "";
+  position: absolute;
+  inset: 10px;
+  pointer-events: none;
+  --b: linear-gradient(var(--frame), var(--frame));
+  background:
+    var(--b) top left / 26px 2px no-repeat, var(--b) top left / 2px 26px no-repeat,
+    var(--b) top right / 26px 2px no-repeat, var(--b) top right / 2px 26px no-repeat,
+    var(--b) bottom left / 26px 2px no-repeat, var(--b) bottom left / 2px 26px no-repeat,
+    var(--b) bottom right / 26px 2px no-repeat, var(--b) bottom right / 2px 26px no-repeat;
+}
+.scenario-art::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 7px;
+  pointer-events: none;
+  background: repeating-linear-gradient(90deg, var(--frame) 0 1px, transparent 1px 14px);
+  opacity: 0.6;
+}
 img { max-width: 100%; height: auto; }
 code { background: var(--panel-2); padding: 0.1em 0.35em; }
 
@@ -371,6 +409,17 @@ dialog button:not(.button):hover { border-color: var(--accent); color: var(--acc
   opacity: 0.18;
   pointer-events: none;
 }
+/* Attribution under a pull quote: continues the quote's accent rule, set small and muted. */
+.briefing-text p.pull:has(+ p.cite) { margin-bottom: 0; }
+.briefing-text p.cite {
+  margin-top: 0;
+  padding: 0.5rem 0 0.2rem 1.6rem;
+  border-left: 3px solid var(--accent);
+  font: 600 0.85rem var(--display);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
 .briefing-text em { color: inherit; }
 
 @keyframes briefing-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
@@ -399,4 +448,43 @@ h1.scenario-title {
   font: 0.8rem var(--display);
   letter-spacing: 0.14em;
   color: var(--muted);
+}
+
+/* Planetary readout drawn over the scenario image, like a ship's survey display. Narrow banners put it below the picture. */
+.scenario-art { container-type: inline-size; }
+.readout {
+  position: absolute;
+  bottom: 1.1rem;
+  left: 2.75rem;
+  min-width: 7rem;
+  color: rgb(205 205 205 / 0.32);
+  font: 0.345rem/1.4 "Share Tech Mono", ui-monospace, "Cascadia Mono", Consolas, "Liberation Mono", monospace;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+.readout-head {
+  margin: 0 0 0.15rem;
+  font-weight: 700;
+}
+.readout-head span { margin-left: 0.4rem; font-weight: 400; }
+.readout dl { margin: 0; }
+.readout dl > div { display: flex; gap: 0.5rem; justify-content: space-between; animation: briefing-in 0.4s ease-out backwards; }
+.readout dt, .readout dd { margin: 0; }
+.readout dd { text-align: right; }
+.readout dl > div:nth-child(1) { animation-delay: 0.1s; }
+.readout dl > div:nth-child(2) { animation-delay: 0.18s; }
+.readout dl > div:nth-child(3) { animation-delay: 0.26s; }
+.readout dl > div:nth-child(4) { animation-delay: 0.34s; }
+.readout dl > div:nth-child(5) { animation-delay: 0.42s; }
+.readout dl > div:nth-child(6) { animation-delay: 0.5s; }
+.readout dl > div:nth-child(7) { animation-delay: 0.58s; }
+.readout dl > div:nth-child(8) { animation-delay: 0.66s; }
+.readout dl > div:nth-child(9) { animation-delay: 0.74s; }
+.readout dl > div:nth-child(10) { animation-delay: 0.82s; }
+@container (max-width: 52rem) {
+  .readout { position: static; margin: 0; max-width: 20rem; padding: 0.7rem 1rem 0.9rem 1.4rem; font-size: 0.65rem; color: rgb(205 205 205 / 0.5); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .readout dl > div { animation: none; }
 }

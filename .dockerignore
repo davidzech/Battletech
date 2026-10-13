@@ -1,0 +1,13 @@
+.git
+.github
+.gitignore
+.gitattributes
+.dockerignore
+Dockerfile
+*.md
+data
+*.db
+*.db-wal
+*.db-shm
+node_modules
+dist

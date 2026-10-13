@@ -34,6 +34,13 @@ func TestRenderBriefingMarksPullQuote(t *testing.T) {
 	}
 }
 
+func TestRenderBriefingMarksAttribution(t *testing.T) {
+	html := string(renderBriefing("\"Quote.\"\n\n— Someone, Title"))
+	if strings.Count(html, `class="cite"`) != 1 || !strings.Contains(html, "— Someone, Title") {
+		t.Errorf("html = %s", html)
+	}
+}
+
 func TestScenarioPlanetFromFrontMatter(t *testing.T) {
 	c, ok := Library{Root: "../../campaigns"}.Campaign("refusalwar")
 	if !ok {

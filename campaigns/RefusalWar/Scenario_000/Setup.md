@@ -6,18 +6,36 @@ map: Circles of Equals
 forces:
   opfor1: OpFor1.mul
   opfor2: OpFor2.mul
-images: []
+images:
+  - images/strana_mechty.png
+readout:
+  - Star: Rodina (G3VI)
+  - Orbit: 4th of 7
+  - Satellites: 2 (Petrograd, Magadan)
+  - Gravity: 1.1 g
+  - Atmosphere: Standard (breathable)
+  - Equatorial temp: 25 °C
+  - Surface water: 70%
+  - Landmasses: 4
+  - Capital: Katyusha City
+  - Population: 130,000,000 (3048)
 ---
 
 # Scenario 000: Trial of Position
 
-> A Call to Trial has been sounded. 
+> You entered the sibko among many. You leave the cadet years among few.
+>
+> The instructors have named you ready, but the Clan does not take their word for it.
+>
+> A Call to Trial has been sounded.
 >
 > You are summoned to the Circle of Equals to contest the rank of MechWarrior.
 >
 > Three machines have been set against each of you. Zellbrigen binds the field.
 >
 > "If you are victorious, so be it. The Clan will be bettered by having a new, competent, MechWarrior. If you are not, the death of the incompetent is the death of a feeble progeny and a testament to our glorious method."
+>
+> — Ulric Kerensky, ilKhan
 
 ## Overview
 
