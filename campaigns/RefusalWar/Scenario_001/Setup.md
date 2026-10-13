@@ -1,6 +1,6 @@
 ---
 id: scenario_001
-title: TBD
+title: Pyre Light
 planet: Colmar
 map: Mountain Lake
 forces:
@@ -9,7 +9,7 @@ forces:
 images: []
 ---
 
-# Scenario 001: TBD
+# Scenario 001: Pyre Light
 
 > Ulric Kerensky bid every Wolf against every world the Falcons hold.
 >

@@ -3,7 +3,7 @@ id: scenario_001
 default_next: ""
 ---
 
-# Scenario 001: TBD - Outcome
+# Scenario 001: Pyre Light - Outcome
 
 ## Victory & Rewards
 
