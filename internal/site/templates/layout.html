@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{.Title}}</title>
+<script>document.documentElement.classList.add('js')</script>
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
@@ -57,10 +58,10 @@
 </dialog>
 <footer>Unofficial fan project. BattleTech and MechWarrior are trademarks of their respective owners.</footer>
 <script>
-// Animated open/close for <details class="outcome">. Without this script (or without the Web
+// Animated open/close for <details class="fold">. Without this script (or without the Web
 // Animations API) the browser's plain toggle still works.
-document.querySelectorAll('details.outcome').forEach(function(d){
-  var s=d.querySelector('summary'),b=d.querySelector('.outcome-body'),a=null;
+document.querySelectorAll('details.fold').forEach(function(d){
+  var s=d.querySelector('summary'),b=d.querySelector('.fold-body'),a=null;
   if(!s||!b||!b.animate)return;
   var reduce=window.matchMedia('(prefers-reduced-motion: reduce)');
   function height(){return b.getBoundingClientRect().height}
@@ -83,6 +84,24 @@ document.querySelectorAll('details.outcome').forEach(function(d){
 });
 </script>
 <script src="/static/seed.js"></script>
+<script>
+// Waypoints start redacted; clicking the black bars or the button blanks them away (the button also puts them
+// back). Without this script the class "js" is never set (see <head>), so every waypoint stays readable.
+document.querySelectorAll('.waypoint').forEach(function(w){
+  var btn=w.querySelector('.wp-toggle'),text=w.querySelector('.wp-text'),stamp=w.querySelector('.wp-stamp');
+  if(!btn||!text)return;
+  text.setAttribute('aria-hidden','true');
+  function set(show){
+    w.classList.toggle('revealed',show);
+    text.setAttribute('aria-hidden',show?'false':'true');
+    btn.setAttribute('aria-expanded',show?'true':'false');
+    btn.textContent=show?'Redact':'Reveal';
+    if(stamp)stamp.textContent=show?'Declassified':'Redacted';
+  }
+  btn.addEventListener('click',function(){set(!w.classList.contains('revealed'))});
+  text.addEventListener('click',function(){if(!w.classList.contains('revealed'))set(true)});
+});
+</script>
 </body>
 </html>
 {{end}}

@@ -26,6 +26,7 @@ type Scenario struct {
 	Planet       string
 	Images       []string
 	Readout      []ReadoutRow  // planet readout overlaid on the first image
+	Waypoints    []Waypoint    // from the `## Waypoints` section of Setup.md
 	Forces       []ForceFile   // downloadable .mul files from front matter
 	Next         string        // id of the default next scenario
 	BriefingHTML template.HTML // the fluff: a leading blockquote in Setup.md
@@ -37,6 +38,14 @@ type Scenario struct {
 type ReadoutRow struct {
 	Label string
 	Value string
+}
+
+// Waypoint is one entry of a scenario's `## Waypoints` section: a hidden event or objective that is only
+// read when the game calls for it, so the page shows it redacted until the player reveals it.
+type Waypoint struct {
+	Name string        // e.g. "Waypoint A"
+	ID   string        // anchor-safe, e.g. "waypoint-a"
+	HTML template.HTML // the rules text, with each text run wrapped for redaction
 }
 
 // ForceFile is a .mul force file offered for download on a scenario page.
@@ -180,6 +189,7 @@ func (l Library) load(name string) (*Campaign, bool) {
 		sdir := filepath.Join(dir, e.Name())
 		setup, setupBody := readMarkdown(filepath.Join(sdir, "Setup.md"))
 		briefing, setupBody := splitBriefing(leadingTitle.ReplaceAllString(setupBody, ""))
+		setupBody, waypoints := splitWaypoints(setupBody)
 		outcome, outcomeBody := readMarkdown(filepath.Join(sdir, "Outcome.md"))
 		s := Scenario{
 			Dir:          sdir,
@@ -191,6 +201,7 @@ func (l Library) load(name string) (*Campaign, bool) {
 			Planet:       setup.Planet,
 			Images:       setup.Images,
 			Readout:      readoutRows(setup.Readout),
+			Waypoints:    waypoints,
 			Forces:       forceFiles(setup.Forces),
 			Next:         outcome.DefaultNext,
 			BriefingHTML: renderBriefing(briefing),
@@ -214,6 +225,66 @@ func (l Library) load(name string) (*Campaign, bool) {
 	c.IntroHTML = renderMarkdown(intro, false)
 	c.KeywordsHTML = renderMarkdown(kw, true)
 	return c, true
+}
+
+var (
+	nonSlug     = regexp.MustCompile(`[^a-z0-9]+`)
+	redactables = []*regexp.Regexp{
+		regexp.MustCompile(`(?s)(<p>)(.*?)(</p>)`),
+		regexp.MustCompile(`(?s)(<li>)(.*?)(</li>)`),
+		regexp.MustCompile(`(?s)(<t[dh](?:\s[^>]*)?>)(.*?)(</t[dh]>)`),
+	}
+)
+
+// splitWaypoints removes the `## Waypoints` section from a Setup.md body and returns the rest of the body plus
+// one Waypoint per `### ` heading inside that section. Text between the section heading and the first
+// waypoint is dropped.
+func splitWaypoints(body string) (rest string, wps []Waypoint) {
+	var keep, cur []string
+	var name string
+	inSection := false
+	flush := func() {
+		if name == "" {
+			return
+		}
+		wps = append(wps, Waypoint{
+			Name: name,
+			ID:   strings.Trim(nonSlug.ReplaceAllString(strings.ToLower(name), "-"), "-"),
+			HTML: redactable(renderMarkdown(strings.Join(cur, "\n"), false)),
+		})
+		name, cur = "", nil
+	}
+	for _, line := range strings.Split(strings.ReplaceAll(body, "\r\n", "\n"), "\n") {
+		switch {
+		case strings.TrimSpace(line) == "## Waypoints":
+			inSection = true
+		case inSection && strings.HasPrefix(line, "## "):
+			flush()
+			inSection = false
+			keep = append(keep, line)
+		case inSection && strings.HasPrefix(line, "### "):
+			flush()
+			name = strings.TrimSpace(strings.TrimPrefix(line, "### "))
+		case inSection && name != "":
+			cur = append(cur, line)
+		case inSection:
+			// intro text before the first waypoint is dropped
+		default:
+			keep = append(keep, line)
+		}
+	}
+	flush()
+	return strings.Join(keep, "\n"), wps
+}
+
+// redactable wraps the text of each paragraph, list item and table cell in a span the stylesheet can black
+// out line by line, like a redacted document.
+func redactable(html template.HTML) template.HTML {
+	out := string(html)
+	for _, re := range redactables {
+		out = re.ReplaceAllString(out, `${1}<span class="redact">${2}</span>${3}`)
+	}
+	return template.HTML(out)
 }
 
 // readoutRows turns the front matter `readout` list (each item a single `Label: value` pair) into rows,

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<unit>
+	<entity chassis="Black Hawk (Nova)" model="Prime" type="Biped" commander="true">
+		<pilot size="1" name="Alrek" nick="" gender="RANDOMIZE" clanperson="true" gunnery="3" piloting="4" ejected="false" edge="" autoeject="true"/>
+		<Game id="1"/>
+	</entity>
+
+	<entity chassis="Grendel (Mongrel)" model="Prime" type="Biped" commander="false">
+		<pilot size="1" name="Katarina" nick="" gender="RANDOMIZE" clanperson="true" gunnery="3" piloting="4" ejected="false" edge="" autoeject="true"/>
+		<Game id="2"/>
+	</entity>
+
+</unit>

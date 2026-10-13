@@ -15,9 +15,19 @@
 {{if .Scenario.Forces}}<h2>Force files</h2>
 <p class="muted">MegaMek unit lists (.mul) for the opposing forces. Load them in <a href="https://mekbay.com" target="_blank" rel="noopener noreferrer">MekBay</a> or MegaMek.</p>
 <p class="downloads">{{range .Scenario.Forces}}<a class="button" href="/{{$.Campaign.Slug}}/{{$.Scenario.Slug}}/forces/{{.File}}" download>Download {{.Label}} (.mul)</a>{{end}}</p>
-{{end}}<details class="outcome">
+{{end}}{{if .Scenario.Waypoints}}<details class="fold waypoints">
+<summary>Waypoints</summary>
+<div class="fold-body"><p class="muted">Reveal a waypoint only when the game calls for it. Each stays redacted until you reveal it.</p>
+<ul class="waypoint-list">
+{{range .Scenario.Waypoints}}<li class="waypoint" id="{{.ID}}">
+<div class="wp-head"><h3>{{.Name}}</h3><span class="wp-stamp">Redacted</span><button type="button" class="button wp-toggle" aria-expanded="false" aria-controls="{{.ID}}-text">Reveal</button></div>
+<div class="wp-text" id="{{.ID}}-text">{{.HTML}}</div>
+</li>
+{{end}}</ul></div>
+</details>
+{{end}}<details class="fold">
 <summary>Outcome</summary>
-<div class="outcome-body"><section class="panel">{{.Scenario.OutcomeHTML}}</section></div>
+<div class="fold-body"><section class="panel">{{.Scenario.OutcomeHTML}}</section></div>
 </details>
 {{with .Next}}<p class="next"><a href="/{{$.Campaign.Slug}}/{{.Slug}}/">Next: {{.Title}} &rsaquo;</a></p>{{end}}
 {{end}}

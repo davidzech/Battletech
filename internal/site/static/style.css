@@ -111,9 +111,9 @@ a:hover { color: var(--accent); }
 }
 .panel > :first-child { margin-top: 1rem; }
 
-/* Collapsible Outcome: arrow points right when closed, rotates down when open. */
-details.outcome { margin-top: 2.5rem; }
-details.outcome > summary {
+/* Collapsible sections (Outcome, Waypoints): arrow points right when closed, rotates down when open. */
+details.fold { margin-top: 2.5rem; }
+details.fold > summary {
   display: inline-flex;
   align-items: center;
   gap: 0.6rem;
@@ -127,8 +127,8 @@ details.outcome > summary {
   list-style: none;
   clip-path: polygon(0 0, 100% 0, calc(100% - 12px) 100%, 0 100%);
 }
-details.outcome > summary::-webkit-details-marker { display: none; }
-details.outcome > summary::before {
+details.fold > summary::-webkit-details-marker { display: none; }
+details.fold > summary::before {
   content: "";
   width: 0;
   height: 0;
@@ -137,17 +137,17 @@ details.outcome > summary::before {
   border-color: transparent transparent transparent currentColor;
   transition: transform 0.15s ease;
 }
-details.outcome[open]:not(.is-closing) > summary::before { transform: rotate(90deg); }
-details.outcome > summary:hover { filter: brightness(1.12); }
-details.outcome > summary:focus-visible { outline: 2px solid var(--text); outline-offset: 3px; }
-details.outcome .panel { margin-top: 0.5rem; }
+details.fold[open]:not(.is-closing) > summary::before { transform: rotate(90deg); }
+details.fold > summary:hover { filter: brightness(1.12); }
+details.fold > summary:focus-visible { outline: 2px solid var(--text); outline-offset: 3px; }
+details.fold .panel { margin-top: 0.5rem; }
 
 /* The open/close animation is driven by the script in layout.html (works in every browser);
    without it the section simply toggles. */
-details.outcome > .outcome-body { overflow: hidden; }
+details.fold > .fold-body { overflow: hidden; }
 
 @media (prefers-reduced-motion: reduce) {
-  details.outcome > summary::before { transition: none; }
+  details.fold > summary::before { transition: none; }
 }
 
 .cards { list-style: none; margin: 1.25rem 0; padding: 0; display: grid; gap: 0.75rem; }
@@ -487,4 +487,60 @@ h1.scenario-title {
 }
 @media (prefers-reduced-motion: reduce) {
   .readout dl > div { animation: none; }
+}
+
+/* Waypoints: a core mechanic, tucked away like the back of the book. Each starts redacted (only when the script
+   has run, so "html.js"), with its text blacked out line by line; Reveal wipes the bars away. */
+details.fold + details.fold { margin-top: 1rem; }
+.waypoint-list { list-style: none; margin: 0.75rem 0 0; padding: 0; display: grid; gap: 0.75rem; }
+.waypoint {
+  padding: 0.75rem 1.1rem 1rem;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--accent);
+  clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 0 100%);
+}
+.wp-head { display: flex; align-items: center; gap: 0.9rem; flex-wrap: wrap; }
+.waypoint h3 {
+  margin: 0;
+  font: 700 1.05rem var(--display);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.wp-stamp {
+  padding: 0.05rem 0.5rem;
+  border: 2px solid currentColor;
+  color: #e5483b;
+  font: 700 0.72rem var(--display);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  transition: color 0.4s ease;
+}
+.waypoint.revealed .wp-stamp { color: var(--muted); }
+.wp-toggle { margin-left: auto; padding: 0.4rem 0.9rem; border: 0; font-size: 0.8rem; cursor: pointer; }
+html:not(.js) .wp-toggle, html:not(.js) .wp-stamp { display: none; }
+.wp-text { margin-top: 0.6rem; }
+.wp-text > :first-child { margin-top: 0; }
+.wp-text > :last-child { margin-bottom: 0; }
+
+/* The bar is a background on each line of text, shrinking to the right to uncover it. */
+.wp-text .redact {
+  background: linear-gradient(#000, #000) right center / 0% 100% no-repeat;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  transition: background-size 0.7s cubic-bezier(0.7, 0, 0.3, 1), color 0.3s ease 0.2s;
+}
+.wp-text > :nth-child(2) .redact { transition-delay: 0.12s, 0.32s; }
+.wp-text > :nth-child(3) .redact { transition-delay: 0.24s, 0.44s; }
+.wp-text > :nth-child(n+4) .redact { transition-delay: 0.36s, 0.56s; }
+.js .waypoint:not(.revealed) .wp-text { user-select: none; cursor: pointer; }
+.js .waypoint:not(.revealed) .wp-text .redact {
+  background-size: 101% 100%;
+  color: transparent;
+  box-shadow: 0 0 0 1px #000;
+}
+.js .waypoint:not(.revealed) .wp-text .redact * { color: transparent; }
+@media (prefers-reduced-motion: reduce) {
+  .wp-text .redact, .wp-stamp { transition: none; }
+  .wp-text > .redact, .wp-text > * .redact { transition-delay: 0s; }
 }

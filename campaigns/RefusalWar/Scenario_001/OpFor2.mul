@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<unit>
+	<entity chassis="Baboon (Howler)" model="" type="Biped" commander="false">
+		<pilot size="1" name="Rurik" nick="" gender="RANDOMIZE" clanperson="true" gunnery="3" piloting="4" ejected="false" edge="" autoeject="true"/>
+		<Game id="1"/>
+	</entity>
+
+	<entity chassis="Uller (Kit Fox)" model="Prime" type="Biped" commander="false">
+		<pilot size="1" name="Sybille" nick="" gender="RANDOMIZE" clanperson="true" gunnery="3" piloting="4" ejected="false" edge="" autoeject="true"/>
+		<Game id="2"/>
+	</entity>
+
+	<entity chassis="Dasher (Fire Moth)" model="Prime" type="Biped" commander="false">
+		<pilot size="1" name="Jarek" nick="" gender="RANDOMIZE" clanperson="true" gunnery="3" piloting="4" ejected="false" edge="" autoeject="true"/>
+		<Game id="3"/>
+	</entity>
+
+</unit>
