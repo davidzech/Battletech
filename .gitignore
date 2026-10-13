@@ -2,3 +2,6 @@ node_modules/
 dist/
 /Battletech
 /Battletech.exe
+*.db
+*.db-wal
+*.db-shm

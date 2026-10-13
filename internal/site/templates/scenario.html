@@ -1,6 +1,10 @@
-{{define "content"}}<p class="kicker">Scenario {{.Scenario.Number}}{{if .Scenario.Map}} &middot; {{.Scenario.Map}}{{end}}</p>
-<h1>{{.Scenario.Title}}</h1>
+{{define "content"}}<p class="kicker">Scenario {{.Scenario.Number}}{{if .Scenario.Planet}} &middot; {{.Scenario.Planet}}{{end}}{{if .Scenario.Map}} &middot; {{.Scenario.Map}}{{end}}</p>
+<h1 class="scenario-title">{{.Scenario.Title}}</h1>
 {{range .Images}}<figure><img src="{{.}}" alt=""></figure>
+{{end}}{{if .Scenario.BriefingHTML}}<section class="briefing" aria-label="Mission briefing">
+<p class="briefing-tag">Incoming transmission</p>
+<div class="briefing-text">{{.Scenario.BriefingHTML}}</div>
+</section>
 {{end}}<section class="panel">{{.Scenario.SetupHTML}}</section>
 {{if .Scenario.Forces}}<h2>Force files</h2>
 <p class="muted">MegaMek unit lists (.mul) for the opposing forces. Load them in <a href="https://mekbay.com" target="_blank" rel="noopener noreferrer">MekBay</a> or MegaMek.</p>

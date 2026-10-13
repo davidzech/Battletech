@@ -43,13 +43,13 @@ curl --compressed -o data/units.json https://db.mekbay.com/units.json
 
 ## Website
 
-A small Go web server renders the campaign folders. It needs [Go](https://go.dev/dl/) 1.23 or newer:
+A small Go web server renders the campaign folders. It needs [Go](https://go.dev/dl/) 1.26 or newer:
 
 ```bash
 go run .     # then open http://localhost:8080
 ```
 
-It re-reads the Markdown on every request, so edits show up when you refresh. Use `-addr` to change the port and `-content` to point at a different campaigns folder (default `campaigns`).
+Visitors pick or generate a **seed** in a popup (no login) and give their MekBay hangar link and number of human players; that identifies their playthrough, which is stored in a local SQLite file (`playthroughs.db`, git-ignored; change it with `-db`). It re-reads the Markdown on every request, so edits show up when you refresh. Use `-addr` to change the port and `-content` to point at a different campaigns folder (default `campaigns`).
 
 ## Notes
 

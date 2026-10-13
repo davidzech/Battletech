@@ -1,6 +1,7 @@
 ---
 id: scenario_000
 title: Trial of Position
+planet: Strana Mechty
 map: Circles of Equals
 forces:
   opfor1: OpFor1.mul
@@ -10,7 +11,9 @@ images: []
 
 # Scenario 000: Trial of Position
 
-> A Call to Trial has been sounded. You are summoned to the Circle of Equals to contest the rank of MechWarrior.
+> A Call to Trial has been sounded. 
+>
+> You are summoned to the Circle of Equals to contest the rank of MechWarrior.
 >
 > Three machines have been set against each of you. Zellbrigen binds the field.
 >

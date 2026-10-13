@@ -17,17 +17,19 @@ import (
 
 // Scenario is one Scenario_NNN folder.
 type Scenario struct {
-	Dir         string // absolute path
-	Slug        string // URL segment, e.g. "scenario_000"
-	ID          string // from front matter
-	Number      string // "000"
-	Title       string
-	Map         string
-	Images      []string
-	Forces      []ForceFile // downloadable .mul files from front matter
-	Next        string      // id of the default next scenario
-	SetupHTML   template.HTML
-	OutcomeHTML template.HTML
+	Dir          string // absolute path
+	Slug         string // URL segment, e.g. "scenario_000"
+	ID           string // from front matter
+	Number       string // "000"
+	Title        string
+	Map          string
+	Planet       string
+	Images       []string
+	Forces       []ForceFile   // downloadable .mul files from front matter
+	Next         string        // id of the default next scenario
+	BriefingHTML template.HTML // the fluff: a leading blockquote in Setup.md
+	SetupHTML    template.HTML
+	OutcomeHTML  template.HTML
 }
 
 // ForceFile is a .mul force file offered for download on a scenario page.
@@ -86,6 +88,7 @@ type frontData struct {
 	ID          string            `yaml:"id"`
 	Title       string            `yaml:"title"`
 	Map         string            `yaml:"map"`
+	Planet      string            `yaml:"planet"`
 	Images      []string          `yaml:"images"`
 	Forces      map[string]string `yaml:"forces"`
 	DefaultNext string            `yaml:"default_next"`
@@ -168,19 +171,22 @@ func (l Library) load(name string) (*Campaign, bool) {
 		}
 		sdir := filepath.Join(dir, e.Name())
 		setup, setupBody := readMarkdown(filepath.Join(sdir, "Setup.md"))
+		briefing, setupBody := splitBriefing(leadingTitle.ReplaceAllString(setupBody, ""))
 		outcome, outcomeBody := readMarkdown(filepath.Join(sdir, "Outcome.md"))
 		s := Scenario{
-			Dir:         sdir,
-			Slug:        strings.ToLower(e.Name()),
-			ID:          setup.ID,
-			Number:      m[1],
-			Title:       setup.Title,
-			Map:         setup.Map,
-			Images:      setup.Images,
-			Forces:      forceFiles(setup.Forces),
-			Next:        outcome.DefaultNext,
-			SetupHTML:   renderMarkdown(setupBody, true),
-			OutcomeHTML: renderMarkdown(outcomeBody, true),
+			Dir:          sdir,
+			Slug:         strings.ToLower(e.Name()),
+			ID:           setup.ID,
+			Number:       m[1],
+			Title:        setup.Title,
+			Map:          setup.Map,
+			Planet:       setup.Planet,
+			Images:       setup.Images,
+			Forces:       forceFiles(setup.Forces),
+			Next:         outcome.DefaultNext,
+			BriefingHTML: renderBriefing(briefing),
+			SetupHTML:    renderMarkdown(setupBody, false),
+			OutcomeHTML:  renderMarkdown(outcomeBody, true),
 		}
 		if s.ID == "" {
 			s.ID = s.Slug
@@ -222,4 +228,36 @@ func forceFiles(m map[string]string) []ForceFile {
 		out = append(out, ForceFile{Label: label, File: file})
 	}
 	return out
+}
+
+// splitBriefing separates a leading blockquote (the scenario's fluff) from the rest of the body and
+// returns the quote's text with the "> " markers removed.
+func splitBriefing(body string) (briefing, rest string) {
+	lines := strings.Split(strings.ReplaceAll(body, "\r\n", "\n"), "\n")
+	i := 0
+	for i < len(lines) && strings.TrimSpace(lines[i]) == "" {
+		i++
+	}
+	start := i
+	for i < len(lines) && strings.HasPrefix(strings.TrimSpace(lines[i]), ">") {
+		i++
+	}
+	if i == start {
+		return "", body
+	}
+	quote := make([]string, 0, i-start)
+	for _, l := range lines[start:i] {
+		quote = append(quote, strings.TrimPrefix(strings.TrimPrefix(strings.TrimSpace(l), ">"), " "))
+	}
+	return strings.Join(quote, "\n"), strings.Join(lines[i:], "\n")
+}
+
+// renderBriefing renders the fluff, marking any paragraph that opens with a quotation mark as a
+// pull quote so it can be styled as one.
+func renderBriefing(src string) template.HTML {
+	html := string(renderMarkdown(src, false))
+	for _, open := range []string{"<p>&quot;", "<p>&ldquo;", "<p>\""} {
+		html = strings.ReplaceAll(html, open, `<p class="pull">`+open[len("<p>"):])
+	}
+	return template.HTML(html)
 }

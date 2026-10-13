@@ -24,22 +24,26 @@ type Page struct {
 	Scenario *Scenario
 	Next     *Scenario
 	Cards    []Card
-	Images   []string // URLs of the scenario's images
+	Images   []string    // URLs of the scenario's images
+	Seed     string      // the visitor's seed ("" if none chosen yet)
+	SeedHint string      // short form of Seed for the header
+	Play     Playthrough // the visitor's playthrough (zero value if no seed)
 }
 
 // Card is one entry in a list of links (campaigns or scenarios).
-type Card struct{ Num, Name, URL string }
+type Card struct{ Num, Name, Sub, URL string }
 
 // Server serves the campaigns found under the content root.
 type Server struct {
 	lib   Library
+	store *Store
 	pages map[string]*template.Template
 }
 
 // NewHandler returns the site's HTTP handler. Campaign files are re-read on every request,
 // so edits show up on refresh.
-func NewHandler(contentRoot string) http.Handler {
-	s := &Server{lib: Library{Root: contentRoot}, pages: map[string]*template.Template{}}
+func NewHandler(contentRoot string, store *Store) http.Handler {
+	s := &Server{lib: Library{Root: contentRoot}, store: store, pages: map[string]*template.Template{}}
 	for _, name := range []string{"home", "campaign", "scenario", "keywords", "notfound"} {
 		s.pages[name] = template.Must(template.ParseFS(assets, "templates/layout.html", "templates/"+name+".html"))
 	}
@@ -48,6 +52,8 @@ func NewHandler(contentRoot string) http.Handler {
 	mux.HandleFunc("GET /static/{file}", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFileFS(w, r, assets, path.Join("static", path.Base(r.PathValue("file"))))
 	})
+	mux.HandleFunc("POST /api/seed", s.setSeed)
+	mux.HandleFunc("POST /api/campaign", s.setCampaign)
 	mux.HandleFunc("GET /{$}", s.home)
 	mux.HandleFunc("GET /{campaign}/{$}", s.campaign)
 	mux.HandleFunc("GET /{campaign}/keywords/{$}", s.keywords)
@@ -58,7 +64,18 @@ func NewHandler(contentRoot string) http.Handler {
 	return mux
 }
 
-func (s *Server) render(w http.ResponseWriter, status int, name string, p Page) {
+func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name string, p Page) {
+	if seed := currentSeed(r); seed != "" {
+		p.Seed, p.SeedHint = seed, seedHint(seed)
+		id := playthroughID(seed)
+		if _, err := s.store.EnsurePlaythrough(r.Context(), id); err != nil {
+			log.Printf("ensure playthrough: %v", err)
+		} else if pt, _, err := s.store.Playthrough(r.Context(), id); err != nil {
+			log.Printf("load playthrough: %v", err)
+		} else {
+			p.Play = pt
+		}
+	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
 	if err := s.pages[name].ExecuteTemplate(w, "layout", p); err != nil {
@@ -67,7 +84,7 @@ func (s *Server) render(w http.ResponseWriter, status int, name string, p Page) 
 }
 
 func (s *Server) notFound(w http.ResponseWriter, r *http.Request) {
-	s.render(w, http.StatusNotFound, "notfound", Page{Title: "Not found | BattleTech Campaigns"})
+	s.render(w, r, http.StatusNotFound, "notfound", Page{Title: "Not found | BattleTech Campaigns"})
 }
 
 func (s *Server) home(w http.ResponseWriter, r *http.Request) {
@@ -81,7 +98,7 @@ func (s *Server) home(w http.ResponseWriter, r *http.Request) {
 	for _, c := range cs {
 		p.Cards = append(p.Cards, Card{Num: strconv.Itoa(len(c.Scenarios)), Name: c.Label, URL: "/" + c.Slug + "/"})
 	}
-	s.render(w, http.StatusOK, "home", p)
+	s.render(w, r, http.StatusOK, "home", p)
 }
 
 func (s *Server) campaign(w http.ResponseWriter, r *http.Request) {
@@ -96,9 +113,9 @@ func (s *Server) campaign(w http.ResponseWriter, r *http.Request) {
 		Campaign: c,
 	}
 	for _, sc := range c.Scenarios {
-		p.Cards = append(p.Cards, Card{Num: sc.Number, Name: sc.Title, URL: "/" + c.Slug + "/" + sc.Slug + "/"})
+		p.Cards = append(p.Cards, Card{Num: sc.Number, Name: sc.Title, Sub: sc.Planet, URL: "/" + c.Slug + "/" + sc.Slug + "/"})
 	}
-	s.render(w, http.StatusOK, "campaign", p)
+	s.render(w, r, http.StatusOK, "campaign", p)
 }
 
 func (s *Server) keywords(w http.ResponseWriter, r *http.Request) {
@@ -107,7 +124,7 @@ func (s *Server) keywords(w http.ResponseWriter, r *http.Request) {
 		s.notFound(w, r)
 		return
 	}
-	s.render(w, http.StatusOK, "keywords", Page{
+	s.render(w, r, http.StatusOK, "keywords", Page{
 		Title:    "Keywords | " + c.Label,
 		Crumbs:   []Crumb{{c.Label, "/" + c.Slug + "/"}, {"Keywords", "/" + c.Slug + "/keywords/"}},
 		Campaign: c,
@@ -130,7 +147,7 @@ func (s *Server) scenario(w http.ResponseWriter, r *http.Request) {
 	for _, img := range sc.Images {
 		images = append(images, "/"+c.Slug+"/"+sc.Slug+"/images/"+path.Base(img))
 	}
-	s.render(w, http.StatusOK, "scenario", Page{
+	s.render(w, r, http.StatusOK, "scenario", Page{
 		Images:   images,
 		Title:    sc.Title + " | " + c.Label,
 		Crumbs:   []Crumb{{c.Label, "/" + c.Slug + "/"}, {"Scenario " + sc.Number, "/" + c.Slug + "/" + sc.Slug + "/"}},
