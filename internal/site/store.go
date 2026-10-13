@@ -79,10 +79,31 @@ func OpenPostgres(url string) (*Store, error) {
 		return nil, fmt.Errorf("connect to postgres: %w", err)
 	}
 	if _, err := db.Exec(postgresSchema); err != nil {
+		diag := postgresDiagnostics(db)
 		db.Close()
-		return nil, fmt.Errorf("apply schema: %w", err)
+		return nil, fmt.Errorf("apply schema: %w (%s)", err, diag)
 	}
 	return &Store{db: db, postgres: true}, nil
+}
+
+// postgresDiagnostics describes who we are connected as and what that role may do, to explain a failed schema
+// setup (managed Postgres 15+ only lets the database owner create tables in the public schema).
+func postgresDiagnostics(db *sql.DB) string {
+	var user, database, owner, schemas string
+	var inPublic, inDatabase bool
+	err := db.QueryRow(`
+		SELECT current_user, current_database(),
+		       (SELECT pg_get_userbyid(datdba) FROM pg_database WHERE datname = current_database()),
+		       has_schema_privilege('public', 'CREATE'),
+		       has_database_privilege(current_database(), 'CREATE'),
+		       (SELECT string_agg(nspname || ' owned by ' || pg_get_userbyid(nspowner), ', ') FROM pg_namespace
+		         WHERE nspname NOT LIKE 'pg\_%' AND nspname <> 'information_schema')`,
+	).Scan(&user, &database, &owner, &inPublic, &inDatabase, &schemas)
+	if err != nil {
+		return "diagnostics unavailable: " + err.Error()
+	}
+	return fmt.Sprintf("connected as %q to database %q owned by %q; create in public schema: %v; create schemas: %v; schemas: %s",
+		user, database, owner, inPublic, inDatabase, schemas)
 }
 
 // q rebinds ? placeholders to $1, $2, ... for PostgreSQL.
