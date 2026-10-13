@@ -82,7 +82,7 @@ func TestParsePlayers(t *testing.T) {
 
 func newTestServer(t *testing.T) (*httptest.Server, *Store) {
 	t.Helper()
-	store, err := OpenStore(filepath.Join(t.TempDir(), "test.db"))
+	store, err := OpenSQLite(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
