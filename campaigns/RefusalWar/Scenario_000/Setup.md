@@ -57,17 +57,17 @@ You may pick any medium or heavy mech available to your touman.
 
 **Deployment:** TBD
 
-- [Mist Lynx E](https://mekbay.com/?gs=cbt&shareUnit=BMKoshi_E&tab=Sheet) (3/4)
-- [Grizzly](https://mekbay.com/?gs=cbt&shareUnit=BMGrizzly&tab=Sheet) (3/4)
-- [Timber Wolf H](https://mekbay.com/?gs=cbt&shareUnit=BMMadCat_H&tab=Sheet) (3/4)
+- [Mist Lynx E](https://mekbay.com/?gs=cbt&shareUnit=BMKoshi_E&tab=Sheet) (3/4) Striker
+- [Grizzly](https://mekbay.com/?gs=cbt&shareUnit=BMGrizzly&tab=Sheet) (3/4) Skirmisher
+- [Timber Wolf H](https://mekbay.com/?gs=cbt&shareUnit=BMMadCat_H&tab=Sheet) (3/4) Missile Boat
 
 ### OpFor 2
 
 **Deployment:** TBD
 
-- [Kit Fox J](https://mekbay.com/?gs=cbt&shareUnit=BMUller_J&tab=Sheet) (3/4)
-- [Shadow Cat A](https://mekbay.com/?gs=cbt&shareUnit=BMShadowCat_A&tab=Sheet) (3/4)
-- [Loki Prime](https://mekbay.com/?gs=cbt&shareUnit=BMLoki_Prime&tab=Sheet) (3/4)
+- [Kit Fox J](https://mekbay.com/?gs=cbt&shareUnit=BMUller_J&tab=Sheet) (3/4) Striker
+- [Shadow Cat A](https://mekbay.com/?gs=cbt&shareUnit=BMShadowCat_A&tab=Sheet) (3/4) Sniper
+- [Loki Prime](https://mekbay.com/?gs=cbt&shareUnit=BMLoki_Prime&tab=Sheet) (3/4) Striker
 
 ## Special Rules
 
