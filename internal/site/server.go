@@ -13,8 +13,13 @@ import (
 //go:embed templates/*.html static/*
 var assets embed.FS
 
-// Crumb is one breadcrumb link.
-type Crumb struct{ Label, URL string }
+// Crumb is one breadcrumb link. A crumb with a Menu opens a dropdown of sibling pages
+// (the campaign's scenarios) instead of linking straight to URL; Current marks the open page.
+type Crumb struct {
+	Label, URL string
+	Current    bool
+	Menu       []Crumb
+}
 
 // Page is the data every template receives.
 type Page struct {
@@ -84,7 +89,7 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name
 }
 
 func (s *Server) notFound(w http.ResponseWriter, r *http.Request) {
-	s.render(w, r, http.StatusNotFound, "notfound", Page{Title: "Not found | BattleTech Campaigns"})
+	s.render(w, r, http.StatusNotFound, "notfound", Page{Title: "Not found | Campaigns"})
 }
 
 func (s *Server) home(w http.ResponseWriter, r *http.Request) {
@@ -94,7 +99,7 @@ func (s *Server) home(w http.ResponseWriter, r *http.Request) {
 		log.Print(err)
 		return
 	}
-	p := Page{Title: "BattleTech Campaigns"}
+	p := Page{Title: "Campaigns"}
 	for _, c := range cs {
 		p.Cards = append(p.Cards, Card{Num: strconv.Itoa(len(c.Scenarios)), Name: c.Label, URL: "/" + c.Slug + "/"})
 	}
@@ -108,8 +113,8 @@ func (s *Server) campaign(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p := Page{
-		Title:    c.Label + " | BattleTech Campaigns",
-		Crumbs:   []Crumb{{c.Label, "/" + c.Slug + "/"}},
+		Title:    c.Label + " | Campaigns",
+		Crumbs:   []Crumb{{Label: c.Label, URL: "/" + c.Slug + "/"}},
 		Campaign: c,
 	}
 	for _, sc := range c.Scenarios {
@@ -126,7 +131,7 @@ func (s *Server) keywords(w http.ResponseWriter, r *http.Request) {
 	}
 	s.render(w, r, http.StatusOK, "keywords", Page{
 		Title:    "Keywords | " + c.Label,
-		Crumbs:   []Crumb{{c.Label, "/" + c.Slug + "/"}, {"Keywords", "/" + c.Slug + "/keywords/"}},
+		Crumbs:   []Crumb{{Label: c.Label, URL: "/" + c.Slug + "/"}, {Label: "Keywords", URL: "/" + c.Slug + "/keywords/"}},
 		Campaign: c,
 	})
 }
@@ -150,11 +155,23 @@ func (s *Server) scenario(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, http.StatusOK, "scenario", Page{
 		Images:   images,
 		Title:    sc.Title + " | " + c.Label,
-		Crumbs:   []Crumb{{c.Label, "/" + c.Slug + "/"}, {"Scenario " + sc.Number, "/" + c.Slug + "/" + sc.Slug + "/"}},
+		Crumbs:   []Crumb{{Label: c.Label, URL: "/" + c.Slug + "/"}, scenarioCrumb(c, sc)},
 		Campaign: c,
 		Scenario: sc,
 		Next:     next,
 	})
+}
+
+// scenarioCrumb is the breadcrumb for a scenario page, "001 – Pyre Light", with a menu of
+// every scenario in the campaign.
+func scenarioCrumb(c *Campaign, sc *Scenario) Crumb {
+	label := func(s *Scenario) string { return s.Number + " – " + s.Title }
+	cr := Crumb{Label: label(sc), URL: "/" + c.Slug + "/" + sc.Slug + "/"}
+	for i := range c.Scenarios {
+		o := &c.Scenarios[i]
+		cr.Menu = append(cr.Menu, Crumb{Label: label(o), URL: "/" + c.Slug + "/" + o.Slug + "/", Current: o.Slug == sc.Slug})
+	}
+	return cr
 }
 
 // image serves files from a scenario's images/ folder. The scenario is looked up by slug and

@@ -10,8 +10,8 @@
 <body>
 <div class="hazard" aria-hidden="true"></div>
 <header class="top">
-  <a class="brand" href="/"><span class="mark">&#9632;</span> BattleTech Campaigns</a>
-  <nav class="crumbs" aria-label="Breadcrumb"><a href="/">Campaigns</a>{{range .Crumbs}}<span class="sep">/</span><a href="{{.URL}}">{{.Label}}</a>{{end}}</nav>
+  <a class="brand" href="/"><span class="mark">&#9632;</span> Campaigns</a>
+  <nav class="crumbs" aria-label="Breadcrumb">{{range $i, $c := .Crumbs}}{{if $i}}<span class="sep">/</span>{{end}}{{if $c.Menu}}<details class="crumb-menu"><summary>{{$c.Label}}</summary><ul>{{range $c.Menu}}<li><a href="{{.URL}}"{{if .Current}} aria-current="page"{{end}}>{{.Label}}</a></li>{{end}}</ul></details>{{else}}<a href="{{$c.URL}}">{{$c.Label}}</a>{{end}}{{end}}</nav>
   {{if .Play.HangarURL}}<a class="chip" id="hangar-link" href="{{.Play.HangarURL}}" target="_blank" rel="noopener noreferrer">Your hangar &rsaquo;</a>
   {{end}}<button id="seed-btn" type="button" class="chip" aria-haspopup="dialog">{{if not .Seed}}Set seed{{else if not .Play.Configured}}Finish setup{{else}}Seed <code>{{.SeedHint}}</code>{{end}}</button>
 </header>
@@ -81,6 +81,16 @@ document.querySelectorAll('details.fold').forEach(function(d){
       a.onfinish=function(){a=null;d.open=false;d.classList.remove('is-closing');cur.cancel()};
     }
   });
+});
+</script>
+<script>
+// Close an open breadcrumb dropdown on a click outside it or on Escape.
+document.addEventListener('click', function(e){
+  document.querySelectorAll('details.crumb-menu[open]').forEach(function(d){ if (!d.contains(e.target)) d.open = false; });
+});
+document.addEventListener('keydown', function(e){
+  if (e.key !== 'Escape') return;
+  document.querySelectorAll('details.crumb-menu[open]').forEach(function(d){ d.open = false; d.querySelector('summary').focus(); });
 });
 </script>
 <script src="/static/seed.js"></script>

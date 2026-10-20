@@ -6,7 +6,20 @@ map: Mountain Lake
 forces:
   opfor1: OpFor1.mul
   opfor2: OpFor2.mul
-images: []
+images:
+  - images/colmar.png
+readout:
+  - Star: Colmar (K4V)
+  - Orbit: 2nd of 5
+  - Satellites: 2
+  - Recharge: 199 hours
+  - Gravity: 0.94 g
+  - Atmosphere: Standard (breathable)
+  - Equatorial temp: 16 °C
+  - Surface water: 58%
+  - Polar ice: Extensive
+  - Capital: Doren
+  - Population: 412,000,000 (3057)
 ---
 
 # Scenario 001: Pyre Light

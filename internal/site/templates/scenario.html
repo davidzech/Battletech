@@ -1,5 +1,5 @@
 {{define "content"}}<p class="kicker">Scenario {{.Scenario.Number}}{{if .Scenario.Planet}} &middot; {{.Scenario.Planet}}{{end}}{{if .Scenario.Map}} &middot; {{.Scenario.Map}}{{end}}</p>
-<h1 class="scenario-title">{{.Scenario.Title}}</h1>
+<h1 class="bt-title">{{.Scenario.Title}}</h1>
 {{range $i, $img := .Images}}<figure class="scenario-art"><img src="{{$img}}" alt="">{{if and (eq $i 0) $.Scenario.Readout}}
 <div class="readout">
 <p class="readout-head">Planetary survey<span>{{$.Scenario.Planet}}</span></p>

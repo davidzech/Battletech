@@ -72,6 +72,32 @@ body {
 .crumbs a:hover { color: var(--accent); }
 .crumbs .sep { color: var(--line); }
 
+/* Scenario crumb: a dropdown of every scenario in the campaign */
+.crumb-menu { position: relative; }
+.crumb-menu > summary { cursor: pointer; color: var(--muted); list-style: none; }
+.crumb-menu > summary::-webkit-details-marker { display: none; }
+.crumb-menu > summary::after { content: "\25BE"; margin-left: 0.35em; font-size: 0.85em; }
+.crumb-menu > summary:hover, .crumb-menu[open] > summary { color: var(--accent); }
+.crumb-menu > summary:focus-visible { outline: 2px solid var(--text); outline-offset: 3px; }
+.crumb-menu ul {
+  position: absolute;
+  top: calc(100% + 0.6rem);
+  left: -0.75rem;
+  z-index: 20;
+  min-width: max-content;
+  max-width: calc(100vw - 2rem);
+  margin: 0;
+  padding: 0.35rem 0;
+  list-style: none;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-top: 2px solid var(--accent);
+  box-shadow: 0 0.75rem 1.5rem rgb(0 0 0 / 0.5);
+}
+.crumb-menu li a { display: block; padding: 0.45rem 0.75rem; white-space: nowrap; }
+.crumb-menu li a:hover { background: var(--panel); }
+.crumb-menu li a[aria-current="page"] { color: var(--accent); }
+
 main {
   max-width: 62rem;
   margin: 0 auto;
@@ -434,8 +460,8 @@ dialog button:not(.button):hover { border-color: var(--accent); color: var(--acc
   .briefing { padding: 1rem 1rem 1.25rem 1.2rem; }
 }
 
-/* Scenario title in the BattleTech old-style face */
-h1.scenario-title {
+/* Page titles (home, campaign, scenario) in the BattleTech old-style face */
+h1.bt-title {
   font-family: "BT Oldstyle", var(--display);
   font-weight: 400;
   letter-spacing: 0.04em;
@@ -482,6 +508,9 @@ h1.scenario-title {
 .readout dl > div:nth-child(8) { animation-delay: 0.66s; }
 .readout dl > div:nth-child(9) { animation-delay: 0.74s; }
 .readout dl > div:nth-child(10) { animation-delay: 0.82s; }
+.readout dl > div:nth-child(11) { animation-delay: 0.9s; }
+.readout dl > div:nth-child(12) { animation-delay: 0.98s; }
+.readout dl > div:nth-child(n+13) { animation-delay: 1.06s; }
 @container (max-width: 52rem) {
   .readout { position: static; margin: 0; max-width: 20rem; padding: 0.7rem 1rem 0.9rem 1.4rem; font-size: 0.65rem; color: rgb(205 205 205 / 0.5); }
 }
