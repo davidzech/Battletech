@@ -1,7 +1,9 @@
 package site
 
 import (
+	"crypto/sha256"
 	"embed"
+	"encoding/hex"
 	"html/template"
 	"log"
 	"net/http"
@@ -12,6 +14,23 @@ import (
 
 //go:embed templates/*.html static/*
 var assets embed.FS
+
+// staticETags maps each embedded static file to a hash of its contents. Embedded files have no
+// modification time, so without an ETag browsers can't revalidate them and re-download every
+// file (fonts included) on each refresh.
+var staticETags = func() map[string]string {
+	tags := map[string]string{}
+	files, _ := assets.ReadDir("static")
+	for _, f := range files {
+		b, err := assets.ReadFile("static/" + f.Name())
+		if err != nil {
+			continue
+		}
+		sum := sha256.Sum256(b)
+		tags[f.Name()] = `"` + hex.EncodeToString(sum[:8]) + `"`
+	}
+	return tags
+}()
 
 // Crumb is one breadcrumb link. A crumb with a Menu opens a dropdown of sibling pages
 // (the campaign's scenarios) instead of linking straight to URL; Current marks the open page.
@@ -55,7 +74,11 @@ func NewHandler(contentRoot string, store *Store) http.Handler {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /static/{file}", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFileFS(w, r, assets, path.Join("static", path.Base(r.PathValue("file"))))
+		name := path.Base(r.PathValue("file"))
+		if tag, ok := staticETags[name]; ok {
+			w.Header().Set("ETag", tag)
+		}
+		http.ServeFileFS(w, r, assets, path.Join("static", name))
 	})
 	mux.HandleFunc("POST /api/seed", s.setSeed)
 	mux.HandleFunc("POST /api/campaign", s.setCampaign)

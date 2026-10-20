@@ -237,3 +237,26 @@ func TestInvalidCookieIsIgnored(t *testing.T) {
 		t.Fatal("a malformed seed cookie should be treated as no seed")
 	}
 }
+
+func TestStaticFilesRevalidate(t *testing.T) {
+	srv, _ := newTestServer(t)
+	res, err := http.Get(srv.URL + "/static/bt_oldstyle.ttf")
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	tag := res.Header.Get("ETag")
+	if tag == "" {
+		t.Fatal("static file served without an ETag")
+	}
+	req, _ := http.NewRequest("GET", srv.URL+"/static/bt_oldstyle.ttf", nil)
+	req.Header.Set("If-None-Match", tag)
+	res, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if res.StatusCode != http.StatusNotModified {
+		t.Fatalf("revalidating with the ETag gave %d, want 304", res.StatusCode)
+	}
+}

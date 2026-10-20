@@ -8,7 +8,8 @@
 @font-face {
   font-family: "BT Oldstyle";
   src: url("/static/bt_oldstyle.ttf") format("truetype");
-  font-display: swap;
+  /* Preloaded in layout.html; block hides the title briefly rather than flashing the fallback font. */
+  font-display: block;
 }
 
 :root {
