@@ -260,3 +260,16 @@ func TestStaticFilesRevalidate(t *testing.T) {
 		t.Fatalf("revalidating with the ETag gave %d, want 304", res.StatusCode)
 	}
 }
+
+func TestShortCommit(t *testing.T) {
+	for in, want := range map[string]string{
+		"dev":     "dev",
+		"e42dcb5": "e42dcb5",
+		"e42dcb519e167135fb40db03d94a087dbc10261b":       "e42dcb5",
+		"e42dcb519e167135fb40db03d94a087dbc10261b-dirty": "e42dcb5-dirty",
+	} {
+		if got := shortCommit(in); got != want {
+			t.Errorf("shortCommit(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

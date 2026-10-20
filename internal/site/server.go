@@ -52,6 +52,7 @@ type Page struct {
 	Seed     string      // the visitor's seed ("" if none chosen yet)
 	SeedHint string      // short form of Seed for the header
 	Play     Playthrough // the visitor's playthrough (zero value if no seed)
+	Commit   string      // git commit the server was built from, short form ("dev" if unknown)
 }
 
 // Card is one entry in a list of links (campaigns or scenarios).
@@ -104,6 +105,7 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name
 			p.Play = pt
 		}
 	}
+	p.Commit = shortCommit(buildCommit)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
 	if err := s.pages[name].ExecuteTemplate(w, "layout", p); err != nil {
