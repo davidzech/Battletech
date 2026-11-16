@@ -585,6 +585,18 @@
       li.querySelector('.rec-n-unalloc').textContent = Math.max(0, total - allocated);
     }
 
+    // Resetting a pilot's SP allocation (directly, or by setting a total below it) forgets their learned Edge abilities too, since those
+    // depended on that SP. The confirmation says so when there are any, and the row is updated in place.
+    function learnedNote(li) {
+      var n = parseInt(li.dataset.learnedCount, 10) || 0;
+      return n ? ' They also forget the ' + n + ' Edge abilit' + (n === 1 ? 'y' : 'ies') + ' they have learned, which depended on that SP.' : '';
+    }
+    function clearLearned(li) {
+      li.dataset.learnedCount = 0;
+      li.querySelector('.rec-n-skills').textContent = 'none';
+      li.querySelector('.rec-skills-reset').disabled = true;
+    }
+
     records.querySelectorAll('#records-list li[data-pilot]').forEach(function (li) {
       // The name, editable with the pencil (shared with the pilot cards).
       attachNameEditor({
@@ -611,10 +623,10 @@
         var allocated = parseInt(li.dataset.allocated, 10) || 0;
         Confirm.ask({
           title: 'Reset ' + li.dataset.name + '\u2019s SP allocation?',
-          message: 'Gunnery, Piloting and Edge go back to the starting levels, and all ' + allocated + ' allocated SP become unallocated. Their total SP stays the same. Any Edge abilities they have learned are kept (reset those separately).',
+          message: 'Gunnery, Piloting and Edge go back to the starting levels, and all ' + allocated + ' allocated SP become unallocated. Their total SP stays the same.' + learnedNote(li),
           confirmLabel: 'Reset SP allocation', danger: true
         }).then(function (ok) {
-          if (ok) recAct('/api/pilots/reset', li, reset, '', function () { li.dataset.allocated = 0; showSP(li); });
+          if (ok) recAct('/api/pilots/reset', li, reset, '', function () { li.dataset.allocated = 0; showSP(li); clearLearned(li); });
         });
       });
 
@@ -653,7 +665,7 @@
         function save() {
           recAct('/api/pilots/total', li, form.querySelector('button[type=submit]'), 'total=' + total + (resets ? '&reset=1' : ''), function () {
             li.dataset.total = total;
-            if (resets) li.dataset.allocated = 0;
+            if (resets) { li.dataset.allocated = 0; clearLearned(li); }
             showSP(li);
             form.hidden = true;
           });
@@ -661,7 +673,7 @@
         if (!resets) { save(); return; }
         Confirm.ask({
           title: 'Reset the allocation?',
-          message: 'Setting ' + li.dataset.name + '\u2019s total to ' + total + ' SP is below the ' + allocated + ' SP already allocated. Doing this resets all of their allocations (Gunnery, Piloting and Edge go back to the starting levels) and leaves ' + total + ' SP unallocated.',
+          message: 'Setting ' + li.dataset.name + '\u2019s total to ' + total + ' SP is below the ' + allocated + ' SP already allocated. Doing this resets all of their allocations (Gunnery, Piloting and Edge go back to the starting levels) and leaves ' + total + ' SP unallocated.' + learnedNote(li),
           confirmLabel: 'Set total and reset', danger: true
         }).then(function (ok) { if (ok) save(); });
       });

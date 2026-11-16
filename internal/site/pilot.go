@@ -126,7 +126,7 @@ type NamedPilot struct {
 }
 
 // PendingAbilities is how many Edge abilities the pilot has earned but not yet chosen: their Edge abilities level minus the abilities
-// they have learned (never negative: a reset of their SP doesn't take learned abilities away, see Store.ResetEdgeAbilities).
+// they have learned (never negative; resetting their SP allocation forgets their learned abilities too, see Store.ResetPilotSP).
 func (p NamedPilot) PendingAbilities() int { return max(0, p.EdgeAbilities()-len(p.Learned)) }
 
 // Earned is the pilot's total SP earned, allocated or not.

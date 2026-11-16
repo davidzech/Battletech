@@ -720,11 +720,17 @@ func (s *Store) DeletePilot(ctx context.Context, playthroughID, campaign, pilotI
 // agreeing to reset the allocation.
 var ErrTotalBelowAllocated = errors.New("that total is below the SP already allocated")
 
-// ResetPilotSP is the factory reset for a pilot's abilities, to repair a desync or a mistake: all four columns go back to
+// ResetPilotSP is the factory reset for a pilot's SP allocation, to repair a desync or a mistake: all four columns go back to
 // zero, so the pilot is a starting 4/5 pilot again, and every SP they have earned becomes unallocated (the total is
-// unchanged). It works on living and killed pilots (sql.ErrNoRows if there is no such pilot).
+// unchanged). The Edge abilities they had learned depended on that SP, so they are forgotten too, in the same transaction.
+// It works on living and killed pilots (sql.ErrNoRows if there is no such pilot).
 func (s *Store) ResetPilotSP(ctx context.Context, playthroughID, campaign, pilotID string) error {
-	res, err := s.db.ExecContext(ctx,
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	res, err := tx.ExecContext(ctx,
 		s.q(`UPDATE named_pilots SET sp_gunnery = 0, sp_piloting = 0, sp_edge_tokens = 0, sp_edge_abilities = 0
 		     WHERE id = ? AND playthrough_id = ? AND campaign = ?`), pilotID, playthroughID, campaign)
 	if err != nil {
@@ -733,25 +739,41 @@ func (s *Store) ResetPilotSP(ctx context.Context, playthroughID, campaign, pilot
 	if n, _ := res.RowsAffected(); n == 0 {
 		return sql.ErrNoRows
 	}
-	return nil
+	if _, err := tx.ExecContext(ctx, s.q(`DELETE FROM pilot_abilities WHERE pilot_id = ?`), pilotID); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // SetPilotTotal overrides a pilot's total SP earned. A total below what is already allocated can't be honoured without
 // undoing allocations, so it is refused (ErrTotalBelowAllocated) unless resetAllocation is true, which also zeroes the
-// four columns, leaving the whole new total unallocated. sql.ErrNoRows if there is no such pilot.
+// four columns, leaving the whole new total unallocated, and forgets the pilot's learned Edge abilities (they depended on that
+// SP; see ResetPilotSP). A total at or above the allocation changes neither. sql.ErrNoRows if there is no such pilot.
 func (s *Store) SetPilotTotal(ctx context.Context, playthroughID, campaign, pilotID string, total int, resetAllocation bool) error {
-	var res sql.Result
-	var err error
 	if resetAllocation {
-		res, err = s.db.ExecContext(ctx,
+		tx, err := s.db.BeginTx(ctx, nil)
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback()
+		res, err := tx.ExecContext(ctx,
 			s.q(`UPDATE named_pilots SET sp_total = ?, sp_gunnery = 0, sp_piloting = 0, sp_edge_tokens = 0, sp_edge_abilities = 0
 			     WHERE id = ? AND playthrough_id = ? AND campaign = ?`), total, pilotID, playthroughID, campaign)
-	} else {
-		res, err = s.db.ExecContext(ctx,
-			s.q(`UPDATE named_pilots SET sp_total = ?
-			     WHERE id = ? AND playthrough_id = ? AND campaign = ?
-			       AND ? >= sp_gunnery + sp_piloting + sp_edge_tokens + sp_edge_abilities`), total, pilotID, playthroughID, campaign, total)
+		if err != nil {
+			return err
+		}
+		if n, _ := res.RowsAffected(); n == 0 {
+			return sql.ErrNoRows
+		}
+		if _, err := tx.ExecContext(ctx, s.q(`DELETE FROM pilot_abilities WHERE pilot_id = ?`), pilotID); err != nil {
+			return err
+		}
+		return tx.Commit()
 	}
+	res, err := s.db.ExecContext(ctx,
+		s.q(`UPDATE named_pilots SET sp_total = ?
+		     WHERE id = ? AND playthrough_id = ? AND campaign = ?
+		       AND ? >= sp_gunnery + sp_piloting + sp_edge_tokens + sp_edge_abilities`), total, pilotID, playthroughID, campaign, total)
 	if err != nil {
 		return err
 	}

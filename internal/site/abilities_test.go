@@ -118,15 +118,40 @@ func abilityStore(t *testing.T, s *Store, id string) {
 	if p := get(); strings.Join(p.Learned, ",") != "nimble,marksman,bulwark" {
 		t.Fatalf("order after a later choice: %+v", p.Learned)
 	}
-	// Resetting the SP allocation takes no ability away, and the pilot is never owed a negative number of them.
+	// Resetting the SP allocation forgets the learned abilities too: they depended on the Edge abilities SP that has just been taken back.
 	if err := s.ResetPilotSP(ctx, id, camp, a.ID); err != nil {
 		t.Fatal(err)
 	}
-	if p := get(); len(p.Learned) != 3 || p.PendingAbilities() != 0 {
-		t.Fatalf("an SP reset keeps learned abilities: %+v pending %d", p.Learned, p.PendingAbilities())
+	if p := get(); len(p.Learned) != 0 || p.EdgeAbilities() != 0 || p.PendingAbilities() != 0 {
+		t.Fatalf("an SP reset forgets learned abilities: %+v level %d pending %d", p.Learned, p.EdgeAbilities(), p.PendingAbilities())
+	}
+	// Setting the total: at or above the allocation touches nothing, refused below it, and below it with the reset agreed forgets them.
+	if err := s.AwardSP(ctx, id, camp, a.ID, SPAllocation{EdgeAbilities: 360}); err != nil { // level 3
+		t.Fatal(err)
+	}
+	if err := s.LearnAbilities(ctx, id, camp, a.ID, []string{"nimble", "marksman", "patient"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetPilotTotal(ctx, id, camp, a.ID, 1000, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetPilotTotal(ctx, id, camp, a.ID, 100, false); !errors.Is(err, ErrTotalBelowAllocated) {
+		t.Fatalf("below the allocation: %v", err)
+	}
+	if p := get(); len(p.Learned) != 3 {
+		t.Fatalf("a raised or refused total must keep the abilities: %+v", p.Learned)
+	}
+	if err := s.SetPilotTotal(ctx, id, camp, a.ID, 100, true); err != nil {
+		t.Fatal(err)
+	}
+	if p := get(); len(p.Learned) != 0 || p.SP.Total() != 0 || p.TotalSP != 100 {
+		t.Fatalf("a total below the allocation, with the reset, forgets the abilities: %+v", p)
 	}
 	// The explicit reset forgets them, for the pilot to choose again.
 	if err := s.AwardSP(ctx, id, camp, a.ID, SPAllocation{EdgeAbilities: 360}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.LearnAbilities(ctx, id, camp, a.ID, []string{"nimble", "marksman", "patient"}); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.ResetEdgeAbilities(ctx, id, camp, a.ID); err != nil {
@@ -322,5 +347,60 @@ func TestEdgeAbilitiesThroughThePages(t *testing.T) {
 	}
 	if !strings.Contains(page(), "Choose 4 new Edge abilities") {
 		t.Error("after a reset the pilot chooses all four again")
+	}
+}
+
+// Resetting a pilot's SP allocation, by the button or by setting a total below it, forgets their Edge abilities too.
+func TestSPResetForgetsEdgeAbilities(t *testing.T) {
+	srv, store, cookie := startedCompany(t)
+	ctx := context.Background()
+	id := playthroughID("wolfpack2026")
+	ps, _ := store.Pilots(ctx, id, "refusalwar")
+	pilot := ps[0]
+	form := func(kv ...string) url.Values {
+		v := url.Values{"campaign": {"refusalwar"}, "pilot": {pilot.ID}}
+		for i := 0; i+1 < len(kv); i += 2 {
+			v.Set(kv[i], kv[i+1])
+		}
+		return v
+	}
+	setUp := func() {
+		t.Helper()
+		if err := store.AwardSP(ctx, id, "refusalwar", pilot.ID, SPAllocation{EdgeAbilities: 60}); err != nil {
+			t.Fatal(err)
+		}
+		if err := store.LearnAbilities(ctx, id, "refusalwar", pilot.ID, []string{"marksman"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	learned := func() int {
+		ps, _ := store.Pilots(ctx, id, "refusalwar")
+		return len(ps[0].Learned)
+	}
+	setUp()
+	if learned() != 1 {
+		t.Fatal("set up")
+	}
+	// A total that keeps the allocation, or one refused for being below it, leaves the ability alone.
+	if got := post(t, srv, "/api/pilots/total", form("total", "900"), cookie, srv.URL).StatusCode; got != http.StatusNoContent {
+		t.Fatal(got)
+	}
+	if got := post(t, srv, "/api/pilots/total", form("total", "10"), cookie, srv.URL).StatusCode; got != http.StatusConflict || learned() != 1 {
+		t.Fatalf("refused total: %d, learned %d", got, learned())
+	}
+	// Agreeing to the reset forgets it.
+	if got := post(t, srv, "/api/pilots/total", form("total", "10", "reset", "1"), cookie, srv.URL).StatusCode; got != http.StatusNoContent || learned() != 0 {
+		t.Fatalf("total with reset: %d, learned %d", got, learned())
+	}
+	// So does the Reset SP allocation button.
+	setUp()
+	if learned() != 1 {
+		t.Fatal("set up again")
+	}
+	if got := post(t, srv, "/api/pilots/reset", form(), cookie, srv.URL).StatusCode; got != http.StatusNoContent || learned() != 0 {
+		t.Fatalf("reset: %d, learned %d", got, learned())
+	}
+	if ps, _ := store.Pilots(ctx, id, "refusalwar"); ps[0].EdgeAbilities() != 0 || ps[0].PendingAbilities() != 0 {
+		t.Errorf("after the reset the pilot has no Edge abilities level and nothing pending: %+v", ps[0])
 	}
 }
