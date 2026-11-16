@@ -154,7 +154,7 @@
     var nameLabel = el('label', null, 'Name');
     nameLabel.setAttribute('for', 'wiz-name');
     var nameInput = document.createElement('input');
-    nameInput.id = 'wiz-name'; nameInput.className = 'wide'; nameInput.maxLength = 30;
+    nameInput.type = 'text'; nameInput.id = 'wiz-name'; nameInput.maxLength = 30; nameInput.autocomplete = 'off';
     nameInput.placeholder = 'Star Captain Alrek'; nameInput.spellcheck = false; nameInput.value = p.name;
     nameInput.addEventListener('input', function () { p.name = nameInput.value; error.textContent = ''; });
     nameBlock.appendChild(nameLabel);
