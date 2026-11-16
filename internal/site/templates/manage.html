@@ -14,8 +14,12 @@
     </div>
   </form>
 </dialog>
+<section class="warchest" id="warchest">
+<h2 class="section-title">Warchest</h2>
+<p class="muted">TBD. Your force&rsquo;s finances will be tracked here.</p>
+</section>
 <section class="pilots" id="pilots" data-campaign="{{.Campaign.Slug}}" data-portraits="{{.Portraits}}" data-ladders="{{.Ladders}}" data-abilities="{{.Abilities}}">
-<h2>Named pilots</h2>
+<h2 class="section-title">Named pilots</h2>
 <ul class="pilot-list">
 {{range .Pilots}}{{if not .Fallen}}<li class="pilot" data-pilot="{{.ID}}" data-name="{{.Name}}" data-edge-pending="{{.EdgePending}}" data-learned="{{range .EdgeLearned}}{{.ID}} {{end}}" data-rank="{{.Rank}}" data-portrait="{{.Portrait}}" data-sp="{{range .Columns}}{{.SP}},{{end}}" data-unallocated="{{.Unallocated}}">
 <div class="pilot-card"><div class="pilot-side"><button type="button" class="portrait-btn" title="Change portrait" aria-label="Change {{.Name}}&rsquo;s portrait"><img src="{{.PortraitURL}}" alt="" width="96" height="96"><span class="portrait-edit">Change</span></button>{{if $.Ranks}}<button type="button" class="rank-btn" title="Change rank" aria-label="Change {{.Name}}&rsquo;s rank">{{.Rank}}</button>{{end}}</div>
@@ -100,7 +104,7 @@
   </form>
 </dialog>
 <section class="hangar-units" id="hangar-units" data-campaign="{{.Campaign.Slug}}" data-cached="{{.ForceJSON}}">
-<h2>Hangar</h2>
+<h2 class="section-title">Hangar</h2>
 <div class="hangar-units-summary" id="hangar-units-summary"></div>
 <p class="muted">{{.Play.CompanyName}}&rsquo;s MekBay hangar holds your mechs, and scenarios deploy from it.</p>
 <p class="downloads" id="campaign-run" data-campaign="{{.Campaign.Slug}}"><a class="button" href="{{.Run.HangarURL}}" target="_blank" rel="noopener noreferrer">Open hangar</a><button type="button" class="button" id="run-open">Change hangar link</button></p>
