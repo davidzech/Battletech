@@ -1,7 +1,7 @@
 {{define "content"}}<p class="kicker">BattleTech</p>
 <h1 class="bt-title">Campaigns</h1>
 <p class="lede">Custom tabletop campaigns, scenario by scenario.</p>
-<ul class="cards">
-{{range .Cards}}<li><a class="card" href="{{.URL}}"><span class="num">{{.Num}}</span><span class="name">{{.Name}}</span><span class="go">Open &rsaquo;</span></a></li>
+<ul class="cards plain">
+{{range .Cards}}<li><a class="card" href="{{.URL}}"><span class="name">{{.Name}}</span><span class="go">Open &rsaquo;</span></a></li>
 {{end}}</ul>
 {{end}}

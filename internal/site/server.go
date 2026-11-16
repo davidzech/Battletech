@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"path"
 	"path/filepath"
-	"strconv"
 )
 
 //go:embed templates/*.html static/*
@@ -141,7 +140,7 @@ func (s *Server) home(w http.ResponseWriter, r *http.Request) {
 	}
 	p := Page{Title: "Campaigns"}
 	for _, c := range cs {
-		p.Cards = append(p.Cards, Card{Num: strconv.Itoa(len(c.Scenarios)), Name: c.Label, URL: "/" + c.Slug + "/"})
+		p.Cards = append(p.Cards, Card{Name: c.Label, URL: "/" + c.Slug + "/"})
 	}
 	s.render(w, r, http.StatusOK, "home", p)
 }

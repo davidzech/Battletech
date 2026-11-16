@@ -201,6 +201,7 @@ details.fold > .fold-body { overflow: hidden; }
   color: var(--text);
 }
 .card:hover { border-color: var(--accent); background: var(--panel-2); }
+.cards.plain .card { grid-template-columns: 1fr auto; }
 .card .num {
   font: 700 1.5rem var(--display);
   color: var(--accent);
@@ -297,6 +298,7 @@ footer .build code { font-family: "Share Tech Mono", ui-monospace, monospace; }
 
 @media (max-width: 30rem) {
   .card { grid-template-columns: auto 1fr; }
+  .cards.plain .card { grid-template-columns: 1fr; }
   .card .go { display: none; }
 }
 
