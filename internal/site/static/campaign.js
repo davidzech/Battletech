@@ -202,20 +202,35 @@
       if (!res.ok) {
         return res.text().then(function (t) {
           if (check.link !== link || seq !== checkSeq) return;
-          check = { link: link, state: 'error', message: t.trim() || 'Could not read your hangar.', result: null };
-          renderCheck(); updateNext();
+          failed(link, t.trim() || 'Could not read your hangar.');
         });
       }
       return res.json().then(function (data) {
         if (check.link !== link || seq !== checkSeq) return;
+        // Identical data (the usual case) needs no repaint: only the "Updating" note goes away.
+        var same = check.state === 'done' && JSON.stringify(check.result) === JSON.stringify(data);
         check = { link: link, state: 'done', message: '', result: data };
-        renderCheck(); updateNext();
+        if (same) { syncNotes(); syncRefresh(); } else { renderCheck(); }
+        updateNext();
       });
     }, function () {
       if (check.link !== link || seq !== checkSeq) return;
-      check = { link: link, state: 'error', message: 'Could not reach the server.', result: null };
-      renderCheck(); updateNext();
+      failed(link, 'Could not reach the server.');
     });
+  }
+
+  // A read failed. If it was a refresh, the result already on screen stays (it is still the latest data we have) and a
+  // note says the refresh didn't work; otherwise the error replaces the checking state.
+  function failed(link, message) {
+    if (check.state === 'done' && check.refreshing) {
+      check.refreshing = false;
+      check.refreshError = message;
+      syncNotes(); syncRefresh();
+    } else {
+      check = { link: link, state: 'error', message: message, result: null };
+      renderCheck();
+    }
+    updateNext();
   }
 
   // Called whenever the link changes: once it has the right shape, read the hangar (after a short pause, so typing
@@ -236,8 +251,16 @@
     clearTimeout(checkTimer);
     var link = hangar.trim();
     if (hangarProblem(link)) return;
-    check = { link: link, state: 'checking', message: '', result: null };
-    renderCheck();
+    if (check.link === link && check.state === 'done') {
+      // The same hangar again: keep what is shown, and swap it for the new data once it is here.
+      check.refreshing = true;
+      check.refreshError = '';
+      syncNotes();
+      syncRefresh();
+    } else {
+      check = { link: link, state: 'checking', message: '', result: null };
+      renderCheck();
+    }
     updateNext();
     runCheck(link);
   }
@@ -247,9 +270,37 @@
   var REFRESH_ICON = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>';
   function syncRefresh() {
     if (!refreshBtn) return;
-    var reading = check.state === 'checking';
+    var reading = check.state === 'checking' || !!check.refreshing;
     refreshBtn.disabled = reading || hangarProblem(hangar.trim()) !== '';
     refreshBtn.classList.toggle('spinning', reading);
+  }
+
+  // The small notes on a finished result: "Updating" while it is read again, and why a refresh failed. They are added
+  // and removed in place, so the rest of the result is never repainted.
+  function syncNotes() {
+    if (!statusBox) return;
+    var summary = statusBox.querySelector('.hc-summary');
+    if (!summary) return;
+    var updating = summary.querySelector('.hc-updating');
+    if (check.refreshing && !updating) {
+      updating = el('span', 'hc-updating');
+      updating.setAttribute('role', 'status');
+      updating.appendChild(el('span', 'spinner'));
+      updating.appendChild(el('span', null, 'Updating\u2026'));
+      summary.appendChild(updating);
+    } else if (!check.refreshing && updating) {
+      updating.remove();
+    }
+    var note = statusBox.querySelector('.hc-refresh-error');
+    if (check.refreshError) {
+      if (!note) {
+        note = el('p', 'hc-problem hc-refresh-error');
+        summary.parentNode.insertBefore(note, summary.nextSibling);
+      }
+      note.textContent = 'Couldn\u2019t refresh: ' + check.refreshError;
+    } else if (note) {
+      note.remove();
+    }
   }
 
   function renderCheck() {
@@ -289,6 +340,7 @@
         });
         statusBox.appendChild(list);
       }
+      syncNotes();
     }
   }
 
@@ -412,7 +464,7 @@
   document.getElementById('wiz-cancel').addEventListener('click', function () { wiz.close(); });
   wizOpen.addEventListener('click', function () { step = 0; wiz.showModal(); render(); });
   function comingBack() {
-    var failing = check.state === 'error' || (check.state === 'done' && !check.result.ok);
+    var failing = check.state === 'error' || (check.state === 'done' && !check.result.ok && !check.refreshing);
     if (wiz.hasAttribute('open') && step >= pilotCount && failing) forceCheck();
   }
   window.addEventListener('focus', comingBack);

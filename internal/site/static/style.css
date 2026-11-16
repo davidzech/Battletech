@@ -457,6 +457,9 @@ dialog.wizard button.button:disabled { opacity: 0.4; cursor: not-allowed; filter
 .hc-summary b { margin-right: 0.25rem; color: var(--accent); font-size: 1.3rem; }
 .hc-summary .bad b { color: #ff7a59; }
 .hc-problem { margin: 0.4rem 0 0; color: #ff7a59; }
+/* On a result that is being read again: it stays put, with a small note beside the summary. */
+.hc-summary .hc-updating { display: inline-flex; align-items: center; gap: 0.4rem; margin-left: auto; font: 0.7rem var(--display); letter-spacing: 0.1em; color: var(--muted); }
+.hc-summary .hc-updating .spinner { width: 0.75rem; height: 0.75rem; }
 /* Shown while the hangar is being read from MekBay. */
 .hc-loading { display: flex; align-items: center; gap: 0.6rem; margin: 0; color: var(--muted); }
 .spinner {
