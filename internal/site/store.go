@@ -580,3 +580,60 @@ func (s *Store) DeleteRun(ctx context.Context, playthroughID, campaign string) (
 	n, _ := res.RowsAffected()
 	return n > 0, tx.Commit()
 }
+
+// RevivePilot brings a pilot marked killed in action back, to correct a misclick (sql.ErrNoRows if there is no such
+// killed pilot, ErrPilotLimit if the command already has the most living pilots it may have). If another living pilot has
+// taken the portrait in the meantime, the pilot gets altPortrait instead.
+func (s *Store) RevivePilot(ctx context.Context, playthroughID, campaign, pilotID, altPortrait string, max int) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var portrait string
+	if err := tx.QueryRowContext(ctx,
+		s.q(`SELECT portrait FROM named_pilots WHERE id = ? AND playthrough_id = ? AND campaign = ? AND fallen = 1`),
+		pilotID, playthroughID, campaign).Scan(&portrait); err != nil {
+		return err // sql.ErrNoRows when there is no such killed pilot
+	}
+	var alive int
+	if err := tx.QueryRowContext(ctx,
+		s.q(`SELECT COUNT(*) FROM named_pilots WHERE playthrough_id = ? AND campaign = ? AND fallen = 0`),
+		playthroughID, campaign).Scan(&alive); err != nil {
+		return err
+	}
+	if alive >= max {
+		return ErrPilotLimit
+	}
+	if portrait != "" {
+		var same int
+		if err := tx.QueryRowContext(ctx,
+			s.q(`SELECT COUNT(*) FROM named_pilots WHERE playthrough_id = ? AND campaign = ? AND fallen = 0 AND portrait = ?`),
+			playthroughID, campaign, portrait).Scan(&same); err != nil {
+			return err
+		}
+		if same > 0 {
+			portrait = altPortrait
+		}
+	}
+	if _, err := tx.ExecContext(ctx,
+		s.q(`UPDATE named_pilots SET fallen = 0, portrait = ? WHERE id = ? AND playthrough_id = ? AND campaign = ?`),
+		portrait, pilotID, playthroughID, campaign); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// DeletePilot permanently removes a pilot, living or killed, to correct a misclick or a desync (sql.ErrNoRows if there is
+// no such pilot).
+func (s *Store) DeletePilot(ctx context.Context, playthroughID, campaign, pilotID string) error {
+	res, err := s.db.ExecContext(ctx,
+		s.q(`DELETE FROM named_pilots WHERE id = ? AND playthrough_id = ? AND campaign = ?`), pilotID, playthroughID, campaign)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}

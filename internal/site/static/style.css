@@ -866,3 +866,18 @@ html:not(.js) .wp-toggle, html:not(.js) .wp-stamp { display: none; }
 .sp-earn label { display: grid; gap: 0.3rem; font: 700 0.8rem var(--display); letter-spacing: 0.08em; text-transform: uppercase; }
 .sp-earn input { width: 7rem; }
 #sp-dialog .stat-boxes { margin-top: 0.5rem; }
+
+/* Killed in action: an outlined, quiet danger button instead of a plain gray one. */
+.pilot-kia { padding: 0.5rem 0.9rem; font: 700 0.8rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: #e5594f; background: transparent; border: 1px solid #7a3a34; cursor: pointer; }
+.pilot-kia:hover:not(:disabled), .pilot-kia:focus-visible { background: rgba(229, 89, 79, 0.15); border-color: #e5594f; }
+/* The pilot records link at the bottom of the page is deliberately quiet. */
+.records-link { margin: 1.5rem 0 0.5rem; text-align: right; }
+.link-button { padding: 0; background: none; border: 0; color: var(--muted); font: 0.8rem var(--display); letter-spacing: 0.08em; text-transform: uppercase; text-decoration: underline; text-underline-offset: 0.2em; cursor: pointer; }
+.link-button:hover, .link-button:focus-visible { color: var(--text); }
+.records-list { list-style: none; margin: 0.75rem 0; padding: 0; display: grid; gap: 0.4rem; }
+.records-list li { display: flex; align-items: center; gap: 0.7rem; padding: 0.3rem 0.5rem; background: var(--bg); border: 1px solid var(--line); }
+.records-list img { flex: none; width: 2.5rem; height: 2.5rem; object-fit: cover; object-position: top; }
+.rec-name { flex: 1; min-width: 0; font: 700 1rem var(--display); letter-spacing: 0.05em; text-transform: uppercase; overflow-wrap: anywhere; }
+.rec-state { font: 700 0.7rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.rec-state.kia { color: #e5594f; }
+.rec-delete { color: #e5594f; border-color: #7a3a34; }

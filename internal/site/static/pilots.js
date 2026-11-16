@@ -1,5 +1,5 @@
-// Manage page: name a new named pilot, change a pilot's portrait, spend their unallocated SP in the Manage SP dialog, or
-// mark one as fallen. The server validates everything; these handlers only post the forms and reload to show the result.
+// Manage page: change a pilot's portrait, spend their unallocated SP in the Manage SP dialog, mark one killed in action,
+// or correct the records (revive or delete a pilot). The server validates everything; these handlers only post the forms and reload to show the result.
 (function () {
   var box = document.getElementById('pilots');
   if (!box) return;
@@ -32,16 +32,6 @@
     }, function () {
       if (button) button.disabled = false;
       error.textContent = 'Could not reach the server.';
-    });
-  }
-
-  var add = document.getElementById('pilot-add');
-  if (add) {
-    add.addEventListener('submit', function (e) {
-      e.preventDefault();
-      var name = add.elements.name.value.trim();
-      if (!name) { error.textContent = 'Give your pilot a name.'; return; }
-      send('/api/pilots', 'name=' + encodeURIComponent(name), add.querySelector('button'));
     });
   }
 
@@ -163,12 +153,39 @@
       });
     }
 
-    var fallen = li.querySelector('.pilot-fallen');
-    if (fallen) {
-      fallen.addEventListener('click', function () {
-        if (!window.confirm('Mark ' + li.dataset.name + ' as fallen? They are permanently removed from the campaign.')) return;
-        send('/api/pilots/fallen', 'pilot=' + encodeURIComponent(id), fallen);
+    var kia = li.querySelector('.pilot-kia');
+    if (kia) {
+      kia.addEventListener('click', function () {
+        if (!window.confirm('Mark ' + li.dataset.name + ' as killed in action? They are removed from your active pilots (you can bring them back under Pilot records).')) return;
+        send('/api/pilots/fallen', 'pilot=' + encodeURIComponent(id), kia);
       });
     }
   });
+
+  // ---- Pilot records: revive or delete a pilot, to correct a misclick or a desync.
+  var records = document.getElementById('records-dialog');
+  if (records && typeof records.showModal === 'function') {
+    var recError = document.getElementById('records-error');
+    document.getElementById('records-open').addEventListener('click', function () { recError.textContent = ''; records.showModal(); });
+    document.getElementById('records-close').addEventListener('click', function () { records.close(); });
+    records.addEventListener('click', function (e) { if (e.target === records) records.close(); });
+    function recAct(url, li, button) {
+      recError.textContent = '';
+      button.disabled = true;
+      post(url, 'pilot=' + encodeURIComponent(li.dataset.pilot)).then(function (res) {
+        if (res.ok) { location.reload(); return; }
+        button.disabled = false;
+        return res.text().then(function (t) { recError.textContent = t.trim() || 'Something went wrong.'; });
+      }, function () { button.disabled = false; recError.textContent = 'Could not reach the server.'; });
+    }
+    records.querySelectorAll('#records-list li[data-pilot]').forEach(function (li) {
+      var revive = li.querySelector('.rec-revive');
+      if (revive) revive.addEventListener('click', function () { recAct('/api/pilots/revive', li, revive); });
+      var del = li.querySelector('.rec-delete');
+      del.addEventListener('click', function () {
+        if (!window.confirm('Delete ' + li.dataset.name + ' permanently? Their record and all of their SP are lost. This cannot be undone.')) return;
+        recAct('/api/pilots/delete', li, del);
+      });
+    });
+  }
 })();

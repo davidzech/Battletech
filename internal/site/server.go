@@ -41,24 +41,22 @@ type Crumb struct {
 
 // Page is the data every template receives.
 type Page struct {
-	Title        string
-	Crumbs       []Crumb
-	Campaign     *Campaign
-	Scenario     *Scenario
-	Next         *Scenario
-	Cards        []Card
-	Images       []string    // URLs of the scenario's images
-	Seed         string      // the visitor's seed ("" if none chosen yet)
-	Play         Playthrough // the visitor's playthrough (zero value if no seed)
-	Run          CampaignRun // the playthrough's run of this page's campaign (zero value until it is started)
-	Pilots       []PilotView // the run's named pilots
-	PilotsNeeded int         // how many more named pilots the campaign requires before scenarios can be played
-	CanAddPilot  bool        // the command has room for another named pilot
-	MaxPilots    int         // most living named pilots a command may have
-	Ladders      string      // the pilot improvement ladders as JSON, for the pilot builder's live preview
-	Portraits    string      // the portrait list as JSON, for the portrait picker
-	MekBayOp     string      // link to the scenario's MekBay operation, once created ("" until then)
-	Commit       string      // git commit the server was built from, short form ("dev" if unknown)
+	Title     string
+	Crumbs    []Crumb
+	Campaign  *Campaign
+	Scenario  *Scenario
+	Next      *Scenario
+	Cards     []Card
+	Images    []string    // URLs of the scenario's images
+	Seed      string      // the visitor's seed ("" if none chosen yet)
+	Play      Playthrough // the visitor's playthrough (zero value if no seed)
+	Run       CampaignRun // the playthrough's run of this page's campaign (zero value until it is started)
+	Pilots    []PilotView // the run's named pilots
+	MaxPilots int         // most living named pilots a command may have
+	Ladders   string      // the pilot improvement ladders as JSON, for the pilot builder's live preview
+	Portraits string      // the portrait list as JSON, for the portrait picker
+	MekBayOp  string      // link to the scenario's MekBay operation, once created ("" until then)
+	Commit    string      // git commit the server was built from, short form ("dev" if unknown)
 }
 
 // Card is one entry in a list of links (campaigns or scenarios).
@@ -104,6 +102,8 @@ func NewHandler(contentRoot string, store *Store, opts ...Option) http.Handler {
 	mux.HandleFunc("POST /api/pilots/earn", s.earnSP)
 	mux.HandleFunc("POST /api/pilots/allocate", s.allocateSP)
 	mux.HandleFunc("POST /api/pilots/fallen", s.pilotFallen)
+	mux.HandleFunc("POST /api/pilots/revive", s.revivePilot)
+	mux.HandleFunc("POST /api/pilots/delete", s.deletePilot)
 	mux.HandleFunc("POST /api/pilots/portrait", s.setPortrait)
 	mux.HandleFunc("GET /api/mekbay/hangar", s.hangarJSON)
 	mux.HandleFunc("POST /api/mekbay/deploy", s.deploy)
@@ -140,10 +140,8 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name
 					if err != nil {
 						log.Printf("load named pilots: %v", err)
 					}
-					var alive int
-					p.Pilots, alive = pilotViews(pilots)
-					p.PilotsNeeded = max(0, p.Campaign.StartingNamedPilots-alive)
-					p.CanAddPilot, p.MaxPilots = alive < maxNamedPilots, maxNamedPilots
+					p.Pilots, _ = pilotViews(pilots)
+					p.MaxPilots = maxNamedPilots
 				}
 			}
 		}

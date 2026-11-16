@@ -382,24 +382,11 @@ func TestDeployFlow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Refusal War mandates two named pilots before anything deploys.
-	addPilot := func(name string) {
-		t.Helper()
-		if r := post(t, srv, "/api/pilots", url.Values{"campaign": {"refusalwar"}, "name": {name}}, cookie, srv.URL); r.StatusCode != http.StatusNoContent {
-			t.Fatalf("add pilot %s: %d", name, r.StatusCode)
-		}
+	// Naming pilots is a requirement for starting a campaign, not for deploying: pilots can die mid-campaign, so a company
+	// with none can still deploy.
+	if r := get(t, srv, hangar, cookie); r.StatusCode != http.StatusOK {
+		t.Fatalf("hangar without named pilots: %d", r.StatusCode)
 	}
-	if r := get(t, srv, hangar, cookie); r.StatusCode != http.StatusBadRequest {
-		t.Fatalf("hangar before naming the pilots: %d", r.StatusCode)
-	}
-	if p := body(t, srv, page, cookie); !strings.Contains(p, "starting named pilots") || strings.Contains(p, `id="deploy-open"`) {
-		t.Fatalf("the scenario should ask for the pilots first, not offer deploying: %.900s", p)
-	}
-	addPilot("Alrek")
-	if r := post(t, srv, "/api/mekbay/deploy", deploy(mine), cookie, srv.URL); r.StatusCode != http.StatusBadRequest {
-		t.Fatalf("deploy with one of two pilots: %d", r.StatusCode)
-	}
-	addPilot("Katarina")
 	p := body(t, srv, page, cookie)
 	if i, j := strings.Index(p, "/static/mechrow.js"), strings.Index(p, "/static/mekbay.js"); i < 0 || j < 0 || i > j {
 		t.Fatal("the scenario page should load mechrow.js before mekbay.js")

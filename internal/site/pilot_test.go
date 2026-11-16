@@ -271,7 +271,7 @@ func TestNamedPilotsFlow(t *testing.T) {
 	}
 
 	// A started campaign asks for its two starting pilots.
-	if c := body(t, srv, "/refusalwar/manage/", cookie); !strings.Contains(c, `id="pilots"`) || !strings.Contains(c, "needs 2 named pilots") || !strings.Contains(c, "Name 2 more") || !strings.Contains(c, `id="pilot-add"`) {
+	if c := body(t, srv, "/refusalwar/manage/", cookie); !strings.Contains(c, `id="pilots"`) || strings.Contains(c, "needs 2 named pilots") || strings.Contains(c, `id="pilot-add"`) {
 		t.Fatalf("pilots panel: %.2500s", c)
 	}
 
@@ -365,7 +365,7 @@ func TestNamedPilotsFlow(t *testing.T) {
 	if got := award(ps[1].ID, "gunnery", "100"); got != http.StatusNotFound {
 		t.Errorf("award to the fallen: %d", got)
 	}
-	if c := body(t, srv, "/refusalwar/manage/", cookie); !strings.Contains(c, `class="pilot fallen"`) || !strings.Contains(c, "Fallen") || !strings.Contains(c, `id="pilot-add"`) {
+	if c := body(t, srv, "/refusalwar/manage/", cookie); !strings.Contains(c, "Killed in action") || !strings.Contains(c, `class="rec-revive"`) || strings.Contains(c, `id="pilot-add"`) {
 		t.Fatalf("a fallen pilot should show, and free a place: %.3000s", c)
 	}
 	if r := post(t, srv, "/api/pilots", pilots("name", "Replacement"), cookie, srv.URL); r.StatusCode != http.StatusNoContent {
@@ -816,5 +816,84 @@ func TestMigrateSPTotal(t *testing.T) {
 	defer s.Close()
 	if ps, _ := s.Pilots(ctx, id, "refusalwar"); ps[0].TotalSP != 190 || ps[0].Unallocated() != 40 {
 		t.Fatalf("after reopening: %+v", ps[0])
+	}
+}
+
+func TestReviveAndDeletePilots(t *testing.T) {
+	srv, store, cookie := startedCompany(t)
+	ctx := context.Background()
+	id := playthroughID("wolfpack2026")
+	ps, _ := store.Pilots(ctx, id, "refusalwar")
+	a, b := ps[0], ps[1]
+	form := func(pilot string) url.Values { return url.Values{"campaign": {"refusalwar"}, "pilot": {pilot}} }
+	do := func(path, pilot string) int { return post(t, srv, path, form(pilot), cookie, srv.URL).StatusCode }
+
+	if got := post(t, srv, "/api/pilots/revive", form(a.ID), cookie, "https://evil.example").StatusCode; got != http.StatusForbidden {
+		t.Errorf("cross-origin revive: %d", got)
+	}
+	if got := do("/api/pilots/revive", a.ID); got != http.StatusNotFound {
+		t.Errorf("reviving a living pilot: %d", got)
+	}
+	// Killed in action: gone from the active list, still in the records, and revivable.
+	if got := do("/api/pilots/fallen", a.ID); got != http.StatusNoContent {
+		t.Fatalf("kia: %d", got)
+	}
+	page := body(t, srv, "/refusalwar/manage/", cookie)
+	if !strings.Contains(page, "Killed in action") || strings.Contains(page, `<li class="pilot" data-pilot="`+a.ID) || !strings.Contains(page, `<li class="pilot" data-pilot="`+b.ID) {
+		t.Error("the killed pilot should leave the active list but stay in the records")
+	}
+	if over := body(t, srv, "/refusalwar/", cookie); strings.Contains(over, a.Name+"</b>") {
+		t.Error("the overview should not show a pilot killed in action")
+	}
+	if got := do("/api/pilots/revive", a.ID); got != http.StatusNoContent {
+		t.Fatalf("revive: %d", got)
+	}
+	if ps, _ := store.Pilots(ctx, id, "refusalwar"); ps[0].Fallen || ps[0].ID != a.ID {
+		t.Errorf("revived pilot: %+v", ps[0])
+	}
+	// A portrait taken by someone else in the meantime is swapped for a free one.
+	if got := do("/api/pilots/fallen", a.ID); got != http.StatusNoContent {
+		t.Fatal(got)
+	}
+	if _, err := store.db.Exec(`UPDATE named_pilots SET portrait = ? WHERE id = ?`, a.Portrait, b.ID); err != nil {
+		t.Fatal(err)
+	}
+	if got := do("/api/pilots/revive", a.ID); got != http.StatusNoContent {
+		t.Fatalf("revive with a clash: %d", got)
+	}
+	ps, _ = store.Pilots(ctx, id, "refusalwar")
+	if ps[0].Portrait == ps[1].Portrait || !validPortrait(ps[0].Portrait) {
+		t.Errorf("portraits after a clash: %q %q", ps[0].Portrait, ps[1].Portrait)
+	}
+	// The limit of living pilots still holds.
+	for _, n := range []string{"C", "D"} {
+		if _, err := store.AddPilot(ctx, id, "refusalwar", n, "", SPAllocation{}, maxNamedPilots); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := do("/api/pilots/fallen", a.ID); got != http.StatusNoContent {
+		t.Fatal(got)
+	}
+	if _, err := store.AddPilot(ctx, id, "refusalwar", "E", "", SPAllocation{}, maxNamedPilots); err != nil {
+		t.Fatal(err)
+	}
+	if got := do("/api/pilots/revive", a.ID); got != http.StatusBadRequest {
+		t.Errorf("reviving with a full command: %d", got)
+	}
+	// Deleting removes a pilot for good, living or killed, and only in their own campaign.
+	if got := do("/api/pilots/delete", a.ID); got != http.StatusNoContent {
+		t.Fatalf("delete a killed pilot: %d", got)
+	}
+	if got := do("/api/pilots/delete", b.ID); got != http.StatusNoContent {
+		t.Fatalf("delete a living pilot: %d", got)
+	}
+	if got := do("/api/pilots/delete", b.ID); got != http.StatusNotFound {
+		t.Errorf("deleting twice: %d", got)
+	}
+	ps, _ = store.Pilots(ctx, id, "refusalwar")
+	for _, p := range ps {
+		if p.ID == a.ID || p.ID == b.ID {
+			t.Errorf("deleted pilot is still there: %+v", p)
+		}
 	}
 }

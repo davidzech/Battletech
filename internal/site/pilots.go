@@ -312,3 +312,44 @@ func (s *Server) allocateSP(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
+
+// revivePilot brings a pilot marked killed in action back, to correct a misclick.
+func (s *Server) revivePilot(w http.ResponseWriter, r *http.Request) {
+	pt, c, ok := s.pilotRequest(w, r)
+	if !ok {
+		return
+	}
+	existing, err := s.store.Pilots(r.Context(), pt.ID, c.Slug)
+	if err != nil {
+		http.Error(w, "could not load named pilots", http.StatusInternalServerError)
+		return
+	}
+	alt := randomPortrait(livingPortraits(existing))
+	if err := s.store.RevivePilot(r.Context(), pt.ID, c.Slug, r.PostFormValue("pilot"), alt, maxNamedPilots); errors.Is(err, sql.ErrNoRows) {
+		http.Error(w, "No such pilot killed in action.", http.StatusNotFound)
+		return
+	} else if errors.Is(err, ErrPilotLimit) {
+		http.Error(w, fmt.Sprintf("You already have %d living named pilots.", maxNamedPilots), http.StatusBadRequest)
+		return
+	} else if err != nil {
+		http.Error(w, "could not revive the pilot", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// deletePilot permanently removes a pilot, living or killed in action.
+func (s *Server) deletePilot(w http.ResponseWriter, r *http.Request) {
+	pt, c, ok := s.pilotRequest(w, r)
+	if !ok {
+		return
+	}
+	if err := s.store.DeletePilot(r.Context(), pt.ID, c.Slug, r.PostFormValue("pilot")); errors.Is(err, sql.ErrNoRows) {
+		http.Error(w, "No such pilot.", http.StatusNotFound)
+		return
+	} else if err != nil {
+		http.Error(w, "could not delete the pilot", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
