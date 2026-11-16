@@ -57,10 +57,10 @@
     </div>
   </form>
 </dialog>
-{{end}}<dialog id="recruit-dialog" class="wizard" aria-labelledby="recruit-title">
+{{end}}<dialog id="recruit-dialog" class="wizard" aria-labelledby="recruit-title" data-sp="{{.Campaign.StartingPilotSP}}">
   <form id="recruit-form" autocomplete="off" novalidate>
     <h2 id="recruit-title">Recruit a new pilot</h2>
-    <p class="muted">A new pilot is a standard 4/5 pilot with 1 Edge token and no SP. Earn SP for them and spend it under Manage SP.</p>
+    <p class="muted">{{if .Campaign.StartingPilotSP}}A new pilot starts with {{.Campaign.StartingPilotSP}} SP to allocate. Spend as much as you like now; what is left stays unallocated and can be spent later under Manage SP.{{else}}A new pilot is a standard 4/5 pilot with 1 Edge token and no SP.{{end}}</p>
     <div class="pilot-top">
       <div class="pilot-id">
         <button type="button" class="portrait-btn" id="recruit-portrait" title="Choose a portrait" aria-label="Choose a portrait"><img id="recruit-portrait-img" alt="" width="96" height="96"><span class="portrait-edit">Change</span></button>
@@ -68,7 +68,9 @@
       </div>
       <div class="stat-boxes" id="recruit-boxes"></div>
     </div>
-    {{if .Ranks}}<label for="recruit-rank" class="recruit-rank-label">Rank</label>
+    {{if .Campaign.StartingPilotSP}}<div class="alloc-headrow"><h3 class="alloc-head">Allocate SP</h3><p class="alloc-remaining" id="recruit-remaining"></p></div>
+    <div id="recruit-rows"></div>
+    {{end}}{{if .Ranks}}<label for="recruit-rank" class="recruit-rank-label">Rank</label>
     <select id="recruit-rank">{{range .Ranks}}<option value="{{.}}">{{.}}</option>{{end}}</select>
     {{end}}<p id="recruit-error" class="form-error" role="alert"></p>
     <div class="form-actions">

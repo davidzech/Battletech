@@ -227,8 +227,30 @@
     var rGo = document.getElementById('recruit-go');
     var rBoxes = document.getElementById('recruit-boxes');
     var rPortrait = '';
-    // The new pilot's starting levels (no SP spent), drawn once.
-    ladders.map(SPAllocator.statBox).forEach(function (b) { b.show(0); rBoxes.appendChild(b); });
+    // The new pilot's starting SP (the campaign's) and the same sliders, number boxes and stat boxes as the start wizard. Spending it
+    // all is optional: what is left stays unallocated.
+    var rBudget = parseInt(recruit.dataset.sp, 10) || 0;
+    var rSP = {};
+    ladders.forEach(function (l) { rSP[l.key] = 0; });
+    var rPilot = { sp: rSP };
+    var rStats = ladders.map(SPAllocator.statBox);
+    rStats.forEach(function (b) { rBoxes.appendChild(b); });
+    var rRemaining = document.getElementById('recruit-remaining');
+    var rRowsBox = document.getElementById('recruit-rows');
+    var rRows = rBudget ? ladders.map(function (l) {
+      return SPAllocator.row(rPilot, l, { ladders: ladders, budget: rBudget, step: STEP, refresh: rRefresh, onEdit: function () { rError.textContent = ''; } });
+    }) : [];
+    rRows.forEach(function (r) { rRowsBox.appendChild(r); });
+    function rRefresh() {
+      if (rRemaining) {
+        var left = rBudget - SPAllocator.spentOf(rPilot, ladders);
+        rRemaining.textContent = left + ' of ' + rBudget + ' SP unallocated';
+        rRemaining.classList.toggle('done', left === 0);
+      }
+      rRows.forEach(function (r) { r.show(); });
+      rStats.forEach(function (b, i) { b.show(rSP[ladders[i].key]); });
+    }
+    rRefresh();
 
     // Portraits living pilots already have: a new pilot never shares one.
     function takenPortraits() {
@@ -246,6 +268,8 @@
       showPortrait(pick.length ? pick[Math.floor(Math.random() * pick.length)].file : '');
       rName.value = '';
       rError.textContent = '';
+      ladders.forEach(function (l) { rSP[l.key] = 0; });
+      rRefresh();
       if (rRank) rRank.selectedIndex = 0;
       rGo.disabled = false;
       recruit.showModal();
@@ -264,7 +288,9 @@
       if (!name) { rError.textContent = 'Give your pilot a name.'; rName.focus(); return; }
       rGo.disabled = true;
       rError.textContent = '';
-      post('/api/pilots', 'name=' + encodeURIComponent(name) + '&portrait=' + encodeURIComponent(rPortrait) + (rRank ? '&rank=' + encodeURIComponent(rRank.value) : '')).then(function (res) {
+      var fields = 'name=' + encodeURIComponent(name) + '&portrait=' + encodeURIComponent(rPortrait) + (rRank ? '&rank=' + encodeURIComponent(rRank.value) : '');
+      ladders.forEach(function (l) { fields += '&' + l.key + '=' + rSP[l.key]; });
+      post('/api/pilots', fields).then(function (res) {
         if (res.ok) { location.reload(); return; }
         rGo.disabled = false;
         return res.text().then(function (t) { rError.textContent = t.trim() || 'Could not recruit the pilot.'; });

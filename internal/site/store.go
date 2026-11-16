@@ -397,15 +397,16 @@ func (s *Store) Pilots(ctx context.Context, playthroughID, campaign string) ([]N
 
 // AddPilot names a new pilot with the given starting SP. A command may have at most max living named pilots
 // (ErrPilotLimit otherwise).
-// AddPilot adds a pilot with the lowest rank (see AddPilotWithRank).
+// AddPilot adds a pilot with the lowest rank and every SP allocated (see AddPilotWithRank).
 func (s *Store) AddPilot(ctx context.Context, playthroughID, campaign, name, portrait string, start SPAllocation, max int) (NamedPilot, error) {
-	return s.AddPilotWithRank(ctx, playthroughID, campaign, name, portrait, "", start, max)
+	return s.AddPilotWithRank(ctx, playthroughID, campaign, name, portrait, "", start, start.Total(), max)
 }
 
 // AddPilotWithRank adds a living named pilot to a campaign run with the given rank ("" is the lowest) and starting SP, refusing
 // it when the command already has max living pilots (ErrPilotLimit), another living pilot has the portrait (ErrPortraitTaken) or
 // the name is taken (ErrNameTaken, ignoring case).
-func (s *Store) AddPilotWithRank(ctx context.Context, playthroughID, campaign, name, portrait, rank string, start SPAllocation, max int) (NamedPilot, error) {
+func (s *Store) AddPilotWithRank(ctx context.Context, playthroughID, campaign, name, portrait, rank string, start SPAllocation, total, max int) (NamedPilot, error) {
+	total = max2(total, start.Total()) // the total can't be below what is allocated; any more is unallocated
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return NamedPilot{}, err
@@ -440,10 +441,10 @@ func (s *Store) AddPilotWithRank(ctx context.Context, playthroughID, campaign, n
 	if named > 0 {
 		return NamedPilot{}, ErrNameTaken
 	}
-	p := NamedPilot{ID: newID(), Name: name, Portrait: portrait, Rank: rank, SP: start, TotalSP: start.Total()}
+	p := NamedPilot{ID: newID(), Name: name, Portrait: portrait, Rank: rank, SP: start, TotalSP: total}
 	if _, err := tx.ExecContext(ctx,
 		s.q(`INSERT INTO named_pilots (id, playthrough_id, campaign, name, portrait, rank, sp_gunnery, sp_piloting, sp_edge_tokens, sp_edge_abilities, sp_total) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`),
-		p.ID, playthroughID, campaign, name, portrait, rank, start.Gunnery, start.Piloting, start.EdgeTokens, start.EdgeAbilities, start.Total()); err != nil {
+		p.ID, playthroughID, campaign, name, portrait, rank, start.Gunnery, start.Piloting, start.EdgeTokens, start.EdgeAbilities, total); err != nil {
 		return NamedPilot{}, err
 	}
 	return p, tx.Commit()
@@ -773,4 +774,11 @@ func (s *Store) SetPilotRank(ctx context.Context, playthroughID, campaign, pilot
 		return sql.ErrNoRows
 	}
 	return nil
+}
+
+func max2(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }

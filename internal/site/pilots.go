@@ -80,7 +80,23 @@ func (s *Server) addPilot(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Pick a rank from the list.", http.StatusBadRequest)
 		return
 	}
-	if _, err := s.store.AddPilotWithRank(r.Context(), pt.ID, c.Slug, name, portrait, rank, SPAllocation{}, maxNamedPilots); errors.Is(err, ErrPilotLimit) {
+	// A recruit starts with the campaign's starting SP (150 in Refusal War), spent as the player chose and the rest unallocated.
+	var start SPAllocation
+	for field, dst := range map[string]*int{
+		"gunnery": &start.Gunnery, "piloting": &start.Piloting, "edge_tokens": &start.EdgeTokens, "edge_abilities": &start.EdgeAbilities,
+	} {
+		n, err := parseSP(r.PostFormValue(field))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		*dst = n
+	}
+	if start.Total() > c.StartingPilotSP {
+		http.Error(w, fmt.Sprintf("A new pilot has %d SP to allocate.", c.StartingPilotSP), http.StatusBadRequest)
+		return
+	}
+	if _, err := s.store.AddPilotWithRank(r.Context(), pt.ID, c.Slug, name, portrait, rank, start, c.StartingPilotSP, maxNamedPilots); errors.Is(err, ErrPilotLimit) {
 		http.Error(w, fmt.Sprintf("You can have at most %d named pilots at a time.", maxNamedPilots), http.StatusBadRequest)
 		return
 	} else if errors.Is(err, ErrNameTaken) {

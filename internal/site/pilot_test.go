@@ -310,7 +310,8 @@ func TestNamedPilotsFlow(t *testing.T) {
 	}
 	ps, _ := store.Pilots(ctx, id, "refusalwar")
 	alrek := ps[0]
-	if alrek.Name != "Alrek" || alrek.Earned() != 0 || !strings.Contains(c, `data-pilot="`+alrek.ID+`"`) {
+	// A pilot added through the endpoint starts with the campaign's 150 SP, all of it unallocated unless the request spends it.
+	if alrek.Name != "Alrek" || alrek.Earned() != 150 || alrek.Unallocated() != 150 || !strings.Contains(c, `data-pilot="`+alrek.ID+`"`) {
 		t.Fatalf("alrek = %+v", alrek)
 	}
 
@@ -340,7 +341,7 @@ func TestNamedPilotsFlow(t *testing.T) {
 	if got := award("no-such-pilot", "gunnery", "100"); got != http.StatusNotFound {
 		t.Errorf("unknown pilot: %d", got)
 	}
-	if ps, _ := store.Pilots(ctx, id, "refusalwar"); ps[0].Earned() != 0 {
+	if ps, _ := store.Pilots(ctx, id, "refusalwar"); ps[0].Earned() != 150 || ps[0].SP.Total() != 0 {
 		t.Fatalf("refused awards changed the pilot: %+v", ps[0])
 	}
 	// The trial pays 150 to 900 SP, so there is no per-award cap below the typo guard.
@@ -352,7 +353,7 @@ func TestNamedPilotsFlow(t *testing.T) {
 		t.Fatalf("allocation = %+v", ps[0].SP)
 	}
 	c = body(t, srv, "/refusalwar/manage/", cookie)
-	if !strings.Contains(c, `<span class="stat-value">3</span>`) || !strings.Contains(c, "SP earned <b>360</b>") || !strings.Contains(c, `stat-next">300/700 SP<`) || !strings.Contains(c, "<b>2</b>") || !strings.Contains(c, `stat-bar"><span style="width: 43%"`) {
+	if !strings.Contains(c, `<span class="stat-value">3</span>`) || !strings.Contains(c, "SP earned <b>510</b>") || !strings.Contains(c, `stat-next">300/700 SP<`) || !strings.Contains(c, "<b>2</b>") || !strings.Contains(c, `stat-bar"><span style="width: 43%"`) {
 		t.Fatalf("the page should show the new levels (gunnery 3, edge 2): %.4000s", c)
 	}
 
@@ -1363,11 +1364,44 @@ func TestRecruitNewPilot(t *testing.T) {
 		t.Fatalf("recruit: %d", got)
 	}
 	ps, _ = store.Pilots(ctx, id, "refusalwar")
-	if len(ps) != 3 || ps[2].Name != "Jarek" || ps[2].Portrait != free || ps[2].Rank != "Star Captain" || ps[2].TotalSP != 0 || ps[2].SP.Total() != 0 {
+	if len(ps) != 3 || ps[2].Name != "Jarek" || ps[2].Portrait != free || ps[2].Rank != "Star Captain" || ps[2].TotalSP != 150 || ps[2].SP.Total() != 0 || ps[2].Unallocated() != 150 {
 		t.Fatalf("the new pilot: %+v", ps)
 	}
 	if v := ps[2].view(factionRanks("clan")); v.Gunnery != 4 || v.Piloting != 5 || v.EdgeTokens != 1 || v.Abilities != 0 {
-		t.Errorf("a recruit is a standard 4/5 pilot with 1 Edge token: %+v", v)
+		t.Errorf("a recruit with nothing allocated is a standard 4/5 pilot with 1 Edge token: %+v", v)
+	}
+	// The 150 starting SP can be spent on the way in, in part or in full, but not exceeded.
+	for name, c := range map[string][]string{
+		"too much":     {"name", "Greedy", "gunnery", "100", "piloting", "51"},
+		"negative":     {"name", "Greedy", "gunnery", "-5"},
+		"not a number": {"name", "Greedy", "edge_tokens", "lots"},
+	} {
+		if got := recruit(c...); got != http.StatusBadRequest {
+			t.Errorf("%s: got %d, want 400", name, got)
+		}
+	}
+	if ps, _ := store.Pilots(ctx, id, "refusalwar"); len(ps) != 3 {
+		t.Fatalf("refused recruits added pilots: %d", len(ps))
+	}
+	if got := recruit("name", "Sybille", "gunnery", "50", "edge_tokens", "60"); got != http.StatusNoContent {
+		t.Fatalf("recruit with an allocation: %d", got)
+	}
+	ps, _ = store.Pilots(ctx, id, "refusalwar")
+	if s := ps[3]; s.Name != "Sybille" || s.TotalSP != 150 || s.SP != (SPAllocation{Gunnery: 50, EdgeTokens: 60}) || s.Unallocated() != 40 {
+		t.Fatalf("a recruit that spent 110 of 150 SP: %+v", s)
+	}
+	if err := store.DeletePilot(ctx, id, "refusalwar", ps[3].ID); err != nil {
+		t.Fatal(err)
+	}
+	if got := recruit("name", "Sybille", "gunnery", "90", "edge_tokens", "60"); got != http.StatusNoContent {
+		t.Fatalf("recruit spending it all: %d", got)
+	}
+	ps, _ = store.Pilots(ctx, id, "refusalwar")
+	if s := ps[3]; s.TotalSP != 150 || s.SP.Total() != 150 || s.Unallocated() != 0 || s.Gunnery() != 4 || s.EdgeTokens() != 2 {
+		t.Fatalf("a recruit that spent all 150: %+v", s)
+	}
+	if err := store.DeletePilot(ctx, id, "refusalwar", ps[3].ID); err != nil {
+		t.Fatal(err)
 	}
 	// With no portrait or rank chosen, a free portrait and the lowest rank are used.
 	if got := recruit("name", "Sybille"); got != http.StatusNoContent {
