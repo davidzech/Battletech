@@ -972,8 +972,8 @@ dialog select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 .pilot-head h3 button.name-ok:disabled { opacity: 0.5; cursor: wait; }
 
 /* Recruit New Pilot: the button under the active pilots, and its one-step dialog. */
-.recruit { margin: 1rem 0 0; }
-.recruit .muted { margin-left: 0.5rem; }
+.recruit { margin: 1rem 0 0; display: flex; justify-content: flex-end; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+.recruit .muted { margin: 0; }
 .recruit button.button:disabled { opacity: 0.45; cursor: not-allowed; filter: grayscale(0.5); }
 .recruit-rank-label { display: block; margin-top: 1rem; }
 #recruit-dialog .pilot-top { margin-top: 0.75rem; }
