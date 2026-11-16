@@ -398,15 +398,9 @@ dialog button:not(.button):hover { border-color: var(--accent); color: var(--acc
 
 /* Campaign start wizard: a step per named pilot with an SP allocator, then the hangar link, with progress at the bottom. */
 dialog.wizard { width: min(46rem, calc(100vw - 2rem)); }
-/* Campaign overview: compressed pilot and unit tables. */
-.force-table { width: 100%; min-width: min(34rem, 100%); border-collapse: collapse; margin: 0.5rem 0 1rem; font-size: 0.9rem; }
-.force-table th { text-align: right; padding: 0.3rem 0.6rem; font: 700 0.7rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--line); }
-.force-table td { text-align: right; padding: 0.2rem 0.6rem; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
-.force-table th:first-child, .force-table td:first-child { text-align: left; }
-.force-table td.who > div { display: flex; align-items: center; gap: 0.6rem; min-width: 0; }
-.force-table td.who img { flex: none; object-fit: cover; object-position: top; background: var(--bg); }
+/* Campaign overview: compressed pilot rows and hangar summary. */
 /* The overview's pilots: portrait, name and the same boxes with yellow numbers as the start wizard. */
-.roster { list-style: none; margin: 0.5rem 0 1rem; padding: 0; display: grid; gap: 0.4rem; }
+.roster { list-style: none; margin: 0.5rem 0 0; padding: 0; display: grid; gap: 0.4rem; }
 .roster-pilot { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.9rem; padding: 0.35rem 0.6rem; background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--accent); }
 .roster-pilot img { flex: none; width: 2.75rem; height: 2.75rem; object-fit: cover; object-position: top; background: var(--bg); border: 1px solid var(--line); }
 .roster-name { flex: 1 1 9rem; display: grid; gap: 0.15rem; min-width: 0; }
@@ -417,13 +411,12 @@ dialog.wizard { width: min(46rem, calc(100vw - 2rem)); }
 .roster-pilot .stat-label { font-size: 0.55rem; }
 .roster-pilot .stat-value { font-size: 1.5rem; }
 @media (max-width: 40rem) { .roster-pilot .stat-boxes { flex-basis: 100%; } }
-.unit-table td.who { font-weight: 600; }
-.unit-table td.who small { font-weight: 400; color: var(--muted); }
-.unit-table td.who img { object-fit: contain; }
-.unit-table tr.destroyed td { opacity: 0.55; }
-.unit-table tfoot td { border-bottom: 0; font: 700 0.85rem var(--display); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
-.unit-table tfoot td.total { color: var(--accent); font-size: 1.1rem; }
-.force-units { margin: 0.25rem 0 1rem; }
+.force-units { margin: 0.4rem 0 1rem; }
+/* One line for the hangar, in the same card style (and so the same width) as the pilot rows above it. */
+.force-summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.3rem 1rem; padding: 0.55rem 0.75rem; background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--accent); }
+.force-summary b { font: 700 1.05rem var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
+.force-summary .notes { font: 700 0.65rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.force-summary .total { margin-left: auto; font: 700 1.5rem var(--display); letter-spacing: 0.04em; color: var(--accent); }
 /* Danger zone: deleting a campaign. */
 .danger-zone { margin: 2.5rem 0 1rem; padding-top: 1rem; border-top: 1px solid var(--line); }
 .danger-zone h2 { color: #e5594f; }

@@ -26,43 +26,20 @@
     box.textContent = '';
     var units = data.units || [];
     if (!units.length) { box.appendChild(el('p', 'muted', 'Your hangar has no units in it yet.')); return; }
-    var table = el('table', 'force-table unit-table');
-    var head = el('thead');
-    var hr = el('tr');
-    ['Unit', 'Role', 'Tons', 'BV'].forEach(function (h) { hr.appendChild(el('th', null, h)); });
-    head.appendChild(hr);
-    table.appendChild(head);
-    var tbody = el('tbody');
+    var bv = 0, damaged = 0, destroyed = 0;
     units.forEach(function (u) {
-      var tr = el('tr', u.destroyed ? 'destroyed' : '');
-      var cell = el('td', 'who');
-      var who = el('div');
-      cell.appendChild(who);
-      var img = document.createElement('img');
-      img.src = u.icon; img.alt = ''; img.width = 42; img.height = 36; img.loading = 'lazy';
-      who.appendChild(img);
-      var label = el('span', null, u.name);
-      if (u.model) label.appendChild(el('small', null, ' ' + u.model));
-      who.appendChild(label);
-      if (u.destroyed) who.appendChild(el('span', 'tag bad', 'Destroyed'));
-      else if (u.damaged) who.appendChild(el('span', 'tag', 'Damaged'));
-      else if (u.unknown) who.appendChild(el('span', 'tag', 'Unknown'));
-      tr.appendChild(cell);
-      tr.appendChild(el('td', null, u.unknown ? '—' : u.role));
-      tr.appendChild(el('td', null, u.unknown ? '—' : String(u.tons)));
-      tr.appendChild(el('td', null, u.unknown ? '—' : commas(u.bv)));
-      tbody.appendChild(tr);
+      if (!u.unknown) bv += u.bv;
+      if (u.destroyed) destroyed++; else if (u.damaged) damaged++;
     });
-    table.appendChild(tbody);
-    var foot = el('tfoot');
-    var fr = el('tr');
-    var total = el('td', null, units.length + (units.length === 1 ? ' unit' : ' units'));
-    total.colSpan = 3;
-    fr.appendChild(total);
-    fr.appendChild(el('td', 'total', commas(data.bv) + ' BV'));
-    foot.appendChild(fr);
-    table.appendChild(foot);
-    box.appendChild(table);
+    var row = el('div', 'force-summary');
+    row.appendChild(el('b', null, units.length + (units.length === 1 ? ' unit' : ' units')));
+    var notes = [];
+    if (damaged) notes.push(damaged + ' damaged');
+    if (destroyed) notes.push(destroyed + ' destroyed');
+    if (notes.length) row.appendChild(el('span', 'notes', notes.join(' · ')));
+    var total = el('span', 'total', commas(data.bv) + ' BV');
+    row.appendChild(total);
+    box.appendChild(row);
   }
 
   function load() {
