@@ -70,7 +70,9 @@ type Campaign struct {
 	// StartingPilotSP is the SP each of those pilots allocates, all of it, when the campaign is started (Intro.md
 	// front matter starting_pilot_sp).
 	StartingPilotSP int
-	Scenarios       []Scenario
+	// StartingBV is the BV of the force a company starts with (Intro.md front matter starting_bv); 0 if not given.
+	StartingBV int
+	Scenarios  []Scenario
 }
 
 // PlayersLabel describes how many players the campaign is for, e.g. "1-2 players", "1 player", or "" if the
@@ -143,8 +145,10 @@ type frontData struct {
 	// StartingNamedPilots is how many named pilots a company must name to begin the campaign (Intro.md).
 	StartingNamedPilots int `yaml:"starting_named_pilots"`
 	// StartingPilotSP is the SP each starting named pilot allocates when the campaign is started (Intro.md).
-	StartingPilotSP int    `yaml:"starting_pilot_sp"`
-	DefaultNext     string `yaml:"default_next"`
+	StartingPilotSP int `yaml:"starting_pilot_sp"`
+	// StartingBV is the battle value of the force a company starts the campaign with (Intro.md).
+	StartingBV  int    `yaml:"starting_bv"`
+	DefaultNext string `yaml:"default_next"`
 }
 
 // readMarkdown splits optional YAML front matter from a Markdown file. A missing file yields zero values.
@@ -259,7 +263,7 @@ func (l Library) load(name string) (*Campaign, bool) {
 	sort.Slice(c.Scenarios, func(i, j int) bool { return c.Scenarios[i].Slug < c.Scenarios[j].Slug })
 	meta, intro := readMarkdown(filepath.Join(dir, "Intro.md"))
 	c.MinPlayers, c.MaxPlayers = meta.MinPlayers, meta.MaxPlayers
-	c.StartingNamedPilots, c.StartingPilotSP = meta.StartingNamedPilots, meta.StartingPilotSP
+	c.StartingNamedPilots, c.StartingPilotSP, c.StartingBV = meta.StartingNamedPilots, meta.StartingPilotSP, meta.StartingBV
 	_, kw := readMarkdown(filepath.Join(dir, "Keywords.md"))
 	c.IntroHTML = renderMarkdown(intro, false)
 	c.KeywordsHTML = renderMarkdown(kw, true)
@@ -392,4 +396,13 @@ func renderBriefing(src string) template.HTML {
 	}
 	html = strings.ReplaceAll(html, "<p>—", `<p class="cite">`+"—")
 	return template.HTML(html)
+}
+
+// StartingBVText is the starting BV with a thousands separator, e.g. "6,000".
+func (c *Campaign) StartingBVText() string {
+	digits := strconv.Itoa(c.StartingBV)
+	for i := len(digits) - 3; i > 0; i -= 3 {
+		digits = digits[:i] + "," + digits[i:]
+	}
+	return digits
 }

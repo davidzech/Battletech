@@ -5,6 +5,14 @@ import (
 	"testing"
 )
 
+func TestStartingBVText(t *testing.T) {
+	for bv, want := range map[int]string{0: "0", 999: "999", 1000: "1,000", 6000: "6,000", 12500: "12,500", 1234567: "1,234,567"} {
+		if got := (&Campaign{StartingBV: bv}).StartingBVText(); got != want {
+			t.Errorf("StartingBVText(%d) = %q, want %q", bv, got, want)
+		}
+	}
+}
+
 func TestPlayersLabel(t *testing.T) {
 	for _, c := range []struct {
 		lo, hi int

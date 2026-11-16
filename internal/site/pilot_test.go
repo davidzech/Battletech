@@ -122,8 +122,8 @@ func TestParsePilotName(t *testing.T) {
 
 func TestRefusalWarStartsWithTwoNamedPilots(t *testing.T) {
 	c, ok := (Library{Root: "../../campaigns"}).Campaign("refusalwar")
-	if !ok || c.StartingNamedPilots != 2 || c.StartingPilotSP != 150 {
-		t.Fatalf("Refusal War mandates two named pilots with 150 SP each to start: %+v", c)
+	if !ok || c.StartingNamedPilots != 2 || c.StartingPilotSP != 150 || c.StartingBV != 6000 {
+		t.Fatalf("Refusal War starts with two named pilots (150 SP each) and a 6000 BV force: %+v", c)
 	}
 }
 
@@ -387,6 +387,15 @@ func TestStartWizardSubmission(t *testing.T) {
 	}
 	if strings.Contains(page, `id="run-dialog"`) {
 		t.Error("an unstarted campaign has no change-hangar dialog")
+	}
+	// The starting rules are a short bulleted list, not one dense sentence.
+	for _, want := range []string{`class="start-rules"`, `<li>Your force starts with <b>6,000 BV</b>.</li>`, `<li>You create <b>2 named pilots</b>, each allocating <b>150 SP</b>.</li>`, `<li>You link this campaign&rsquo;s MekBay hangar`} {
+		if !strings.Contains(page, want) {
+			t.Errorf("starting rules are missing %s", want)
+		}
+	}
+	if strings.Contains(page, "takes a few steps") {
+		t.Error("the dense starting sentence should be gone")
 	}
 
 	with := func(mut func(v url.Values)) url.Values {

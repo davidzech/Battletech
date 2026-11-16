@@ -364,6 +364,11 @@ dialog button:not(.button) {
 }
 dialog button:not(.button):hover { border-color: var(--accent); color: var(--accent); }
 
+/* The starting rules listed on an unstarted campaign. */
+.start-rules { margin: 0.4rem 0 0.9rem; padding-left: 1.2rem; display: grid; gap: 0.3rem; }
+.start-rules li::marker { color: var(--accent); }
+.start-rules b { color: var(--accent); font-weight: 700; }
+
 /* Named pilots on the campaign page. */
 .pilots { margin: 1.5rem 0; }
 .pilots .need { color: var(--accent); font: 700 1rem var(--display); letter-spacing: 0.05em; }
