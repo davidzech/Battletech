@@ -21,7 +21,6 @@
 </dialog>
 <section class="pilots" id="pilots" data-campaign="{{.Campaign.Slug}}" data-portraits="{{.Portraits}}" data-ladders="{{.Ladders}}">
 <h2>Named pilots</h2>
-<p class="muted">Only named pilots improve their skills, use Edge and earn Edge abilities. A command may have up to {{.MaxPilots}} at a time.</p>
 <ul class="pilot-list">
 {{range .Pilots}}{{if not .Fallen}}<li class="pilot" data-pilot="{{.ID}}" data-name="{{.Name}}" data-rank="{{.Rank}}" data-portrait="{{.Portrait}}" data-sp="{{range .Columns}}{{.SP}},{{end}}" data-unallocated="{{.Unallocated}}">
 <div class="pilot-card"><div class="pilot-side"><button type="button" class="portrait-btn" title="Change portrait" aria-label="Change {{.Name}}&rsquo;s portrait"><img src="{{.PortraitURL}}" alt="" width="96" height="96"><span class="portrait-edit">Change</span></button>{{if $.Ranks}}<button type="button" class="rank-btn" title="Change rank" aria-label="Change {{.Name}}&rsquo;s rank">{{.Rank}}</button>{{end}}</div>
@@ -33,7 +32,6 @@
 </li>
 {{end}}{{end}}</ul>
 {{if .Memorial}}<h2 class="memorial-head">Memorial</h2>
-<p class="muted">Pilots Killed in Action. They stay on record but are out of the campaign.</p>
 <ul class="pilot-list memorial">
 {{range .Pilots}}{{if .Fallen}}<li class="pilot kia" data-pilot="{{.ID}}" data-name="{{.Name}}">
 <div class="pilot-card"><div class="pilot-side"><span class="portrait-btn"><img src="{{.PortraitURL}}" alt="" width="96" height="96"></span>{{if .Rank}}<span class="rank-label">{{.Rank}}</span>{{end}}</div>
