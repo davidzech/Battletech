@@ -10,6 +10,9 @@
 // p.sp[ladder.key] is the SP in a column. With `base` ({key: SP already in the column}) p.sp holds only the SP being
 // added, and the controls show the column's whole total, with what it holds now as their minimum.
 (function () {
+  // The arrow between the SP so far and the next level, drawn rather than typed so it reads clearly in any font.
+  var ARROW = '<svg viewBox="0 0 16 10" width="16" height="10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 5h13M10 1l4 4-4 4"/></svg>';
+
   function el(tag, cls, text) {
     var e = document.createElement(tag);
     if (cls) e.className = cls;
@@ -85,8 +88,14 @@
       // "SP/needed SP -> <next level>", the next level in bold yellow, or "max" at the top of the ladder.
       next.textContent = '';
       if (n) {
-        next.appendChild(document.createTextNode(spent + '/' + n.sp + ' SP → '));
-        next.appendChild(el('b', null, String(n.level)));
+        next.appendChild(document.createTextNode(spent + '/' + n.sp + ' SP'));
+        var to = el('span', 'stat-to'); // the arrow and the level wrap together, never apart
+        var arrow = el('span', 'stat-arrow');
+        arrow.setAttribute('aria-hidden', 'true');
+        arrow.innerHTML = ARROW; // a constant defined above, never data
+        to.appendChild(arrow);
+        to.appendChild(el('b', null, String(n.level)));
+        next.appendChild(to);
       } else {
         next.textContent = 'max';
       }

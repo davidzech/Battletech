@@ -479,6 +479,9 @@ dialog .pilot-name input::placeholder { color: var(--muted); font-weight: 400; o
 .stat-value { font: 700 2.6rem/1 var(--display); color: var(--accent); }
 .stat-next { font-size: 0.65rem; line-height: 1.2; color: var(--muted); }
 .stat-next b { color: var(--accent); font-weight: 700; }
+.stat-to { white-space: nowrap; }
+.stat-arrow { display: inline-block; margin: 0 0.3em; color: var(--text); vertical-align: -0.05em; line-height: 0; }
+.stat-arrow svg { width: 1.2em; height: 0.8em; }
 .alloc-head { margin: 1rem 0 0.25rem; font: 700 1rem var(--display); letter-spacing: 0.08em; text-transform: uppercase; }
 .alloc-remaining { margin: 0.2rem 0 0.6rem; font: 700 1.05rem var(--display); letter-spacing: 0.05em; color: var(--accent); }
 .alloc-remaining.done { color: var(--text); }
