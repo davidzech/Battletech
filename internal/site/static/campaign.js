@@ -242,14 +242,18 @@
     runCheck(link);
   }
 
-  function recheckButton() {
-    var b = el('button', 'recheck', 'Check again');
-    b.type = 'button';
-    b.addEventListener('click', forceCheck);
-    return b;
+  // The refresh icon inside the link box: enabled once the link has the right shape, spinning while it is read.
+  var refreshBtn = null;
+  var REFRESH_ICON = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>';
+  function syncRefresh() {
+    if (!refreshBtn) return;
+    var reading = check.state === 'checking';
+    refreshBtn.disabled = reading || hangarProblem(hangar.trim()) !== '';
+    refreshBtn.classList.toggle('spinning', reading);
   }
 
   function renderCheck() {
+    syncRefresh();
     if (!statusBox) return;
     statusBox.textContent = '';
     if (check.state === 'checking') {
@@ -260,7 +264,6 @@
       statusBox.appendChild(loading);
     } else if (check.state === 'error') {
       statusBox.appendChild(el('p', 'hc-problem', check.message));
-      statusBox.appendChild(recheckButton());
     } else if (check.state === 'done') {
       var r = check.result;
       var summary = el('p', 'hc-summary');
@@ -274,7 +277,6 @@
       summary.appendChild(bv);
       statusBox.appendChild(summary);
       r.problems.forEach(function (t) { statusBox.appendChild(el('p', 'hc-problem', t)); });
-      statusBox.appendChild(recheckButton());
       if (r.units.length) {
         var list = el('ul', 'hc-units');
         r.units.forEach(function (u) {
@@ -316,10 +318,22 @@
     input.addEventListener('input', function () {
       hangar = input.value; error.textContent = '';
       scheduleCheck(350);
+      syncRefresh();
       updateNext();
     });
+    // The link box, with a refresh icon embedded on its right: the player fixes the hangar in MekBay without
+    // changing the link, so this reads it again.
+    var field = el('div', 'link-field');
+    refreshBtn = el('button', 'refresh');
+    refreshBtn.type = 'button';
+    refreshBtn.title = 'Check the hangar again';
+    refreshBtn.setAttribute('aria-label', 'Check the hangar again');
+    refreshBtn.innerHTML = REFRESH_ICON;
+    refreshBtn.addEventListener('click', forceCheck);
+    field.appendChild(input);
+    field.appendChild(refreshBtn);
     body.appendChild(label);
-    body.appendChild(input);
+    body.appendChild(field);
     statusBox = el('div', 'hangar-check');
     statusBox.setAttribute('aria-live', 'polite');
     body.appendChild(statusBox);
