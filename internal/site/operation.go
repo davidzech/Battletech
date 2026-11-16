@@ -65,6 +65,11 @@ type hangarUnitView struct {
 	InDeployed bool    `json:"inDeployed"`
 	// MekBayURL is the unit's own page on mekbay.com (its sheet, not the player's force), "" when the unit has no MekBay ID.
 	MekBayURL string `json:"mekbayUrl"`
+	// Condition is the worst state the unit is in (see condition.go): ok, armor, structure, crippled or destroyed, with a note saying why. AmmoExpended
+	// is separate: a unit can be in any condition and need rearming too.
+	Condition     string `json:"condition"`
+	ConditionNote string `json:"conditionNote"`
+	AmmoExpended  bool   `json:"ammoExpended"`
 }
 
 var chassisNames = regexp.MustCompile(`^(.*?)\s*\((.+)\)$`)
@@ -115,6 +120,13 @@ func hangarViews(h HangarForce) []hangarUnitView {
 		} else {
 			v.Name, v.Unknown, v.Icon = hu.Unit, true, defaultIconURL("")
 		}
+		var tons float64
+		var engine string
+		if u, ok := unitByName(hu.Unit); ok {
+			tons, engine = u.Tons, u.Engine
+		}
+		c, note := conditionOf(hu, tons, engine)
+		v.Condition, v.ConditionNote, v.AmmoExpended = string(c), note, hu.AmmoUsed > 0
 		views = append(views, v)
 	}
 	return views

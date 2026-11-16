@@ -14,6 +14,14 @@
   var EXTERNAL = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/></svg>';
   var HELMET = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 13.5a8.5 8.5 0 0 1 17 0V20h-5v-3.5h-7V20h-5z"/></svg>';
 
+  // The pill for each condition: its label and colour class (see .mr-chip.cond-* in style.css). "ok" has none.
+  var CONDITIONS = {
+    armor: { label: 'Armor damage', cls: 'cond-armor' },
+    structure: { label: 'Structure damage', cls: 'cond-structure' },
+    crippled: { label: 'Crippled', cls: 'cond-crippled' },
+    destroyed: { label: 'Destroyed', cls: 'cond-destroyed' }
+  };
+
   function el(tag, cls, text) {
     var e = document.createElement(tag);
     if (cls) e.className = cls;
@@ -64,7 +72,15 @@
       if (u.pilot) pilot.title = u.pilot;
       chips.appendChild(pilot);
     }
-    if (u.destroyed) chips.appendChild(chip('bad', 'Destroyed'));
+    // A unit with a worked-out condition (the hangar's) shows its worst state, one of armor / structure / crippled / destroyed, and a separate
+    // pill when its ammo is spent; the note says why. Rows without one (the deploy popup) keep the plain Destroyed / Damaged tags.
+    var cond = u.condition && !u.unknown && !u.notMech ? CONDITIONS[u.condition] : null;
+    if (cond) {
+      var cp = chip(cond.cls, cond.label);
+      if (u.conditionNote) cp.title = u.conditionNote;
+      chips.appendChild(cp);
+      if (u.ammoExpended) chips.appendChild(chip('ammo', 'Ammo expended'));
+    } else if (u.destroyed) chips.appendChild(chip('bad', 'Destroyed'));
     else if (u.unknown) chips.appendChild(chip('bad', 'Unknown unit'));
     else if (u.notMech) chips.appendChild(chip('warn', 'Not a mech'));
     else if (u.damaged) chips.appendChild(chip('warn', 'Damaged'));

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -24,7 +25,7 @@ func hangarCacheStore(t *testing.T, s *Store, id string) {
 		t.Fatal(err)
 	}
 	got, at, ok, err := s.CachedHangar(ctx, id, camp, inst)
-	if err != nil || !ok || got.Name != "Test Hangar" || len(got.Units) != 2 || got.Units[1] != h.Units[1] || at.IsZero() {
+	if err != nil || !ok || got.Name != "Test Hangar" || len(got.Units) != 2 || !reflect.DeepEqual(got.Units[1], h.Units[1]) || at.IsZero() {
 		t.Fatalf("cached hangar: %+v at %v ok %v err %v", got, at, ok, err)
 	}
 	// A copy belongs to the hangar link it was read from.

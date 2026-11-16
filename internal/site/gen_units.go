@@ -23,7 +23,8 @@ type entry struct {
 	Role    string  `json:"role"`
 	Type    string  `json:"type"`
 	Tech    string  `json:"techBase"`
-	Icon    string  `json:"icon,omitempty"` // in data/units.json: the path inside mm-data; written to the index as iconFile(path)
+	Engine  string  `json:"engine,omitempty"` // Fusion, XL (Clan), ...; the crippling rule needs to know Fusion from the rest
+	Icon    string  `json:"icon,omitempty"`   // in data/units.json: the path inside mm-data; written to the index as iconFile(path)
 }
 
 func main() {

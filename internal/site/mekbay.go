@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/coder/websocket"
@@ -53,6 +54,12 @@ type HangarUnit struct {
 	Piloting  int
 	Damaged   bool // has recorded armor/structure damage, critical hits or spent ammo
 	Destroyed bool
+	// The raw damage MekBay records, from which conditionOf works out the unit's state (see condition.go).
+	Locations  map[string]LocationLoss // armor and internal structure points lost, by location (HD, CT, LT, RT, LA, RA, LL, RL ...)
+	AmmoUsed   int                     // ammo consumed, summed over its ammo bins
+	EngineHits int                     // destroyed engine slots
+	// TorsoCheckFailed is MekBay's stored result of the torso crippling check (rule check core.torso-crippling).
+	TorsoCheckFailed bool
 }
 
 // HangarForce is a player's campaign force, read from MekBay.
@@ -241,18 +248,25 @@ func parseHangarForce(raw json.RawMessage) (HangarForce, error) {
 					ID    string `json:"id"`
 					Unit  string `json:"unit"`
 					State struct {
-						Destroyed bool           `json:"destroyed"`
-						Locations map[string]any `json:"locations"`
-						Crits     []struct {
-							Hits      int `json:"hits"`
-							Consumed  int `json:"consumed"`
-							Destroyed any `json:"destroyed"`
+						Destroyed bool `json:"destroyed"`
+						Locations map[string]struct {
+							Armor    int `json:"armor"`
+							Internal int `json:"internal"`
+						} `json:"locations"`
+						Crits []struct {
+							Name      string `json:"name"`
+							Hits      int    `json:"hits"`
+							Consumed  int    `json:"consumed"`
+							Destroyed any    `json:"destroyed"`
 						} `json:"crits"`
 						Crew []struct {
 							Name     string `json:"name"`
 							Gunnery  int    `json:"gunnerySkill"`
 							Piloting int    `json:"pilotingSkill"`
 						} `json:"crew"`
+						RuleChecks map[string]struct {
+							Status string `json:"status"`
+						} `json:"ruleChecks"`
 					} `json:"state"`
 				} `json:"units"`
 			} `json:"groups"`
@@ -273,11 +287,28 @@ func parseHangarForce(raw json.RawMessage) (HangarForce, error) {
 				hu.Pilot, hu.Gunnery, hu.Piloting = c.Name, c.Gunnery, c.Piloting
 			}
 			hu.Damaged = len(u.State.Locations) > 0
+			for k, l := range u.State.Locations {
+				if hu.Locations == nil {
+					hu.Locations = map[string]LocationLoss{}
+				}
+				hu.Locations[k] = LocationLoss{Armor: l.Armor, Internal: l.Internal}
+			}
 			for _, c := range u.State.Crits {
-				if c.Hits > 0 || c.Consumed > 0 || (c.Destroyed != nil && c.Destroyed != float64(0)) {
+				gone := c.Destroyed != nil && c.Destroyed != float64(0)
+				if c.Hits > 0 || c.Consumed > 0 || gone {
 					hu.Damaged = true
 				}
+				hu.AmmoUsed += c.Consumed
+				// Each destroyed slot (or hit) of these components is a critical hit on it, which the crippling rules count.
+				n := c.Hits
+				if gone && n < 1 {
+					n = 1
+				}
+				if strings.Contains(strings.ToLower(c.Name), "engine") {
+					hu.EngineHits += n
+				}
 			}
+			hu.TorsoCheckFailed = u.State.RuleChecks["core.torso-crippling"].Status == "failed"
 			h.Units = append(h.Units, hu)
 		}
 	}

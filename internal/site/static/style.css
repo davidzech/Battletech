@@ -616,6 +616,13 @@ dialog .deploy-unit label {
 .mr-chip svg { width: 0.8rem; height: 0.8rem; fill: currentColor; }
 .mr-chip.pilot { color: var(--accent-ink); background: var(--accent); }
 .mr-chip.warn { color: var(--accent); background: transparent; border: 1px solid currentColor; text-transform: uppercase; font-size: 0.62rem; letter-spacing: 0.08em; }
+.mr-chip.cond-armor, .mr-chip.cond-structure, .mr-chip.cond-crippled, .mr-chip.cond-destroyed, .mr-chip.ammo { background: transparent; border: 1px solid currentColor; text-transform: uppercase; font-size: 0.62rem; letter-spacing: 0.08em; }
+.mr-chip.cond-armor { color: #e8c547; }
+.mr-chip.cond-structure { color: #ff9a4d; }
+.mr-chip.cond-crippled { color: #ff6b4a; background: rgb(255 107 74 / 0.14); }
+.mr-chip.cond-destroyed { color: #fff; background: #c0392b; border-color: #c0392b; }
+.mr-chip.ammo { color: #6cb8ff; }
+.mech-list .mr-chip.cond-armor, .mech-list .mr-chip.cond-structure, .mech-list .mr-chip.cond-crippled, .mech-list .mr-chip.cond-destroyed, .mech-list .mr-chip.ammo { font-size: 0.66rem; }
 .mr-chip.bad { color: #ff7a59; background: transparent; border: 1px solid currentColor; text-transform: uppercase; font-size: 0.62rem; letter-spacing: 0.08em; }
 .mech-row.destroyed .mr-icon { filter: grayscale(1); opacity: 0.6; }
 /* The opt-in "open on MekBay" button at the right of a row (mechrow.js externalUrl). */

@@ -27,6 +27,7 @@ type Unit struct {
 	Role     string  `json:"role"`        // Master Unit List role
 	Type     string  `json:"type"`        // Mek, Tank, ProtoMek...
 	TechBase string  `json:"techBase"`    // Clan, Inner Sphere, Mixed
+	Engine   string  `json:"engine"`      // Fusion, XL (Clan), Light, ICE...
 	Icon     string  `json:"icon"`        // file name in icons/ (mechs only; "" for anything else)
 }
 
