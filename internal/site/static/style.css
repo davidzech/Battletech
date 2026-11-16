@@ -629,8 +629,9 @@ dialog .deploy-unit label {
 .mech-row.has-row-link { cursor: pointer; }
 .mech-row.has-row-link:hover, .mech-row.has-row-link:focus-visible { border-color: var(--accent); outline: none; }
 .mr-nameline { display: flex; align-items: center; gap: 0.45rem; }
-/* The little gray (i) after the unit name: a link to the unit's generic page. */
-.mr-ext { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 1.05rem; height: 1.05rem; font: italic 700 0.72rem/1 Georgia, serif; text-decoration: none; color: var(--muted); border: 1px solid currentColor; border-radius: 50%; }
+/* The little gray external-link icon after the unit name: a link to the unit's generic page, with no button around it. */
+.mr-ext { flex: none; display: inline-flex; align-items: center; color: var(--muted); }
+.mr-ext svg { width: 0.95rem; height: 0.95rem; }
 .mr-ext:hover, .mr-ext:focus-visible { color: var(--accent); outline: none; }
 @media (max-width: 40rem) {
   .mech-row { grid-template-columns: 1.5rem 2.8rem minmax(0, 1fr); }

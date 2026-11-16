@@ -13,6 +13,8 @@
   // The standard "opens in a new tab" icon: a box with an arrow leaving its top right corner.
   var HELMET = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 13.5a8.5 8.5 0 0 1 17 0V20h-5v-3.5h-7V20h-5z"/></svg>';
 
+  var EXTERNAL = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/></svg>';
+
   // The pill for each condition: its label and colour class (see .mr-chip.cond-* in style.css). "ok" has none.
   var CONDITIONS = {
     armor: { label: 'Armor damage', cls: 'cond-armor' },
@@ -89,7 +91,7 @@
 
     row.appendChild(main);
 
-    // A small gray (i) after the name opens the unit's generic page (its General tab on MekBay) in a new tab.
+    // A small gray external-link icon after the name opens the unit's generic page (its General tab on MekBay) in a new tab.
     if (u.externalUrl && /^https:\/\/mekbay\.com\//.test(u.externalUrl)) {
       var link = document.createElement('a');
       link.className = 'mr-ext';
@@ -98,7 +100,7 @@
       link.rel = 'noopener noreferrer';
       link.title = 'About this unit on MekBay';
       link.setAttribute('aria-label', 'About ' + (u.name + ' ' + (u.model || '')).trim() + ' on MekBay (opens in a new tab)');
-      link.textContent = 'i';
+      link.innerHTML = EXTERNAL; // a constant defined above, never data
       nameLine.appendChild(link);
     }
     // rowUrl (a https://mekbay.com/ link) makes the whole row a link opened in a new tab, e.g. the player's hangar with this unit selected.
