@@ -414,3 +414,38 @@ func (s *Store) MarkFallen(ctx context.Context, playthroughID, campaign, pilotID
 	}
 	return nil
 }
+
+// ErrAlreadyStarted is returned when pilots are given to start a campaign that has already been started.
+var ErrAlreadyStarted = errors.New("this campaign has already been started")
+
+// StartRunWithPilots starts a campaign and creates its starting named pilots, all or nothing. It refuses
+// (ErrAlreadyStarted) if the campaign was already started, so submitting the wizard twice can't make duplicate pilots.
+func (s *Store) StartRunWithPilots(ctx context.Context, playthroughID, campaign string, h Hangar, pilots []NewPilot) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var existing int
+	if err := tx.QueryRowContext(ctx,
+		s.q(`SELECT COUNT(*) FROM campaign_runs WHERE playthrough_id = ? AND campaign = ?`),
+		playthroughID, campaign).Scan(&existing); err != nil {
+		return err
+	}
+	if existing > 0 {
+		return ErrAlreadyStarted
+	}
+	if _, err := tx.ExecContext(ctx,
+		s.q(`INSERT INTO campaign_runs (playthrough_id, campaign, hangar_url, hangar_instance, hangar_sel) VALUES (?, ?, ?, ?, ?)`),
+		playthroughID, campaign, h.URL, h.Instance, h.Sel); err != nil {
+		return err
+	}
+	for _, p := range pilots {
+		if _, err := tx.ExecContext(ctx,
+			s.q(`INSERT INTO named_pilots (id, playthrough_id, campaign, name, sp_gunnery, sp_piloting, sp_edge_tokens, sp_edge_abilities) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`),
+			newID(), playthroughID, campaign, p.Name, p.SP.Gunnery, p.SP.Piloting, p.SP.EdgeTokens, p.SP.EdgeAbilities); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}

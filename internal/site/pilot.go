@@ -1,6 +1,7 @@
 package site
 
 import (
+	"encoding/json"
 	"errors"
 	"unicode/utf8"
 )
@@ -15,24 +16,29 @@ const maxNamedPilots = 4
 
 // ladderRow is one step of an improvement ladder: reaching Level costs SP in total (cumulative, not per step) and
 // adds Handicap (that level's handicap alone, not added to earlier steps').
-type ladderRow struct{ Level, Handicap, SP int }
+type ladderRow struct {
+	Level    int `json:"level"`
+	Handicap int `json:"handicap"`
+	SP       int `json:"sp"`
+}
 
 // ladder is one column of the improvement table: the level a pilot starts at, and the steps above it.
 type ladder struct {
-	Name string
-	Base int // the level with no SP allocated
-	Rows []ladderRow
+	Key  string      `json:"key"` // the column's form field and JSON name
+	Name string      `json:"name"`
+	Base int         `json:"base"` // the level with no SP allocated
+	Rows []ladderRow `json:"rows"`
 }
 
 // The Named Pilot Improvement Table (Classic BattleTech columns). Gunnery and Piloting get better as the number
 // falls; Edge tokens and Edge abilities as it rises. The Alpha Strike "Skill" column isn't used by this site.
 var (
-	gunneryLadder    = ladder{"Gunnery", 4, []ladderRow{{3, 12, 300}, {2, 28, 700}, {1, 48, 1200}, {0, 88, 2200}}}
-	pilotingLadder   = ladder{"Piloting", 5, []ladderRow{{4, 4, 100}, {3, 8, 200}, {2, 28, 700}, {1, 48, 1200}}}
-	edgeTokensLadder = ladder{"Edge tokens", 1, []ladderRow{
+	gunneryLadder    = ladder{"gunnery", "Gunnery", 4, []ladderRow{{3, 12, 300}, {2, 28, 700}, {1, 48, 1200}, {0, 88, 2200}}}
+	pilotingLadder   = ladder{"piloting", "Piloting", 5, []ladderRow{{4, 4, 100}, {3, 8, 200}, {2, 28, 700}, {1, 48, 1200}}}
+	edgeTokensLadder = ladder{"edge_tokens", "Edge tokens", 1, []ladderRow{
 		{2, 2, 60}, {3, 5, 120}, {4, 8, 200}, {5, 12, 300}, {6, 17, 420}, {7, 22, 560}, {8, 29, 720}, {9, 36, 900}, {10, 44, 1100},
 	}}
-	edgeAbilitiesLadder = ladder{"Edge abilities", 0, []ladderRow{{1, 2, 60}, {2, 8, 180}, {3, 14, 360}, {4, 24, 600}, {5, 36, 900}}}
+	edgeAbilitiesLadder = ladder{"edge_abilities", "Edge abilities", 0, []ladderRow{{1, 2, 60}, {2, 8, 180}, {3, 14, 360}, {4, 24, 600}, {5, 36, 900}}}
 )
 
 // at is the step a column has reached with sp allocated to it: the highest row it can afford, or the base level
@@ -56,6 +62,16 @@ func (l ladder) next(sp int) (r ladderRow, ok bool) {
 	}
 	return ladderRow{}, false
 }
+
+// laddersJSON is the four ladders as JSON, handed to the campaign page so the pilot builder can preview levels with
+// exactly the rules the server uses.
+var laddersJSON = func() string {
+	b, err := json.Marshal([]ladder{gunneryLadder, pilotingLadder, edgeTokensLadder, edgeAbilitiesLadder})
+	if err != nil {
+		panic(err)
+	}
+	return string(b)
+}()
 
 // SPAllocation is SP spread over a pilot's four columns.
 type SPAllocation struct {
@@ -146,6 +162,12 @@ func pilotViews(pilots []NamedPilot) (views []PilotView, alive int) {
 		}
 	}
 	return views, alive
+}
+
+// NewPilot is a pilot to create along with a campaign run: a name and the SP allocated at the start.
+type NewPilot struct {
+	Name string
+	SP   SPAllocation
 }
 
 // ErrPilotLimit is returned when a command already has the most named pilots it may have.

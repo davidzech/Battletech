@@ -7,23 +7,39 @@
 <h2>{{if .Run.Started}}Campaign started{{else}}Start this campaign{{end}}</h2>
 {{if .Run.Started}}<p class="muted">{{.Play.CompanyName}} is running this campaign. Its MekBay hangar holds your mechs, and scenarios deploy from it.</p>
 <p class="downloads"><a class="button" href="{{.Run.HangarURL}}" target="_blank" rel="noopener noreferrer">Open hangar</a><button type="button" class="button" id="run-open">Change hangar link</button></p>
-{{else}}<p class="muted">Each campaign has its own MekBay hangar: the force {{.Play.CompanyName}} fields in it. Paste the link to start.</p>
-<p class="downloads"><button type="button" class="button" id="run-open">Start campaign&hellip;</button></p>
+{{else}}<p class="muted">Starting {{.Campaign.Label}} takes a few steps: {{if .Campaign.StartingNamedPilots}}create your {{.Campaign.StartingNamedPilots}} named pilots (each allocates {{.Campaign.StartingPilotSP}} SP), then {{end}}link this campaign&rsquo;s MekBay hangar, the force {{.Play.CompanyName}} fields in it.</p>
+<p class="downloads"><button type="button" class="button" id="wizard-open">Start campaign&hellip;</button></p>
 {{end}}</section>
-<dialog id="run-dialog" aria-labelledby="run-title">
+{{if .Run.Started}}<dialog id="run-dialog" aria-labelledby="run-title">
   <form id="run-form" autocomplete="off" novalidate>
-    <h2 id="run-title">{{if .Run.Started}}Change hangar link{{else}}Start {{.Campaign.Label}}{{end}}</h2>
+    <h2 id="run-title">Change hangar link</h2>
     <p>Paste the link to this campaign&rsquo;s MekBay hangar, the force holding all of your mechs.</p>
     <label for="run-hangar">MekBay hangar link</label>
     <input id="run-hangar" class="wide" name="hangar" type="url" value="{{.Run.HangarURL}}" placeholder="https://mekbay.com/?instance=&hellip;" spellcheck="false" required>
     <p id="run-error" class="form-error" role="alert"></p>
     <div class="form-actions">
-      <button type="submit" class="button">{{if .Run.Started}}Save link{{else}}Start campaign{{end}}</button>
+      <button type="submit" class="button">Save link</button>
       <button type="button" id="run-cancel">Cancel</button>
     </div>
   </form>
 </dialog>
-<script src="/static/campaign.js" defer></script>
+{{else}}<dialog id="start-wizard" class="wizard" aria-labelledby="wiz-title" data-campaign="{{.Campaign.Slug}}" data-pilots="{{.Campaign.StartingNamedPilots}}" data-sp="{{.Campaign.StartingPilotSP}}" data-ladders="{{.Ladders}}">
+  <form id="wiz-form" autocomplete="off" novalidate>
+    <h2 id="wiz-title"></h2>
+    <div id="wiz-body"></div>
+    <p id="wiz-error" class="form-error" role="alert"></p>
+    <div class="form-actions">
+      <button type="button" id="wiz-back">Back</button>
+      <button type="submit" class="button" id="wiz-next">Next</button>
+      <button type="button" id="wiz-cancel">Cancel</button>
+    </div>
+    <div class="wiz-footer">
+      <span class="wiz-count" id="wiz-count"></span>
+      <div class="wiz-progress" id="wiz-progress" role="progressbar" aria-valuemin="0" aria-valuemax="1" aria-valuenow="0"><span id="wiz-bar"></span></div>
+    </div>
+  </form>
+</dialog>
+{{end}}<script src="/static/campaign.js" defer></script>
 {{if .Run.Started}}<section class="pilots" id="pilots" data-campaign="{{.Campaign.Slug}}">
 <h2>Named pilots</h2>
 {{if .PilotsNeeded}}<p class="need">This campaign needs {{.Campaign.StartingNamedPilots}} named pilots before you can deploy. Name {{.PilotsNeeded}} more.</p>

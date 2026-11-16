@@ -52,7 +52,7 @@ type hangarUnitView struct {
 	Class      string  `json:"class"`
 	Role       string  `json:"role"`
 	Tons       float64 `json:"tons"`
-	BV         int     `json:"bv"` // with the pilot's skills, as MekBay counts it
+	BV         int     `json:"bv"` // base battle value; pilot skills never change it in this campaign
 	Pilot      string  `json:"pilot"`
 	Gunnery    int     `json:"gunnery"`
 	Piloting   int     `json:"piloting"`
@@ -80,7 +80,7 @@ func hangarViews(h HangarForce) []hangarUnitView {
 		v := hangarUnitView{ID: hu.ID, Pilot: hu.Pilot, Gunnery: hu.Gunnery, Piloting: hu.Piloting, Damaged: hu.Damaged, Destroyed: hu.Destroyed, InDeployed: sameGroupName(hu.Group, deployedGroup)}
 		if u, ok := unitByName(hu.Unit); ok {
 			v.Name, v.Class, v.Role, v.Tons = displayName(u), u.Class, u.Role, u.Tons
-			v.BV = adjustedBV(u.BV, hu.Gunnery, hu.Piloting)
+			v.BV = u.BV // base BV: this campaign ignores pilot skills, so skill can never be a way to game the BV cap
 		} else {
 			v.Name, v.Unknown = hu.Unit, true
 		}

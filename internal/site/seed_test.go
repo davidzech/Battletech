@@ -209,7 +209,7 @@ func TestSeedAndCampaignFlow(t *testing.T) {
 		t.Fatal("rejected requests must not name the company")
 	}
 	// A campaign can't be started before the company has a name.
-	camp := url.Values{"campaign": {"refusalwar"}, "hangar": {goodHangar}}
+	camp := startForm(goodHangar, "Alrek", "Katarina")
 	if r := post(t, srv, "/api/campaign/start", camp, cookie, srv.URL); r.StatusCode != http.StatusBadRequest {
 		t.Fatalf("start before naming the company: got %d", r.StatusCode)
 	}
@@ -246,7 +246,7 @@ func TestSeedAndCampaignFlow(t *testing.T) {
 	}
 
 	// The campaign page offers to start it.
-	if c := body(t, srv, "/refusalwar/", cookie); !strings.Contains(c, `id="run-open"`) || !strings.Contains(c, "Start this campaign") || strings.Contains(c, "Campaign started") {
+	if c := body(t, srv, "/refusalwar/", cookie); !strings.Contains(c, `id="wizard-open"`) || !strings.Contains(c, "Start this campaign") || strings.Contains(c, "Campaign started") {
 		t.Fatalf("unstarted campaign page: %.1500s", c)
 	}
 

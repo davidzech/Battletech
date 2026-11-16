@@ -67,7 +67,10 @@ type Campaign struct {
 	// StartingNamedPilots is how many named pilots the campaign requires before scenarios can be played
 	// (Intro.md front matter starting_named_pilots); 0 means none are required.
 	StartingNamedPilots int
-	Scenarios           []Scenario
+	// StartingPilotSP is the SP each of those pilots allocates, all of it, when the campaign is started (Intro.md
+	// front matter starting_pilot_sp).
+	StartingPilotSP int
+	Scenarios       []Scenario
 }
 
 // PlayersLabel describes how many players the campaign is for, e.g. "1-2 players", "1 player", or "" if the
@@ -138,8 +141,10 @@ type frontData struct {
 	MinPlayers int                 `yaml:"min_players"`
 	MaxPlayers int                 `yaml:"max_players"`
 	// StartingNamedPilots is how many named pilots a company must name to begin the campaign (Intro.md).
-	StartingNamedPilots int    `yaml:"starting_named_pilots"`
-	DefaultNext         string `yaml:"default_next"`
+	StartingNamedPilots int `yaml:"starting_named_pilots"`
+	// StartingPilotSP is the SP each starting named pilot allocates when the campaign is started (Intro.md).
+	StartingPilotSP int    `yaml:"starting_pilot_sp"`
+	DefaultNext     string `yaml:"default_next"`
 }
 
 // readMarkdown splits optional YAML front matter from a Markdown file. A missing file yields zero values.
@@ -254,7 +259,7 @@ func (l Library) load(name string) (*Campaign, bool) {
 	sort.Slice(c.Scenarios, func(i, j int) bool { return c.Scenarios[i].Slug < c.Scenarios[j].Slug })
 	meta, intro := readMarkdown(filepath.Join(dir, "Intro.md"))
 	c.MinPlayers, c.MaxPlayers = meta.MinPlayers, meta.MaxPlayers
-	c.StartingNamedPilots = meta.StartingNamedPilots
+	c.StartingNamedPilots, c.StartingPilotSP = meta.StartingNamedPilots, meta.StartingPilotSP
 	_, kw := readMarkdown(filepath.Join(dir, "Keywords.md"))
 	c.IntroHTML = renderMarkdown(intro, false)
 	c.KeywordsHTML = renderMarkdown(kw, true)

@@ -199,7 +199,7 @@ func TestDeployGroups(t *testing.T) {
 
 func hangarFixture() HangarForce {
 	return HangarForce{Name: "Test Hangar", Timestamp: "t", Units: []HangarUnit{
-		{ID: "u-vulture", Unit: "BMVulture_Prime", Group: "Hangar", Pilot: "Anya", Gunnery: 4, Piloting: 5},
+		{ID: "u-vulture", Unit: "BMVulture_Prime", Group: "Hangar", Pilot: "Anya", Gunnery: 3, Piloting: 4}, // a skilled pilot: still base BV
 		{ID: "u-loki1", Unit: "BMLoki_Prime", Group: "Deployed", Gunnery: 4, Piloting: 5, Damaged: true},
 		{ID: "u-loki2", Unit: "BMLoki_Prime", Group: "Hangar", Gunnery: 4, Piloting: 5},
 		{ID: "u-loki3", Unit: "BMLoki_Prime", Group: "Hangar", Gunnery: 4, Piloting: 5},
@@ -378,8 +378,8 @@ func TestDeployFlow(t *testing.T) {
 	}
 
 	// A started campaign without an owner UID: the player can look and pick, but the site can't deploy for them.
-	if r := post(t, srv, "/api/campaign/start", url.Values{"campaign": {"refusalwar"}, "hangar": {goodHangar}}, cookie, srv.URL); r.StatusCode != http.StatusNoContent {
-		t.Fatalf("start: %d", r.StatusCode)
+	if err := store.StartRun(ctx, id, "refusalwar", Hangar{URL: goodHangar, Instance: goodInstance, Sel: goodSel}); err != nil {
+		t.Fatal(err)
 	}
 
 	// Refusal War mandates two named pilots before anything deploys.

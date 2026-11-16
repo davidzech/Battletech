@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -121,8 +122,8 @@ func TestParsePilotName(t *testing.T) {
 
 func TestRefusalWarStartsWithTwoNamedPilots(t *testing.T) {
 	c, ok := (Library{Root: "../../campaigns"}).Campaign("refusalwar")
-	if !ok || c.StartingNamedPilots != 2 {
-		t.Fatalf("Refusal War mandates two named pilots to start: %+v", c)
+	if !ok || c.StartingNamedPilots != 2 || c.StartingPilotSP != 150 {
+		t.Fatalf("Refusal War mandates two named pilots with 150 SP each to start: %+v", c)
 	}
 }
 
@@ -184,6 +185,41 @@ func pilotStore(t *testing.T, s *Store, id string) {
 	if ps, _ := s.Pilots(ctx, id, "refusalwar"); len(ps) != 3 || !ps[1].Fallen {
 		t.Fatalf("the fallen pilot should stay on record: %+v", ps)
 	}
+
+	// Starting a campaign creates its run and pilots together, and only once.
+	start := []NewPilot{{Name: "Alrek", SP: SPAllocation{Gunnery: 90, EdgeTokens: 60}}, {Name: "Katarina", SP: SPAllocation{Piloting: 100, EdgeTokens: 50}}}
+	hangar := Hangar{URL: goodHangar, Instance: goodInstance}
+	if err := s.StartRunWithPilots(ctx, id, "wizard", hangar, start); err != nil {
+		t.Fatal(err)
+	}
+	if r, ok, _ := s.Run(ctx, id, "wizard"); !ok || r.HangarInstance != goodInstance {
+		t.Fatalf("run not started: %+v", r)
+	}
+	if ps, _ := s.Pilots(ctx, id, "wizard"); len(ps) != 2 || ps[0].Name != "Alrek" || ps[0].SP != start[0].SP || ps[1].SP != start[1].SP || ps[1].Piloting() != 4 {
+		t.Fatalf("starting pilots = %+v", ps)
+	}
+	if err := s.StartRunWithPilots(ctx, id, "wizard", hangar, start); !errors.Is(err, ErrAlreadyStarted) {
+		t.Fatalf("starting twice should be refused, got %v", err)
+	}
+	if ps, _ := s.Pilots(ctx, id, "wizard"); len(ps) != 2 {
+		t.Fatalf("a refused start must not add pilots: %+v", ps)
+	}
+	if err := s.StartRunWithPilots(ctx, "no-such-playthrough", "wizard", hangar, start); err == nil {
+		t.Fatal("a run needs a playthrough")
+	}
+}
+
+// startForm is what the start wizard posts: the hangar link plus, for each name, a pilot who allocates all 150 of
+// their starting SP (90 to Gunnery, 60 to Edge tokens).
+func startForm(hangar string, names ...string) url.Values {
+	v := url.Values{"campaign": {"refusalwar"}, "hangar": {hangar}}
+	for i, n := range names {
+		p := "pilot" + strconv.Itoa(i) + "_"
+		v.Set(p+"name", n)
+		v.Set(p+"gunnery", "90")
+		v.Set(p+"edge_tokens", "60")
+	}
+	return v
 }
 
 // startedCompany sets up a test server with a company that has started Refusal War.
@@ -194,7 +230,7 @@ func startedCompany(t *testing.T) (*httptest.Server, *Store, *http.Cookie) {
 	if r := post(t, srv, "/api/company", url.Values{"company": {"Wolf's Dragoons"}}, cookie, srv.URL); r.StatusCode != http.StatusNoContent {
 		t.Fatalf("company: %d", r.StatusCode)
 	}
-	if r := post(t, srv, "/api/campaign/start", url.Values{"campaign": {"refusalwar"}, "hangar": {goodHangar}}, cookie, srv.URL); r.StatusCode != http.StatusNoContent {
+	if r := post(t, srv, "/api/campaign/start", startForm(goodHangar, "Alrek", "Katarina"), cookie, srv.URL); r.StatusCode != http.StatusNoContent {
 		t.Fatalf("start: %d", r.StatusCode)
 	}
 	return srv, store, cookie
@@ -226,8 +262,11 @@ func TestNamedPilotsFlow(t *testing.T) {
 	if c := body(t, srv, "/refusalwar/", cookie); strings.Contains(c, `id="pilots"`) {
 		t.Fatal("the pilots panel belongs to a started campaign")
 	}
-	post(t, srv, "/api/campaign/start", url.Values{"campaign": {"refusalwar"}, "hangar": {goodHangar}}, cookie, srv.URL)
 	id := playthroughID("wolfpack2026")
+	// A campaign started without pilots (before they were part of starting one) has to name them afterwards.
+	if err := store.StartRun(ctx, id, "refusalwar", Hangar{URL: goodHangar, Instance: goodInstance, Sel: goodSel}); err != nil {
+		t.Fatal(err)
+	}
 
 	// A started campaign asks for its two starting pilots.
 	if c := body(t, srv, "/refusalwar/", cookie); !strings.Contains(c, `id="pilots"`) || !strings.Contains(c, "needs 2 named pilots") || !strings.Contains(c, "Name 2 more") || !strings.Contains(c, `id="pilot-add"`) {
@@ -329,6 +368,88 @@ func TestNamedPilotsFlow(t *testing.T) {
 	}
 	if r := post(t, srv, "/api/pilots", pilots("name", "Replacement"), cookie, srv.URL); r.StatusCode != http.StatusNoContent {
 		t.Fatalf("replacement: %d", r.StatusCode)
+	}
+}
+
+func TestStartWizardSubmission(t *testing.T) {
+	srv, store := newTestServer(t)
+	ctx := context.Background()
+	cookie := post(t, srv, "/api/seed", url.Values{"seed": {"wolfpack2026"}}, nil, "").Cookies()[0]
+	post(t, srv, "/api/company", url.Values{"company": {"Wolf's Dragoons"}}, cookie, srv.URL)
+	id := playthroughID("wolfpack2026")
+
+	// The wizard page carries what the script needs: the pilot count, the SP budget and the ladders.
+	page := body(t, srv, "/refusalwar/", cookie)
+	for _, want := range []string{`id="start-wizard"`, `data-pilots="2"`, `data-sp="150"`, `data-ladders="[{&#34;key&#34;:&#34;gunnery&#34;`, `id="wiz-progress"`, `id="wizard-open"`} {
+		if !strings.Contains(page, want) {
+			t.Errorf("wizard page is missing %s", want)
+		}
+	}
+	if strings.Contains(page, `id="run-dialog"`) {
+		t.Error("an unstarted campaign has no change-hangar dialog")
+	}
+
+	with := func(mut func(v url.Values)) url.Values {
+		v := startForm(goodHangar, "Alrek", "Katarina")
+		mut(v)
+		return v
+	}
+	for name, form := range map[string]url.Values{
+		"no pilots at all":  {"campaign": {"refusalwar"}, "hangar": {goodHangar}},
+		"only one pilot":    with(func(v url.Values) { v.Del("pilot1_name") }),
+		"blank name":        with(func(v url.Values) { v.Set("pilot1_name", "  ") }),
+		"same name twice":   with(func(v url.Values) { v.Set("pilot1_name", "alrek") }),
+		"one SP short":      with(func(v url.Values) { v.Set("pilot0_gunnery", "89") }),
+		"one SP too many":   with(func(v url.Values) { v.Set("pilot0_gunnery", "91") }),
+		"nothing allocated": with(func(v url.Values) { v.Del("pilot1_gunnery"); v.Del("pilot1_edge_tokens") }),
+		"negative SP":       with(func(v url.Values) { v.Set("pilot0_gunnery", "-10"); v.Set("pilot0_piloting", "160") }),
+		"nonsense SP":       with(func(v url.Values) { v.Set("pilot0_piloting", "lots") }),
+		"bad hangar":        with(func(v url.Values) { v.Set("hangar", "https://evil.example/?instance="+goodInstance) }),
+		"markup in a name":  with(func(v url.Values) { v.Set("pilot0_name", "<b>x</b>") }),
+	} {
+		if r := post(t, srv, "/api/campaign/start", form, cookie, srv.URL); r.StatusCode != http.StatusBadRequest {
+			t.Errorf("%s: got %d, want 400", name, r.StatusCode)
+		}
+	}
+	if _, ok, _ := store.Run(ctx, id, "refusalwar"); ok {
+		t.Fatal("a rejected start must not start the campaign")
+	}
+	if ps, _ := store.Pilots(ctx, id, "refusalwar"); len(ps) != 0 {
+		t.Fatalf("a rejected start must not create pilots: %+v", ps)
+	}
+
+	// Splitting the SP any way is fine as long as all of it is allocated.
+	good := with(func(v url.Values) {
+		v.Set("pilot1_gunnery", "0")
+		v.Set("pilot1_edge_tokens", "0")
+		v.Set("pilot1_piloting", "100")
+		v.Set("pilot1_edge_abilities", "50")
+	})
+	if r := post(t, srv, "/api/campaign/start", good, cookie, srv.URL); r.StatusCode != http.StatusNoContent {
+		t.Fatalf("good start: %d", r.StatusCode)
+	}
+	ps, _ := store.Pilots(ctx, id, "refusalwar")
+	if len(ps) != 2 || ps[0].Name != "Alrek" || ps[0].SP != (SPAllocation{Gunnery: 90, EdgeTokens: 60}) ||
+		ps[1].Name != "Katarina" || ps[1].SP != (SPAllocation{Piloting: 100, EdgeAbilities: 50}) {
+		t.Fatalf("pilots = %+v", ps)
+	}
+	if ps[0].EdgeTokens() != 2 || ps[1].Piloting() != 4 || ps[1].EdgeAbilities() != 0 {
+		t.Errorf("levels follow the ladders: %+v", ps)
+	}
+	if c := body(t, srv, "/refusalwar/", cookie); !strings.Contains(c, "Katarina") || strings.Contains(c, "needs 2 named pilots") || strings.Contains(c, `id="start-wizard"`) || !strings.Contains(c, `id="run-dialog"`) {
+		t.Fatalf("a started campaign shows its pilots and the change-link dialog: %.3000s", c)
+	}
+
+	// Submitting the wizard again only changes the hangar link: no duplicate pilots.
+	other := "https://mekbay.com/?instance=01a12f98-8a21-7d12-b43d-52bb70872376"
+	if r := post(t, srv, "/api/campaign/start", startForm(other, "Alrek", "Katarina"), cookie, srv.URL); r.StatusCode != http.StatusNoContent {
+		t.Fatalf("second submit: %d", r.StatusCode)
+	}
+	if ps, _ := store.Pilots(ctx, id, "refusalwar"); len(ps) != 2 {
+		t.Fatalf("a second submit must not duplicate pilots: %+v", ps)
+	}
+	if run, _, _ := store.Run(ctx, id, "refusalwar"); run.HangarInstance != "01a12f98-8a21-7d12-b43d-52bb70872376" {
+		t.Fatalf("the second submit should change the hangar: %+v", run)
 	}
 }
 

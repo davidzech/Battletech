@@ -111,8 +111,9 @@ func (s *Server) setCompany(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// startCampaign starts one of the campaigns for the visitor's playthrough, with that campaign's own MekBay hangar.
-// Posting again for a started campaign changes its hangar link.
+// startCampaign starts one of the campaigns for the visitor's playthrough, with that campaign's own MekBay hangar and
+// its starting named pilots (see parseStartingPilots), all together. Posting again for a campaign that is already
+// started just changes its hangar link.
 func (s *Server) startCampaign(w http.ResponseWriter, r *http.Request) {
 	if !sameOrigin(r) {
 		http.Error(w, "cross-origin request refused", http.StatusForbidden)
@@ -123,7 +124,7 @@ func (s *Server) startCampaign(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Choose a seed first.", http.StatusBadRequest)
 		return
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, 4096)
+	r.Body = http.MaxBytesReader(w, r.Body, 8192)
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
@@ -148,7 +149,28 @@ func (s *Server) startCampaign(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if err := s.store.StartRun(r.Context(), id, c.Slug, hangar); err != nil {
+	_, started, err := s.store.Run(r.Context(), id, c.Slug)
+	if err != nil {
+		http.Error(w, "could not load campaign", http.StatusInternalServerError)
+		return
+	}
+	if started {
+		if err := s.store.StartRun(r.Context(), id, c.Slug, hangar); err != nil {
+			http.Error(w, "could not save the hangar link", http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	pilots, err := parseStartingPilots(r, c)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := s.store.StartRunWithPilots(r.Context(), id, c.Slug, hangar, pilots); errors.Is(err, ErrAlreadyStarted) {
+		http.Error(w, "This campaign has already been started.", http.StatusConflict)
+		return
+	} else if err != nil {
 		http.Error(w, "could not start the campaign", http.StatusInternalServerError)
 		return
 	}

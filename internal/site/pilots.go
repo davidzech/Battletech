@@ -135,3 +135,37 @@ func (s *Server) pilotFallen(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
+
+// parseStartingPilots reads the pilots a campaign's start wizard submits (fields pilot0_name, pilot0_gunnery, ...):
+// exactly the campaign's number of starting pilots, each with a name of their own, and every one allocating all of
+// the campaign's starting SP, as the book has a pilot allocate SP the moment they earn it.
+func parseStartingPilots(r *http.Request, c *Campaign) ([]NewPilot, error) {
+	var out []NewPilot
+	seen := map[string]bool{}
+	for i := 0; i < c.StartingNamedPilots; i++ {
+		prefix := "pilot" + strconv.Itoa(i) + "_"
+		name, err := parsePilotName(r.PostFormValue(prefix + "name"))
+		if err != nil {
+			return nil, fmt.Errorf("Named pilot %d: %w", i+1, err)
+		}
+		if seen[strings.ToLower(name)] {
+			return nil, errors.New("Two of your pilots can't share a name.")
+		}
+		seen[strings.ToLower(name)] = true
+		var a SPAllocation
+		for field, dst := range map[string]*int{
+			"gunnery": &a.Gunnery, "piloting": &a.Piloting, "edge_tokens": &a.EdgeTokens, "edge_abilities": &a.EdgeAbilities,
+		} {
+			n, err := parseSP(r.PostFormValue(prefix + field))
+			if err != nil {
+				return nil, fmt.Errorf("%s: %w", name, err)
+			}
+			*dst = n
+		}
+		if a.Total() != c.StartingPilotSP {
+			return nil, fmt.Errorf("%s must allocate exactly %d SP (%d allocated).", name, c.StartingPilotSP, a.Total())
+		}
+		out = append(out, NewPilot{Name: name, SP: a})
+	}
+	return out, nil
+}

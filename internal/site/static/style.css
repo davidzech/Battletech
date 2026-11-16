@@ -391,6 +391,41 @@ dialog button:not(.button):hover { border-color: var(--accent); color: var(--acc
 .pilot-add label { flex-basis: 100%; font: 0.85rem var(--display); letter-spacing: 0.08em; text-transform: uppercase; }
 .pilot-add input { flex: 1 1 14rem; max-width: 22rem; }
 
+/* Campaign start wizard: a step per named pilot with an SP allocator, then the hangar link, with progress at the bottom. */
+dialog.wizard { width: min(40rem, calc(100vw - 2rem)); }
+.alloc-head { margin: 1rem 0 0.25rem; font: 700 1rem var(--display); letter-spacing: 0.08em; text-transform: uppercase; }
+.alloc-remaining { margin: 0.2rem 0 0.6rem; font: 700 1.05rem var(--display); letter-spacing: 0.05em; color: var(--accent); }
+.alloc-remaining.done { color: var(--text); }
+.alloc-row {
+  display: grid;
+  grid-template-columns: 12rem 1fr;
+  gap: 0.2rem 0.9rem;
+  align-items: center;
+  padding: 0.5rem 0;
+  border-top: 1px solid var(--line);
+}
+dialog .alloc-name {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  font: 700 0.85rem var(--display);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.alloc-name input { width: 4.5rem; }
+.alloc-row input[type="range"] { width: 100%; accent-color: var(--accent); }
+.alloc-preview { grid-column: 1 / -1; color: var(--muted); font-size: 0.85rem; }
+.alloc-summary { margin: 0.6rem 0 0; font: 0.85rem var(--display); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.wiz-recap { margin: 0.25rem 0 0.75rem; padding-left: 1.1rem; }
+.wiz-footer { display: flex; align-items: center; gap: 0.9rem; margin-top: 1rem; }
+.wiz-count { font: 700 0.8rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+.wiz-progress { flex: 1; height: 0.5rem; background: var(--bg); border: 1px solid var(--line); }
+.wiz-progress > span { display: block; width: 0; height: 100%; background: var(--accent); transition: width 0.25s ease; }
+@media (prefers-reduced-motion: reduce) { .wiz-progress > span { transition: none; } }
+@media (max-width: 40rem) { .alloc-row { grid-template-columns: 1fr; } }
+
 /* Deploy popup: the player's hangar as a pick list with a BV meter. */
 dialog.deploy { width: min(54rem, calc(100vw - 2rem)); }
 .deploy-meter { margin: 0.5rem 0 0; font: 700 1.1rem var(--display); letter-spacing: 0.06em; text-transform: uppercase; }

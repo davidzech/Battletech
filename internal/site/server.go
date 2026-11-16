@@ -55,6 +55,7 @@ type Page struct {
 	PilotsNeeded int         // how many more named pilots the campaign requires before scenarios can be played
 	CanAddPilot  bool        // the command has room for another named pilot
 	MaxPilots    int         // most living named pilots a command may have
+	Ladders      string      // the pilot improvement ladders as JSON, for the pilot builder's live preview
 	MekBayOp     string      // link to the scenario's MekBay operation, once created ("" until then)
 	Commit       string      // git commit the server was built from, short form ("dev" if unknown)
 }
@@ -118,6 +119,7 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name
 		} else {
 			p.Play = pt
 			if p.Campaign != nil {
+				p.Ladders = laddersJSON
 				if run, _, err := s.store.Run(r.Context(), id, p.Campaign.Slug); err != nil {
 					log.Printf("load campaign run: %v", err)
 				} else {
