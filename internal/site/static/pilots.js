@@ -42,7 +42,7 @@
   var spBody = document.getElementById('sp-body');
   var spError = document.getElementById('sp-error');
   var apply = document.getElementById('sp-apply');
-  var current = null; // the pilot whose dialog is open: {id, name, base, pool, sp}
+  var current = null; // the pilot whose dialog is open: {id, name, base, pool, earned, sp}; earned is staged, not yet saved
   var dirty = false;  // something was saved, so the page behind is stale
 
   function render() {
@@ -78,25 +78,32 @@
     addBtn.type = 'submit';
     earn.appendChild(label);
     earn.appendChild(addBtn);
+    // Earned SP is only staged here: it raises what can be spent in this dialog, but nothing is saved until Apply (closing
+    // the dialog throws it away).
     earn.addEventListener('submit', function (e) {
       e.preventDefault();
       var n = parseInt(input.value, 10);
       if (isNaN(n) || n < 1) { spError.textContent = 'Enter how much SP the pilot earned.'; return; }
-      addBtn.disabled = true;
-      post('/api/pilots/earn', 'pilot=' + encodeURIComponent(p.id) + '&sp=' + n).then(function (res) {
-        if (res.ok) {
-          dirty = true;
-          p.pool += n;
-          ladders.forEach(function (l) { p.sp[l.key] = 0; });
-          spError.textContent = '';
-          render();
-          return;
-        }
-        addBtn.disabled = false;
-        return res.text().then(function (t) { spError.textContent = t.trim() || 'Could not save the SP.'; });
-      }, function () { addBtn.disabled = false; spError.textContent = 'Could not reach the server.'; });
+      if (p.earned + n > 10000) { spError.textContent = 'That is too much SP to add at once.'; return; }
+      p.earned += n;
+      p.pool += n;
+      spError.textContent = '';
+      render();
     });
     spBody.appendChild(earn);
+    if (p.earned) {
+      var staged = el('p', 'sp-staged', '+' + p.earned + ' SP earned. Not saved until you press Apply. ');
+      var clear = el('button', 'link-button', 'Clear');
+      clear.type = 'button';
+      clear.addEventListener('click', function () {
+        p.pool -= p.earned;
+        p.earned = 0;
+        if (SPAllocator.spentOf(p, ladders) > p.pool) ladders.forEach(function (l) { p.sp[l.key] = 0; });
+        render();
+      });
+      staged.appendChild(clear);
+      spBody.appendChild(staged);
+    }
 
     function refresh() {
       var used = SPAllocator.spentOf(p, ladders);
@@ -105,14 +112,14 @@
       remaining.classList.toggle('done', left === 0);
       rows.forEach(function (r) { r.show(); });
       stats.forEach(function (b, i) { b.show(p.base[ladders[i].key] + p.sp[ladders[i].key]); });
-      apply.disabled = used === 0;
+      apply.disabled = used === 0 && p.earned === 0;
     }
     refresh();
   }
 
   function openSP(li) {
     var base = {}, parts = (li.dataset.sp || '').split(',');
-    var p = { id: li.dataset.pilot, name: li.dataset.name, base: base, pool: parseInt(li.dataset.unallocated, 10) || 0, sp: {} };
+    var p = { id: li.dataset.pilot, name: li.dataset.name, base: base, pool: parseInt(li.dataset.unallocated, 10) || 0, earned: 0, sp: {} };
     ladders.forEach(function (l, i) { base[l.key] = parseInt(parts[i], 10) || 0; p.sp[l.key] = 0; });
     current = p;
     dirty = false;
@@ -127,7 +134,7 @@
     document.getElementById('sp-form').addEventListener('submit', function (e) {
       e.preventDefault();
       if (!current || apply.disabled) return;
-      var parts = ['pilot=' + encodeURIComponent(current.id)];
+      var parts = ['pilot=' + encodeURIComponent(current.id), 'earned=' + current.earned];
       ladders.forEach(function (l) { parts.push(l.key + '=' + current.sp[l.key]); });
       apply.disabled = true;
       post('/api/pilots/allocate', parts.join('&')).then(function (res) {

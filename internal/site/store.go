@@ -457,11 +457,20 @@ func (s *Store) EarnSP(ctx context.Context, playthroughID, campaign, pilotID str
 // unallocated (total minus the columns' sum), checked in the same statement that writes it so two requests can't both
 // spend the same SP. sql.ErrNoRows if there is no such living pilot, ErrNotEnoughSP if a is too much.
 func (s *Store) AllocateSP(ctx context.Context, playthroughID, campaign, pilotID string, a SPAllocation) error {
+	return s.ApplySP(ctx, playthroughID, campaign, pilotID, 0, a)
+}
+
+// ApplySP adds `earned` SP to a living pilot's total and allocates `a` to their columns, both in one statement, so the
+// Manage SP dialog can stage earned SP and an allocation and commit them together or not at all. The allocation may use
+// the pilot's unallocated SP including the SP being earned. sql.ErrNoRows if there is no such living pilot, ErrNotEnoughSP
+// if a is more than that.
+func (s *Store) ApplySP(ctx context.Context, playthroughID, campaign, pilotID string, earned int, a SPAllocation) error {
 	res, err := s.db.ExecContext(ctx,
-		s.q(`UPDATE named_pilots SET sp_gunnery = sp_gunnery + ?, sp_piloting = sp_piloting + ?, sp_edge_tokens = sp_edge_tokens + ?, sp_edge_abilities = sp_edge_abilities + ?
+		s.q(`UPDATE named_pilots SET sp_total = sp_total + ?,
+		       sp_gunnery = sp_gunnery + ?, sp_piloting = sp_piloting + ?, sp_edge_tokens = sp_edge_tokens + ?, sp_edge_abilities = sp_edge_abilities + ?
 		     WHERE id = ? AND playthrough_id = ? AND campaign = ? AND fallen = 0
-		       AND sp_total - (sp_gunnery + sp_piloting + sp_edge_tokens + sp_edge_abilities) >= ?`),
-		a.Gunnery, a.Piloting, a.EdgeTokens, a.EdgeAbilities, pilotID, playthroughID, campaign, a.Total())
+		       AND sp_total + ? - (sp_gunnery + sp_piloting + sp_edge_tokens + sp_edge_abilities) >= ?`),
+		earned, a.Gunnery, a.Piloting, a.EdgeTokens, a.EdgeAbilities, pilotID, playthroughID, campaign, earned, a.Total())
 	if err != nil {
 		return err
 	}

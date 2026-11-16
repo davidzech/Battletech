@@ -279,7 +279,9 @@ func (s *Server) earnSP(w http.ResponseWriter, r *http.Request) {
 }
 
 // allocateSP spends a pilot's unallocated SP across their four columns. The form holds the SP to add to each column,
-// not their new totals; the server refuses more than the pilot has unallocated.
+// not their new totals, and optionally `earned`, SP to add to the pilot's total in the same step (the Manage SP dialog
+// stages it, then commits it together with the allocation); the server refuses more than the pilot would then have
+// unallocated.
 func (s *Server) allocateSP(w http.ResponseWriter, r *http.Request) {
 	pt, c, ok := s.pilotRequest(w, r)
 	if !ok {
@@ -296,11 +298,16 @@ func (s *Server) allocateSP(w http.ResponseWriter, r *http.Request) {
 		}
 		*dst = n
 	}
-	if a.Total() == 0 {
+	earned, err := parseSP(r.PostFormValue("earned"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if a.Total() == 0 && earned == 0 {
 		http.Error(w, "Allocate some SP first.", http.StatusBadRequest)
 		return
 	}
-	if err := s.store.AllocateSP(r.Context(), pt.ID, c.Slug, r.PostFormValue("pilot"), a); errors.Is(err, sql.ErrNoRows) {
+	if err := s.store.ApplySP(r.Context(), pt.ID, c.Slug, r.PostFormValue("pilot"), earned, a); errors.Is(err, sql.ErrNoRows) {
 		http.Error(w, "No such living pilot.", http.StatusNotFound)
 		return
 	} else if errors.Is(err, ErrNotEnoughSP) {

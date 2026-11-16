@@ -706,6 +706,28 @@ func spStore(t *testing.T, s *Store, id string) {
 	if err := s.AllocateSP(ctx, id, camp, a.ID, SPAllocation{Gunnery: 1}); !errors.Is(err, ErrNotEnoughSP) {
 		t.Fatalf("nothing left: %v", err)
 	}
+	// Earned SP and an allocation commit together, or not at all.
+	if err := s.ApplySP(ctx, id, camp, a.ID, 100, SPAllocation{Gunnery: 101}); !errors.Is(err, ErrNotEnoughSP) {
+		t.Fatalf("101 of 100 earned: %v", err)
+	}
+	if p := get(); p.TotalSP != 450 {
+		t.Fatalf("a refused apply changed the total: %+v", p)
+	}
+	if err := s.ApplySP(ctx, id, camp, a.ID, 100, SPAllocation{Gunnery: 60, Piloting: 40}); err != nil {
+		t.Fatal(err)
+	}
+	if p := get(); p.TotalSP != 550 || p.Unallocated() != 0 || p.SP.Gunnery != 350 || p.SP.Piloting != 90 {
+		t.Fatalf("after earning 100 and allocating it: %+v", p)
+	}
+	if err := s.ApplySP(ctx, id, camp, a.ID, 25, SPAllocation{}); err != nil {
+		t.Fatalf("earning without allocating: %v", err)
+	}
+	if p := get(); p.TotalSP != 575 || p.Unallocated() != 25 {
+		t.Fatalf("after earning 25: %+v", p)
+	}
+	if err := s.AllocateSP(ctx, id, camp, a.ID, SPAllocation{Gunnery: 25}); err != nil {
+		t.Fatal(err)
+	}
 	if err := s.AllocateSP(ctx, id, camp, "nobody", SPAllocation{Gunnery: 1}); !errors.Is(err, sql.ErrNoRows) {
 		t.Fatalf("unknown pilot: %v", err)
 	}
@@ -716,7 +738,7 @@ func spStore(t *testing.T, s *Store, id string) {
 	if err := s.AwardSP(ctx, id, camp, a.ID, SPAllocation{Gunnery: 10}); err != nil {
 		t.Fatal(err)
 	}
-	if p := get(); p.TotalSP != 460 || p.Unallocated() != 0 {
+	if p := get(); p.TotalSP != 585 || p.Unallocated() != 0 {
 		t.Fatalf("after a direct award: %+v", p)
 	}
 	if err := s.MarkFallen(ctx, id, camp, a.ID); err != nil {
@@ -776,6 +798,23 @@ func TestSPEndpoints(t *testing.T) {
 	ps, _ = store.Pilots(ctx, id, "refusalwar")
 	if p := ps[0]; p.TotalSP != 450 || p.Unallocated() != 0 || p.SP.Gunnery != 290 || p.SP.Piloting != 100 {
 		t.Errorf("after earn and allocate: %+v", p)
+	}
+	// The dialog stages earned SP and commits it with the allocation in one request.
+	if got := status("/api/pilots/allocate", form("earned", "50", "gunnery", "51")); got != http.StatusBadRequest {
+		t.Errorf("allocating more than was earned: %d", got)
+	}
+	if got := status("/api/pilots/allocate", form("earned", "lots")); got != http.StatusBadRequest {
+		t.Errorf("a bad earned amount: %d", got)
+	}
+	if got := status("/api/pilots/allocate", form("earned", "50", "gunnery", "50")); got != http.StatusNoContent {
+		t.Fatalf("earn and allocate together: %d", got)
+	}
+	if got := status("/api/pilots/allocate", form("earned", "20")); got != http.StatusNoContent {
+		t.Fatalf("earn without allocating: %d", got)
+	}
+	ps, _ = store.Pilots(ctx, id, "refusalwar")
+	if p := ps[0]; p.TotalSP != 520 || p.Unallocated() != 20 || p.SP.Gunnery != 340 {
+		t.Errorf("after staged earning was applied: %+v", p)
 	}
 }
 

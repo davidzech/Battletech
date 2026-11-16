@@ -901,3 +901,7 @@ details.more > summary:focus-visible { outline: none; }
 .alloc-headrow { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; margin: 1rem 0 0.4rem; }
 .alloc-headrow .alloc-head, .alloc-headrow .alloc-remaining { margin: 0; }
 .alloc-headrow .alloc-remaining { text-align: right; }
+.sp-staged { margin: 0.6rem 0 0; font-size: 0.85rem; color: var(--accent); }
+.sp-staged .link-button { margin-left: 0.4rem; }
+dialog .sp-staged .link-button { padding: 0; background: none; border: 0; color: var(--muted); }
+dialog .sp-staged .link-button:hover { color: var(--text); background: none; }
