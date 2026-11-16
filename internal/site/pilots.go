@@ -473,3 +473,44 @@ func (s *Server) setRank(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
+
+// learnAbilities records the Edge abilities a pilot chooses (one "ability" field per choice, all of the pending ones at once).
+func (s *Server) learnAbilities(w http.ResponseWriter, r *http.Request) {
+	pt, c, ok := s.pilotRequest(w, r)
+	if !ok {
+		return
+	}
+	err := s.store.LearnAbilities(r.Context(), pt.ID, c.Slug, r.PostFormValue("pilot"), r.PostForm["ability"])
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		http.Error(w, "No such living pilot.", http.StatusNotFound)
+	case errors.Is(err, ErrNoPendingAbilities):
+		http.Error(w, "This pilot has no new Edge ability to choose.", http.StatusBadRequest)
+	case errors.Is(err, ErrAbilityCount):
+		http.Error(w, "Choose an Edge ability for each one the pilot has earned.", http.StatusBadRequest)
+	case errors.Is(err, ErrUnknownAbility):
+		http.Error(w, "Pick the Edge abilities from the list.", http.StatusBadRequest)
+	case errors.Is(err, ErrAbilityLearned):
+		http.Error(w, "Each Edge ability can be learned once.", http.StatusBadRequest)
+	case err != nil:
+		http.Error(w, "could not save the Edge abilities", http.StatusInternalServerError)
+	default:
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+// resetEdgeAbilities forgets a pilot's learned Edge abilities (Manage Pilot Records).
+func (s *Server) resetEdgeAbilities(w http.ResponseWriter, r *http.Request) {
+	pt, c, ok := s.pilotRequest(w, r)
+	if !ok {
+		return
+	}
+	if err := s.store.ResetEdgeAbilities(r.Context(), pt.ID, c.Slug, r.PostFormValue("pilot")); errors.Is(err, sql.ErrNoRows) {
+		http.Error(w, "No such pilot.", http.StatusNotFound)
+		return
+	} else if err != nil {
+		http.Error(w, "could not reset the Edge abilities", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}

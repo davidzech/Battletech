@@ -977,3 +977,18 @@ dialog select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 .recruit button.button:disabled { opacity: 0.45; cursor: not-allowed; filter: grayscale(0.5); }
 .recruit-rank-label { display: block; margin-top: 1rem; }
 #recruit-dialog .pilot-top { margin-top: 0.75rem; }
+
+/* Edge abilities: the chips under a pilot's stat boxes, the "choose" button, the picker and the records row. */
+.edge-skills { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.5rem; margin: 0.5rem 0 0; }
+.edge-skills-label { font: 700 0.65rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.skill-chip { padding: 0.2rem 0.6rem; font: 700 0.72rem var(--display); letter-spacing: 0.06em; text-transform: uppercase; color: var(--text); background: var(--bg); border: 1px solid var(--line); cursor: help; }
+.skill-chip:hover, .skill-chip:focus-visible { color: var(--accent); border-color: var(--accent); outline: none; }
+button.button.skill-pick { padding: 0.4rem 0.9rem; font-size: 0.75rem; }
+.pilot.kia .skill-chip { color: var(--muted); }
+.skill-slot { margin-top: 0.9rem; }
+.skill-slot label { display: block; margin-bottom: 0.1rem; font: 700 0.8rem var(--display); letter-spacing: 0.08em; text-transform: uppercase; }
+.skill-desc { margin: 0.4rem 0 0; font-size: 0.85rem; line-height: 1.45; min-height: 3.6em; }
+.rec-skills { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.7rem; font-size: 0.85rem; color: var(--muted); }
+.rec-skills-text { flex: 1 1 14rem; }
+.rec-skills-text b { color: var(--text); }
+dialog button.rec-skills-reset:disabled { opacity: 0.4; cursor: not-allowed; }

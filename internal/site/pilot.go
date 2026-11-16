@@ -120,7 +120,14 @@ type NamedPilot struct {
 	TotalSP int
 	Fallen  bool // died, and is permanently removed from the campaign (kept so the record isn't lost)
 	SP      SPAllocation
+	// Learned are the IDs of the Edge abilities the pilot has chosen (see abilities.go), in the order they were chosen. A pilot may hold as
+	// many as their Edge abilities level (EdgeAbilities); what they haven't chosen yet is PendingAbilities.
+	Learned []string
 }
+
+// PendingAbilities is how many Edge abilities the pilot has earned but not yet chosen: their Edge abilities level minus the abilities
+// they have learned (never negative: a reset of their SP doesn't take learned abilities away, see Store.ResetEdgeAbilities).
+func (p NamedPilot) PendingAbilities() int { return max(0, p.EdgeAbilities()-len(p.Learned)) }
 
 // Earned is the pilot's total SP earned, allocated or not.
 func (p NamedPilot) Earned() int { return p.TotalSP }
@@ -159,7 +166,9 @@ type PilotView struct {
 	Rank                                     string // the pilot's rank (the lowest if none was chosen); "" when the campaign has no ranks
 	Fallen                                   bool
 	Gunnery, Piloting, EdgeTokens, Abilities int
-	Earned, Unallocated, Allocated           int // total SP earned, the part not yet in a column, and the part that is
+	Earned, Unallocated, Allocated           int           // total SP earned, the part not yet in a column, and the part that is
+	EdgeLearned                              []EdgeAbility // the Edge abilities the pilot has chosen, in order
+	EdgePending                              int           // how many more they have earned and still have to choose
 	Columns                                  []pilotColumn
 }
 
@@ -177,6 +186,7 @@ func (p NamedPilot) view(ranks []string) PilotView {
 		ID: p.ID, Name: p.Name, Rank: rankFor(ranks, p.Rank), Fallen: p.Fallen, Portrait: portraitOf(p.ID, p.Portrait), PortraitURL: portraitURL(portraitOf(p.ID, p.Portrait)),
 		Gunnery: p.Gunnery(), Piloting: p.Piloting(), EdgeTokens: p.EdgeTokens(), Abilities: p.EdgeAbilities(),
 		Earned: p.Earned(), Unallocated: p.Unallocated(), Allocated: p.SP.Total(),
+		EdgeLearned: edgeAbilityList(p.Learned), EdgePending: p.PendingAbilities(),
 		Columns: []pilotColumn{
 			col(gunneryLadder, p.SP.Gunnery), col(pilotingLadder, p.SP.Piloting),
 			col(edgeTokensLadder, p.SP.EdgeTokens), col(edgeAbilitiesLadder, p.SP.EdgeAbilities),

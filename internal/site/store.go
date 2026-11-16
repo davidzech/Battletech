@@ -77,6 +77,12 @@ func (s *Store) schemaStatements() []string {
 	hangar_instance TEXT NOT NULL DEFAULT '',
 	PRIMARY KEY (playthrough_id, campaign)
 )`, s.timestampColumn()),
+		`CREATE TABLE IF NOT EXISTS pilot_abilities (
+	pilot_id TEXT NOT NULL REFERENCES named_pilots(id) ON DELETE CASCADE,
+	ability  TEXT NOT NULL,
+	seq      INTEGER NOT NULL,
+	PRIMARY KEY (pilot_id, ability)
+)`,
 		`CREATE TABLE IF NOT EXISTS hangar_cache (
 	playthrough_id TEXT NOT NULL REFERENCES playthroughs(id) ON DELETE CASCADE,
 	campaign       TEXT NOT NULL,
@@ -392,7 +398,30 @@ func (s *Store) Pilots(ctx context.Context, playthroughID, campaign string) ([]N
 		}
 		out = append(out, p)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	rows.Close() // done with this result before the next query
+	// The Edge abilities each pilot has chosen, in the order they chose them.
+	arows, err := s.db.QueryContext(ctx,
+		s.q(`SELECT a.pilot_id, a.ability FROM pilot_abilities a JOIN named_pilots p ON p.id = a.pilot_id
+		     WHERE p.playthrough_id = ? AND p.campaign = ? ORDER BY a.pilot_id, a.seq`), playthroughID, campaign)
+	if err != nil {
+		return nil, err
+	}
+	defer arows.Close()
+	byPilot := map[string][]string{}
+	for arows.Next() {
+		var pid, ability string
+		if err := arows.Scan(&pid, &ability); err != nil {
+			return nil, err
+		}
+		byPilot[pid] = append(byPilot[pid], ability)
+	}
+	for i := range out {
+		out[i].Learned = byPilot[out[i].ID]
+	}
+	return out, arows.Err()
 }
 
 // AddPilot names a new pilot with the given starting SP. A command may have at most max living named pilots
@@ -607,6 +636,11 @@ func (s *Store) DeleteRun(ctx context.Context, playthroughID, campaign string) (
 		return false, err
 	}
 	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx,
+		s.q(`DELETE FROM pilot_abilities WHERE pilot_id IN (SELECT id FROM named_pilots WHERE playthrough_id = ? AND campaign = ?)`),
+		playthroughID, campaign); err != nil {
+		return false, err
+	}
 	for _, table := range []string{"named_pilots", "mekbay_operations", "hangar_cache"} {
 		if _, err := tx.ExecContext(ctx, s.q("DELETE FROM "+table+" WHERE playthrough_id = ? AND campaign = ?"), playthroughID, campaign); err != nil {
 			return false, err
@@ -666,6 +700,11 @@ func (s *Store) RevivePilot(ctx context.Context, playthroughID, campaign, pilotI
 // DeletePilot permanently removes a pilot, living or killed, to correct a misclick or a desync (sql.ErrNoRows if there is
 // no such pilot).
 func (s *Store) DeletePilot(ctx context.Context, playthroughID, campaign, pilotID string) error {
+	if _, err := s.db.ExecContext(ctx,
+		s.q(`DELETE FROM pilot_abilities WHERE pilot_id IN (SELECT id FROM named_pilots WHERE id = ? AND playthrough_id = ? AND campaign = ?)`),
+		pilotID, playthroughID, campaign); err != nil {
+		return err
+	}
 	res, err := s.db.ExecContext(ctx,
 		s.q(`DELETE FROM named_pilots WHERE id = ? AND playthrough_id = ? AND campaign = ?`), pilotID, playthroughID, campaign)
 	if err != nil {
@@ -781,4 +820,81 @@ func max2(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// Edge ability errors.
+var (
+	ErrNoPendingAbilities = errors.New("this pilot has no new Edge ability to choose")
+	ErrAbilityCount       = errors.New("choose exactly as many Edge abilities as the pilot has earned")
+	ErrUnknownAbility     = errors.New("that is not an Edge ability")
+	ErrAbilityLearned     = errors.New("that Edge ability is already learned (or chosen twice)")
+)
+
+// LearnAbilities records the Edge abilities a living pilot chooses for the levels they have earned. The pilot may hold as many as their
+// Edge abilities level; ids must name exactly as many new ones as are still pending, each from the book's list and none already learned,
+// chosen together in one go. The choice is permanent until Store.ResetEdgeAbilities. sql.ErrNoRows if there is no such living pilot.
+func (s *Store) LearnAbilities(ctx context.Context, playthroughID, campaign, pilotID string, ids []string) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var sp int
+	if err := tx.QueryRowContext(ctx,
+		s.q(`SELECT sp_edge_abilities FROM named_pilots WHERE id = ? AND playthrough_id = ? AND campaign = ? AND fallen = 0`),
+		pilotID, playthroughID, campaign).Scan(&sp); err != nil {
+		return err // sql.ErrNoRows when there is no such living pilot
+	}
+	var learned int
+	if err := tx.QueryRowContext(ctx, s.q(`SELECT COUNT(*) FROM pilot_abilities WHERE pilot_id = ?`), pilotID).Scan(&learned); err != nil {
+		return err
+	}
+	pending := edgeAbilitiesLadder.at(sp).Level - learned
+	if pending <= 0 {
+		return ErrNoPendingAbilities
+	}
+	if len(ids) != pending {
+		return ErrAbilityCount
+	}
+	have := map[string]bool{}
+	rows, err := tx.QueryContext(ctx, s.q(`SELECT ability FROM pilot_abilities WHERE pilot_id = ?`), pilotID)
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
+		var a string
+		if err := rows.Scan(&a); err != nil {
+			rows.Close()
+			return err
+		}
+		have[a] = true
+	}
+	rows.Close()
+	for _, id := range ids {
+		if _, ok := edgeAbilityByID(id); !ok {
+			return ErrUnknownAbility
+		}
+		if have[id] {
+			return ErrAbilityLearned
+		}
+		have[id] = true
+	}
+	for i, id := range ids {
+		if _, err := tx.ExecContext(ctx, s.q(`INSERT INTO pilot_abilities (pilot_id, ability, seq) VALUES (?, ?, ?)`), pilotID, id, learned+i+1); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+// ResetEdgeAbilities forgets every Edge ability a pilot has learned, so they can choose them again (their SP is untouched). It works on
+// living and killed pilots, to repair a mistake (sql.ErrNoRows if there is no such pilot).
+func (s *Store) ResetEdgeAbilities(ctx context.Context, playthroughID, campaign, pilotID string) error {
+	var one int
+	if err := s.db.QueryRowContext(ctx,
+		s.q(`SELECT 1 FROM named_pilots WHERE id = ? AND playthrough_id = ? AND campaign = ?`), pilotID, playthroughID, campaign).Scan(&one); err != nil {
+		return err
+	}
+	_, err := s.db.ExecContext(ctx, s.q(`DELETE FROM pilot_abilities WHERE pilot_id = ?`), pilotID)
+	return err
 }

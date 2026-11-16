@@ -215,6 +215,99 @@
     });
   }
 
+  // ---- Edge abilities: whenever a pilot's Edge abilities level is above the number they have learned, the card offers a picker with one
+  // combo box for each new ability. The choice is permanent: Manage Pilot Records resets it.
+  var skillDialog = document.getElementById('skill-dialog');
+  var abilityCatalog = JSON.parse(box.dataset.abilities || '[]');
+  var CATEGORY_ORDER = ['Attack', 'Indirect Fire', 'Defense', 'Heat', 'Melee', 'Movement'];
+  var skillPilot = null; // the pilot's row the picker is open for
+  var skillSelects = [];
+  var skillSlots = document.getElementById('skill-slots');
+  var skillLearn = document.getElementById('skill-learn');
+  var skillError = document.getElementById('skill-error');
+
+  function abilityById(id) {
+    for (var i = 0; i < abilityCatalog.length; i++) if (abilityCatalog[i].id === id) return abilityCatalog[i];
+    return null;
+  }
+
+  // Each combo box lists the abilities the pilot doesn't have yet, grouped by category; one chosen in another box is greyed out here, and
+  // the chosen ability's rule is shown under its box.
+  function syncSkills() {
+    var chosen = skillSelects.map(function (s) { return s.value; });
+    skillSelects.forEach(function (s, i) {
+      [].forEach.call(s.options, function (o) { o.disabled = o.value !== '' && chosen.some(function (c, j) { return j !== i && c === o.value; }); });
+      var a = abilityById(s.value);
+      s.parentNode.querySelector('.skill-desc').textContent = a ? a.category + ': ' + a.text : 'Choose an ability to read what it does.';
+    });
+    skillLearn.disabled = chosen.some(function (c) { return c === ''; });
+    skillError.textContent = '';
+  }
+
+  function openSkills(li) {
+    skillPilot = li;
+    var pending = parseInt(li.dataset.edgePending, 10) || 0;
+    var learned = (li.dataset.learned || '').split(' ').filter(Boolean);
+    var available = abilityCatalog.filter(function (a) { return learned.indexOf(a.id) < 0; });
+    document.getElementById('skill-title').textContent = li.dataset.name + ': choose ' + (pending === 1 ? 'a new Edge ability' : pending + ' new Edge abilities');
+    document.getElementById('skill-intro').textContent = 'As a named pilot reaches a new level of Edge abilities, they choose one from the list. This choice is permanent: it can only be undone from Manage Pilot Records.';
+    skillSlots.textContent = '';
+    skillSelects = [];
+    for (var i = 0; i < pending; i++) {
+      var slot = el('div', 'skill-slot');
+      var label = el('label', null, 'Edge ability ' + (pending > 1 ? (i + 1) : ''));
+      var select = document.createElement('select');
+      select.id = 'skill-select-' + i;
+      label.setAttribute('for', select.id);
+      var blank = el('option', null, 'Choose an ability\u2026');
+      blank.value = '';
+      select.appendChild(blank);
+      var categories = CATEGORY_ORDER.slice();
+      available.forEach(function (a) { if (categories.indexOf(a.category) < 0) categories.push(a.category); });
+      categories.forEach(function (cat) {
+        var inCat = available.filter(function (a) { return a.category === cat; });
+        if (!inCat.length) return;
+        var group = document.createElement('optgroup');
+        group.label = cat;
+        inCat.forEach(function (a) { var o = el('option', null, a.name); o.value = a.id; group.appendChild(o); });
+        select.appendChild(group);
+      });
+      select.addEventListener('change', syncSkills);
+      slot.appendChild(label);
+      slot.appendChild(select);
+      slot.appendChild(el('p', 'skill-desc muted', ''));
+      skillSlots.appendChild(slot);
+      skillSelects.push(select);
+    }
+    syncSkills();
+    skillDialog.showModal();
+    if (skillSelects.length) skillSelects[0].focus();
+  }
+
+  if (skillDialog && typeof skillDialog.showModal === 'function') {
+    document.getElementById('skill-cancel').addEventListener('click', function () { skillDialog.close(); });
+    skillDialog.addEventListener('click', function (e) { if (e.target === skillDialog) skillDialog.close(); });
+    document.getElementById('skill-form').addEventListener('submit', function (e) {
+      e.preventDefault();
+      if (!skillPilot || skillLearn.disabled) return;
+      var ids = skillSelects.map(function (s) { return s.value; });
+      var names = ids.map(function (id) { return abilityById(id).name; });
+      Confirm.ask({
+        title: 'Learn ' + names.join(', ') + '?',
+        message: 'This choice is permanent. To undo it you will have to reset ' + skillPilot.dataset.name + '\u2019s Edge abilities under Manage Pilot Records.',
+        confirmLabel: 'Learn', danger: true
+      }).then(function (ok) {
+        if (!ok) return;
+        skillLearn.disabled = true;
+        post('/api/pilots/abilities', 'pilot=' + encodeURIComponent(skillPilot.dataset.pilot) + ids.map(function (id) { return '&ability=' + encodeURIComponent(id); }).join('')).then(function (res) {
+          if (res.ok) { location.reload(); return; }
+          skillLearn.disabled = false;
+          return res.text().then(function (t) { skillError.textContent = t.trim() || 'Could not save the Edge abilities.'; });
+        }, function () { skillLearn.disabled = false; skillError.textContent = 'Could not reach the server.'; });
+      });
+    });
+  }
+
   // ---- Recruit New Pilot: a one-step wizard. A random portrait nobody has, a name, and a rank; the new pilot is a standard 4/5 pilot
   // with 1 Edge token and no SP, shown in the same stat boxes as the start wizard.
   var recruit = document.getElementById('recruit-dialog');
@@ -340,6 +433,8 @@
 
   box.querySelectorAll('li.pilot').forEach(function (li) {
     var id = li.dataset.pilot;
+    var skillBtn = li.querySelector('.skill-pick');
+    if (skillBtn && skillDialog) skillBtn.addEventListener('click', function () { openSkills(li); });
     var cardEdit = li.querySelector('.pilot-head .name-edit');
     if (cardEdit) {
       attachNameEditor({
@@ -444,11 +539,29 @@
       reset.addEventListener('click', function () {
         var allocated = parseInt(li.dataset.allocated, 10) || 0;
         Confirm.ask({
-          title: 'Reset ' + li.dataset.name + '\u2019s abilities?',
-          message: 'Gunnery, Piloting and Edge go back to the starting levels, and all ' + allocated + ' allocated SP become unallocated. Their total SP stays the same.',
-          confirmLabel: 'Reset abilities', danger: true
+          title: 'Reset ' + li.dataset.name + '\u2019s SP allocation?',
+          message: 'Gunnery, Piloting and Edge go back to the starting levels, and all ' + allocated + ' allocated SP become unallocated. Their total SP stays the same. Any Edge abilities they have learned are kept (reset those separately).',
+          confirmLabel: 'Reset SP allocation', danger: true
         }).then(function (ok) {
           if (ok) recAct('/api/pilots/reset', li, reset, '', function () { li.dataset.allocated = 0; showSP(li); });
+        });
+      });
+
+      // Forget the Edge abilities the pilot has learned, so they can choose them again. Their SP is not touched.
+      var skillsReset = li.querySelector('.rec-skills-reset');
+      skillsReset.addEventListener('click', function () {
+        var count = parseInt(li.dataset.learnedCount, 10) || 0;
+        Confirm.ask({
+          title: 'Reset ' + li.dataset.name + '\u2019s Edge abilities?',
+          message: 'They forget the ' + count + ' Edge abilit' + (count === 1 ? 'y' : 'ies') + ' they have learned and can choose them again from the list. Their SP is not touched.',
+          confirmLabel: 'Reset Edge abilities', danger: true
+        }).then(function (ok) {
+          if (!ok) return;
+          recAct('/api/pilots/abilities/reset', li, skillsReset, '', function () {
+            li.dataset.learnedCount = 0;
+            li.querySelector('.rec-n-skills').textContent = 'none';
+            skillsReset.disabled = true;
+          });
         });
       });
 

@@ -62,6 +62,7 @@ type Page struct {
 	Ranks        []string // the campaign's pilot ranks, lowest first (empty when it has none)
 	Memorial     bool     // at least one named pilot was killed in action
 	Ladders      string   // the pilot improvement ladders as JSON, for the pilot builder's live preview
+	Abilities    string   // the Edge ability catalog as JSON, for the ability picker
 	Portraits    string   // the portrait list as JSON, for the portrait picker
 	MekBayOp     string   // link to the scenario's MekBay operation, once created ("" until then)
 	Commit       string   // git commit the server was built from, short form ("dev" if unknown)
@@ -114,6 +115,8 @@ func NewHandler(contentRoot string, store *Store, opts ...Option) http.Handler {
 	mux.HandleFunc("POST /api/pilots/reset", s.resetPilotSP)
 	mux.HandleFunc("POST /api/pilots/rename", s.renamePilot)
 	mux.HandleFunc("POST /api/pilots/rank", s.setRank)
+	mux.HandleFunc("POST /api/pilots/abilities", s.learnAbilities)
+	mux.HandleFunc("POST /api/pilots/abilities/reset", s.resetEdgeAbilities)
 	mux.HandleFunc("POST /api/pilots/total", s.setPilotTotal)
 	mux.HandleFunc("POST /api/pilots/delete", s.deletePilot)
 	mux.HandleFunc("POST /api/pilots/portrait", s.setPortrait)
@@ -141,7 +144,7 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name
 		} else {
 			p.Play = pt
 			if p.Campaign != nil {
-				p.Ladders, p.Portraits = laddersJSON, portraitsJSON()
+				p.Ladders, p.Portraits, p.Abilities = laddersJSON, portraitsJSON(), edgeAbilitiesJSON
 				if run, _, err := s.store.Run(r.Context(), id, p.Campaign.Slug); err != nil {
 					log.Printf("load campaign run: %v", err)
 				} else {
