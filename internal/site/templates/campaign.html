@@ -6,12 +6,9 @@
 {{else if .Run.Started}}<section class="mekbay overview" id="force-overview" data-campaign="{{.Campaign.Slug}}">
 <h2>Your force</h2>
 {{if .PilotsNeeded}}<p class="need">This campaign needs {{.Campaign.StartingNamedPilots}} named pilots before you can deploy. Name {{.PilotsNeeded}} more under Manage.</p>
-{{end}}<table class="force-table pilot-table">
-<thead><tr><th>Named pilot</th><th title="Gunnery">G</th><th title="Piloting">P</th><th title="Edge tokens">Edge</th><th title="Edge abilities">Abil.</th><th title="Skill points earned">SP</th></tr></thead>
-<tbody>
-{{range .Pilots}}{{if not .Fallen}}<tr><td class="who"><div><img src="{{.PortraitURL}}" alt="" width="36" height="36"><span>{{.Name}}</span></div></td><td>{{.Gunnery}}</td><td>{{.Piloting}}</td><td>{{.EdgeTokens}}</td><td>{{.Abilities}}</td><td>{{.Earned}}</td></tr>
-{{end}}{{end}}</tbody>
-</table>
+{{end}}<ul class="roster">
+{{range .Pilots}}{{if not .Fallen}}<li class="roster-pilot"><img src="{{.PortraitURL}}" alt="" width="72" height="72"><div class="roster-name"><b>{{.Name}}</b><span>{{.Earned}} SP earned</span></div><div class="stat-boxes"><div class="stat-box"><span class="stat-label">Gunnery</span><span class="stat-value">{{.Gunnery}}</span></div><div class="stat-box"><span class="stat-label">Piloting</span><span class="stat-value">{{.Piloting}}</span></div><div class="stat-box"><span class="stat-label">Edge tokens</span><span class="stat-value">{{.EdgeTokens}}</span></div><div class="stat-box"><span class="stat-label">Edge abilities</span><span class="stat-value">{{.Abilities}}</span></div></div></li>
+{{end}}{{end}}</ul>
 <div id="force-units" class="force-units" aria-live="polite"><p class="muted">Reading your hangar&hellip;</p></div>
 <p class="downloads"><a class="button" href="/{{.Campaign.Slug}}/manage/">Manage force</a></p>
 </section>

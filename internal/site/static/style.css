@@ -405,8 +405,14 @@ dialog.wizard { width: min(46rem, calc(100vw - 2rem)); }
 .force-table th:first-child, .force-table td:first-child { text-align: left; }
 .force-table td.who > div { display: flex; align-items: center; gap: 0.6rem; min-width: 0; }
 .force-table td.who img { flex: none; object-fit: cover; object-position: top; background: var(--bg); }
-.pilot-table td.who { font: 700 1rem var(--display); letter-spacing: 0.04em; text-transform: uppercase; }
-.pilot-table td.who img { border: 1px solid var(--line); }
+/* The overview's pilots: portrait, name and the same boxes with yellow numbers as the start wizard. */
+.roster { list-style: none; margin: 0.5rem 0 1rem; padding: 0; display: grid; gap: 0.6rem; }
+.roster-pilot { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem; padding: 0.6rem 0.75rem; background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--accent); }
+.roster-pilot img { flex: none; width: 4.5rem; height: 4.5rem; object-fit: cover; object-position: top; background: var(--bg); border: 1px solid var(--line); }
+.roster-name { flex: 1 1 9rem; display: grid; gap: 0.15rem; min-width: 0; }
+.roster-name b { font: 700 1.2rem var(--display); letter-spacing: 0.06em; text-transform: uppercase; overflow-wrap: anywhere; }
+.roster-name span { font: 700 0.75rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+@media (max-width: 40rem) { .roster-pilot .stat-boxes { flex-basis: 100%; } }
 .unit-table td.who { font-weight: 600; }
 .unit-table td.who small { font-weight: 400; color: var(--muted); }
 .unit-table td.who img { object-fit: contain; }
