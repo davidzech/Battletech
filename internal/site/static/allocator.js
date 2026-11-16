@@ -8,7 +8,7 @@
 //   SPAllocator.reach / upcoming / spentOf                                         ladder maths
 //
 // p.sp[ladder.key] is the SP in a column. With `base` ({key: SP already in the column}) p.sp holds only the SP being
-// added, and the row says what the column holds now.
+// added, and the controls show the column's whole total, with what it holds now as their minimum.
 (function () {
   function el(tag, cls, text) {
     var e = document.createElement(tag);
@@ -34,21 +34,25 @@
 
   // One column of the allocator: a slider and a number box for the same amount of SP. Never more than o.budget in total
   // across the columns; o.refresh() is called after every change.
+  //
+  // Without o.base the boxes hold the SP being allocated (0 to o.budget). With o.base ({key: SP already in the column}) they
+  // hold the column's whole total instead: the minimum of both controls is what the column has now, and they reach up to
+  // that plus the budget, so p.sp[key] is still only the SP being added. Typing in the number box isn't rewritten while it
+  // has focus (a half-typed "19" on the way to "190" is below the minimum), only tidied once it is left.
   function row(p, l, o) {
+    var base = o.base ? o.base[l.key] : 0;
     var r = el('div', 'alloc-row');
     var name = el('label', 'alloc-name', l.name);
     var slider = document.createElement('input');
-    slider.type = 'range'; slider.min = 0; slider.max = o.budget; slider.step = o.step;
+    slider.type = 'range'; slider.min = base; slider.max = base + o.budget; slider.step = o.step;
     var number = document.createElement('input');
-    number.type = 'number'; number.min = 0; number.max = o.budget; number.step = o.step; number.inputMode = 'numeric';
+    number.type = 'number'; number.min = base; number.max = base + o.budget; number.step = o.step; number.inputMode = 'numeric';
     name.appendChild(number);
     r.appendChild(name);
     r.appendChild(slider);
-    var note = o.base ? el('span', 'alloc-base') : null;
-    if (note) r.appendChild(note);
 
     function set(raw) {
-      var n = parseInt(raw, 10);
+      var n = parseInt(raw, 10) - base;
       if (isNaN(n) || n < 0) n = 0;
       var others = spentOf(p, o.ladders) - p.sp[l.key];
       p.sp[l.key] = Math.min(n, Math.max(0, o.budget - others)); // never more than is left to allocate
@@ -57,12 +61,11 @@
     }
     slider.addEventListener('input', function () { set(slider.value); });
     number.addEventListener('input', function () { set(number.value); });
+    number.addEventListener('change', function () { number.value = base + p.sp[l.key]; });
     r.show = function () {
-      slider.value = p.sp[l.key]; number.value = p.sp[l.key];
-      if (note) {
-        note.textContent = 'Total: ' + o.base[l.key] + ' SP' + (p.sp[l.key] ? ' → ' + (o.base[l.key] + p.sp[l.key]) + ' SP' : '');
-        note.classList.toggle('changed', p.sp[l.key] > 0); // yellow only while the column has a pending change
-      }
+      slider.value = base + p.sp[l.key];
+      if (!(o.base && document.activeElement === number)) number.value = base + p.sp[l.key];
+      r.classList.toggle('changed', p.sp[l.key] > 0); // the number turns yellow while the column has a pending change
     };
     r.show();
     return r;
