@@ -185,6 +185,7 @@
   // What the server made of the pasted hangar: idle, checking, error (with a message) or done (with the result).
   var check = { link: '', state: 'idle', message: '', result: null };
   var checkTimer = null;
+  var checkSeq = 0;
   var statusBox = null;
 
   function number(n) { return Number(n).toLocaleString('en-US'); }
@@ -192,25 +193,26 @@
   // Reads the hangar behind the link and checks it against the campaign's starting conditions. A reply for a link
   // the player has since changed is ignored.
   function runCheck(link) {
+    var seq = ++checkSeq;
     fetch('/api/campaign/hangar-check?campaign=' + encodeURIComponent(wiz.dataset.campaign) + '&hangar=' + encodeURIComponent(link), {
       credentials: 'same-origin',
       cache: 'no-store'
     }).then(function (res) {
-      if (check.link !== link) return;
+      if (check.link !== link || seq !== checkSeq) return;
       if (!res.ok) {
         return res.text().then(function (t) {
-          if (check.link !== link) return;
+          if (check.link !== link || seq !== checkSeq) return;
           check = { link: link, state: 'error', message: t.trim() || 'Could not read your hangar.', result: null };
           renderCheck(); updateNext();
         });
       }
       return res.json().then(function (data) {
-        if (check.link !== link) return;
+        if (check.link !== link || seq !== checkSeq) return;
         check = { link: link, state: 'done', message: '', result: data };
         renderCheck(); updateNext();
       });
     }, function () {
-      if (check.link !== link) return;
+      if (check.link !== link || seq !== checkSeq) return;
       check = { link: link, state: 'error', message: 'Could not reach the server.', result: null };
       renderCheck(); updateNext();
     });
@@ -228,6 +230,25 @@
     checkTimer = setTimeout(function () { runCheck(link); }, delay);
   }
 
+  // Reads the current link again at once. The player edits their hangar in MekBay and comes back, and the link
+  // hasn't changed, so nothing else would make the wizard look again.
+  function forceCheck() {
+    clearTimeout(checkTimer);
+    var link = hangar.trim();
+    if (hangarProblem(link)) return;
+    check = { link: link, state: 'checking', message: '', result: null };
+    renderCheck();
+    updateNext();
+    runCheck(link);
+  }
+
+  function recheckButton() {
+    var b = el('button', 'recheck', 'Check again');
+    b.type = 'button';
+    b.addEventListener('click', forceCheck);
+    return b;
+  }
+
   function renderCheck() {
     if (!statusBox) return;
     statusBox.textContent = '';
@@ -239,6 +260,7 @@
       statusBox.appendChild(loading);
     } else if (check.state === 'error') {
       statusBox.appendChild(el('p', 'hc-problem', check.message));
+      statusBox.appendChild(recheckButton());
     } else if (check.state === 'done') {
       var r = check.result;
       var summary = el('p', 'hc-summary');
@@ -252,6 +274,7 @@
       summary.appendChild(bv);
       statusBox.appendChild(summary);
       r.problems.forEach(function (t) { statusBox.appendChild(el('p', 'hc-problem', t)); });
+      statusBox.appendChild(recheckButton());
       if (r.units.length) {
         var list = el('ul', 'hc-units');
         r.units.forEach(function (u) {
@@ -321,7 +344,10 @@
   function updateNext() {
     var missing = problem();
     next.disabled = busy || missing !== '';
-    hint.textContent = busy ? '' : missing;
+    // Once the hangar has been read, the status box right above already spells out what is wrong, so the hint stays
+    // quiet there (the reason is still the button's tooltip).
+    var spelledOut = step >= pilotCount && check.link === hangar.trim() && (check.state === 'done' || check.state === 'error');
+    hint.textContent = busy || spelledOut ? '' : missing;
     if (missing) next.title = missing; else next.removeAttribute('title');
   }
 
@@ -369,4 +395,10 @@
   back.addEventListener('click', function () { if (step > 0) { step--; render(); } });
   document.getElementById('wiz-cancel').addEventListener('click', function () { wiz.close(); });
   wizOpen.addEventListener('click', function () { step = 0; wiz.showModal(); render(); });
+  function comingBack() {
+    var failing = check.state === 'error' || (check.state === 'done' && !check.result.ok);
+    if (wiz.hasAttribute('open') && step >= pilotCount && failing) forceCheck();
+  }
+  window.addEventListener('focus', comingBack);
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) comingBack(); });
 })();

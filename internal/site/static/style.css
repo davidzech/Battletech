@@ -471,6 +471,7 @@ dialog.wizard button.button:disabled { opacity: 0.4; cursor: not-allowed; filter
 @keyframes spin { to { transform: rotate(360deg); } }
 /* Reduced motion: slow it down rather than stop it, so it still says "working". */
 @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2.4s; } }
+.hangar-check .recheck { margin-top: 0.6rem; }
 .hc-units { list-style: none; margin: 0.6rem 0 0; padding: 0; max-height: 9.5rem; overflow-y: auto; border-top: 1px solid var(--line); }
 .hc-units li { display: flex; justify-content: space-between; gap: 1rem; padding: 0.25rem 0; border-bottom: 1px solid var(--line); color: var(--muted); }
 .hc-units b { color: var(--text); font-weight: 700; }
