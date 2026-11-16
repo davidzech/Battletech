@@ -26,7 +26,12 @@
       list.appendChild(el('p', 'muted', 'Your hangar has no units in it yet. Add some in MekBay.'));
       return;
     }
-    units.forEach(function (u) { list.appendChild(MechRow.build(u)); });
+    // The hangar's pilot skills are a matter of assigning pilots, not something the mech itself has, so the rows leave them out.
+    units.forEach(function (u) {
+      var row = {};
+      Object.keys(u).forEach(function (k) { if (k !== 'gunnery' && k !== 'piloting' && k !== 'pilot') row[k] = u[k]; });
+      list.appendChild(MechRow.build(row));
+    });
   }
 
   var shown = false;
