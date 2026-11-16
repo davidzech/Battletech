@@ -238,6 +238,9 @@ th {
   clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%);
 }
 .button:hover { color: var(--accent-ink); filter: brightness(1.12); }
+/* A <button class="button"> looks like the link buttons: no default border, pointer cursor. */
+button.button { border: 0; cursor: pointer; }
+button.button:disabled { opacity: 0.6; cursor: wait; filter: none; }
 
 figure { margin: 1rem 0; }
 /* Scenario art: a wide banner cropped to the top, so dark space at the bottom of the image fades into the page.
@@ -374,7 +377,6 @@ dialog .hint { margin: 0.4rem 0 0; font-size: 0.85rem; color: var(--muted, #9a9a
 dialog label.check { display: flex; align-items: center; gap: 0.5rem; text-transform: none; letter-spacing: 0; font-family: inherit; }
 .form-error { min-height: 1.4em; margin: 0.6rem 0 0; color: #ff7a59; }
 .form-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; margin-top: 0.5rem; }
-.form-actions .button { border: 0; cursor: pointer; }
 
 /* Mission briefing: the scenario fluff, shown as an incoming transmission */
 .briefing {
