@@ -215,6 +215,63 @@
     });
   }
 
+  // ---- Recruit New Pilot: a one-step wizard. A random portrait nobody has, a name, and a rank; the new pilot is a standard 4/5 pilot
+  // with 1 Edge token and no SP, shown in the same stat boxes as the start wizard.
+  var recruit = document.getElementById('recruit-dialog');
+  if (recruit && typeof recruit.showModal === 'function') {
+    var portraitList = JSON.parse(box.dataset.portraits || '[]');
+    var rName = document.getElementById('recruit-name');
+    var rImg = document.getElementById('recruit-portrait-img');
+    var rRank = document.getElementById('recruit-rank');
+    var rError = document.getElementById('recruit-error');
+    var rGo = document.getElementById('recruit-go');
+    var rBoxes = document.getElementById('recruit-boxes');
+    var rPortrait = '';
+    // The new pilot's starting levels (no SP spent), drawn once.
+    ladders.map(SPAllocator.statBox).forEach(function (b) { b.show(0); rBoxes.appendChild(b); });
+
+    // Portraits living pilots already have: a new pilot never shares one.
+    function takenPortraits() {
+      var taken = [];
+      box.querySelectorAll('li.pilot:not(.kia)').forEach(function (li) { if (li.dataset.portrait) taken.push(li.dataset.portrait); });
+      return taken;
+    }
+    function showPortrait(file) { rPortrait = file; rImg.src = '/portraits/' + file; }
+
+    var openBtn = document.getElementById('recruit-open');
+    if (openBtn) openBtn.addEventListener('click', function () {
+      var taken = takenPortraits();
+      var free = portraitList.filter(function (p) { return taken.indexOf(p.file) < 0; });
+      var pick = free.length ? free : portraitList;
+      showPortrait(pick.length ? pick[Math.floor(Math.random() * pick.length)].file : '');
+      rName.value = '';
+      rError.textContent = '';
+      if (rRank) rRank.selectedIndex = 0;
+      rGo.disabled = false;
+      recruit.showModal();
+      rName.focus();
+    });
+    document.getElementById('recruit-portrait').addEventListener('click', function () {
+      if (typeof PortraitPicker === 'undefined') return;
+      PortraitPicker.open({ portraits: portraitList, selected: rPortrait, taken: takenPortraits(), onPick: showPortrait });
+    });
+    document.getElementById('recruit-cancel').addEventListener('click', function () { recruit.close(); });
+    recruit.addEventListener('click', function (e) { if (e.target === recruit) recruit.close(); });
+    rName.addEventListener('input', function () { rError.textContent = ''; });
+    document.getElementById('recruit-form').addEventListener('submit', function (e) {
+      e.preventDefault();
+      var name = rName.value.trim();
+      if (!name) { rError.textContent = 'Give your pilot a name.'; rName.focus(); return; }
+      rGo.disabled = true;
+      rError.textContent = '';
+      post('/api/pilots', 'name=' + encodeURIComponent(name) + '&portrait=' + encodeURIComponent(rPortrait) + (rRank ? '&rank=' + encodeURIComponent(rRank.value) : '')).then(function (res) {
+        if (res.ok) { location.reload(); return; }
+        rGo.disabled = false;
+        return res.text().then(function (t) { rError.textContent = t.trim() || 'Could not recruit the pilot.'; });
+      }, function () { rGo.disabled = false; rError.textContent = 'Could not reach the server.'; });
+    });
+  }
+
   // A rank never wraps: the longest of a faction's ranks fits the box at the stylesheet's size, and a rank that is still too wide
   // (a longer ladder in another campaign) is scaled down in proportion.
   function fitRanks() {

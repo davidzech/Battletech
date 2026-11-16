@@ -42,18 +42,19 @@ type Crumb struct {
 
 // Page is the data every template receives.
 type Page struct {
-	Title     string
-	Crumbs    []Crumb
-	Campaign  *Campaign
-	Scenario  *Scenario
-	Next      *Scenario
-	Cards     []Card
-	Images    []string    // URLs of the scenario's images
-	Seed      string      // the visitor's seed ("" if none chosen yet)
-	Play      Playthrough // the visitor's playthrough (zero value if no seed)
-	Run       CampaignRun // the playthrough's run of this page's campaign (zero value until it is started)
-	Pilots    []PilotView // the run's named pilots
-	MaxPilots int         // most living named pilots a command may have
+	Title      string
+	Crumbs     []Crumb
+	Campaign   *Campaign
+	Scenario   *Scenario
+	Next       *Scenario
+	Cards      []Card
+	Images     []string    // URLs of the scenario's images
+	Seed       string      // the visitor's seed ("" if none chosen yet)
+	Play       Playthrough // the visitor's playthrough (zero value if no seed)
+	Run        CampaignRun // the playthrough's run of this page's campaign (zero value until it is started)
+	Pilots     []PilotView // the run's named pilots
+	CanRecruit bool        // the command has room for another living named pilot
+	MaxPilots  int         // most living named pilots a command may have
 	// CachedHangar is the hangar last read from MekBay for this run (nil if none yet), and CachedAt when; the campaign and scenario
 	// pages embed it so they can paint the hangar before the live read finishes (see hangarcache.go).
 	CachedHangar *HangarForce
@@ -151,7 +152,9 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name
 					if err != nil {
 						log.Printf("load named pilots: %v", err)
 					}
-					p.Pilots, _ = pilotViews(pilots, p.Campaign.Ranks)
+					var alive int
+					p.Pilots, alive = pilotViews(pilots, p.Campaign.Ranks)
+					p.CanRecruit = alive < maxNamedPilots
 					p.Ranks = p.Campaign.Ranks
 					if name == "campaign" || name == "scenario" {
 						if h, at, ok, err := s.store.CachedHangar(r.Context(), id, p.Campaign.Slug, p.Run.HangarInstance); err != nil {

@@ -1252,8 +1252,9 @@ func TestPilotRanksEndToEnd(t *testing.T) {
 			t.Errorf("the manage page is missing %q", want)
 		}
 	}
-	if strings.Count(page, "<option value=") != 7 {
-		t.Errorf("the picker should list the seven Clan ranks, got %d options", strings.Count(page, "<option value="))
+	// The seven Clan ranks are offered twice: in the rank picker and in the Recruit New Pilot dialog.
+	if strings.Count(page, "<option value=") != 14 {
+		t.Errorf("each rank picker should list the seven Clan ranks (14 options in all), got %d", strings.Count(page, "<option value="))
 	}
 
 	if got := post(t, srv, "/api/pilots/rank", form("rank", "Khan"), cookie, "https://evil.example").StatusCode; got != http.StatusForbidden {
@@ -1304,5 +1305,95 @@ func TestStatBoxLabels(t *testing.T) {
 	}
 	if !strings.Contains(page, `&#34;name&#34;:&#34;Edge abilities&#34;`) || !strings.Contains(page, `&#34;short&#34;:&#34;Abilities&#34;`) {
 		t.Errorf("the ladders JSON should keep the full name and add the short one")
+	}
+}
+
+func TestRecruitNewPilot(t *testing.T) {
+	srv, store, cookie := startedCompany(t)
+	ctx := context.Background()
+	id := playthroughID("wolfpack2026")
+	recruit := func(kv ...string) int {
+		v := url.Values{"campaign": {"refusalwar"}}
+		for i := 0; i+1 < len(kv); i += 2 {
+			v.Set(kv[i], kv[i+1])
+		}
+		return post(t, srv, "/api/pilots", v, cookie, srv.URL).StatusCode
+	}
+	// The button sits under the active pilots (above the memorial) and opens the one-step dialog.
+	page := body(t, srv, "/refusalwar/manage/", cookie)
+	for _, want := range []string{`id="recruit-open"`, ">Recruit New Pilot</button>", `id="recruit-dialog"`, `id="recruit-name"`, `id="recruit-rank"`, `id="recruit-portrait"`} {
+		if !strings.Contains(page, want) {
+			t.Errorf("the manage page is missing %q", want)
+		}
+	}
+	if strings.Contains(page, `id="recruit-open" disabled`) {
+		t.Error("with room for another pilot the button is enabled")
+	}
+	if got := post(t, srv, "/api/pilots", url.Values{"campaign": {"refusalwar"}, "name": {"Jarek"}}, cookie, "https://evil.example").StatusCode; got != http.StatusForbidden {
+		t.Errorf("cross-origin: %d", got)
+	}
+
+	ps, _ := store.Pilots(ctx, id, "refusalwar")
+	existing := ps[0]
+	for name, c := range map[string][]string{
+		"blank name":     {"name", "  "},
+		"markup":         {"name", "<b>x</b>"},
+		"taken name":     {"name", existing.Name},
+		"taken, case":    {"name", strings.ToUpper(existing.Name)},
+		"bad rank":       {"name", "Jarek", "rank", "General"},
+		"bad portrait":   {"name", "Jarek", "portrait", "../x.png"},
+		"taken portrait": {"name", "Jarek", "portrait", existing.Portrait},
+	} {
+		if got := recruit(c...); got != http.StatusBadRequest {
+			t.Errorf("%s: got %d, want 400", name, got)
+		}
+	}
+	if ps, _ := store.Pilots(ctx, id, "refusalwar"); len(ps) != 2 {
+		t.Fatalf("refused requests added pilots: %d", len(ps))
+	}
+
+	free := ""
+	for _, p := range portraits() {
+		if p.File != ps[0].Portrait && p.File != ps[1].Portrait {
+			free = p.File
+			break
+		}
+	}
+	if got := recruit("name", "Jarek", "portrait", free, "rank", "Star Captain"); got != http.StatusNoContent {
+		t.Fatalf("recruit: %d", got)
+	}
+	ps, _ = store.Pilots(ctx, id, "refusalwar")
+	if len(ps) != 3 || ps[2].Name != "Jarek" || ps[2].Portrait != free || ps[2].Rank != "Star Captain" || ps[2].TotalSP != 0 || ps[2].SP.Total() != 0 {
+		t.Fatalf("the new pilot: %+v", ps)
+	}
+	if v := ps[2].view(factionRanks("clan")); v.Gunnery != 4 || v.Piloting != 5 || v.EdgeTokens != 1 || v.Abilities != 0 {
+		t.Errorf("a recruit is a standard 4/5 pilot with 1 Edge token: %+v", v)
+	}
+	// With no portrait or rank chosen, a free portrait and the lowest rank are used.
+	if got := recruit("name", "Sybille"); got != http.StatusNoContent {
+		t.Fatalf("recruit with defaults: %d", got)
+	}
+	ps, _ = store.Pilots(ctx, id, "refusalwar")
+	if len(ps) != 4 || ps[3].Rank != "" || !validPortrait(ps[3].Portrait) || ps[3].Portrait == ps[0].Portrait || ps[3].Portrait == ps[1].Portrait || ps[3].Portrait == ps[2].Portrait {
+		t.Fatalf("defaults: %+v", ps[3])
+	}
+	// A command holds four living pilots: the button is disabled, and the server refuses a fifth.
+	page = body(t, srv, "/refusalwar/manage/", cookie)
+	if !strings.Contains(page, `id="recruit-open" disabled`) || !strings.Contains(page, "already has 4 living pilots") {
+		t.Error("with four living pilots the button should be disabled, with a reason")
+	}
+	if got := recruit("name", "Fifth"); got != http.StatusBadRequest {
+		t.Errorf("a fifth pilot: %d", got)
+	}
+	// A pilot killed in action frees a place, and the button comes back; the button stays above the memorial.
+	if got := post(t, srv, "/api/pilots/fallen", url.Values{"campaign": {"refusalwar"}, "pilot": {ps[0].ID}}, cookie, srv.URL).StatusCode; got != http.StatusNoContent {
+		t.Fatal(got)
+	}
+	page = body(t, srv, "/refusalwar/manage/", cookie)
+	if strings.Contains(page, `id="recruit-open" disabled`) {
+		t.Error("a killed pilot frees a place")
+	}
+	if i, j := strings.Index(page, `id="recruit-open"`), strings.Index(page, `class="memorial-head"`); i < 0 || j < 0 || i > j {
+		t.Errorf("the Recruit button belongs above the Memorial (%d, %d)", i, j)
 	}
 }

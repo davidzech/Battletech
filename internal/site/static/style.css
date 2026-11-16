@@ -970,3 +970,10 @@ dialog select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 .pilot-head h3 button.name-ok { position: absolute; top: 2px; right: 2px; bottom: 2px; display: inline-flex; align-items: center; padding: 0 0.5rem; color: var(--accent-ink); background: var(--accent); border: 0; cursor: pointer; }
 .pilot-head h3 button.name-ok:hover { filter: brightness(1.12); }
 .pilot-head h3 button.name-ok:disabled { opacity: 0.5; cursor: wait; }
+
+/* Recruit New Pilot: the button under the active pilots, and its one-step dialog. */
+.recruit { margin: 1rem 0 0; }
+.recruit .muted { margin-left: 0.5rem; }
+.recruit button.button:disabled { opacity: 0.45; cursor: not-allowed; filter: grayscale(0.5); }
+.recruit-rank-label { display: block; margin-top: 1rem; }
+#recruit-dialog .pilot-top { margin-top: 0.75rem; }

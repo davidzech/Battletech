@@ -75,8 +75,16 @@ func (s *Server) addPilot(w http.ResponseWriter, r *http.Request) {
 		}
 		portrait = randomPortrait(livingPortraits(existing))
 	}
-	if _, err := s.store.AddPilot(r.Context(), pt.ID, c.Slug, name, portrait, SPAllocation{}, maxNamedPilots); errors.Is(err, ErrPilotLimit) {
+	rank := r.PostFormValue("rank")
+	if rank != "" && !validRank(c.Ranks, rank) {
+		http.Error(w, "Pick a rank from the list.", http.StatusBadRequest)
+		return
+	}
+	if _, err := s.store.AddPilotWithRank(r.Context(), pt.ID, c.Slug, name, portrait, rank, SPAllocation{}, maxNamedPilots); errors.Is(err, ErrPilotLimit) {
 		http.Error(w, fmt.Sprintf("You can have at most %d named pilots at a time.", maxNamedPilots), http.StatusBadRequest)
+		return
+	} else if errors.Is(err, ErrNameTaken) {
+		http.Error(w, "Another pilot already has that name.", http.StatusBadRequest)
 		return
 	} else if errors.Is(err, ErrPortraitTaken) {
 		http.Error(w, "Another pilot already has that portrait.", http.StatusBadRequest)
