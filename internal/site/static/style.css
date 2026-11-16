@@ -628,10 +628,10 @@ dialog .deploy-unit label {
 /* The opt-in "open on MekBay" button at the right of a row (mechrow.js externalUrl). */
 .mech-row.has-row-link { cursor: pointer; }
 .mech-row.has-row-link:hover, .mech-row.has-row-link:focus-visible { border-color: var(--accent); outline: none; }
-.mech-row.has-link { grid-template-columns: 1.6rem 3.4rem minmax(0, 1fr) auto; }
-.mr-ext { align-self: center; display: inline-flex; align-items: center; justify-content: center; width: 2.2rem; height: 2.2rem; margin-right: 0.7rem; color: var(--muted); border: 1px solid var(--line); background: var(--bg); }
-.mr-ext svg { width: 1.05rem; height: 1.05rem; }
-.mr-ext:hover, .mr-ext:focus-visible { color: var(--accent); border-color: var(--accent); outline: none; }
+.mr-nameline { display: flex; align-items: center; gap: 0.45rem; }
+/* The little gray (i) after the unit name: a link to the unit's generic page. */
+.mr-ext { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 1.05rem; height: 1.05rem; font: italic 700 0.72rem/1 Georgia, serif; text-decoration: none; color: var(--muted); border: 1px solid currentColor; border-radius: 50%; }
+.mr-ext:hover, .mr-ext:focus-visible { color: var(--accent); outline: none; }
 @media (max-width: 40rem) {
   .mech-row { grid-template-columns: 1.5rem 2.8rem minmax(0, 1fr); }
   .mr-icon { width: 2.6rem; }
@@ -1049,7 +1049,6 @@ dialog button.rec-skills-reset:disabled { opacity: 0.4; cursor: not-allowed; }
 /* The Hangar list has a little more room than the compact rows in the popup and the wizard: about 5.2rem tall, with the icon, name and chips
    sized between the two. */
 .mech-list .mech-row { grid-template-columns: 1.7rem 4.4rem minmax(0, 1fr); min-height: 5.2rem; }
-.mech-list .mech-row.has-link { grid-template-columns: 1.7rem 4.4rem minmax(0, 1fr) auto; }
 .mech-list .mr-icon { width: 3.8rem; max-height: 4rem; }
 .mech-list .mr-main { gap: 0.1rem; padding: 0.45rem 0.8rem 0.45rem 0.25rem; }
 .mech-list .mr-model { font-size: 0.77rem; }
