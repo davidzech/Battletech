@@ -927,3 +927,14 @@ dialog button.rec-edit:hover, dialog button.rec-edit:focus-visible { color: var(
 dialog button.rec-name-ok { position: absolute; top: 2px; right: 2px; bottom: 2px; display: inline-flex; align-items: center; padding: 0 0.5rem; color: var(--accent-ink); background: var(--accent); border: 0; cursor: pointer; }
 dialog button.rec-name-ok:hover { background: var(--accent); filter: brightness(1.12); }
 dialog button.rec-name-ok:disabled { opacity: 0.5; cursor: wait; }
+
+/* The site's own confirmation dialog (confirm.js). */
+dialog.confirm-dialog { width: min(30rem, calc(100vw - 2rem)); }
+dialog.confirm-dialog.danger { border-left-color: #e5594f; }
+dialog.confirm-dialog.danger h2 { color: #ff8d83; }
+.confirm-message { margin: 0.5rem 0 1rem; line-height: 1.5; }
+
+/* Buttons side by side in a form-actions row (Apply / Close, Delete / Cancel, Back / Next ...) share one box: the same
+   height, font and centring, whichever style they have, so they line up exactly. */
+.form-actions > button, .form-actions > .button { box-sizing: border-box; height: 2.5rem; margin: 0; padding: 0 1.1rem; display: inline-flex; align-items: center; justify-content: center; font: 700 0.85rem var(--display); letter-spacing: 0.1em; line-height: 1; text-transform: uppercase; }
+.form-actions > button:not(.button) { border: 1px solid var(--line); }

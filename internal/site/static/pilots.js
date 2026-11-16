@@ -86,11 +86,17 @@
       var n = parseInt(input.value, 10);
       if (isNaN(n) || n < 1) { spError.textContent = 'Enter how much SP the pilot earned.'; return; }
       if (p.earned + n > 10000) { spError.textContent = 'That is too much SP to add at once.'; return; }
-      if (!window.confirm('Add ' + n + ' earned SP to ' + p.name + '? It is staged until you press Apply, and Clear or closing this window discards it.')) return;
-      p.earned += n;
-      p.pool += n;
-      spError.textContent = '';
-      render();
+      Confirm.ask({
+        title: 'Add ' + n + ' earned SP?',
+        message: 'Add ' + n + ' earned SP to ' + p.name + '. It is staged until you press Apply, and Clear or closing this window discards it.',
+        confirmLabel: 'Add SP'
+      }).then(function (ok) {
+        if (!ok) return;
+        p.earned += n;
+        p.pool += n;
+        spError.textContent = '';
+        render();
+      });
     });
     spBody.appendChild(earn);
     if (p.earned) {
@@ -169,8 +175,11 @@
     var kia = li.querySelector('.pilot-kia');
     if (kia) {
       kia.addEventListener('click', function () {
-        if (!window.confirm('Mark ' + li.dataset.name + ' as Killed in Action? They are removed from your active pilots (you can bring them back under Pilot records).')) return;
-        send('/api/pilots/fallen', 'pilot=' + encodeURIComponent(id), kia);
+        Confirm.ask({
+          title: 'Mark ' + li.dataset.name + ' as Killed in Action?',
+          message: 'They move to the Memorial and are out of the campaign. Their record stays, and you can bring them back under Manage Pilot Records.',
+          confirmLabel: 'Killed in Action', danger: true
+        }).then(function (ok) { if (ok) send('/api/pilots/fallen', 'pilot=' + encodeURIComponent(id), kia); });
       });
     }
   });
@@ -273,8 +282,13 @@
       var reset = li.querySelector('.rec-reset');
       reset.addEventListener('click', function () {
         var allocated = parseInt(li.dataset.allocated, 10) || 0;
-        if (!window.confirm('Factory-reset ' + li.dataset.name + '\u2019s abilities? Gunnery, Piloting and Edge go back to the starting levels, and all ' + allocated + ' allocated SP become unallocated. Their total SP stays the same.')) return;
-        recAct('/api/pilots/reset', li, reset, '', function () { li.dataset.allocated = 0; showSP(li); });
+        Confirm.ask({
+          title: 'Reset ' + li.dataset.name + '\u2019s abilities?',
+          message: 'Gunnery, Piloting and Edge go back to the starting levels, and all ' + allocated + ' allocated SP become unallocated. Their total SP stays the same.',
+          confirmLabel: 'Reset abilities', danger: true
+        }).then(function (ok) {
+          if (ok) recAct('/api/pilots/reset', li, reset, '', function () { li.dataset.allocated = 0; showSP(li); });
+        });
       });
 
       // Override the total SP. A total below what is already allocated has to reset the allocation, so it asks first (the
@@ -291,22 +305,35 @@
         var total = parseInt(totalInput.value, 10), allocated = parseInt(li.dataset.allocated, 10) || 0;
         if (isNaN(total) || total < 0) { recError.textContent = 'Enter a whole number of SP, 0 or more.'; return; }
         var resets = total < allocated;
-        if (resets && !window.confirm('Setting ' + li.dataset.name + '\u2019s total to ' + total + ' SP is below the ' + allocated + ' SP already allocated. Doing this resets all of their allocations (Gunnery, Piloting and Edge go back to the starting levels) and leaves ' + total + ' SP unallocated. Continue?')) return;
-        recAct('/api/pilots/total', li, form.querySelector('button[type=submit]'), 'total=' + total + (resets ? '&reset=1' : ''), function () {
-          li.dataset.total = total;
-          if (resets) li.dataset.allocated = 0;
-          showSP(li);
-          form.hidden = true;
-        });
+        function save() {
+          recAct('/api/pilots/total', li, form.querySelector('button[type=submit]'), 'total=' + total + (resets ? '&reset=1' : ''), function () {
+            li.dataset.total = total;
+            if (resets) li.dataset.allocated = 0;
+            showSP(li);
+            form.hidden = true;
+          });
+        }
+        if (!resets) { save(); return; }
+        Confirm.ask({
+          title: 'Reset the allocation?',
+          message: 'Setting ' + li.dataset.name + '\u2019s total to ' + total + ' SP is below the ' + allocated + ' SP already allocated. Doing this resets all of their allocations (Gunnery, Piloting and Edge go back to the starting levels) and leaves ' + total + ' SP unallocated.',
+          confirmLabel: 'Set total and reset', danger: true
+        }).then(function (ok) { if (ok) save(); });
       });
 
       var del = li.querySelector('.rec-delete');
       del.addEventListener('click', function () {
-        if (!window.confirm('Delete ' + li.dataset.name + ' permanently? Their record and all of their SP are lost. This cannot be undone.')) return;
-        recAct('/api/pilots/delete', li, del, '', function () {
-          var list = li.parentNode;
-          li.remove();
-          if (!list.querySelector('li[data-pilot]')) list.appendChild(el('li', 'muted', 'No pilots.'));
+        Confirm.ask({
+          title: 'Delete ' + li.dataset.name + '?',
+          message: 'This permanently deletes their record and all of their SP. It cannot be undone.',
+          confirmLabel: 'Delete pilot', danger: true
+        }).then(function (ok) {
+          if (!ok) return;
+          recAct('/api/pilots/delete', li, del, '', function () {
+            var list = li.parentNode;
+            li.remove();
+            if (!list.querySelector('li[data-pilot]')) list.appendChild(el('li', 'muted', 'No pilots.'));
+          });
         });
       });
     });
