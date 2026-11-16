@@ -5,7 +5,7 @@
 //   MechRow.build({ name, model, role, icon, tons, bv, gunnery, piloting, pilot,
 //                   unknown, destroyed, damaged, notMech, externalUrl }) -> HTMLElement
 //
-// externalUrl (a https://mekbay.com/ link) adds an "opens in a new tab" button at the right of the row. It is opt-in: the deploy popup's rows are
+// rowUrl makes the whole row open a link; externalUrl (a https://mekbay.com/ link) adds an "opens in a new tab" button at the right of the row. It is opt-in: the deploy popup's rows are
 // checkbox labels and have none.
 (function () {
   // Small icons for the tonnage and pilot chips, drawn for this site.
@@ -99,6 +99,19 @@
       link.innerHTML = EXTERNAL; // a constant defined above, never data
       row.classList.add('has-link');
       row.appendChild(link);
+    }
+    // rowUrl (a https://mekbay.com/ link) makes the whole row a link opened in a new tab, e.g. the player's hangar with this unit selected.
+    // The small button above keeps its own target.
+    if (u.rowUrl && /^https:\/\/mekbay\.com\//.test(u.rowUrl)) {
+      row.classList.add('has-row-link');
+      row.tabIndex = 0;
+      row.setAttribute('role', 'link');
+      row.title = 'Open in your hangar on MekBay';
+      var go = function () { window.open(u.rowUrl, '_blank', 'noopener,noreferrer'); };
+      row.addEventListener('click', function (e) { if (!e.target.closest('.mr-ext')) go(); });
+      row.addEventListener('keydown', function (e) {
+        if ((e.key === 'Enter' || e.key === ' ') && e.target === row) { e.preventDefault(); go(); }
+      });
     }
     return row;
   }

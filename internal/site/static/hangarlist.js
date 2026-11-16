@@ -15,6 +15,9 @@
     return e;
   }
   // The count and total BV as big yellow numbers with labels; the rows underneath carry the per-unit detail, so no icons here.
+  var openLink = document.querySelector('#campaign-run a.button');
+  var hangarLink = openLink ? openLink.getAttribute('href') : '';
+
   function render(data) {
     var units = data.units || [];
     list.textContent = '';
@@ -30,6 +33,8 @@
       var row = {};
       Object.keys(u).forEach(function (k) { if (k !== 'gunnery' && k !== 'piloting' && k !== 'pilot') row[k] = u[k]; });
       if (u.mekbayUrl) row.externalUrl = u.mekbayUrl; // the unit's own page on MekBay, opened in a new tab
+      // Clicking the row opens the player's hangar on MekBay with this unit selected (MekBay's `sel` parameter is the force unit's ID).
+      if (hangarLink && u.id) row.rowUrl = hangarLink + (hangarLink.indexOf('?') < 0 ? '?' : '&') + 'sel=' + encodeURIComponent(u.id);
       list.appendChild(MechRow.build(row));
     });
   }
