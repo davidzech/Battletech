@@ -95,6 +95,14 @@ func TestHangarCachePullThrough(t *testing.T) {
 		t.Fatalf("cached payload: %+v %v", cached, err)
 	}
 
+	// The Manage page's Mechs list embeds it too, and sits under the pilots (and their memorial) and above the records link.
+	man := body(t, srv, "/refusalwar/manage/", cookie)
+	mattr := cachedAttr(man)
+	i, j, k := strings.Index(man, `id="pilots"`), strings.Index(man, `id="hangar-units"`), strings.Index(man, `id="records-open"`)
+	if !strings.Contains(mattr, "Mist Lynx") || !strings.Contains(man, `id="hangar-units-list"`) || !(i >= 0 && i < j && j < k) {
+		t.Errorf("the manage page should list the cached mechs under the pilots: attr %.120s, positions %d %d %d", mattr, i, j, k)
+	}
+
 	// A live read refreshes the copy (write-through).
 	fake.setHangar(hangarOf("BMMadCat_H"), nil)
 	if r := get(t, srv, "/api/campaign/force?campaign=refusalwar", cookie); r.StatusCode != http.StatusOK {

@@ -104,6 +104,10 @@
     </div>
   </form>
 </dialog>
+<section class="hangar-units" id="hangar-units" data-campaign="{{.Campaign.Slug}}" data-cached="{{.ForceJSON}}">
+<div class="hangar-units-head"><h2>Mechs</h2><span class="hangar-units-summary" id="hangar-units-summary"></span></div>
+<div class="mech-list" id="hangar-units-list"><p class="muted">Reading your hangar&hellip;</p></div>
+</section>
 <p class="records-link"><button type="button" class="link-button" id="records-open">Manage Pilot Records&hellip;</button></p>
 <section class="danger-zone" id="danger-zone" data-campaign="{{.Campaign.Slug}}">
 <h2>Danger zone</h2>
@@ -137,6 +141,8 @@
   <div class="form-actions"><button type="button" id="records-close">Close</button></div>
 </dialog>
 <script src="/static/confirm.js" defer></script>
+<script src="/static/mechrow.js" defer></script>
+<script src="/static/hangarlist.js" defer></script>
 <script src="/static/portraitpicker.js" defer></script>
 <script src="/static/allocator.js" defer></script>
 <script src="/static/campaign.js" defer></script>

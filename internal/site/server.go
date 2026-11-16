@@ -159,7 +159,7 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name
 					p.Pilots, alive = pilotViews(pilots, p.Campaign.Ranks)
 					p.CanRecruit = alive < maxNamedPilots
 					p.Ranks = p.Campaign.Ranks
-					if name == "campaign" || name == "scenario" {
+					if name == "campaign" || name == "scenario" || name == "manage" {
 						if h, at, ok, err := s.store.CachedHangar(r.Context(), id, p.Campaign.Slug, p.Run.HangarInstance); err != nil {
 							log.Printf("load cached hangar: %v", err)
 						} else if ok {
