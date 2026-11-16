@@ -30,6 +30,7 @@
     units.forEach(function (u) {
       var row = {};
       Object.keys(u).forEach(function (k) { if (k !== 'gunnery' && k !== 'piloting' && k !== 'pilot') row[k] = u[k]; });
+      if (u.mekbayUrl) row.externalUrl = u.mekbayUrl; // the unit's own page on MekBay, opened in a new tab
       list.appendChild(MechRow.build(row));
     });
   }

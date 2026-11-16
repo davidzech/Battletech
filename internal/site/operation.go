@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -62,6 +63,8 @@ type hangarUnitView struct {
 	Destroyed  bool    `json:"destroyed"`
 	Unknown    bool    `json:"unknown"` // not in the unit catalog, so its BV can't be worked out
 	InDeployed bool    `json:"inDeployed"`
+	// MekBayURL is the unit's own page on mekbay.com (its sheet, not the player's force), "" when the unit has no MekBay ID.
+	MekBayURL string `json:"mekbayUrl"`
 }
 
 var chassisNames = regexp.MustCompile(`^(.*?)\s*\((.+)\)$`)
@@ -104,7 +107,7 @@ func displayName(u Unit) string {
 func hangarViews(h HangarForce) []hangarUnitView {
 	views := make([]hangarUnitView, 0, len(h.Units))
 	for _, hu := range h.Units {
-		v := hangarUnitView{ID: hu.ID, Pilot: hu.Pilot, Gunnery: hu.Gunnery, Piloting: hu.Piloting, Damaged: hu.Damaged, Destroyed: hu.Destroyed, InDeployed: sameGroupName(hu.Group, deployedGroup)}
+		v := hangarUnitView{MekBayURL: unitPageURL(hu.Unit), ID: hu.ID, Pilot: hu.Pilot, Gunnery: hu.Gunnery, Piloting: hu.Piloting, Damaged: hu.Damaged, Destroyed: hu.Destroyed, InDeployed: sameGroupName(hu.Group, deployedGroup)}
 		if u, ok := unitByName(hu.Unit); ok {
 			v.Name, v.Model = unitNames(u)
 			v.Class, v.Role, v.Tons, v.Icon = u.Class, roleLabel(u), u.Tons, iconURL(u)
@@ -282,4 +285,13 @@ func (s *Server) deploy(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]string{"url": OperationURL(op.OperationID)})
+}
+
+// unitPageURL is the link to a unit's page on mekbay.com, from its MekBay unit ID (e.g. BMMadCat_H): the generic sheet for that design,
+// not a unit in anyone's force. "" if there is no ID.
+func unitPageURL(unitID string) string {
+	if unitID == "" {
+		return ""
+	}
+	return "https://mekbay.com/?" + url.Values{"gs": {"cbt"}, "shareUnit": {unitID}, "tab": {"Sheet"}}.Encode()
 }

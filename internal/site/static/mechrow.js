@@ -3,10 +3,15 @@
 // they look the same. The name is the Clan name when the design has one (the server decides; this only displays).
 //
 //   MechRow.build({ name, model, role, icon, tons, bv, gunnery, piloting, pilot,
-//                   unknown, destroyed, damaged, notMech }) -> HTMLElement
+//                   unknown, destroyed, damaged, notMech, externalUrl }) -> HTMLElement
+//
+// externalUrl (a https://mekbay.com/ link) adds an "opens in a new tab" button at the right of the row. It is opt-in: the deploy popup's rows are
+// checkbox labels and have none.
 (function () {
   // Small icons for the tonnage and pilot chips, drawn for this site.
   var WEIGHT = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.2 9h9.6l2.4 11H4.8z"/><circle cx="12" cy="5.8" r="2.6"/></svg>';
+  // The standard "opens in a new tab" icon: a box with an arrow leaving its top right corner.
+  var EXTERNAL = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/></svg>';
   var HELMET = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 13.5a8.5 8.5 0 0 1 17 0V20h-5v-3.5h-7V20h-5z"/></svg>';
 
   function el(tag, cls, text) {
@@ -66,6 +71,19 @@
     main.appendChild(chips);
 
     row.appendChild(main);
+
+    if (u.externalUrl && /^https:\/\/mekbay\.com\//.test(u.externalUrl)) {
+      var link = document.createElement('a');
+      link.className = 'mr-ext';
+      link.href = u.externalUrl;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.title = 'Open this unit on MekBay';
+      link.setAttribute('aria-label', 'Open ' + (u.name + ' ' + (u.model || '')).trim() + ' on MekBay (opens in a new tab)');
+      link.innerHTML = EXTERNAL; // a constant defined above, never data
+      row.classList.add('has-link');
+      row.appendChild(link);
+    }
     return row;
   }
 
