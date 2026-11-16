@@ -3,6 +3,7 @@ package site
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -166,6 +167,19 @@ func (s *Server) startCampaign(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
+	}
+	// The hangar must meet the campaign's starting conditions (enough mechs, within the starting BV).
+	if c.StartingBV > 0 || c.StartingMinMechs > 0 {
+		h, err := s.mekbay.ReadHangar(r.Context(), hangar.Instance)
+		if err != nil {
+			log.Printf("read hangar to start %s: %v", c.Slug, err)
+			http.Error(w, err.Error(), http.StatusBadGateway)
+			return
+		}
+		if check := checkStartingHangar(h, c); !check.OK {
+			http.Error(w, strings.Join(check.Problems, " "), http.StatusBadRequest)
+			return
+		}
 	}
 	if err := s.store.StartRunWithPilots(r.Context(), id, c.Slug, hangar, pilots); errors.Is(err, ErrAlreadyStarted) {
 		http.Error(w, "This campaign has already been started.", http.StatusConflict)

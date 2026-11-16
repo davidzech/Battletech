@@ -72,7 +72,10 @@ type Campaign struct {
 	StartingPilotSP int
 	// StartingBV is the BV of the force a company starts with (Intro.md front matter starting_bv); 0 if not given.
 	StartingBV int
-	Scenarios  []Scenario
+	// StartingMinMechs is how many mechs the starting hangar must hold at least (Intro.md front matter
+	// starting_min_mechs); 0 if not given.
+	StartingMinMechs int
+	Scenarios        []Scenario
 }
 
 // PlayersLabel describes how many players the campaign is for, e.g. "1-2 players", "1 player", or "" if the
@@ -147,8 +150,10 @@ type frontData struct {
 	// StartingPilotSP is the SP each starting named pilot allocates when the campaign is started (Intro.md).
 	StartingPilotSP int `yaml:"starting_pilot_sp"`
 	// StartingBV is the battle value of the force a company starts the campaign with (Intro.md).
-	StartingBV  int    `yaml:"starting_bv"`
-	DefaultNext string `yaml:"default_next"`
+	StartingBV int `yaml:"starting_bv"`
+	// StartingMinMechs is how many mechs the starting hangar must hold at least (Intro.md).
+	StartingMinMechs int    `yaml:"starting_min_mechs"`
+	DefaultNext      string `yaml:"default_next"`
 }
 
 // readMarkdown splits optional YAML front matter from a Markdown file. A missing file yields zero values.
@@ -264,6 +269,7 @@ func (l Library) load(name string) (*Campaign, bool) {
 	meta, intro := readMarkdown(filepath.Join(dir, "Intro.md"))
 	c.MinPlayers, c.MaxPlayers = meta.MinPlayers, meta.MaxPlayers
 	c.StartingNamedPilots, c.StartingPilotSP, c.StartingBV = meta.StartingNamedPilots, meta.StartingPilotSP, meta.StartingBV
+	c.StartingMinMechs = meta.StartingMinMechs
 	_, kw := readMarkdown(filepath.Join(dir, "Keywords.md"))
 	c.IntroHTML = renderMarkdown(intro, false)
 	c.KeywordsHTML = renderMarkdown(kw, true)
@@ -399,10 +405,4 @@ func renderBriefing(src string) template.HTML {
 }
 
 // StartingBVText is the starting BV with a thousands separator, e.g. "6,000".
-func (c *Campaign) StartingBVText() string {
-	digits := strconv.Itoa(c.StartingBV)
-	for i := len(digits) - 3; i > 0; i -= 3 {
-		digits = digits[:i] + "," + digits[i:]
-	}
-	return digits
-}
+func (c *Campaign) StartingBVText() string { return withCommas(c.StartingBV) }

@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -93,16 +92,11 @@ func TestParseCompanyName(t *testing.T) {
 	}
 }
 
+// newTestServer is a site with a fake MekBay whose hangar meets Refusal War's starting conditions, so tests that
+// start campaigns never touch the network.
 func newTestServer(t *testing.T) (*httptest.Server, *Store) {
 	t.Helper()
-	store, err := OpenSQLite(filepath.Join(t.TempDir(), "test.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { store.Close() })
-	srv := httptest.NewServer(NewHandler("../../campaigns", store))
-	t.Cleanup(srv.Close)
-	return srv, store
+	return newMekBayTestServer(t, &fakeMekBay{hangar: startingHangar()})
 }
 
 func post(t *testing.T, srv *httptest.Server, path string, form url.Values, cookie *http.Cookie, origin string) *http.Response {

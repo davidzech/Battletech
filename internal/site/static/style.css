@@ -451,6 +451,29 @@ dialog .alloc-name {
 .wiz-hint { min-height: 1.4em; margin: 0.8rem 0 0; color: var(--accent); font-size: 0.9rem; }
 .wizard .wiz-hint + .form-error { min-height: 0; margin: 0; }
 dialog.wizard button.button:disabled { opacity: 0.4; cursor: not-allowed; filter: grayscale(0.5); }
+.recap-num { color: var(--accent); font-weight: 700; }
+.hangar-check { margin-top: 0.6rem; font-size: 0.9rem; }
+.hc-summary { display: flex; flex-wrap: wrap; gap: 0.2rem 1.4rem; margin: 0; font: 700 0.85rem var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
+.hc-summary b { margin-right: 0.25rem; color: var(--accent); font-size: 1.3rem; }
+.hc-summary .bad b { color: #ff7a59; }
+.hc-problem { margin: 0.4rem 0 0; color: #ff7a59; }
+/* Shown while the hangar is being read from MekBay. */
+.hc-loading { display: flex; align-items: center; gap: 0.6rem; margin: 0; color: var(--muted); }
+.spinner {
+  flex: none;
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid var(--line);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+/* Reduced motion: slow it down rather than stop it, so it still says "working". */
+@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2.4s; } }
+.hc-units { list-style: none; margin: 0.6rem 0 0; padding: 0; max-height: 9.5rem; overflow-y: auto; border-top: 1px solid var(--line); }
+.hc-units li { display: flex; justify-content: space-between; gap: 1rem; padding: 0.25rem 0; border-bottom: 1px solid var(--line); color: var(--muted); }
+.hc-units b { color: var(--text); font-weight: 700; }
 .wiz-recap { margin: 0.25rem 0 0.75rem; padding-left: 1.1rem; }
 .wiz-footer { display: flex; align-items: center; gap: 0.9rem; margin-top: 1rem; }
 .wiz-count { font: 700 0.8rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }

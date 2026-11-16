@@ -96,9 +96,6 @@
     return null;
   }
   function spentOf(p) { return ladders.reduce(function (sum, l) { return sum + p.sp[l.key]; }, 0); }
-  function summaryOf(p) {
-    return ladders.map(function (l) { return l.name + ' ' + reach(l, p.sp[l.key]).level; }).join(' · ');
-  }
 
   // One column of the allocator: a slider and a number box for the same amount of SP.
   function allocatorRow(p, l, refresh) {
@@ -185,6 +182,89 @@
     nameInput.focus();
   }
 
+  // What the server made of the pasted hangar: idle, checking, error (with a message) or done (with the result).
+  var check = { link: '', state: 'idle', message: '', result: null };
+  var checkTimer = null;
+  var statusBox = null;
+
+  function number(n) { return Number(n).toLocaleString('en-US'); }
+
+  // Reads the hangar behind the link and checks it against the campaign's starting conditions. A reply for a link
+  // the player has since changed is ignored.
+  function runCheck(link) {
+    fetch('/api/campaign/hangar-check?campaign=' + encodeURIComponent(wiz.dataset.campaign) + '&hangar=' + encodeURIComponent(link), {
+      credentials: 'same-origin',
+      cache: 'no-store'
+    }).then(function (res) {
+      if (check.link !== link) return;
+      if (!res.ok) {
+        return res.text().then(function (t) {
+          if (check.link !== link) return;
+          check = { link: link, state: 'error', message: t.trim() || 'Could not read your hangar.', result: null };
+          renderCheck(); updateNext();
+        });
+      }
+      return res.json().then(function (data) {
+        if (check.link !== link) return;
+        check = { link: link, state: 'done', message: '', result: data };
+        renderCheck(); updateNext();
+      });
+    }, function () {
+      if (check.link !== link) return;
+      check = { link: link, state: 'error', message: 'Could not reach the server.', result: null };
+      renderCheck(); updateNext();
+    });
+  }
+
+  // Called whenever the link changes: once it has the right shape, read the hangar (after a short pause, so typing
+  // doesn't send a request per key).
+  function scheduleCheck(delay) {
+    clearTimeout(checkTimer);
+    var link = hangar.trim();
+    if (hangarProblem(link)) { check = { link: '', state: 'idle', message: '', result: null }; renderCheck(); return; }
+    if (check.link === link && check.state !== 'idle') { renderCheck(); return; }
+    check = { link: link, state: 'checking', message: '', result: null };
+    renderCheck();
+    checkTimer = setTimeout(function () { runCheck(link); }, delay);
+  }
+
+  function renderCheck() {
+    if (!statusBox) return;
+    statusBox.textContent = '';
+    if (check.state === 'checking') {
+      var loading = el('p', 'hc-loading');
+      loading.setAttribute('role', 'status');
+      loading.appendChild(el('span', 'spinner'));
+      loading.appendChild(el('span', null, 'Reading your hangar\u2026'));
+      statusBox.appendChild(loading);
+    } else if (check.state === 'error') {
+      statusBox.appendChild(el('p', 'hc-problem', check.message));
+    } else if (check.state === 'done') {
+      var r = check.result;
+      var summary = el('p', 'hc-summary');
+      var mechs = el('span', r.minMechs && r.mechs < r.minMechs ? 'bad' : null);
+      mechs.appendChild(el('b', null, String(r.mechs)));
+      mechs.appendChild(document.createTextNode(r.mechs === 1 ? ' mech' : ' mechs'));
+      summary.appendChild(mechs);
+      var bv = el('span', r.maxBV && r.bv > r.maxBV ? 'bad' : null);
+      bv.appendChild(el('b', null, number(r.bv)));
+      bv.appendChild(document.createTextNode(r.maxBV ? ' of ' + number(r.maxBV) + ' BV' : ' BV'));
+      summary.appendChild(bv);
+      statusBox.appendChild(summary);
+      r.problems.forEach(function (t) { statusBox.appendChild(el('p', 'hc-problem', t)); });
+      if (r.units.length) {
+        var list = el('ul', 'hc-units');
+        r.units.forEach(function (u) {
+          var li = el('li');
+          li.appendChild(el('span', null, u.name + (u.unknown ? ' (unknown unit)' : u.mech ? '' : ' (not a mech)')));
+          li.appendChild(el('b', null, u.unknown ? '?' : number(u.bv)));
+          list.appendChild(li);
+        });
+        statusBox.appendChild(list);
+      }
+    }
+  }
+
   function renderHangar() {
     title.textContent = 'Link your hangar';
     body.textContent = '';
@@ -194,20 +274,33 @@
       pilots.forEach(function (p) {
         var li = el('li');
         li.appendChild(el('b', null, p.name.trim()));
-        li.appendChild(el('span', 'muted', ' — ' + summaryOf(p)));
+        li.appendChild(el('span', 'muted', ' \u2014 '));
+        ladders.forEach(function (l, i) {
+          if (i) li.appendChild(el('span', 'muted', ' \u00b7 '));
+          li.appendChild(el('span', 'muted', l.name + ' '));
+          li.appendChild(el('b', 'recap-num', String(reach(l, p.sp[l.key]).level)));
+        });
         list.appendChild(li);
       });
       body.appendChild(list);
     }
-    body.appendChild(el('p', 'muted', 'Paste the link to this campaign’s MekBay hangar, the force holding all of your mechs.'));
+    body.appendChild(el('p', 'muted', 'Paste the link to this campaign\u2019s MekBay hangar, the force holding all of your mechs. We read it to check it meets the starting conditions.'));
     var label = el('label', null, 'MekBay hangar link');
     label.setAttribute('for', 'wiz-hangar');
     var input = document.createElement('input');
     input.id = 'wiz-hangar'; input.className = 'wide'; input.type = 'url'; input.spellcheck = false;
-    input.placeholder = 'https://mekbay.com/?instance=…'; input.value = hangar;
-    input.addEventListener('input', function () { hangar = input.value; error.textContent = ''; updateNext(); });
+    input.placeholder = 'https://mekbay.com/?instance=\u2026'; input.value = hangar;
+    input.addEventListener('input', function () {
+      hangar = input.value; error.textContent = '';
+      scheduleCheck(350);
+      updateNext();
+    });
     body.appendChild(label);
     body.appendChild(input);
+    statusBox = el('div', 'hangar-check');
+    statusBox.setAttribute('aria-live', 'polite');
+    body.appendChild(statusBox);
+    scheduleCheck(0); // a link entered earlier (then Back and forward) is checked again straight away
     input.focus();
   }
 
@@ -234,7 +327,14 @@
 
   // The problem with the current step, or ''.
   function problem() {
-    if (step >= pilotCount) return hangarProblem(hangar);
+    if (step >= pilotCount) {
+      var bad = hangarProblem(hangar);
+      if (bad) return bad;
+      if (check.link !== hangar.trim() || check.state === 'checking' || check.state === 'idle') return 'Checking your hangar\u2026';
+      if (check.state === 'error') return check.message;
+      if (!check.result.ok) return check.result.problems[0];
+      return '';
+    }
     var p = pilots[step], name = p.name.trim();
     if (!name) return 'Name your pilot.';
     var clash = pilots.some(function (o, j) { return j !== step && o.name.trim().toLowerCase() === name.toLowerCase(); });

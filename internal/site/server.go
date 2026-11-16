@@ -93,6 +93,7 @@ func NewHandler(contentRoot string, store *Store, opts ...Option) http.Handler {
 	mux.HandleFunc("POST /api/seed", s.setSeed)
 	mux.HandleFunc("POST /api/company", s.setCompany)
 	mux.HandleFunc("POST /api/campaign/start", s.startCampaign)
+	mux.HandleFunc("GET /api/campaign/hangar-check", s.hangarCheck)
 	mux.HandleFunc("POST /api/pilots", s.addPilot)
 	mux.HandleFunc("POST /api/pilots/sp", s.awardSP)
 	mux.HandleFunc("POST /api/pilots/fallen", s.pilotFallen)
