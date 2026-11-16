@@ -895,9 +895,16 @@ details.more > summary:focus-visible { outline: none; }
 .more-menu button.pilot-kia svg { flex: none; }
 .more-menu button.pilot-kia:hover, .more-menu button.pilot-kia:focus-visible { color: #fff; background: #c0392b; outline: none; }
 .memorial-head { margin-top: 2rem; color: var(--muted); }
-.pilot.kia { opacity: 0.55; border-left-color: #7a3a34; }
-.pilot.kia .portrait-btn img { filter: grayscale(1); }
+/* A pilot Killed in Action: the portrait, stats and abilities are dimmed, but the words that say so stay vivid (red), and a K.I.A. stamp
+   is laid over the portrait. */
+.pilot.kia { border-left-color: #7a3a34; }
+.pilot.kia .portrait-btn img { filter: grayscale(1) brightness(0.7); }
+.pilot.kia .stat-boxes, .pilot.kia .edge-skills, .pilot.kia .pilot-stat { opacity: 0.55; }
 .pilot.kia .stat-value { color: var(--muted); }
+.pilot.kia h3 { color: var(--muted); }
+.pilot.kia .tag.bad { padding: 0.15rem 0.6rem; font: 700 0.75rem var(--display); letter-spacing: 0.12em; text-transform: uppercase; color: #ff5a4d; background: rgba(229, 89, 79, 0.12); border: 1px solid #c0392b; }
+.pilot.kia .rank-label { opacity: 0.7; }
+.kia-stamp { position: absolute; left: 50%; top: 50%; padding: 0.1rem 0.55rem; font: 700 1.55rem/1.2 var(--display); letter-spacing: 0.14em; text-transform: uppercase; white-space: nowrap; color: #ff5a4d; background: rgba(10, 8, 8, 0.6); border: 3px solid #e5594f; border-radius: 3px; text-shadow: 0 0 6px rgba(0, 0, 0, 0.9); transform: translate(-50%, -50%) rotate(-16deg); pointer-events: none; }
 /* The pilot records link at the bottom of the page is deliberately quiet. */
 .records-link { margin: 1.5rem 0 0; }
 .link-button { padding: 0; background: none; border: 0; color: var(--muted); font: 0.8rem var(--display); letter-spacing: 0.08em; text-transform: uppercase; text-decoration: underline; text-underline-offset: 0.2em; cursor: pointer; }

@@ -36,7 +36,7 @@
 {{if .Memorial}}<h2 class="memorial-head">Memorial</h2>
 <ul class="pilot-list memorial">
 {{range .Pilots}}{{if .Fallen}}<li class="pilot kia" data-pilot="{{.ID}}" data-name="{{.Name}}">
-<div class="pilot-card"><div class="pilot-side"><span class="portrait-btn"><img src="{{.PortraitURL}}" alt="" width="96" height="96"></span>{{if .Rank}}<span class="rank-label">{{.Rank}}</span>{{end}}</div>
+<div class="pilot-card"><div class="pilot-side"><span class="portrait-btn"><img src="{{.PortraitURL}}" alt="" width="96" height="96"><span class="kia-stamp">K.I.A.</span></span>{{if .Rank}}<span class="rank-label">{{.Rank}}</span>{{end}}</div>
 <div class="pilot-main">
 <div class="pilot-head"><h3>{{.Name}}</h3><span class="tag bad">Killed in Action</span><span class="pilot-stat">SP earned <b>{{.Earned}}</b></span></div>
 <div class="stat-boxes">{{range .Columns}}<div class="stat-box"><span class="stat-label">{{.Label}}</span><span class="stat-value">{{.Level}}</span></div>{{end}}</div>

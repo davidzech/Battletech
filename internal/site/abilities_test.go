@@ -323,6 +323,9 @@ func TestEdgeAbilitiesThroughThePages(t *testing.T) {
 	}
 	p = page()
 	i := strings.Index(p, `class="memorial-head"`)
+	if i < 0 || !strings.Contains(p[i:], `class="kia-stamp">K.I.A.</span>`) {
+		t.Error("a pilot in the memorial carries a K.I.A. stamp over their portrait")
+	}
 	if i < 0 || !strings.Contains(p[i:], `>Marksman</span>`) || !strings.Contains(p[i:], `>Bulwark</span>`) {
 		t.Error("the memorial should show the abilities as chips")
 	}
