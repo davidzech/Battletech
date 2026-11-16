@@ -540,3 +540,44 @@ func portraitStore(t *testing.T, s *Store, id string) {
 		t.Fatalf("fallen pilot's portrait should be free: %v", err)
 	}
 }
+
+func TestDeleteCampaign(t *testing.T) {
+	srv, store, cookie := startedCompany(t)
+	ctx := context.Background()
+	id := playthroughID("wolfpack2026")
+	form := url.Values{"campaign": {"refusalwar"}}
+
+	if r := post(t, srv, "/api/campaign/delete", form, cookie, "https://evil.example"); r.StatusCode != http.StatusForbidden {
+		t.Fatalf("cross-origin delete: %d", r.StatusCode)
+	}
+	if _, ok, _ := store.Run(ctx, id, "refusalwar"); !ok {
+		t.Fatal("a refused delete removed the campaign")
+	}
+	// The page offers the delete button with its confirmation popup while the campaign is started.
+	if page := body(t, srv, "/refusalwar/", cookie); !strings.Contains(page, `id="delete-dialog"`) {
+		t.Error("a started campaign should show the delete button and its confirmation popup")
+	}
+
+	if r := post(t, srv, "/api/campaign/delete", form, cookie, srv.URL); r.StatusCode != http.StatusNoContent {
+		t.Fatalf("delete: %d", r.StatusCode)
+	}
+	if _, ok, _ := store.Run(ctx, id, "refusalwar"); ok {
+		t.Error("the run should be gone")
+	}
+	if ps, _ := store.Pilots(ctx, id, "refusalwar"); len(ps) != 0 {
+		t.Errorf("the pilots should be gone: %v", ps)
+	}
+	if page := body(t, srv, "/refusalwar/", cookie); strings.Contains(page, `id="delete-dialog"`) || !strings.Contains(page, `id="wizard-open"`) {
+		t.Error("after deleting, the campaign should offer to start again and no delete button")
+	}
+	// Deleting what isn't started is refused, and the company survives.
+	if r := post(t, srv, "/api/campaign/delete", form, cookie, srv.URL); r.StatusCode != http.StatusBadRequest {
+		t.Errorf("deleting a campaign that isn't started: %d", r.StatusCode)
+	}
+	if pt, ok, _ := store.Playthrough(ctx, id); !ok || !pt.Configured() {
+		t.Error("the company should survive deleting a campaign")
+	}
+	if r := post(t, srv, "/api/campaign/start", startForm(goodHangar, "Alrek", "Katarina"), cookie, srv.URL); r.StatusCode != http.StatusNoContent {
+		t.Errorf("starting again after deleting: %d", r.StatusCode)
+	}
+}

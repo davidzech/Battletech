@@ -238,3 +238,17 @@ func (s *Server) setPortrait(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
+
+// deleteCampaign deletes the playthrough's progress in one campaign (see Store.DeleteRun). The browser asks the player
+// to confirm first.
+func (s *Server) deleteCampaign(w http.ResponseWriter, r *http.Request) {
+	pt, c, ok := s.pilotRequest(w, r)
+	if !ok {
+		return
+	}
+	if _, err := s.store.DeleteRun(r.Context(), pt.ID, c.Slug); err != nil {
+		http.Error(w, "could not delete the campaign", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}

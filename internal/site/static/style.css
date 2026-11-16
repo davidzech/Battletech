@@ -398,6 +398,12 @@ dialog button:not(.button):hover { border-color: var(--accent); color: var(--acc
 
 /* Campaign start wizard: a step per named pilot with an SP allocator, then the hangar link, with progress at the bottom. */
 dialog.wizard { width: min(46rem, calc(100vw - 2rem)); }
+/* Danger zone: deleting a campaign. */
+.danger-zone { margin: 2.5rem 0 1rem; padding-top: 1rem; border-top: 1px solid var(--line); }
+.danger-zone h2 { color: #e5594f; }
+button.danger, button.button.danger { background: #c0392b; color: #fff; border-color: #c0392b; }
+button.danger:hover:not(:disabled), button.button.danger:hover:not(:disabled) { background: #e5594f; border-color: #e5594f; }
+button.danger:disabled { opacity: 0.5; cursor: wait; }
 /* Portrait buttons (wizard and pilot cards) and the picker grid. */
 .pilot-id { display: flex; align-items: center; gap: 1rem; min-width: 0; }
 .pilot-id .pilot-name { flex: 1; min-width: 0; }

@@ -503,3 +503,25 @@ func (s *Store) SetPilotPortrait(ctx context.Context, playthroughID, campaign, p
 	}
 	return tx.Commit()
 }
+
+// DeleteRun removes a started campaign from a playthrough: its named pilots, its saved MekBay operation IDs and the run
+// itself, in one transaction. The company, its other campaigns and anything saved in MekBay are left alone. It reports
+// whether there was a run to delete.
+func (s *Store) DeleteRun(ctx context.Context, playthroughID, campaign string) (bool, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback()
+	for _, table := range []string{"named_pilots", "mekbay_operations"} {
+		if _, err := tx.ExecContext(ctx, s.q("DELETE FROM "+table+" WHERE playthrough_id = ? AND campaign = ?"), playthroughID, campaign); err != nil {
+			return false, err
+		}
+	}
+	res, err := tx.ExecContext(ctx, s.q(`DELETE FROM campaign_runs WHERE playthrough_id = ? AND campaign = ?`), playthroughID, campaign)
+	if err != nil {
+		return false, err
+	}
+	n, _ := res.RowsAffected()
+	return n > 0, tx.Commit()
+}
