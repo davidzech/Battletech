@@ -215,6 +215,19 @@
     });
   }
 
+  // A rank never wraps: the longest of a faction's ranks fits the box at the stylesheet's size, and a rank that is still too wide
+  // (a longer ladder in another campaign) is scaled down in proportion.
+  function fitRanks() {
+    box.querySelectorAll('.rank-btn, .rank-label').forEach(function (e) {
+      e.style.fontSize = '';
+      var room = e.clientWidth, need = e.scrollWidth;
+      if (room > 0 && need > room) e.style.fontSize = (parseFloat(getComputedStyle(e).fontSize) * room / need * 0.97).toFixed(2) + 'px';
+    });
+  }
+  fitRanks();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitRanks); // the display font changes the widths when it arrives
+  window.addEventListener('resize', fitRanks);
+
   // ---- Rank: a cosmetic rank under the portrait, picked from a list in a small dialog.
   var rankDialog = document.getElementById('rank-dialog');
   var rankSelect = document.getElementById('rank-select');
