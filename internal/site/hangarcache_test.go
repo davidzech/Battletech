@@ -158,10 +158,10 @@ func TestHangarCachePullThrough(t *testing.T) {
 // Each hangar unit carries the link to its own page on mekbay.com (the generic sheet, not a unit in a force).
 func TestUnitPageURL(t *testing.T) {
 	for in, want := range map[string]string{
-		"BMMadCat_H":     "https://mekbay.com/?gs=cbt&shareUnit=BMMadCat_H&tab=Sheet",
-		"BMKoshi_E":      "https://mekbay.com/?gs=cbt&shareUnit=BMKoshi_E&tab=Sheet",
-		"BMGrizzly":      "https://mekbay.com/?gs=cbt&shareUnit=BMGrizzly&tab=Sheet",
-		"BM Odd&Name=1#": "https://mekbay.com/?gs=cbt&shareUnit=BM+Odd%26Name%3D1%23&tab=Sheet",
+		"BMMadCat_H":     "https://mekbay.com/?gs=cbt&shareUnit=BMMadCat_H&tab=General",
+		"BMKoshi_E":      "https://mekbay.com/?gs=cbt&shareUnit=BMKoshi_E&tab=General",
+		"BMGrizzly":      "https://mekbay.com/?gs=cbt&shareUnit=BMGrizzly&tab=General",
+		"BM Odd&Name=1#": "https://mekbay.com/?gs=cbt&shareUnit=BM+Odd%26Name%3D1%23&tab=General",
 		"":               "",
 	} {
 		if got := unitPageURL(in); got != want {
@@ -169,7 +169,7 @@ func TestUnitPageURL(t *testing.T) {
 		}
 	}
 	views := hangarViews(hangarOf("BMMadCat_H", "BMNotAUnit"))
-	if views[0].MekBayURL != "https://mekbay.com/?gs=cbt&shareUnit=BMMadCat_H&tab=Sheet" || views[1].MekBayURL == "" {
+	if views[0].MekBayURL != "https://mekbay.com/?gs=cbt&shareUnit=BMMadCat_H&tab=General" || views[1].MekBayURL == "" {
 		t.Errorf("hangar views carry the unit's MekBay page: %+v", views)
 	}
 	b, err := json.Marshal(views[0])
@@ -177,7 +177,7 @@ func TestUnitPageURL(t *testing.T) {
 		t.Fatal(err)
 	}
 	var decoded map[string]any
-	if err := json.Unmarshal(b, &decoded); err != nil || decoded["mekbayUrl"] != "https://mekbay.com/?gs=cbt&shareUnit=BMMadCat_H&tab=Sheet" {
+	if err := json.Unmarshal(b, &decoded); err != nil || decoded["mekbayUrl"] != "https://mekbay.com/?gs=cbt&shareUnit=BMMadCat_H&tab=General" {
 		t.Errorf("the view's JSON should carry mekbayUrl: %v %v", decoded["mekbayUrl"], err)
 	}
 }

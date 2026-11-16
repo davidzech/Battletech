@@ -287,11 +287,11 @@ func (s *Server) deploy(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]string{"url": OperationURL(op.OperationID)})
 }
 
-// unitPageURL is the link to a unit's page on mekbay.com, from its MekBay unit ID (e.g. BMMadCat_H): the generic sheet for that design,
+// unitPageURL is the link to a unit's page on mekbay.com, from its MekBay unit ID (e.g. BMMadCat_H): the General tab of that design's page,
 // not a unit in anyone's force. "" if there is no ID.
 func unitPageURL(unitID string) string {
 	if unitID == "" {
 		return ""
 	}
-	return "https://mekbay.com/?" + url.Values{"gs": {"cbt"}, "shareUnit": {unitID}, "tab": {"Sheet"}}.Encode()
+	return "https://mekbay.com/?" + url.Values{"gs": {"cbt"}, "shareUnit": {unitID}, "tab": {"General"}}.Encode()
 }
