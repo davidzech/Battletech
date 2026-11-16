@@ -27,7 +27,7 @@
 <div class="pilot-card"><button type="button" class="portrait-btn" title="Change portrait" aria-label="Change {{.Name}}&rsquo;s portrait"><img src="{{.PortraitURL}}" alt="" width="96" height="96"><span class="portrait-edit">Change</span></button>
 <div class="pilot-main">
 <div class="pilot-head"><h3>{{.Name}}</h3><span class="pilot-stat">SP earned <b>{{.Earned}}</b></span>{{if .Unallocated}}<span class="pilot-stat unalloc">Unallocated <b>{{.Unallocated}}</b></span>{{end}}</div>
-<div class="stat-boxes">{{range .Columns}}<div class="stat-box"><span class="stat-label">{{.Name}}</span><span class="stat-value">{{.Level}}</span><span class="stat-next">{{if .HasNext}}next: {{.NextLvl}} at {{.NextAt}} SP{{else}}top level{{end}}</span></div>{{end}}</div>
+<div class="stat-boxes">{{range .Columns}}<div class="stat-box"><span class="stat-label">{{.Name}}</span><span class="stat-value">{{.Level}}</span><span class="stat-next">{{if .HasNext}}next: {{.SP}}/{{.NextAt}} SP{{else}}max{{end}}</span></div>{{end}}</div>
 <div class="pilot-actions"><button type="button" class="button pilot-sp">Manage SP{{if .Unallocated}} ({{.Unallocated}}){{end}}</button><details class="more"><summary>More</summary><div class="more-menu"><button type="button" class="pilot-kia">Mark as killed in action</button></div></details></div>
 </div></div>
 </li>

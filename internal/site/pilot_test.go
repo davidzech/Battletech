@@ -351,7 +351,7 @@ func TestNamedPilotsFlow(t *testing.T) {
 		t.Fatalf("allocation = %+v", ps[0].SP)
 	}
 	c = body(t, srv, "/refusalwar/manage/", cookie)
-	if !strings.Contains(c, `<span class="stat-value">3</span>`) || !strings.Contains(c, "SP earned <b>360</b>") || !strings.Contains(c, "next: 2 at 700 SP") {
+	if !strings.Contains(c, `<span class="stat-value">3</span>`) || !strings.Contains(c, "SP earned <b>360</b>") || !strings.Contains(c, "next: 300/700 SP") {
 		t.Fatalf("the page should show the new levels (gunnery 3, edge 2): %.4000s", c)
 	}
 
@@ -1121,5 +1121,24 @@ func TestRenamePilots(t *testing.T) {
 	}
 	if page := body(t, srv, "/refusalwar/manage/", cookie); !strings.Contains(page, `class="rec-edit"`) || !strings.Contains(page, `rec-name-text">ALREK PRIME<`) {
 		t.Error("the records dialog should offer the pencil and show the new name")
+	}
+}
+
+// The stat boxes say how close each column is to its next level, as "next: SP/needed SP", and "max" at the top.
+func TestStatBoxCaptions(t *testing.T) {
+	srv, store, cookie := startedCompany(t)
+	ctx := context.Background()
+	id := playthroughID("wolfpack2026")
+	ps, _ := store.Pilots(ctx, id, "refusalwar")
+	// The starting pilots hold 90 or 60 SP in some columns: closeness shows as SP/needed.
+	page := body(t, srv, "/refusalwar/manage/", cookie)
+	if !strings.Contains(page, `stat-next">next: 0/100 SP<`) || strings.Contains(page, "top level") || strings.Contains(page, " at 100 SP") {
+		t.Errorf("captions should read next: SP/needed SP: %.1500s", page)
+	}
+	if err := store.AwardSP(ctx, id, "refusalwar", ps[0].ID, SPAllocation{Gunnery: 1000000}); err != nil {
+		t.Fatal(err)
+	}
+	if page := body(t, srv, "/refusalwar/manage/", cookie); !strings.Contains(page, `stat-next">max<`) {
+		t.Error("a column at its top level should say max")
 	}
 }

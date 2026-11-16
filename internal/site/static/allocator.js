@@ -76,7 +76,7 @@
     box.show = function (spent) {
       var r = reach(l, spent), n = upcoming(l, spent);
       value.textContent = r.level;
-      next.textContent = n ? 'next: ' + n.level + ' at ' + n.sp + ' SP' : 'top level';
+      next.textContent = n ? 'next: ' + spent + '/' + n.sp + ' SP' : 'max';
       box.classList.toggle('up', r.level !== l.base);
     };
     return box;
