@@ -1025,11 +1025,12 @@ dialog button.rec-skills-reset:disabled { opacity: 0.4; cursor: not-allowed; }
 .hangar-units-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0.3rem 1rem; }
 .hangar-units-summary { font: 700 0.8rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
 .mech-list { display: grid; gap: 0.4rem; margin-top: 0.6rem; }
-/* The Mechs list has room to breathe: taller rows than the compact ones in the popup and the wizard, with a bigger icon and name. */
-.mech-list .mech-row { grid-template-columns: 1.8rem 5.4rem minmax(0, 1fr); min-height: 6.2rem; }
-.mech-list .mr-icon { width: 4.6rem; max-height: 4.8rem; }
-.mech-list .mr-main { gap: 0.15rem; padding: 0.55rem 1rem 0.55rem 0.3rem; }
-.mech-list .mr-model { font-size: 0.82rem; }
-.mech-list .mr-name { font-size: 1.3rem; }
-.mech-list .mr-chips { gap: 0.4rem; margin-top: 0.35rem; }
-.mech-list .mr-chip { padding: 0.12rem 0.55rem; font-size: 0.82rem; }
+/* The Hangar list has a little more room than the compact rows in the popup and the wizard: about 5.2rem tall, with the icon, name and chips
+   sized between the two. */
+.mech-list .mech-row { grid-template-columns: 1.7rem 4.4rem minmax(0, 1fr); min-height: 5.2rem; }
+.mech-list .mr-icon { width: 3.8rem; max-height: 4rem; }
+.mech-list .mr-main { gap: 0.1rem; padding: 0.45rem 0.8rem 0.45rem 0.25rem; }
+.mech-list .mr-model { font-size: 0.77rem; }
+.mech-list .mr-name { font-size: 1.15rem; }
+.mech-list .mr-chips { gap: 0.35rem; margin-top: 0.25rem; }
+.mech-list .mr-chip { padding: 0.09rem 0.48rem; font-size: 0.77rem; }
