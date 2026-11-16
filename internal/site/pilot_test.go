@@ -3,6 +3,7 @@ package site
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -269,7 +270,7 @@ func TestNamedPilotsFlow(t *testing.T) {
 	}
 
 	// A started campaign asks for its two starting pilots.
-	if c := body(t, srv, "/refusalwar/", cookie); !strings.Contains(c, `id="pilots"`) || !strings.Contains(c, "needs 2 named pilots") || !strings.Contains(c, "Name 2 more") || !strings.Contains(c, `id="pilot-add"`) {
+	if c := body(t, srv, "/refusalwar/manage/", cookie); !strings.Contains(c, `id="pilots"`) || !strings.Contains(c, "needs 2 named pilots") || !strings.Contains(c, "Name 2 more") || !strings.Contains(c, `id="pilot-add"`) {
 		t.Fatalf("pilots panel: %.2500s", c)
 	}
 
@@ -301,7 +302,7 @@ func TestNamedPilotsFlow(t *testing.T) {
 	if r := post(t, srv, "/api/pilots", pilots("name", "Fifth"), cookie, srv.URL); r.StatusCode != http.StatusBadRequest {
 		t.Fatalf("a fifth pilot should be refused: %d", r.StatusCode)
 	}
-	c := body(t, srv, "/refusalwar/", cookie)
+	c := body(t, srv, "/refusalwar/manage/", cookie)
 	if strings.Contains(c, "needs 2 named pilots") || strings.Contains(c, `id="pilot-add"`) || !strings.Contains(c, "Alrek") || !strings.Contains(c, "Sybille") {
 		t.Fatalf("with four pilots there is nothing left to ask for: %.3000s", c)
 	}
@@ -348,7 +349,7 @@ func TestNamedPilotsFlow(t *testing.T) {
 	if ps[0].SP != (SPAllocation{Gunnery: 300, EdgeTokens: 60}) {
 		t.Fatalf("allocation = %+v", ps[0].SP)
 	}
-	c = body(t, srv, "/refusalwar/", cookie)
+	c = body(t, srv, "/refusalwar/manage/", cookie)
 	if !strings.Contains(c, "<b>3</b>") || !strings.Contains(c, "SP earned <b>360</b>") || !strings.Contains(c, "next level 2 at 700 SP") {
 		t.Fatalf("the page should show the new levels (gunnery 3, edge 2): %.4000s", c)
 	}
@@ -363,7 +364,7 @@ func TestNamedPilotsFlow(t *testing.T) {
 	if got := award(ps[1].ID, "gunnery", "100"); got != http.StatusNotFound {
 		t.Errorf("award to the fallen: %d", got)
 	}
-	if c := body(t, srv, "/refusalwar/", cookie); !strings.Contains(c, `class="pilot fallen"`) || !strings.Contains(c, "Fallen") || !strings.Contains(c, `id="pilot-add"`) {
+	if c := body(t, srv, "/refusalwar/manage/", cookie); !strings.Contains(c, `class="pilot fallen"`) || !strings.Contains(c, "Fallen") || !strings.Contains(c, `id="pilot-add"`) {
 		t.Fatalf("a fallen pilot should show, and free a place: %.3000s", c)
 	}
 	if r := post(t, srv, "/api/pilots", pilots("name", "Replacement"), cookie, srv.URL); r.StatusCode != http.StatusNoContent {
@@ -379,7 +380,7 @@ func TestStartWizardSubmission(t *testing.T) {
 	id := playthroughID("wolfpack2026")
 
 	// The wizard page carries what the script needs: the pilot count, the SP budget and the ladders.
-	page := body(t, srv, "/refusalwar/", cookie)
+	page := body(t, srv, "/refusalwar/manage/", cookie)
 	for _, want := range []string{`id="start-wizard"`, `data-pilots="2"`, `data-sp="150"`, `data-ladders="[{&#34;key&#34;:&#34;gunnery&#34;`, `id="wiz-progress"`, `id="wizard-open"`} {
 		if !strings.Contains(page, want) {
 			t.Errorf("wizard page is missing %s", want)
@@ -452,7 +453,7 @@ func TestStartWizardSubmission(t *testing.T) {
 	if ps[0].EdgeTokens() != 2 || ps[1].Piloting() != 4 || ps[1].EdgeAbilities() != 0 {
 		t.Errorf("levels follow the ladders: %+v", ps)
 	}
-	if c := body(t, srv, "/refusalwar/", cookie); !strings.Contains(c, "Katarina") || strings.Contains(c, "needs 2 named pilots") || strings.Contains(c, `id="start-wizard"`) || !strings.Contains(c, `id="run-dialog"`) {
+	if c := body(t, srv, "/refusalwar/manage/", cookie); !strings.Contains(c, "Katarina") || strings.Contains(c, "needs 2 named pilots") || strings.Contains(c, `id="start-wizard"`) || !strings.Contains(c, `id="run-dialog"`) {
 		t.Fatalf("a started campaign shows its pilots and the change-link dialog: %.3000s", c)
 	}
 
@@ -554,7 +555,7 @@ func TestDeleteCampaign(t *testing.T) {
 		t.Fatal("a refused delete removed the campaign")
 	}
 	// The page offers the delete button with its confirmation popup while the campaign is started.
-	if page := body(t, srv, "/refusalwar/", cookie); !strings.Contains(page, `id="delete-dialog"`) {
+	if page := body(t, srv, "/refusalwar/manage/", cookie); !strings.Contains(page, `id="delete-dialog"`) {
 		t.Error("a started campaign should show the delete button and its confirmation popup")
 	}
 
@@ -579,5 +580,80 @@ func TestDeleteCampaign(t *testing.T) {
 	}
 	if r := post(t, srv, "/api/campaign/start", startForm(goodHangar, "Alrek", "Katarina"), cookie, srv.URL); r.StatusCode != http.StatusNoContent {
 		t.Errorf("starting again after deleting: %d", r.StatusCode)
+	}
+}
+
+func TestManageAndOverview(t *testing.T) {
+	srv, _, cookie := startedCompany(t)
+	// The overview is compressed: the pilots as a table, a place for the units, a link to the manage page, and none of the
+	// management controls.
+	over := body(t, srv, "/refusalwar/", cookie)
+	for _, want := range []string{`id="force-overview"`, `id="force-units"`, `href="/refusalwar/manage/"`, "Manage force", "Alrek", "Katarina", `/portraits/`} {
+		if !strings.Contains(over, want) {
+			t.Errorf("overview is missing %q", want)
+		}
+	}
+	for _, not := range []string{`id="pilot-add"`, `id="delete-dialog"`, `id="run-dialog"`, `class="award-form"`} {
+		if strings.Contains(over, not) {
+			t.Errorf("overview should not hold %q", not)
+		}
+	}
+	// The manage page holds all of them.
+	man := body(t, srv, "/refusalwar/manage/", cookie)
+	for _, want := range []string{`id="run-dialog"`, `id="delete-dialog"`, `class="award-form"`, "Open hangar"} {
+		if !strings.Contains(man, want) {
+			t.Errorf("manage page is missing %q", want)
+		}
+	}
+
+	// The unit summary: every unit with the base BV, and their total.
+	r := get(t, srv, "/api/campaign/force?campaign=refusalwar", cookie)
+	var out struct {
+		Units []hangarUnitView `json:"units"`
+		BV    int              `json:"bv"`
+	}
+	if r.StatusCode != http.StatusOK {
+		t.Fatalf("force: %d", r.StatusCode)
+	}
+	if err := json.NewDecoder(r.Body).Decode(&out); err != nil {
+		t.Fatal(err)
+	}
+	sum := 0
+	for _, u := range out.Units {
+		if !u.Unknown {
+			sum += u.BV
+		}
+	}
+	if len(out.Units) == 0 || out.BV != sum || out.BV == 0 {
+		t.Errorf("force summary: %d units, bv %d (sum %d)", len(out.Units), out.BV, sum)
+	}
+	if r := get(t, srv, "/api/campaign/force?campaign=nope", cookie); r.StatusCode != http.StatusNotFound {
+		t.Errorf("unknown campaign: %d", r.StatusCode)
+	}
+	if r := get(t, srv, "/api/campaign/force?campaign=refusalwar", nil); r.StatusCode != http.StatusBadRequest {
+		t.Errorf("no seed: %d", r.StatusCode)
+	}
+}
+
+func TestManageNeedsAStartedCampaign(t *testing.T) {
+	srv, _ := newTestServer(t)
+	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	// No seed at all: back to the campaign page.
+	r, err := client.Get(srv.URL + "/refusalwar/manage/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.StatusCode != http.StatusSeeOther || r.Header.Get("Location") != "/refusalwar/" {
+		t.Errorf("no seed: %d %q", r.StatusCode, r.Header.Get("Location"))
+	}
+	// A company that hasn't started the campaign: the same.
+	cookie := post(t, srv, "/api/seed", url.Values{"seed": {"wolfpack2026"}}, nil, "").Cookies()[0]
+	req, _ := http.NewRequest("GET", srv.URL+"/refusalwar/manage/", nil)
+	req.AddCookie(cookie)
+	if r, err := client.Do(req); err != nil || r.StatusCode != http.StatusSeeOther {
+		t.Errorf("not started: %v %v", r, err)
+	}
+	if r, _ := client.Get(srv.URL + "/nope/manage/"); r.StatusCode != http.StatusNotFound {
+		t.Errorf("unknown campaign: %d", r.StatusCode)
 	}
 }

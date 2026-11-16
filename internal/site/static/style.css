@@ -398,6 +398,22 @@ dialog button:not(.button):hover { border-color: var(--accent); color: var(--acc
 
 /* Campaign start wizard: a step per named pilot with an SP allocator, then the hangar link, with progress at the bottom. */
 dialog.wizard { width: min(46rem, calc(100vw - 2rem)); }
+/* Campaign overview: compressed pilot and unit tables. */
+.force-table { width: 100%; min-width: min(34rem, 100%); border-collapse: collapse; margin: 0.5rem 0 1rem; font-size: 0.9rem; }
+.force-table th { text-align: right; padding: 0.3rem 0.6rem; font: 700 0.7rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--line); }
+.force-table td { text-align: right; padding: 0.2rem 0.6rem; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+.force-table th:first-child, .force-table td:first-child { text-align: left; }
+.force-table td.who > div { display: flex; align-items: center; gap: 0.6rem; min-width: 0; }
+.force-table td.who img { flex: none; object-fit: cover; object-position: top; background: var(--bg); }
+.pilot-table td.who { font: 700 1rem var(--display); letter-spacing: 0.04em; text-transform: uppercase; }
+.pilot-table td.who img { border: 1px solid var(--line); }
+.unit-table td.who { font-weight: 600; }
+.unit-table td.who small { font-weight: 400; color: var(--muted); }
+.unit-table td.who img { object-fit: contain; }
+.unit-table tr.destroyed td { opacity: 0.55; }
+.unit-table tfoot td { border-bottom: 0; font: 700 0.85rem var(--display); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.unit-table tfoot td.total { color: var(--accent); font-size: 1.1rem; }
+.force-units { margin: 0.25rem 0 1rem; }
 /* Danger zone: deleting a campaign. */
 .danger-zone { margin: 2.5rem 0 1rem; padding-top: 1rem; border-top: 1px solid var(--line); }
 .danger-zone h2 { color: #e5594f; }

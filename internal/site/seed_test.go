@@ -305,7 +305,7 @@ func TestSeedAndCampaignFlow(t *testing.T) {
 	if strings.Contains(body(t, srv, "/", cookie), `id="hangar-link"`) {
 		t.Error("the home page isn't in a campaign, so it has no hangar link")
 	}
-	if c := body(t, srv, "/refusalwar/", cookie); !strings.Contains(c, "Campaign started") || !strings.Contains(c, "Change hangar link") {
+	if c := body(t, srv, "/refusalwar/manage/", cookie); !strings.Contains(c, "Change hangar link") {
 		t.Errorf("started campaign page: %.1500s", c)
 	}
 

@@ -79,7 +79,7 @@ func NewHandler(contentRoot string, store *Store, opts ...Option) http.Handler {
 	for _, o := range opts {
 		o(s)
 	}
-	for _, name := range []string{"home", "campaign", "scenario", "keywords", "notfound"} {
+	for _, name := range []string{"home", "campaign", "manage", "scenario", "keywords", "notfound"} {
 		s.pages[name] = template.Must(template.ParseFS(assets, "templates/layout.html", "templates/"+name+".html"))
 	}
 
@@ -98,6 +98,7 @@ func NewHandler(contentRoot string, store *Store, opts ...Option) http.Handler {
 	mux.HandleFunc("POST /api/campaign/start", s.startCampaign)
 	mux.HandleFunc("POST /api/campaign/delete", s.deleteCampaign)
 	mux.HandleFunc("GET /api/campaign/hangar-check", s.hangarCheck)
+	mux.HandleFunc("GET /api/campaign/force", s.forceJSON)
 	mux.HandleFunc("POST /api/pilots", s.addPilot)
 	mux.HandleFunc("POST /api/pilots/sp", s.awardSP)
 	mux.HandleFunc("POST /api/pilots/fallen", s.pilotFallen)
@@ -107,6 +108,7 @@ func NewHandler(contentRoot string, store *Store, opts ...Option) http.Handler {
 	mux.HandleFunc("GET /{$}", s.home)
 	mux.HandleFunc("GET /{campaign}/{$}", s.campaign)
 	mux.HandleFunc("GET /{campaign}/keywords/{$}", s.keywords)
+	mux.HandleFunc("GET /{campaign}/manage/{$}", s.manage)
 	mux.HandleFunc("GET /{campaign}/{scenario}/{$}", s.scenario)
 	mux.HandleFunc("GET /{campaign}/{scenario}/images/{file}", s.image)
 	mux.HandleFunc("GET /{campaign}/{scenario}/forces/{file}", s.force)

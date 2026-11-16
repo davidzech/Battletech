@@ -3,32 +3,30 @@
 <section class="panel">{{if .Campaign.IntroHTML}}{{.Campaign.IntroHTML}}{{else}}<p class="muted">Campaign briefing coming soon.</p>{{end}}</section>
 {{if not .Seed}}<p class="muted">Choose a seed (top right) to track your company through this campaign.</p>
 {{else if not .Play.Configured}}<p class="muted">Name your company (top right) to start this campaign.</p>
+{{else if .Run.Started}}<section class="mekbay overview" id="force-overview" data-campaign="{{.Campaign.Slug}}">
+<h2>Your force</h2>
+{{if .PilotsNeeded}}<p class="need">This campaign needs {{.Campaign.StartingNamedPilots}} named pilots before you can deploy. Name {{.PilotsNeeded}} more under Manage.</p>
+{{end}}<table class="force-table pilot-table">
+<thead><tr><th>Named pilot</th><th title="Gunnery">G</th><th title="Piloting">P</th><th title="Edge tokens">Edge</th><th title="Edge abilities">Abil.</th><th title="Skill points earned">SP</th></tr></thead>
+<tbody>
+{{range .Pilots}}{{if not .Fallen}}<tr><td class="who"><div><img src="{{.PortraitURL}}" alt="" width="36" height="36"><span>{{.Name}}</span></div></td><td>{{.Gunnery}}</td><td>{{.Piloting}}</td><td>{{.EdgeTokens}}</td><td>{{.Abilities}}</td><td>{{.Earned}}</td></tr>
+{{end}}{{end}}</tbody>
+</table>
+<div id="force-units" class="force-units" aria-live="polite"><p class="muted">Reading your hangar&hellip;</p></div>
+<p class="downloads"><a class="button" href="/{{.Campaign.Slug}}/manage/">Manage force</a></p>
+</section>
+<script src="/static/force.js" defer></script>
 {{else}}<section class="mekbay" id="campaign-run" data-campaign="{{.Campaign.Slug}}">
-<h2>{{if .Run.Started}}Campaign started{{else}}Start this campaign{{end}}</h2>
-{{if .Run.Started}}<p class="muted">{{.Play.CompanyName}} is running this campaign. Its MekBay hangar holds your mechs, and scenarios deploy from it.</p>
-<p class="downloads"><a class="button" href="{{.Run.HangarURL}}" target="_blank" rel="noopener noreferrer">Open hangar</a><button type="button" class="button" id="run-open">Change hangar link</button></p>
-{{else}}<p class="muted">How {{.Campaign.Label}} begins:</p>
+<h2>Start this campaign</h2>
+<p class="muted">How {{.Campaign.Label}} begins:</p>
 <ul class="start-rules">
 {{if or .Campaign.StartingMinMechs .Campaign.StartingBV}}<li>Your hangar holds {{if .Campaign.StartingMinMechs}}<b>at least {{.Campaign.StartingMinMechs}} mechs</b>{{end}}{{if and .Campaign.StartingMinMechs .Campaign.StartingBV}}, totalling {{end}}{{if .Campaign.StartingBV}}<b>up to {{.Campaign.StartingBVText}} BV</b>{{end}} (base BV, whatever the pilots&rsquo; skills).</li>
 {{end}}{{if .Campaign.StartingNamedPilots}}<li>You create <b>{{.Campaign.StartingNamedPilots}} named pilots</b>, each allocating <b>{{.Campaign.StartingPilotSP}} SP</b>.</li>
 {{end}}<li>You link this campaign&rsquo;s MekBay hangar, the force {{.Play.CompanyName}} fields in it.</li>
 </ul>
 <p class="downloads"><button type="button" class="button" id="wizard-open">Start campaign&hellip;</button></p>
-{{end}}</section>
-{{if .Run.Started}}<dialog id="run-dialog" aria-labelledby="run-title">
-  <form id="run-form" autocomplete="off" novalidate>
-    <h2 id="run-title">Change hangar link</h2>
-    <p>Paste the link to this campaign&rsquo;s MekBay hangar, the force holding all of your mechs.</p>
-    <label for="run-hangar">MekBay hangar link</label>
-    <input id="run-hangar" class="wide" name="hangar" type="url" value="{{.Run.HangarURL}}" placeholder="https://mekbay.com/?instance=&hellip;" spellcheck="false" required>
-    <p id="run-error" class="form-error" role="alert"></p>
-    <div class="form-actions">
-      <button type="submit" class="button">Save link</button>
-      <button type="button" id="run-cancel">Cancel</button>
-    </div>
-  </form>
-</dialog>
-{{else}}<dialog id="start-wizard" class="wizard" aria-labelledby="wiz-title" data-campaign="{{.Campaign.Slug}}" data-pilots="{{.Campaign.StartingNamedPilots}}" data-sp="{{.Campaign.StartingPilotSP}}" data-ladders="{{.Ladders}}" data-portraits="{{.Portraits}}">
+</section>
+<dialog id="start-wizard" class="wizard" aria-labelledby="wiz-title" data-campaign="{{.Campaign.Slug}}" data-pilots="{{.Campaign.StartingNamedPilots}}" data-sp="{{.Campaign.StartingPilotSP}}" data-ladders="{{.Ladders}}" data-portraits="{{.Portraits}}">
   <form id="wiz-form" autocomplete="off" novalidate>
     <h2 id="wiz-title"></h2>
     <div id="wiz-body"></div>
@@ -45,63 +43,12 @@
     </div>
   </form>
 </dialog>
-{{end}}<script src="/static/portraitpicker.js" defer></script>
+<script src="/static/portraitpicker.js" defer></script>
 <script src="/static/mechrow.js" defer></script>
 <script src="/static/campaign.js" defer></script>
-{{if .Run.Started}}<section class="pilots" id="pilots" data-campaign="{{.Campaign.Slug}}" data-portraits="{{.Portraits}}">
-<h2>Named pilots</h2>
-{{if .PilotsNeeded}}<p class="need">This campaign needs {{.Campaign.StartingNamedPilots}} named pilots before you can deploy. Name {{.PilotsNeeded}} more.</p>
-{{else}}<p class="muted">Only named pilots improve their skills, use Edge and earn Edge abilities. A command may have up to {{.MaxPilots}} at a time.</p>
-{{end}}<ul class="pilot-list">
-{{range .Pilots}}<li class="pilot{{if .Fallen}} fallen{{end}}" data-pilot="{{.ID}}" data-portrait="{{if not .Fallen}}{{.Portrait}}{{end}}">
-<div class="pilot-card">{{if .Fallen}}<span class="portrait-btn"><img src="{{.PortraitURL}}" alt="" width="96" height="96"></span>{{else}}<button type="button" class="portrait-btn" title="Change portrait" aria-label="Change {{.Name}}'s portrait"><img src="{{.PortraitURL}}" alt="" width="96" height="96"><span class="portrait-edit">Change</span></button>{{end}}
-<div class="pilot-main">
-<div class="pilot-head"><h3>{{.Name}}</h3>{{if .Fallen}}<span class="tag bad">Fallen</span>{{end}}
-<span class="pilot-stat">Gunnery <b>{{.Gunnery}}</b></span><span class="pilot-stat">Piloting <b>{{.Piloting}}</b></span><span class="pilot-stat">Edge <b>{{.EdgeTokens}}</b></span><span class="pilot-stat">Abilities <b>{{.Abilities}}</b></span><span class="pilot-stat">SP earned <b>{{.Earned}}</b></span></div>
-<ul class="pilot-cols">{{range .Columns}}<li><span class="col-name">{{.Name}}</span> <span>{{.SP}} SP</span> <span class="muted">{{if .HasNext}}next level {{.NextLvl}} at {{.NextAt}} SP{{else}}top level{{end}}</span></li>
-{{end}}</ul>
-{{if not .Fallen}}<details class="pilot-award"><summary>Award SP</summary>
-<form class="award-form" autocomplete="off">
-<label>Gunnery <input name="gunnery" type="number" min="0" max="10000" inputmode="numeric" placeholder="0"></label>
-<label>Piloting <input name="piloting" type="number" min="0" max="10000" inputmode="numeric" placeholder="0"></label>
-<label>Edge tokens <input name="edge_tokens" type="number" min="0" max="10000" inputmode="numeric" placeholder="0"></label>
-<label>Edge abilities <input name="edge_abilities" type="number" min="0" max="10000" inputmode="numeric" placeholder="0"></label>
-<button type="submit" class="button">Award</button>
-</form>
-<p class="muted">Pilots allocate every SP as they earn it. Split it across the columns however you like.</p>
-<button type="button" class="pilot-fallen">Mark as fallen</button>
-</details>{{end}}
-</div></div>
-</li>
-{{end}}</ul>
-{{if .CanAddPilot}}<form id="pilot-add" class="pilot-add" autocomplete="off">
-<label for="pilot-name">Name a pilot</label>
-<input id="pilot-name" name="name" maxlength="30" placeholder="Alrek" spellcheck="false" required>
-<button type="submit" class="button">Add named pilot</button>
-</form>
-{{end}}<p id="pilot-error" class="form-error" role="alert"></p>
-</section>
-<script src="/static/pilots.js" defer></script>
-{{end}}{{end}}<h2>Scenarios</h2>
+{{end}}<h2>Scenarios</h2>
 <ul class="cards">
 {{range .Cards}}<li><a class="card" href="{{.URL}}"><span class="num">{{.Num}}</span><span class="name">{{.Name}}{{if .Sub}}<span class="sub">{{.Sub}}</span>{{end}}</span><span class="go">Open &rsaquo;</span></a></li>
 {{end}}</ul>
 <p><a href="/{{.Campaign.Slug}}/keywords/">Campaign keywords &rsaquo;</a></p>
-{{if .Seed}}{{if .Play.Configured}}{{if .Run.Started}}<section class="danger-zone" id="danger-zone" data-campaign="{{.Campaign.Slug}}">
-<h2>Danger zone</h2>
-<p class="muted">Deleting this campaign removes {{.Play.CompanyName}}&rsquo;s progress in it: its named pilots and the link to its hangar. Your company and anything saved in MekBay are not touched.</p>
-<button type="button" class="button danger" id="delete-open">Delete campaign&hellip;</button>
-<dialog id="delete-dialog" aria-labelledby="delete-title">
-  <form id="delete-form" method="dialog">
-    <h2 id="delete-title">Delete {{.Campaign.Label}}?</h2>
-    <p>This permanently deletes your progress in this campaign, including all of its named pilots. It cannot be undone.</p>
-    <p id="delete-error" class="form-error" role="alert"></p>
-    <div class="form-actions">
-      <button type="submit" class="button danger" id="delete-confirm">Delete campaign</button>
-      <button type="button" id="delete-cancel">Cancel</button>
-    </div>
-  </form>
-</dialog>
-</section>
-<script src="/static/campaigndelete.js" defer></script>
-{{end}}{{end}}{{end}}{{end}}
+{{end}}
