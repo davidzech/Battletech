@@ -364,6 +364,33 @@ dialog button:not(.button) {
 }
 dialog button:not(.button):hover { border-color: var(--accent); color: var(--accent); }
 
+/* Named pilots on the campaign page. */
+.pilots { margin: 1.5rem 0; }
+.pilots .need { color: var(--accent); font: 700 1rem var(--display); letter-spacing: 0.05em; }
+.pilot-list { list-style: none; margin: 0.75rem 0; padding: 0; display: grid; gap: 0.75rem; }
+.pilot {
+  padding: 0.75rem 1.1rem 0.9rem;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--accent);
+}
+.pilot.fallen { opacity: 0.55; border-left-color: #ff7a59; }
+.pilot-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.4rem 1.1rem; }
+.pilot-head h3 { margin: 0; font: 700 1.2rem var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
+.pilot-stat { color: var(--muted); font: 0.8rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; }
+.pilot-stat b { color: var(--text); font-size: 1.05rem; margin-left: 0.2rem; }
+.pilot-cols { list-style: none; margin: 0.5rem 0 0; padding: 0; display: grid; gap: 0.15rem; font-size: 0.9rem; }
+.pilot-cols li { display: flex; flex-wrap: wrap; gap: 0.2rem 1rem; }
+.pilot-cols .col-name { min-width: 8rem; font: 700 0.85rem var(--display); letter-spacing: 0.08em; text-transform: uppercase; }
+.pilot-award { margin-top: 0.6rem; }
+.pilot-award summary { cursor: pointer; color: var(--link); }
+.award-form { display: flex; flex-wrap: wrap; align-items: end; gap: 0.6rem; margin: 0.6rem 0 0.4rem; }
+.award-form label { display: grid; gap: 0.2rem; font: 0.75rem var(--display); letter-spacing: 0.08em; text-transform: uppercase; }
+.award-form input { width: 6.5rem; }
+.pilot-add { display: flex; flex-wrap: wrap; align-items: end; gap: 0.6rem; margin-top: 0.5rem; }
+.pilot-add label { flex-basis: 100%; font: 0.85rem var(--display); letter-spacing: 0.08em; text-transform: uppercase; }
+.pilot-add input { flex: 1 1 14rem; max-width: 22rem; }
+
 /* Deploy popup: the player's hangar as a pick list with a BV meter. */
 dialog.deploy { width: min(54rem, calc(100vw - 2rem)); }
 .deploy-meter { margin: 0.5rem 0 0; font: 700 1.1rem var(--display); letter-spacing: 0.06em; text-transform: uppercase; }

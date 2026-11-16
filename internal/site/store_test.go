@@ -115,6 +115,8 @@ func storeContract(t *testing.T, s *Store) {
 	if op, _, _ := s.MekBayOperation(ctx, id, "another", "scenario_000"); op.OperationID != "o9" {
 		t.Fatalf("two campaigns with a scenario_000 must not share an operation: %+v", op)
 	}
+
+	pilotStore(t, s, id)
 }
 
 func TestStoreSQLite(t *testing.T) {

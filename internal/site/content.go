@@ -64,7 +64,10 @@ type Campaign struct {
 	KeywordsHTML template.HTML
 	MinPlayers   int // fewest players the campaign is built for (Intro.md front matter min_players); 0 if not given
 	MaxPlayers   int // most players it supports (max_players); 0 if not given
-	Scenarios    []Scenario
+	// StartingNamedPilots is how many named pilots the campaign requires before scenarios can be played
+	// (Intro.md front matter starting_named_pilots); 0 means none are required.
+	StartingNamedPilots int
+	Scenarios           []Scenario
 }
 
 // PlayersLabel describes how many players the campaign is for, e.g. "1-2 players", "1 player", or "" if the
@@ -124,17 +127,19 @@ func humanize(name string) string {
 }
 
 type frontData struct {
-	ID          string              `yaml:"id"`
-	Title       string              `yaml:"title"`
-	Map         string              `yaml:"map"`
-	Planet      string              `yaml:"planet"`
-	Images      []string            `yaml:"images"`
-	Readout     []map[string]string `yaml:"readout"`
-	Forces      map[string]string   `yaml:"forces"`
-	BVLimit     int                 `yaml:"bv_limit"`
-	MinPlayers  int                 `yaml:"min_players"`
-	MaxPlayers  int                 `yaml:"max_players"`
-	DefaultNext string              `yaml:"default_next"`
+	ID         string              `yaml:"id"`
+	Title      string              `yaml:"title"`
+	Map        string              `yaml:"map"`
+	Planet     string              `yaml:"planet"`
+	Images     []string            `yaml:"images"`
+	Readout    []map[string]string `yaml:"readout"`
+	Forces     map[string]string   `yaml:"forces"`
+	BVLimit    int                 `yaml:"bv_limit"`
+	MinPlayers int                 `yaml:"min_players"`
+	MaxPlayers int                 `yaml:"max_players"`
+	// StartingNamedPilots is how many named pilots a company must name to begin the campaign (Intro.md).
+	StartingNamedPilots int    `yaml:"starting_named_pilots"`
+	DefaultNext         string `yaml:"default_next"`
 }
 
 // readMarkdown splits optional YAML front matter from a Markdown file. A missing file yields zero values.
@@ -249,6 +254,7 @@ func (l Library) load(name string) (*Campaign, bool) {
 	sort.Slice(c.Scenarios, func(i, j int) bool { return c.Scenarios[i].Slug < c.Scenarios[j].Slug })
 	meta, intro := readMarkdown(filepath.Join(dir, "Intro.md"))
 	c.MinPlayers, c.MaxPlayers = meta.MinPlayers, meta.MaxPlayers
+	c.StartingNamedPilots = meta.StartingNamedPilots
 	_, kw := readMarkdown(filepath.Join(dir, "Keywords.md"))
 	c.IntroHTML = renderMarkdown(intro, false)
 	c.KeywordsHTML = renderMarkdown(kw, true)

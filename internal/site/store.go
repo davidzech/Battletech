@@ -87,6 +87,19 @@ func (s *Store) schemaStatements() []string {
 	operation_id   TEXT NOT NULL,
 	PRIMARY KEY (playthrough_id, campaign, scenario_id)
 )`,
+		fmt.Sprintf(`CREATE TABLE IF NOT EXISTS named_pilots (
+	id               TEXT PRIMARY KEY,
+	playthrough_id   TEXT NOT NULL REFERENCES playthroughs(id) ON DELETE CASCADE,
+	campaign         TEXT NOT NULL,
+	name             TEXT NOT NULL,
+	created_at       %s,
+	fallen           INTEGER NOT NULL DEFAULT 0,
+	sp_gunnery       INTEGER NOT NULL DEFAULT 0 CHECK (sp_gunnery >= 0),
+	sp_piloting      INTEGER NOT NULL DEFAULT 0 CHECK (sp_piloting >= 0),
+	sp_edge_tokens   INTEGER NOT NULL DEFAULT 0 CHECK (sp_edge_tokens >= 0),
+	sp_edge_abilities INTEGER NOT NULL DEFAULT 0 CHECK (sp_edge_abilities >= 0)
+)`, s.timestampColumn()),
+		`CREATE INDEX IF NOT EXISTS named_pilots_by_run ON named_pilots (playthrough_id, campaign)`,
 	}
 }
 
@@ -315,4 +328,89 @@ func (s *Store) SaveMekBayOperation(ctx context.Context, playthroughID, campaign
 		     ON CONFLICT (playthrough_id, campaign, scenario_id) DO UPDATE SET opfor_instance = excluded.opfor_instance, operation_id = excluded.operation_id`),
 		playthroughID, campaign, scenarioID, op.OpForInstance, op.OperationID)
 	return err
+}
+
+const pilotColumns = `id, name, fallen, sp_gunnery, sp_piloting, sp_edge_tokens, sp_edge_abilities`
+
+func scanPilot(row interface{ Scan(...any) error }) (p NamedPilot, err error) {
+	var fallen int
+	err = row.Scan(&p.ID, &p.Name, &fallen, &p.SP.Gunnery, &p.SP.Piloting, &p.SP.EdgeTokens, &p.SP.EdgeAbilities)
+	p.Fallen = fallen != 0
+	return p, err
+}
+
+// Pilots lists a campaign run's named pilots, oldest first, fallen ones included.
+func (s *Store) Pilots(ctx context.Context, playthroughID, campaign string) ([]NamedPilot, error) {
+	rows, err := s.db.QueryContext(ctx,
+		s.q(`SELECT `+pilotColumns+` FROM named_pilots WHERE playthrough_id = ? AND campaign = ? ORDER BY created_at, id`),
+		playthroughID, campaign)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []NamedPilot
+	for rows.Next() {
+		p, err := scanPilot(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+// AddPilot names a new pilot with the given starting SP. A command may have at most max living named pilots
+// (ErrPilotLimit otherwise).
+func (s *Store) AddPilot(ctx context.Context, playthroughID, campaign, name string, start SPAllocation, max int) (NamedPilot, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return NamedPilot{}, err
+	}
+	defer tx.Rollback()
+	var alive int
+	if err := tx.QueryRowContext(ctx,
+		s.q(`SELECT COUNT(*) FROM named_pilots WHERE playthrough_id = ? AND campaign = ? AND fallen = 0`),
+		playthroughID, campaign).Scan(&alive); err != nil {
+		return NamedPilot{}, err
+	}
+	if alive >= max {
+		return NamedPilot{}, ErrPilotLimit
+	}
+	p := NamedPilot{ID: newID(), Name: name, SP: start}
+	if _, err := tx.ExecContext(ctx,
+		s.q(`INSERT INTO named_pilots (id, playthrough_id, campaign, name, sp_gunnery, sp_piloting, sp_edge_tokens, sp_edge_abilities) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`),
+		p.ID, playthroughID, campaign, name, start.Gunnery, start.Piloting, start.EdgeTokens, start.EdgeAbilities); err != nil {
+		return NamedPilot{}, err
+	}
+	return p, tx.Commit()
+}
+
+// AwardSP adds SP to a living pilot's columns (sql.ErrNoRows if there is no such pilot, or they have fallen).
+func (s *Store) AwardSP(ctx context.Context, playthroughID, campaign, pilotID string, a SPAllocation) error {
+	res, err := s.db.ExecContext(ctx,
+		s.q(`UPDATE named_pilots SET sp_gunnery = sp_gunnery + ?, sp_piloting = sp_piloting + ?, sp_edge_tokens = sp_edge_tokens + ?, sp_edge_abilities = sp_edge_abilities + ?
+		     WHERE id = ? AND playthrough_id = ? AND campaign = ? AND fallen = 0`),
+		a.Gunnery, a.Piloting, a.EdgeTokens, a.EdgeAbilities, pilotID, playthroughID, campaign)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
+// MarkFallen records that a pilot died, which frees their place among the command's named pilots
+// (sql.ErrNoRows if there is no such living pilot).
+func (s *Store) MarkFallen(ctx context.Context, playthroughID, campaign, pilotID string) error {
+	res, err := s.db.ExecContext(ctx,
+		s.q(`UPDATE named_pilots SET fallen = 1 WHERE id = ? AND playthrough_id = ? AND campaign = ? AND fallen = 0`),
+		pilotID, playthroughID, campaign)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
 }

@@ -41,18 +41,22 @@ type Crumb struct {
 
 // Page is the data every template receives.
 type Page struct {
-	Title    string
-	Crumbs   []Crumb
-	Campaign *Campaign
-	Scenario *Scenario
-	Next     *Scenario
-	Cards    []Card
-	Images   []string    // URLs of the scenario's images
-	Seed     string      // the visitor's seed ("" if none chosen yet)
-	Play     Playthrough // the visitor's playthrough (zero value if no seed)
-	Run      CampaignRun // the playthrough's run of this page's campaign (zero value until it is started)
-	MekBayOp string      // link to the scenario's MekBay operation, once created ("" until then)
-	Commit   string      // git commit the server was built from, short form ("dev" if unknown)
+	Title        string
+	Crumbs       []Crumb
+	Campaign     *Campaign
+	Scenario     *Scenario
+	Next         *Scenario
+	Cards        []Card
+	Images       []string    // URLs of the scenario's images
+	Seed         string      // the visitor's seed ("" if none chosen yet)
+	Play         Playthrough // the visitor's playthrough (zero value if no seed)
+	Run          CampaignRun // the playthrough's run of this page's campaign (zero value until it is started)
+	Pilots       []PilotView // the run's named pilots
+	PilotsNeeded int         // how many more named pilots the campaign requires before scenarios can be played
+	CanAddPilot  bool        // the command has room for another named pilot
+	MaxPilots    int         // most living named pilots a command may have
+	MekBayOp     string      // link to the scenario's MekBay operation, once created ("" until then)
+	Commit       string      // git commit the server was built from, short form ("dev" if unknown)
 }
 
 // Card is one entry in a list of links (campaigns or scenarios).
@@ -88,6 +92,9 @@ func NewHandler(contentRoot string, store *Store, opts ...Option) http.Handler {
 	mux.HandleFunc("POST /api/seed", s.setSeed)
 	mux.HandleFunc("POST /api/company", s.setCompany)
 	mux.HandleFunc("POST /api/campaign/start", s.startCampaign)
+	mux.HandleFunc("POST /api/pilots", s.addPilot)
+	mux.HandleFunc("POST /api/pilots/sp", s.awardSP)
+	mux.HandleFunc("POST /api/pilots/fallen", s.pilotFallen)
 	mux.HandleFunc("GET /api/mekbay/hangar", s.hangarJSON)
 	mux.HandleFunc("POST /api/mekbay/deploy", s.deploy)
 	mux.HandleFunc("GET /{$}", s.home)
@@ -115,6 +122,16 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name
 					log.Printf("load campaign run: %v", err)
 				} else {
 					p.Run = run
+				}
+				if p.Run.Started() {
+					pilots, err := s.store.Pilots(r.Context(), id, p.Campaign.Slug)
+					if err != nil {
+						log.Printf("load named pilots: %v", err)
+					}
+					var alive int
+					p.Pilots, alive = pilotViews(pilots)
+					p.PilotsNeeded = max(0, p.Campaign.StartingNamedPilots-alive)
+					p.CanAddPilot, p.MaxPilots = alive < maxNamedPilots, maxNamedPilots
 				}
 			}
 		}

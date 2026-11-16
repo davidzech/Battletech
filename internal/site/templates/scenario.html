@@ -12,7 +12,11 @@
 <div class="briefing-text">{{.Scenario.BriefingHTML}}</div>
 </section>
 {{end}}<section class="panel">{{.Scenario.SetupHTML}}</section>
-{{if and .Run.Started .Scenario.Forces}}<section class="mekbay" id="mekbay-op">
+{{if and .Run.Started .Scenario.Forces .PilotsNeeded}}<section class="mekbay">
+<h2>Deploy your force</h2>
+<p class="muted">Name your {{.Campaign.StartingNamedPilots}} starting named pilots on the <a href="/{{.Campaign.Slug}}/#pilots">campaign page</a> before you deploy ({{.PilotsNeeded}} to go).</p>
+</section>
+{{else if and .Run.Started .Scenario.Forces}}<section class="mekbay" id="mekbay-op">
 <h2>Deploy your force</h2>
 <p class="muted">Choose which mechs from your hangar fly this mission{{if .Scenario.BVLimit}}, up to {{.Scenario.BVLimit}} BV{{end}}. The site sorts your MekBay hangar into <em>Deployed</em> and <em>Hangar</em> groups and sets up the OpFor against them.</p>
 <p class="downloads"><button type="button" class="button" id="deploy-open">Deploy force&hellip;</button>{{if .MekBayOp}}<a class="button" href="{{.MekBayOp}}" target="_blank" rel="noopener noreferrer">Open in MekBay</a>{{end}}</p>

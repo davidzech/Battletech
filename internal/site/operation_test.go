@@ -381,6 +381,25 @@ func TestDeployFlow(t *testing.T) {
 	if r := post(t, srv, "/api/campaign/start", url.Values{"campaign": {"refusalwar"}, "hangar": {goodHangar}}, cookie, srv.URL); r.StatusCode != http.StatusNoContent {
 		t.Fatalf("start: %d", r.StatusCode)
 	}
+
+	// Refusal War mandates two named pilots before anything deploys.
+	addPilot := func(name string) {
+		t.Helper()
+		if r := post(t, srv, "/api/pilots", url.Values{"campaign": {"refusalwar"}, "name": {name}}, cookie, srv.URL); r.StatusCode != http.StatusNoContent {
+			t.Fatalf("add pilot %s: %d", name, r.StatusCode)
+		}
+	}
+	if r := get(t, srv, hangar, cookie); r.StatusCode != http.StatusBadRequest {
+		t.Fatalf("hangar before naming the pilots: %d", r.StatusCode)
+	}
+	if p := body(t, srv, page, cookie); !strings.Contains(p, "starting named pilots") || strings.Contains(p, `id="deploy-open"`) {
+		t.Fatalf("the scenario should ask for the pilots first, not offer deploying: %.900s", p)
+	}
+	addPilot("Alrek")
+	if r := post(t, srv, "/api/mekbay/deploy", deploy(mine), cookie, srv.URL); r.StatusCode != http.StatusBadRequest {
+		t.Fatalf("deploy with one of two pilots: %d", r.StatusCode)
+	}
+	addPilot("Katarina")
 	p := body(t, srv, page, cookie)
 	if !strings.Contains(p, `id="deploy-open"`) || !strings.Contains(p, "Add your MekBay user ID under Company details") || !strings.Contains(p, "up to 10000 BV") {
 		t.Fatalf("read-only page: %.900s", p)

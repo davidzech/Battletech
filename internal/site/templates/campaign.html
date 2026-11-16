@@ -24,7 +24,38 @@
   </form>
 </dialog>
 <script src="/static/campaign.js" defer></script>
-{{end}}<h2>Scenarios</h2>
+{{if .Run.Started}}<section class="pilots" id="pilots" data-campaign="{{.Campaign.Slug}}">
+<h2>Named pilots</h2>
+{{if .PilotsNeeded}}<p class="need">This campaign needs {{.Campaign.StartingNamedPilots}} named pilots before you can deploy. Name {{.PilotsNeeded}} more.</p>
+{{else}}<p class="muted">Only named pilots improve their skills, use Edge and earn Edge abilities. A command may have up to {{.MaxPilots}} at a time.</p>
+{{end}}<ul class="pilot-list">
+{{range .Pilots}}<li class="pilot{{if .Fallen}} fallen{{end}}" data-pilot="{{.ID}}">
+<div class="pilot-head"><h3>{{.Name}}</h3>{{if .Fallen}}<span class="tag bad">Fallen</span>{{end}}
+<span class="pilot-stat">Gunnery <b>{{.Gunnery}}</b></span><span class="pilot-stat">Piloting <b>{{.Piloting}}</b></span><span class="pilot-stat">Edge <b>{{.EdgeTokens}}</b></span><span class="pilot-stat">Abilities <b>{{.Abilities}}</b></span><span class="pilot-stat">Handicap <b>{{.Handicap}}</b></span><span class="pilot-stat">SP earned <b>{{.Earned}}</b></span></div>
+<ul class="pilot-cols">{{range .Columns}}<li><span class="col-name">{{.Name}}</span> <span>{{.SP}} SP</span> <span class="muted">{{if .HasNext}}next level {{.NextLvl}} at {{.NextAt}} SP{{else}}top level{{end}}</span></li>
+{{end}}</ul>
+{{if not .Fallen}}<details class="pilot-award"><summary>Award SP</summary>
+<form class="award-form" autocomplete="off">
+<label>Gunnery <input name="gunnery" type="number" min="0" max="10000" inputmode="numeric" placeholder="0"></label>
+<label>Piloting <input name="piloting" type="number" min="0" max="10000" inputmode="numeric" placeholder="0"></label>
+<label>Edge tokens <input name="edge_tokens" type="number" min="0" max="10000" inputmode="numeric" placeholder="0"></label>
+<label>Edge abilities <input name="edge_abilities" type="number" min="0" max="10000" inputmode="numeric" placeholder="0"></label>
+<button type="submit" class="button">Award</button>
+</form>
+<p class="muted">Pilots allocate every SP as they earn it. Split it across the columns however you like.</p>
+<button type="button" class="pilot-fallen">Mark as fallen</button>
+</details>{{end}}
+</li>
+{{end}}</ul>
+{{if .CanAddPilot}}<form id="pilot-add" class="pilot-add" autocomplete="off">
+<label for="pilot-name">Name a pilot</label>
+<input id="pilot-name" name="name" maxlength="30" placeholder="Star Captain Alrek" spellcheck="false" required>
+<button type="submit" class="button">Add named pilot</button>
+</form>
+{{end}}<p id="pilot-error" class="form-error" role="alert"></p>
+</section>
+<script src="/static/pilots.js" defer></script>
+{{end}}{{end}}<h2>Scenarios</h2>
 <ul class="cards">
 {{range .Cards}}<li><a class="card" href="{{.URL}}"><span class="num">{{.Num}}</span><span class="name">{{.Name}}{{if .Sub}}<span class="sub">{{.Sub}}</span>{{end}}</span><span class="go">Open &rsaquo;</span></a></li>
 {{end}}</ul>

@@ -159,6 +159,15 @@ func (s *Server) mekbayRequest(w http.ResponseWriter, r *http.Request) (pt Playt
 		http.Error(w, "Start this campaign first.", http.StatusBadRequest)
 		return
 	}
+	pilots, err := s.store.Pilots(r.Context(), pt.ID, c.Slug)
+	if err != nil {
+		http.Error(w, "could not load named pilots", http.StatusInternalServerError)
+		return
+	}
+	if _, alive := pilotViews(pilots); alive < c.StartingNamedPilots {
+		http.Error(w, fmt.Sprintf("Name your %d starting named pilots on the campaign page first.", c.StartingNamedPilots), http.StatusBadRequest)
+		return
+	}
 	return pt, run, c, sc, true
 }
 

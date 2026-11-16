@@ -1,0 +1,340 @@
+package site
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"strings"
+	"testing"
+)
+
+func TestLadders(t *testing.T) {
+	for _, c := range []struct {
+		l                   ladder
+		sp, level, handicap int
+	}{
+		// Gunnery starts at 4 and improves one step at a time as cumulative SP is reached.
+		{gunneryLadder, 0, 4, 0},
+		{gunneryLadder, 299, 4, 0},
+		{gunneryLadder, 300, 3, 12},
+		{gunneryLadder, 699, 3, 12},
+		{gunneryLadder, 700, 2, 28},
+		{gunneryLadder, 1200, 1, 48},
+		{gunneryLadder, 2200, 0, 88},
+		{gunneryLadder, 99999, 0, 88}, // the top of the ladder holds
+		// Piloting starts at 5 and stops at 1.
+		{pilotingLadder, 99, 5, 0},
+		{pilotingLadder, 100, 4, 4},
+		{pilotingLadder, 200, 3, 8},
+		{pilotingLadder, 700, 2, 28},
+		{pilotingLadder, 1200, 1, 48},
+		{pilotingLadder, 5000, 1, 48},
+		// Edge tokens start at 1.
+		{edgeTokensLadder, 59, 1, 0},
+		{edgeTokensLadder, 60, 2, 2},
+		{edgeTokensLadder, 120, 3, 5},
+		{edgeTokensLadder, 560, 7, 22},
+		{edgeTokensLadder, 1100, 10, 44},
+		// Edge abilities start at none.
+		{edgeAbilitiesLadder, 59, 0, 0},
+		{edgeAbilitiesLadder, 60, 1, 2},
+		{edgeAbilitiesLadder, 180, 2, 8},
+		{edgeAbilitiesLadder, 900, 5, 36},
+		{edgeAbilitiesLadder, 5000, 5, 36},
+	} {
+		if got := c.l.at(c.sp); got.Level != c.level || got.Handicap != c.handicap {
+			t.Errorf("%s at %d SP = level %d handicap %d, want level %d handicap %d", c.l.Name, c.sp, got.Level, got.Handicap, c.level, c.handicap)
+		}
+	}
+	if n, ok := gunneryLadder.next(0); !ok || n.SP != 300 || n.Level != 3 {
+		t.Errorf("next gunnery step from 0 = %+v, %v", n, ok)
+	}
+	if n, ok := gunneryLadder.next(300); !ok || n.SP != 700 {
+		t.Errorf("next gunnery step from 300 = %+v, %v", n, ok)
+	}
+	if _, ok := gunneryLadder.next(2200); ok {
+		t.Error("there is nothing above Gunnery 0")
+	}
+	// Every ladder's SP costs must rise, or a cheaper step could be skipped.
+	for _, l := range []ladder{gunneryLadder, pilotingLadder, edgeTokensLadder, edgeAbilitiesLadder} {
+		for i := 1; i < len(l.Rows); i++ {
+			if l.Rows[i].SP <= l.Rows[i-1].SP || l.Rows[i].Handicap <= l.Rows[i-1].Handicap {
+				t.Errorf("%s: row %d (%+v) must cost and weigh more than the one before", l.Name, i, l.Rows[i])
+			}
+		}
+	}
+}
+
+// TestKirbyExample replays the worked example in the book (Hot Spots: Draconis Reach, p. 34): Kirby puts 120 SP into
+// Edge tokens and 30 into Edge abilities, then later 60 more into abilities.
+func TestKirbyExample(t *testing.T) {
+	kirby := NamedPilot{Name: "Kirby", SP: SPAllocation{EdgeTokens: 120, EdgeAbilities: 30}}
+	if kirby.EdgeTokens() != 3 || kirby.EdgeAbilities() != 0 || kirby.Handicap() != 5 || kirby.Earned() != 150 {
+		t.Fatalf("Kirby after 150 SP: tokens %d, abilities %d, handicap %d, earned %d (the book says 3, 0, 5)", kirby.EdgeTokens(), kirby.EdgeAbilities(), kirby.Handicap(), kirby.Earned())
+	}
+	kirby.SP.EdgeAbilities += 60
+	if kirby.SP.EdgeAbilities != 90 || kirby.EdgeAbilities() != 1 || kirby.Handicap() != 7 {
+		t.Fatalf("Kirby after 60 more: abilities SP %d, abilities %d, handicap %d (the book says 90, 1, 7)", kirby.SP.EdgeAbilities, kirby.EdgeAbilities(), kirby.Handicap())
+	}
+	// A brand new pilot is a standard 4/5 pilot with one Edge token and no handicap.
+	if p := (NamedPilot{}); p.Gunnery() != 4 || p.Piloting() != 5 || p.EdgeTokens() != 1 || p.EdgeAbilities() != 0 || p.Handicap() != 0 {
+		t.Errorf("new pilot = %d/%d, edge %d, abilities %d, handicap %d", p.Gunnery(), p.Piloting(), p.EdgeTokens(), p.EdgeAbilities(), p.Handicap())
+	}
+}
+
+func TestPilotView(t *testing.T) {
+	views, alive := pilotViews([]NamedPilot{
+		{ID: "a", Name: "Alrek", SP: SPAllocation{Gunnery: 300, Piloting: 50}},
+		{ID: "b", Name: "Katarina", Fallen: true},
+	})
+	if alive != 1 || len(views) != 2 {
+		t.Fatalf("alive %d of %d", alive, len(views))
+	}
+	a := views[0]
+	if a.Gunnery != 3 || a.Piloting != 5 || a.Handicap != 12 || a.Earned != 350 || !views[1].Fallen {
+		t.Errorf("view = %+v", a)
+	}
+	g, p := a.Columns[0], a.Columns[1]
+	if g.Name != "Gunnery" || g.SP != 300 || !g.HasNext || g.NextAt != 700 || g.NextLvl != 2 {
+		t.Errorf("gunnery column = %+v", g)
+	}
+	if p.SP != 50 || p.NextAt != 100 || p.NextLvl != 4 {
+		t.Errorf("piloting column = %+v", p)
+	}
+}
+
+func TestParsePilotName(t *testing.T) {
+	for _, good := range []string{"Alrek", "Star Captain Alrek", "Ulric d'Aleshire"} {
+		if got, err := parsePilotName(good); err != nil || got != good {
+			t.Errorf("parsePilotName(%q) = %q, %v", good, got, err)
+		}
+	}
+	for _, bad := range []string{"", "  ", "<b>", strings.Repeat("a", 31), "a\x00b"} {
+		if _, err := parsePilotName(bad); err == nil {
+			t.Errorf("parsePilotName(%q) should fail", bad)
+		}
+	}
+}
+
+func TestRefusalWarStartsWithTwoNamedPilots(t *testing.T) {
+	c, ok := (Library{Root: "../../campaigns"}).Campaign("refusalwar")
+	if !ok || c.StartingNamedPilots != 2 {
+		t.Fatalf("Refusal War mandates two named pilots to start: %+v", c)
+	}
+}
+
+// pilotStore exercises the named pilot queries; it is run for both databases from storeContract.
+func pilotStore(t *testing.T, s *Store, id string) {
+	t.Helper()
+	ctx := context.Background()
+	if ps, err := s.Pilots(ctx, id, "refusalwar"); err != nil || len(ps) != 0 {
+		t.Fatalf("no pilots yet: %v %v", ps, err)
+	}
+	a, err := s.AddPilot(ctx, id, "refusalwar", "Alrek", SPAllocation{Gunnery: 150}, 2)
+	if err != nil || a.ID == "" || a.Name != "Alrek" {
+		t.Fatalf("add pilot: %+v, %v", a, err)
+	}
+	b, err := s.AddPilot(ctx, id, "refusalwar", "Katarina", SPAllocation{}, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.AddPilot(ctx, id, "refusalwar", "Third", SPAllocation{}, 2); !errors.Is(err, ErrPilotLimit) {
+		t.Fatalf("the limit should refuse a third pilot, got %v", err)
+	}
+	// Another campaign has its own pilots.
+	if _, err := s.AddPilot(ctx, id, "another", "Elsewhere", SPAllocation{}, 2); err != nil {
+		t.Fatalf("pilots belong to a campaign: %v", err)
+	}
+	ps, err := s.Pilots(ctx, id, "refusalwar")
+	if err != nil || len(ps) != 2 || ps[0].ID != a.ID || ps[1].ID != b.ID || ps[0].SP.Gunnery != 150 || ps[0].Fallen {
+		t.Fatalf("pilots = %+v, %v", ps, err)
+	}
+
+	// SP adds to the columns.
+	if err := s.AwardSP(ctx, id, "refusalwar", a.ID, SPAllocation{Gunnery: 150, EdgeTokens: 60}); err != nil {
+		t.Fatal(err)
+	}
+	ps, _ = s.Pilots(ctx, id, "refusalwar")
+	if ps[0].SP != (SPAllocation{Gunnery: 300, EdgeTokens: 60}) || ps[0].Gunnery() != 3 || ps[0].EdgeTokens() != 2 {
+		t.Fatalf("after award: %+v", ps[0])
+	}
+	if err := s.AwardSP(ctx, id, "refusalwar", "no-such-pilot", SPAllocation{Gunnery: 1}); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("unknown pilot: %v", err)
+	}
+	if err := s.AwardSP(ctx, id, "another", a.ID, SPAllocation{Gunnery: 1}); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("another campaign's pilot: %v", err)
+	}
+
+	// A fallen pilot frees their place, keeps their record, and can no longer earn SP.
+	if err := s.MarkFallen(ctx, id, "refusalwar", b.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.MarkFallen(ctx, id, "refusalwar", b.ID); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("already fallen: %v", err)
+	}
+	if err := s.AwardSP(ctx, id, "refusalwar", b.ID, SPAllocation{Gunnery: 1}); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("the fallen earn nothing: %v", err)
+	}
+	if _, err := s.AddPilot(ctx, id, "refusalwar", "Replacement", SPAllocation{}, 2); err != nil {
+		t.Fatalf("a fallen pilot should free a place: %v", err)
+	}
+	if ps, _ := s.Pilots(ctx, id, "refusalwar"); len(ps) != 3 || !ps[1].Fallen {
+		t.Fatalf("the fallen pilot should stay on record: %+v", ps)
+	}
+}
+
+// startedCompany sets up a test server with a company that has started Refusal War.
+func startedCompany(t *testing.T) (*httptest.Server, *Store, *http.Cookie) {
+	t.Helper()
+	srv, store := newTestServer(t)
+	cookie := post(t, srv, "/api/seed", url.Values{"seed": {"wolfpack2026"}}, nil, "").Cookies()[0]
+	if r := post(t, srv, "/api/company", url.Values{"company": {"Wolf's Dragoons"}}, cookie, srv.URL); r.StatusCode != http.StatusNoContent {
+		t.Fatalf("company: %d", r.StatusCode)
+	}
+	if r := post(t, srv, "/api/campaign/start", url.Values{"campaign": {"refusalwar"}, "hangar": {goodHangar}}, cookie, srv.URL); r.StatusCode != http.StatusNoContent {
+		t.Fatalf("start: %d", r.StatusCode)
+	}
+	return srv, store, cookie
+}
+
+func TestNamedPilotsFlow(t *testing.T) {
+	srv, store := newTestServer(t)
+	ctx := context.Background()
+	pilots := func(extra ...string) url.Values {
+		v := url.Values{"campaign": {"refusalwar"}}
+		for i := 0; i+1 < len(extra); i += 2 {
+			v.Set(extra[i], extra[i+1])
+		}
+		return v
+	}
+
+	// The endpoints need a seed, a named company and a started campaign.
+	if r := post(t, srv, "/api/pilots", pilots("name", "Alrek"), nil, srv.URL); r.StatusCode != http.StatusBadRequest {
+		t.Fatalf("no seed: %d", r.StatusCode)
+	}
+	cookie := post(t, srv, "/api/seed", url.Values{"seed": {"wolfpack2026"}}, nil, "").Cookies()[0]
+	if r := post(t, srv, "/api/pilots", pilots("name", "Alrek"), cookie, srv.URL); r.StatusCode != http.StatusBadRequest {
+		t.Fatalf("no company: %d", r.StatusCode)
+	}
+	post(t, srv, "/api/company", url.Values{"company": {"Wolf's Dragoons"}}, cookie, srv.URL)
+	if r := post(t, srv, "/api/pilots", pilots("name", "Alrek"), cookie, srv.URL); r.StatusCode != http.StatusBadRequest {
+		t.Fatalf("campaign not started: %d", r.StatusCode)
+	}
+	if c := body(t, srv, "/refusalwar/", cookie); strings.Contains(c, `id="pilots"`) {
+		t.Fatal("the pilots panel belongs to a started campaign")
+	}
+	post(t, srv, "/api/campaign/start", url.Values{"campaign": {"refusalwar"}, "hangar": {goodHangar}}, cookie, srv.URL)
+	id := playthroughID("wolfpack2026")
+
+	// A started campaign asks for its two starting pilots.
+	if c := body(t, srv, "/refusalwar/", cookie); !strings.Contains(c, `id="pilots"`) || !strings.Contains(c, "needs 2 named pilots") || !strings.Contains(c, "Name 2 more") || !strings.Contains(c, `id="pilot-add"`) {
+		t.Fatalf("pilots panel: %.2500s", c)
+	}
+
+	// Bad requests change nothing.
+	for name, c := range map[string]struct {
+		form   url.Values
+		origin string
+		status int
+	}{
+		"cross-origin":     {pilots("name", "Alrek"), "https://evil.example", http.StatusForbidden},
+		"blank name":       {pilots("name", "  "), srv.URL, http.StatusBadRequest},
+		"markup in a name": {pilots("name", "<b>x</b>"), srv.URL, http.StatusBadRequest},
+		"unknown campaign": {url.Values{"campaign": {"nope"}, "name": {"Alrek"}}, srv.URL, http.StatusNotFound},
+	} {
+		if r := post(t, srv, "/api/pilots", c.form, cookie, c.origin); r.StatusCode != c.status {
+			t.Errorf("%s: got %d, want %d", name, r.StatusCode, c.status)
+		}
+	}
+	if ps, _ := store.Pilots(ctx, id, "refusalwar"); len(ps) != 0 {
+		t.Fatalf("refused requests created pilots: %+v", ps)
+	}
+
+	// Naming pilots, up to the limit of four.
+	for _, name := range []string{"Alrek", "Katarina", "Jarek", "Sybille"} {
+		if r := post(t, srv, "/api/pilots", pilots("name", name), cookie, srv.URL); r.StatusCode != http.StatusNoContent {
+			t.Fatalf("add %s: %d", name, r.StatusCode)
+		}
+	}
+	if r := post(t, srv, "/api/pilots", pilots("name", "Fifth"), cookie, srv.URL); r.StatusCode != http.StatusBadRequest {
+		t.Fatalf("a fifth pilot should be refused: %d", r.StatusCode)
+	}
+	c := body(t, srv, "/refusalwar/", cookie)
+	if strings.Contains(c, "needs 2 named pilots") || strings.Contains(c, `id="pilot-add"`) || !strings.Contains(c, "Alrek") || !strings.Contains(c, "Sybille") {
+		t.Fatalf("with four pilots there is nothing left to ask for: %.3000s", c)
+	}
+	ps, _ := store.Pilots(ctx, id, "refusalwar")
+	alrek := ps[0]
+	if alrek.Name != "Alrek" || alrek.Earned() != 0 || !strings.Contains(c, `data-pilot="`+alrek.ID+`"`) {
+		t.Fatalf("alrek = %+v", alrek)
+	}
+
+	// Awarding SP.
+	award := func(pilot string, kv ...string) int {
+		v := pilots("pilot", pilot)
+		for i := 0; i+1 < len(kv); i += 2 {
+			v.Set(kv[i], kv[i+1])
+		}
+		return post(t, srv, "/api/pilots/sp", v, cookie, srv.URL).StatusCode
+	}
+	for name, c := range map[string]struct {
+		status int
+		kv     []string
+	}{
+		"nothing":       {http.StatusBadRequest, nil},
+		"all zero":      {http.StatusBadRequest, []string{"gunnery", "0"}},
+		"negative":      {http.StatusBadRequest, []string{"gunnery", "-5"}},
+		"not a number":  {http.StatusBadRequest, []string{"gunnery", "lots"}},
+		"absurd":        {http.StatusBadRequest, []string{"gunnery", "99999999"}},
+		"one bad field": {http.StatusBadRequest, []string{"gunnery", "100", "piloting", "x"}},
+	} {
+		if got := award(alrek.ID, c.kv...); got != c.status {
+			t.Errorf("award %s: got %d, want %d", name, got, c.status)
+		}
+	}
+	if got := award("no-such-pilot", "gunnery", "100"); got != http.StatusNotFound {
+		t.Errorf("unknown pilot: %d", got)
+	}
+	if ps, _ := store.Pilots(ctx, id, "refusalwar"); ps[0].Earned() != 0 {
+		t.Fatalf("refused awards changed the pilot: %+v", ps[0])
+	}
+	// The trial pays 150 to 900 SP, so there is no per-award cap below the typo guard.
+	if got := award(alrek.ID, "gunnery", "300", "edge_tokens", "60", "edge_abilities", ""); got != http.StatusNoContent {
+		t.Fatalf("award: %d", got)
+	}
+	ps, _ = store.Pilots(ctx, id, "refusalwar")
+	if ps[0].SP != (SPAllocation{Gunnery: 300, EdgeTokens: 60}) {
+		t.Fatalf("allocation = %+v", ps[0].SP)
+	}
+	c = body(t, srv, "/refusalwar/", cookie)
+	if !strings.Contains(c, "<b>3</b>") || !strings.Contains(c, "Handicap <b>14</b>") || !strings.Contains(c, "SP earned <b>360</b>") || !strings.Contains(c, "next level 2 at 700 SP") {
+		t.Fatalf("the page should show the new levels (gunnery 3, handicap 12+2): %.4000s", c)
+	}
+
+	// A fallen pilot is marked as such, can't earn more, and frees their place.
+	if r := post(t, srv, "/api/pilots/fallen", pilots("pilot", ps[1].ID), cookie, srv.URL); r.StatusCode != http.StatusNoContent {
+		t.Fatalf("fallen: %d", r.StatusCode)
+	}
+	if r := post(t, srv, "/api/pilots/fallen", pilots("pilot", ps[1].ID), cookie, srv.URL); r.StatusCode != http.StatusNotFound {
+		t.Fatalf("already fallen: %d", r.StatusCode)
+	}
+	if got := award(ps[1].ID, "gunnery", "100"); got != http.StatusNotFound {
+		t.Errorf("award to the fallen: %d", got)
+	}
+	if c := body(t, srv, "/refusalwar/", cookie); !strings.Contains(c, `class="pilot fallen"`) || !strings.Contains(c, "Fallen") || !strings.Contains(c, `id="pilot-add"`) {
+		t.Fatalf("a fallen pilot should show, and free a place: %.3000s", c)
+	}
+	if r := post(t, srv, "/api/pilots", pilots("name", "Replacement"), cookie, srv.URL); r.StatusCode != http.StatusNoContent {
+		t.Fatalf("replacement: %d", r.StatusCode)
+	}
+}
+
+func TestStartedCompanyHelper(t *testing.T) {
+	_, store, _ := startedCompany(t)
+	if run, ok, _ := store.Run(context.Background(), playthroughID("wolfpack2026"), "refusalwar"); !ok || !run.Started() {
+		t.Fatal("helper should start the campaign")
+	}
+}
