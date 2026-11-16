@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"path"
 	"path/filepath"
+	"time"
 )
 
 //go:embed templates/*.html static/*
@@ -53,12 +54,16 @@ type Page struct {
 	Run       CampaignRun // the playthrough's run of this page's campaign (zero value until it is started)
 	Pilots    []PilotView // the run's named pilots
 	MaxPilots int         // most living named pilots a command may have
-	Ranks     []string    // the campaign's pilot ranks, lowest first (empty when it has none)
-	Memorial  bool        // at least one named pilot was killed in action
-	Ladders   string      // the pilot improvement ladders as JSON, for the pilot builder's live preview
-	Portraits string      // the portrait list as JSON, for the portrait picker
-	MekBayOp  string      // link to the scenario's MekBay operation, once created ("" until then)
-	Commit    string      // git commit the server was built from, short form ("dev" if unknown)
+	// CachedHangar is the hangar last read from MekBay for this run (nil if none yet), and CachedAt when; the campaign and scenario
+	// pages embed it so they can paint the hangar before the live read finishes (see hangarcache.go).
+	CachedHangar *HangarForce
+	CachedAt     time.Time
+	Ranks        []string // the campaign's pilot ranks, lowest first (empty when it has none)
+	Memorial     bool     // at least one named pilot was killed in action
+	Ladders      string   // the pilot improvement ladders as JSON, for the pilot builder's live preview
+	Portraits    string   // the portrait list as JSON, for the portrait picker
+	MekBayOp     string   // link to the scenario's MekBay operation, once created ("" until then)
+	Commit       string   // git commit the server was built from, short form ("dev" if unknown)
 }
 
 // Card is one entry in a list of links (campaigns or scenarios).
@@ -148,6 +153,13 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name
 					}
 					p.Pilots, _ = pilotViews(pilots, p.Campaign.Ranks)
 					p.Ranks = p.Campaign.Ranks
+					if name == "campaign" || name == "scenario" {
+						if h, at, ok, err := s.store.CachedHangar(r.Context(), id, p.Campaign.Slug, p.Run.HangarInstance); err != nil {
+							log.Printf("load cached hangar: %v", err)
+						} else if ok {
+							p.CachedHangar, p.CachedAt = &h, at
+						}
+					}
 					for _, v := range p.Pilots {
 						p.Memorial = p.Memorial || v.Fallen
 					}

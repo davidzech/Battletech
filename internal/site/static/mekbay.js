@@ -19,7 +19,12 @@
   var query = 'campaign=' + encodeURIComponent(dialog.dataset.campaign) + '&scenario=' + encodeURIComponent(dialog.dataset.scenario);
   var units = [];
   var selected = {};
+  var touched = false; // the player has ticked or unticked a unit, so a fresh read must not undo their choice
   var busy = false;
+  // The hangar as the server last read it from MekBay, embedded in the page: shown at once when the popup opens, then replaced
+  // by the live read.
+  var cachedData = null;
+  try { cachedData = JSON.parse(dialog.dataset.cached || 'null'); } catch (e) { cachedData = null; }
 
   function fmt(n) { return Number(n).toLocaleString('en-US'); }
 
@@ -53,6 +58,7 @@
     box.checked = !!selected[u.id];
     box.disabled = unavailable;
     box.addEventListener('change', function () {
+      touched = true;
       if (box.checked) selected[u.id] = true; else delete selected[u.id];
       li.classList.toggle('picked', box.checked);
       error.textContent = '';
@@ -70,29 +76,51 @@
     update();
   }
 
-  function load() {
-    status.hidden = false;
-    status.textContent = 'Loading your hangar…';
-    error.textContent = '';
-    list.textContent = '';
-    units = [];
+  // Shows a hangar (cached or live). A choice the player has already made is kept for the units that are still there; before
+  // that, the units already in the Deployed group are ticked.
+  function apply(data) {
+    var before = selected;
+    units = data.units || [];
+    if (data.limit) limit = data.limit;
     selected = {};
-    resetRow.hidden = true;
+    units.forEach(function (u) {
+      if (u.destroyed || u.unknown) return;
+      if (touched ? before[u.id] : u.inDeployed) selected[u.id] = true;
+    });
+    resetRow.hidden = !(data.hasOperation && canModify);
+    status.hidden = units.length > 0;
+    if (!units.length) status.textContent = 'Your hangar force has no mechs in it yet. Add some in MekBay first.';
+    render();
+  }
+
+  // A failed live read keeps a hangar that is already showing, and says so.
+  function failed(message) {
+    status.hidden = false;
+    status.textContent = units.length ? 'Showing your last known hangar. ' + message : message;
+  }
+
+  function load() {
+    error.textContent = '';
     reset.checked = false;
-    update();
+    touched = false;
+    if (cachedData && cachedData.units) {
+      apply(cachedData); // instant
+    } else {
+      status.hidden = false;
+      status.textContent = 'Loading your hangar…';
+      list.textContent = '';
+      units = [];
+      selected = {};
+      resetRow.hidden = true;
+      update();
+    }
     fetch('/api/mekbay/hangar?' + query, { credentials: 'same-origin', cache: 'no-store' }).then(function (res) {
-      if (!res.ok) return res.text().then(function (t) { status.textContent = t.trim() || 'Could not read your hangar.'; });
+      if (!res.ok) return res.text().then(function (t) { failed(t.trim() || 'Could not read your hangar.'); });
       return res.json().then(function (data) {
-        units = data.units || [];
-        if (data.limit) limit = data.limit;
-        // Reopening after a deployment starts from the units already in the Deployed group.
-        units.forEach(function (u) { if (u.inDeployed && !u.destroyed && !u.unknown) selected[u.id] = true; });
-        resetRow.hidden = !(data.hasOperation && canModify);
-        status.hidden = units.length > 0;
-        if (!units.length) status.textContent = 'Your hangar force has no mechs in it yet. Add some in MekBay first.';
-        render();
+        cachedData = data; // the next time the popup opens starts from this
+        apply(data);
       });
-    }, function () { status.textContent = 'Could not reach the server.'; });
+    }, function () { failed('Could not reach the server.'); });
   }
 
   openBtn.addEventListener('click', function () {

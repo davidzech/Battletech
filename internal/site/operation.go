@@ -207,7 +207,8 @@ func (s *Server) hangarJSON(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not load operation", http.StatusInternalServerError)
 		return
 	}
-	out := map[string]any{"name": h.Name, "limit": sc.BVLimit, "canModify": pt.CanModify(), "units": hangarViews(h), "hasOperation": hasOp}
+	s.cacheHangar(r.Context(), pt.ID, c.Slug, run.HangarInstance, h)
+	out := deployData(h, sc.BVLimit, pt.CanModify(), hasOp)
 	if hasOp {
 		out["url"] = OperationURL(op.OperationID)
 	}

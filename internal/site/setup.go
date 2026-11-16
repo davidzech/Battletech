@@ -186,6 +186,7 @@ func (s *Server) startCampaign(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// The hangar must meet the campaign's starting conditions (enough mechs, within the starting BV).
+	var read *HangarForce // what the check read, kept as the new run's first cached copy
 	if c.StartingBV > 0 || c.StartingMinMechs > 0 {
 		h, err := s.mekbay.ReadHangar(r.Context(), hangar.Instance)
 		if err != nil {
@@ -197,6 +198,7 @@ func (s *Server) startCampaign(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, strings.Join(check.Problems, " "), http.StatusBadRequest)
 			return
 		}
+		read = &h
 	}
 	if err := s.store.StartRunWithPilots(r.Context(), id, c.Slug, hangar, pilots); errors.Is(err, ErrAlreadyStarted) {
 		http.Error(w, "This campaign has already been started.", http.StatusConflict)
@@ -204,6 +206,9 @@ func (s *Server) startCampaign(w http.ResponseWriter, r *http.Request) {
 	} else if err != nil {
 		http.Error(w, "could not start the campaign", http.StatusInternalServerError)
 		return
+	}
+	if read != nil {
+		s.cacheHangar(r.Context(), id, c.Slug, hangar.Instance, *read)
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

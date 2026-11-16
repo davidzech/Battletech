@@ -77,6 +77,14 @@ func (s *Store) schemaStatements() []string {
 	hangar_instance TEXT NOT NULL DEFAULT '',
 	PRIMARY KEY (playthrough_id, campaign)
 )`, s.timestampColumn()),
+		`CREATE TABLE IF NOT EXISTS hangar_cache (
+	playthrough_id TEXT NOT NULL REFERENCES playthroughs(id) ON DELETE CASCADE,
+	campaign       TEXT NOT NULL,
+	instance       TEXT NOT NULL,
+	data           TEXT NOT NULL,
+	fetched_at     BIGINT NOT NULL,
+	PRIMARY KEY (playthrough_id, campaign)
+)`,
 		`CREATE TABLE IF NOT EXISTS mekbay_operations (
 	playthrough_id TEXT NOT NULL REFERENCES playthroughs(id) ON DELETE CASCADE,
 	campaign       TEXT NOT NULL,
@@ -581,7 +589,7 @@ func (s *Store) DeleteRun(ctx context.Context, playthroughID, campaign string) (
 		return false, err
 	}
 	defer tx.Rollback()
-	for _, table := range []string{"named_pilots", "mekbay_operations"} {
+	for _, table := range []string{"named_pilots", "mekbay_operations", "hangar_cache"} {
 		if _, err := tx.ExecContext(ctx, s.q("DELETE FROM "+table+" WHERE playthrough_id = ? AND campaign = ?"), playthroughID, campaign); err != nil {
 			return false, err
 		}

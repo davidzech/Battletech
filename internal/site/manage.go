@@ -33,9 +33,8 @@ func (s *Server) manage(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// forceJSON describes the units in a started campaign's hangar for the campaign overview, read anonymously from MekBay.
-// bv is the sum of the base BV of every unit the catalog knows (an unknown unit adds nothing, a destroyed one still counts:
-// it is still in the hangar).
+// forceJSON describes the units in a started campaign's hangar for the campaign overview, read anonymously from MekBay (see
+// forceData), and keeps the copy for the page's next visit (see hangarcache.go).
 func (s *Server) forceJSON(w http.ResponseWriter, r *http.Request) {
 	seed := currentSeed(r)
 	if seed == "" {
@@ -62,14 +61,8 @@ func (s *Server) forceJSON(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
-	units := hangarViews(h)
-	bv := 0
-	for _, u := range units {
-		if !u.Unknown {
-			bv += u.BV
-		}
-	}
+	s.cacheHangar(r.Context(), playthroughID(seed), c.Slug, run.HangarInstance, h)
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
-	_ = json.NewEncoder(w).Encode(map[string]any{"name": h.Name, "units": units, "bv": bv})
+	_ = json.NewEncoder(w).Encode(forceData(h))
 }
