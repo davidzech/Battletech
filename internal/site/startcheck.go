@@ -51,7 +51,7 @@ func checkStartingHangar(h HangarForce, c *Campaign) startCheck {
 			continue
 		}
 		name, model := unitNames(u)
-		cu := startCheckUnit{Name: name, Model: model, Role: u.Role, Icon: iconURL(u), Tons: u.Tons, BV: u.BV, Gunnery: hu.Gunnery, Piloting: hu.Piloting, Mech: u.Type == "Mek"}
+		cu := startCheckUnit{Name: name, Model: model, Role: roleLabel(u), Icon: iconURL(u), Tons: u.Tons, BV: u.BV, Gunnery: hu.Gunnery, Piloting: hu.Piloting, Mech: u.Type == "Mek"}
 		res.Units = append(res.Units, cu)
 		res.BV += cu.BV
 		if cu.Mech {

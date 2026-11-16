@@ -82,6 +82,18 @@ func unitNames(u Unit) (name, model string) {
 	return name, u.Model
 }
 
+// roleLabel is the role shown in a mech row's band. The catalog gives a few mechs the role "None", which would read
+// as a label in its own right, so those show their weight class instead (the first part of it, for the few classes
+// that are long lists).
+func roleLabel(u Unit) string {
+	if r := strings.TrimSpace(u.Role); r != "" && !strings.EqualFold(r, "none") {
+		return r
+	}
+	// A few classes are long lists ("Ultra Light/PA(L)/Exoskeleton"): the first part is the label.
+	class, _, _ := strings.Cut(u.Class, "/")
+	return strings.TrimSpace(class)
+}
+
 // displayName is a unit's name and model on one line, e.g. "Mad Dog Prime".
 func displayName(u Unit) string {
 	name, model := unitNames(u)
@@ -95,7 +107,7 @@ func hangarViews(h HangarForce) []hangarUnitView {
 		v := hangarUnitView{ID: hu.ID, Pilot: hu.Pilot, Gunnery: hu.Gunnery, Piloting: hu.Piloting, Damaged: hu.Damaged, Destroyed: hu.Destroyed, InDeployed: sameGroupName(hu.Group, deployedGroup)}
 		if u, ok := unitByName(hu.Unit); ok {
 			v.Name, v.Model = unitNames(u)
-			v.Class, v.Role, v.Tons, v.Icon = u.Class, u.Role, u.Tons, iconURL(u)
+			v.Class, v.Role, v.Tons, v.Icon = u.Class, roleLabel(u), u.Tons, iconURL(u)
 			v.BV = u.BV // base BV: this campaign ignores pilot skills, so skill can never be a way to game the BV cap
 		} else {
 			v.Name, v.Unknown, v.Icon = hu.Unit, true, defaultIconURL("")

@@ -71,6 +71,44 @@ func TestUnitNamesPreferTheClanName(t *testing.T) {
 	}
 }
 
+func TestRoleLabelNeverReadsNone(t *testing.T) {
+	loadUnits()
+	var noRole int
+	for _, u := range unitsByName {
+		if u.Type != "Mek" {
+			continue
+		}
+		got := roleLabel(u)
+		if got == "" || strings.EqualFold(got, "none") {
+			t.Errorf("%s: role label %q", u.Name, got)
+		}
+		if strings.EqualFold(strings.TrimSpace(u.Role), "none") {
+			noRole++
+			if want, _, _ := strings.Cut(u.Class, "/"); got != want {
+				t.Errorf("%s has no role, so its band should read its weight class %q, got %q", u.Name, want, got)
+			}
+		}
+	}
+	if noRole == 0 {
+		t.Error("expected some catalog mechs to have the role None")
+	}
+	if roleLabel(unitNamed(t, "BMVulture_Prime")) != "Missile Boat" {
+		t.Error("a real role is shown as it is")
+	}
+	if got := roleLabel(Unit{Role: "None", Class: "Ultra Light/PA(L)/Exoskeleton"}); got != "Ultra Light" {
+		t.Errorf("a long class list is cut to its first part, got %q", got)
+	}
+	if got := roleLabel(Unit{Role: "", Class: "Heavy"}); got != "Heavy" {
+		t.Errorf("a missing role shows the class, got %q", got)
+	}
+	// No role label is longer than the one mechrow.js is sized for (anything longer is scaled down there).
+	for _, u := range unitsByName {
+		if u.Type == "Mek" && len(roleLabel(u)) > 12 {
+			t.Errorf("%s: role %q is longer than 12 characters; mechrow.js would scale it down", u.Name, roleLabel(u))
+		}
+	}
+}
+
 func TestEveryMechHasAnIconOrADefault(t *testing.T) {
 	loadUnits()
 	var mechs, own int

@@ -533,30 +533,31 @@ dialog .deploy-unit label {
 /* A mech row in the style of MekBay's: role band, icon, model over a bold name, and BV / tonnage / pilot chips. */
 .mech-row {
   display: grid;
-  grid-template-columns: 1.7rem 4.4rem minmax(0, 1fr);
+  grid-template-columns: 1.6rem 3.4rem minmax(0, 1fr);
   align-items: stretch;
-  min-height: 5.6rem;
+  min-height: 4.2rem;
   background: var(--panel);
   border: 1px solid var(--line);
 }
+/* The role runs down the band on one line; a label longer than "Missile Boat" is scaled down in mechrow.js, never wrapped. */
 .mr-role { display: flex; align-items: center; justify-content: center; overflow: hidden; color: var(--accent-ink); background: var(--accent); }
-.mr-role > span { white-space: nowrap; font: 700 0.68rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; writing-mode: vertical-rl; transform: rotate(180deg); }
-.mr-icon { align-self: center; justify-self: center; width: 4rem; height: auto; max-height: 4.2rem; object-fit: contain; }
-.mr-main { display: grid; align-content: center; gap: 0.1rem; min-width: 0; padding: 0.4rem 0.8rem 0.4rem 0.3rem; }
-.mr-model { min-height: 1.15em; font-size: 0.85rem; color: var(--muted); }
-.mr-name { font: 700 1.25rem/1.15 var(--display); letter-spacing: 0.03em; overflow-wrap: anywhere; }
-.mr-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.25rem; }
-.mr-chip { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.12rem 0.5rem; font: 700 0.85rem var(--display); letter-spacing: 0.04em; background: rgb(0 0 0 / 0.4); }
+.mr-role > span { padding: 0.12rem 0; white-space: nowrap; font: 700 0.54rem/1.1 var(--display); letter-spacing: 0.05em; text-align: center; text-transform: uppercase; writing-mode: vertical-rl; transform: rotate(180deg); }
+.mr-icon { align-self: center; justify-self: center; width: 3.1rem; height: auto; max-height: 3.3rem; object-fit: contain; }
+.mr-main { display: grid; align-content: center; gap: 0.05rem; min-width: 0; padding: 0.3rem 0.6rem 0.3rem 0.2rem; }
+.mr-model { min-height: 1.1em; font-size: 0.72rem; line-height: 1.1; color: var(--muted); }
+.mr-name { font: 700 1rem/1.1 var(--display); letter-spacing: 0.03em; overflow-wrap: anywhere; }
+.mr-chips { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.15rem; }
+.mr-chip { display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.06rem 0.4rem; font: 700 0.72rem var(--display); letter-spacing: 0.04em; background: rgb(0 0 0 / 0.4); }
 .mr-chip .mr-ico { display: inline-flex; }
-.mr-chip svg { width: 0.95rem; height: 0.95rem; fill: currentColor; }
+.mr-chip svg { width: 0.8rem; height: 0.8rem; fill: currentColor; }
 .mr-chip.pilot { color: var(--accent-ink); background: var(--accent); }
-.mr-chip.warn { color: var(--accent); background: transparent; border: 1px solid currentColor; text-transform: uppercase; font-size: 0.7rem; letter-spacing: 0.08em; }
-.mr-chip.bad { color: #ff7a59; background: transparent; border: 1px solid currentColor; text-transform: uppercase; font-size: 0.7rem; letter-spacing: 0.08em; }
+.mr-chip.warn { color: var(--accent); background: transparent; border: 1px solid currentColor; text-transform: uppercase; font-size: 0.62rem; letter-spacing: 0.08em; }
+.mr-chip.bad { color: #ff7a59; background: transparent; border: 1px solid currentColor; text-transform: uppercase; font-size: 0.62rem; letter-spacing: 0.08em; }
 .mech-row.destroyed .mr-icon { filter: grayscale(1); opacity: 0.6; }
 @media (max-width: 40rem) {
-  .mech-row { grid-template-columns: 1.5rem 3.4rem minmax(0, 1fr); }
-  .mr-icon { width: 3.2rem; }
-  .mr-name { font-size: 1.1rem; }
+  .mech-row { grid-template-columns: 1.5rem 2.8rem minmax(0, 1fr); }
+  .mr-icon { width: 2.6rem; }
+  .mr-name { font-size: 0.95rem; }
 }
 dialog .optional { color: var(--muted, #9a9a9a); text-transform: none; letter-spacing: 0; }
 dialog .hint { margin: 0.4rem 0 0; font-size: 0.85rem; color: var(--muted, #9a9a9a); }

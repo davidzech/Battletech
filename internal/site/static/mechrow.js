@@ -31,7 +31,12 @@
     var row = el('div', 'mech-row' + (u.destroyed ? ' destroyed' : ''));
 
     var role = el('span', 'mr-role');
-    role.appendChild(el('span', null, u.unknown ? 'Unknown' : (u.role || 'Mech')));
+    var label = u.unknown ? 'Unknown' : (u.role || 'Mech');
+    var roleText = el('span', null, label);
+    // The label runs down the band on one line and never wraps. The longest real role ("Missile Boat", 12
+    // characters) fits at the stylesheet's size; anything longer is scaled down in proportion.
+    if (label.length > 12) roleText.style.fontSize = (0.54 * 12 / label.length).toFixed(3) + 'rem';
+    role.appendChild(roleText);
     row.appendChild(role);
 
     var img = document.createElement('img');
