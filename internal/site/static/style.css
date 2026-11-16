@@ -1027,7 +1027,14 @@ dialog button.rec-skills-reset:disabled { opacity: 0.4; cursor: not-allowed; }
 /* Manage page: the full list of the hangar's mechs, as the same rows as the deploy popup. */
 .hangar-units { margin: 2rem 0 0; }
 .hangar-units .downloads { margin: 0.6rem 0 0.9rem; }
-.hangar-units-summary { margin: 0.5rem 0 0.9rem; }
+.hangar-units-summary { margin: 0.6rem 0 0.9rem; }
+/* UNITS and BASE BV as big labelled numbers, in the style of the pilots' stat boxes. */
+.hangar-stats { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.hangar-stat { display: grid; justify-items: center; gap: 0.1rem; min-width: 7.5rem; padding: 0.5rem 1.1rem 0.45rem; text-align: center; background: var(--bg); border: 1px solid var(--line); }
+.hangar-stat-label { font: 700 0.68rem var(--display); letter-spacing: 0.12em; text-transform: uppercase; color: var(--text); }
+.hangar-stat-value { font: 700 2.4rem/1.05 var(--display); color: var(--accent); }
+.hangar-stat.warn .hangar-stat-value { color: #ff9a4d; }
+.hangar-stat.bad .hangar-stat-value { color: #ff7a59; }
 .hangar-units-summary:empty { display: none; }
 .mech-list { display: grid; gap: 0.4rem; margin-top: 0.6rem; }
 /* The Hangar list has a little more room than the compact rows in the popup and the wizard: about 5.2rem tall, with the icon, name and chips

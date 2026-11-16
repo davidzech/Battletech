@@ -1,4 +1,4 @@
-// Manage page: the campaign's MekBay hangar as an at-a-glance summary card (forcesummary.js) above the full list of its mechs, as the same mech
+// Manage page: the campaign's MekBay hangar as two big labelled numbers, UNITS and BASE BV (forcesummary.js), above the full list of its mechs, as the same mech
 // rows the deploy popup uses (mechrow.js). Both scripts must load first. Like the overview, the page embeds the hangar as it was last read, so the list paints at once and
 // the live read (GET /api/campaign/force) only refreshes it; only a run that has never been read shows "Reading your hangar...". Names,
 // roles and models go in as text, never HTML.
@@ -14,12 +14,12 @@
     if (text !== undefined) e.textContent = text;
     return e;
   }
-  // The same at-a-glance card as the campaign overview: unit icons with hover details, the count, and the total BV in big yellow.
+  // The count and total BV as big yellow numbers with labels; the rows underneath carry the per-unit detail, so no icons here.
   function render(data) {
     var units = data.units || [];
     list.textContent = '';
     summary.textContent = '';
-    var card = typeof ForceSummary !== 'undefined' ? ForceSummary.build(data) : null;
+    var card = typeof ForceSummary !== 'undefined' ? ForceSummary.stats(data) : null;
     if (card) summary.appendChild(card);
     if (!units.length) {
       list.appendChild(el('p', 'muted', 'Your hangar has no units in it yet. Add some in MekBay.'));

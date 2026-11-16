@@ -3,6 +3,7 @@
 // reads at a glance. Names are inserted as text, never HTML.
 //
 //   ForceSummary.build({ units: [...hangar unit views], bv: total }) -> HTMLElement, or null when there are no units
+//   ForceSummary.stats(data) -> the same facts as plain labelled number boxes (UNITS, BASE BV, and DAMAGED / DESTROYED when there are any), with no icons
 (function () {
   var CAP = 8; // icons shown; more would crowd the row, the rest are only counted
 
@@ -104,5 +105,30 @@
     return row;
   }
 
-  window.ForceSummary = { build: build };
+  // The facts without the icons, for a page where the unit rows are right underneath: big yellow numbers with small-caps labels, in the
+  // style of the pilots' stat boxes. Damaged and destroyed boxes appear only when there are any.
+  function stats(data) {
+    var units = (data && data.units) || [];
+    if (!units.length) return null;
+    var bv = 0, damaged = 0, destroyed = 0;
+    units.forEach(function (u) {
+      if (!u.unknown) bv += u.bv;
+      if (u.destroyed) destroyed++; else if (u.damaged) damaged++;
+    });
+    if (typeof data.bv === 'number') bv = data.bv;
+    var row = el('div', 'hangar-stats');
+    function box(label, value, cls) {
+      var b = el('div', 'hangar-stat' + (cls ? ' ' + cls : ''));
+      b.appendChild(el('span', 'hangar-stat-label', label));
+      b.appendChild(el('span', 'hangar-stat-value', value));
+      row.appendChild(b);
+    }
+    box('Units', String(units.length));
+    box('Base BV', commas(bv));
+    if (damaged) box('Damaged', String(damaged), 'warn');
+    if (destroyed) box('Destroyed', String(destroyed), 'bad');
+    return row;
+  }
+
+  window.ForceSummary = { build: build, stats: stats };
 })();
