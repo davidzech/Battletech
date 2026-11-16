@@ -3,6 +3,7 @@ id: scenario_001
 title: Pyre Light
 planet: Colmar
 map: Mountain Lake
+bv_limit: 10000
 forces:
   opfor1: OpFor1.mul
   opfor2: OpFor2.mul

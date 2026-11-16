@@ -28,6 +28,7 @@ type Scenario struct {
 	Readout      []ReadoutRow  // planet readout overlaid on the first image
 	Waypoints    []Waypoint    // from the `## Waypoints` section of Setup.md
 	Forces       []ForceFile   // downloadable .mul files from front matter
+	BVLimit      int           // most battle value the player may deploy (front matter bv_limit); 0 means no limit
 	Next         string        // id of the default next scenario
 	BriefingHTML template.HTML // the fluff: a leading blockquote in Setup.md
 	SetupHTML    template.HTML
@@ -108,6 +109,7 @@ type frontData struct {
 	Images      []string            `yaml:"images"`
 	Readout     []map[string]string `yaml:"readout"`
 	Forces      map[string]string   `yaml:"forces"`
+	BVLimit     int                 `yaml:"bv_limit"`
 	DefaultNext string              `yaml:"default_next"`
 }
 
@@ -203,6 +205,7 @@ func (l Library) load(name string) (*Campaign, bool) {
 			Readout:      readoutRows(setup.Readout),
 			Waypoints:    waypoints,
 			Forces:       forceFiles(setup.Forces),
+			BVLimit:      setup.BVLimit,
 			Next:         outcome.DefaultNext,
 			BriefingHTML: renderBriefing(briefing),
 			SetupHTML:    renderMarkdown(setupBody, false),

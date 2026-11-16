@@ -12,15 +12,21 @@
 <div class="briefing-text">{{.Scenario.BriefingHTML}}</div>
 </section>
 {{end}}<section class="panel">{{.Scenario.SetupHTML}}</section>
-{{if and .Play.Configured .Scenario.Forces}}<section class="mekbay" id="mekbay-op" data-campaign="{{.Campaign.Slug}}" data-scenario="{{.Scenario.Slug}}">
-<h2>MekBay operation</h2>
-{{if .MekBayOp}}<p class="muted">Your hangar and this scenario's OpFor, loaded together with the OpFor as the hostile force.</p>
-<p class="downloads"><a class="button" href="{{.MekBayOp}}" target="_blank" rel="noopener noreferrer">Open in MekBay</a>{{if .Play.CanModify}}<button type="button" class="button" id="mekbay-rebuild">Reset OpFor</button>{{end}}</p>
-{{else if .Play.CanModify}}<p class="muted">Create a MekBay operation with your hangar and a fresh copy of this scenario's OpFor (one group per OpFor).</p>
-<p class="downloads"><button type="button" class="button alert" id="mekbay-create">Create operation</button></p>
-{{else}}<p class="muted">To have the site create this operation for you, add your MekBay user ID under Campaign details.</p>
-{{end}}<p id="mekbay-error" class="form-error" role="alert"></p>
+{{if and .Play.Configured .Scenario.Forces}}<section class="mekbay" id="mekbay-op">
+<h2>Deploy your force</h2>
+<p class="muted">Choose which mechs from your hangar fly this mission{{if .Scenario.BVLimit}}, up to {{.Scenario.BVLimit}} BV{{end}}. The site sorts your MekBay hangar into <em>Deployed</em> and <em>Hangar</em> groups and sets up the OpFor against them.</p>
+<p class="downloads"><button type="button" class="button" id="deploy-open">Deploy force&hellip;</button>{{if .MekBayOp}}<a class="button" href="{{.MekBayOp}}" target="_blank" rel="noopener noreferrer">Open in MekBay</a>{{end}}</p>
 </section>
+<dialog id="deploy-dialog" class="deploy" aria-labelledby="deploy-title" data-campaign="{{.Campaign.Slug}}" data-scenario="{{.Scenario.Slug}}" data-limit="{{.Scenario.BVLimit}}" data-can-modify="{{if .Play.CanModify}}1{{end}}">
+<h2 id="deploy-title">Deploy your force</h2>
+<p class="deploy-meter" id="deploy-meter"></p>
+<p class="muted" id="deploy-status">Loading your hangar&hellip;</p>
+<ul class="deploy-list" id="deploy-list"></ul>
+{{if not .Play.CanModify}}<p class="muted">The site can only read your hangar. Add your MekBay user ID under Campaign details to let it deploy for you.</p>
+{{end}}<label class="check" id="deploy-reset-row" hidden><input type="checkbox" id="deploy-reset"> Reset the OpFor (wipes any damage recorded on it)</label>
+<p id="deploy-error" class="form-error" role="alert"></p>
+<div class="form-actions"><button type="button" class="button alert" id="deploy-go" disabled>Deploy</button><button type="button" id="deploy-cancel">Cancel</button></div>
+</dialog>
 <script src="/static/mekbay.js" defer></script>
 {{end}}{{if .Scenario.Waypoints}}<details class="fold waypoints">
 <summary>Waypoints</summary>

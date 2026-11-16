@@ -377,6 +377,37 @@ dialog button:not(.button):hover { border-color: var(--accent); color: var(--acc
 .pill input:checked + span { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .pill input:focus-visible + span { outline: 2px solid var(--text); outline-offset: 2px; }
 
+/* Deploy popup: the player's hangar as a pick list with a BV meter. */
+dialog.deploy { width: min(54rem, calc(100vw - 2rem)); }
+.deploy-meter { margin: 0.5rem 0 0; font: 700 1.1rem var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
+.deploy-meter.over { color: #ff7a59; }
+.deploy-list { list-style: none; margin: 0.75rem 0; padding: 0; max-height: 50vh; overflow-y: auto; border-top: 1px solid var(--line); }
+.deploy-unit { border-bottom: 1px solid var(--line); }
+.deploy-unit:hover { background: rgb(242 184 0 / 0.06); }
+dialog .deploy-unit label {
+  display: grid;
+  grid-template-columns: auto minmax(7rem, 1.3fr) minmax(8rem, 2fr) minmax(7rem, 1.2fr) auto 4rem;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0.55rem 0.4rem;
+  cursor: pointer;
+  font: 0.95rem var(--body);
+  letter-spacing: normal;
+  text-transform: none;
+}
+.deploy-unit.unavailable { opacity: 0.5; }
+.deploy-unit.unavailable label { cursor: not-allowed; }
+.du-name { font: 700 1rem var(--display); letter-spacing: 0.05em; text-transform: uppercase; }
+.du-meta, .du-pilot { color: var(--muted); font-size: 0.85rem; }
+.du-bv { font: 700 1.05rem var(--display); text-align: right; }
+.du-tags .tag { font: 700 0.7rem var(--display); letter-spacing: 0.08em; text-transform: uppercase; padding: 0.1rem 0.4rem; border: 1px solid currentColor; }
+.du-tags .warn { color: var(--accent); }
+.du-tags .bad { color: #ff7a59; }
+@media (max-width: 40rem) {
+  dialog .deploy-unit label { grid-template-columns: auto 1fr auto; }
+  .du-meta, .du-pilot, .du-tags { grid-column: 2 / 4; }
+}
 dialog .optional { color: var(--muted, #9a9a9a); text-transform: none; letter-spacing: 0; }
 dialog .hint { margin: 0.4rem 0 0; font-size: 0.85rem; color: var(--muted, #9a9a9a); }
 dialog label.check { display: flex; align-items: center; gap: 0.5rem; text-transform: none; letter-spacing: 0; font-family: inherit; }

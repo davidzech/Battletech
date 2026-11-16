@@ -14,10 +14,14 @@ import (
 )
 
 type entry struct {
-	Name    string `json:"name"`
-	Chassis string `json:"chassis"`
-	Model   string `json:"model"`
-	BV      int    `json:"bv"`
+	Name    string  `json:"name"`
+	Chassis string  `json:"chassis"`
+	Model   string  `json:"model"`
+	BV      int     `json:"bv"`
+	Tons    float64 `json:"tons"`
+	Class   string  `json:"weightClass"`
+	Role    string  `json:"role"`
+	Type    string  `json:"type"`
 }
 
 func main() {
