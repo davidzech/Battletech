@@ -916,7 +916,8 @@ details.more > summary:focus-visible { outline: none; }
 .rec-name { flex: 1; min-width: 0; font: 700 1rem var(--display); letter-spacing: 0.05em; text-transform: uppercase; overflow-wrap: anywhere; }
 .rec-state { font: 700 0.7rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
 .rec-state.kia { color: #e5594f; }
-.rec-delete { color: #e5594f; border-color: #7a3a34; }
+dialog button.rec-delete { display: inline-flex; align-items: center; justify-content: center; width: 2.25rem; height: 2.25rem; padding: 0; color: #e5594f; border-color: #7a3a34; }
+dialog button.rec-delete:hover:not(:disabled), dialog button.rec-delete:focus-visible { color: #fff; background: #c0392b; border-color: #c0392b; }
 .alloc-headrow { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; margin: 1rem 0 0.4rem; }
 .alloc-headrow .alloc-head, .alloc-headrow .alloc-remaining { margin: 0; }
 .alloc-headrow .alloc-remaining { text-align: right; }
