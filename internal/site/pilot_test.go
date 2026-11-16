@@ -397,6 +397,13 @@ func TestStartWizardSubmission(t *testing.T) {
 	if strings.Contains(page, "takes a few steps") {
 		t.Error("the dense starting sentence should be gone")
 	}
+	// The wizard lists the hangar's mechs with the shared row component, and the icons are credited.
+	if i, j := strings.Index(page, "/static/mechrow.js"), strings.Index(page, "/static/campaign.js"); i < 0 || j < 0 || i > j {
+		t.Error("the campaign page should load mechrow.js before campaign.js")
+	}
+	if !strings.Contains(page, "MegaMek Data") || !strings.Contains(page, "CC BY-NC-SA 4.0") {
+		t.Error("the footer should credit the unit icons")
+	}
 
 	with := func(mut func(v url.Values)) url.Values {
 		v := startForm(goodHangar, "Alrek", "Katarina")

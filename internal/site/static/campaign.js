@@ -281,8 +281,10 @@
         var list = el('ul', 'hc-units');
         r.units.forEach(function (u) {
           var li = el('li');
-          li.appendChild(el('span', null, u.name + (u.unknown ? ' (unknown unit)' : u.mech ? '' : ' (not a mech)')));
-          li.appendChild(el('b', null, u.unknown ? '?' : number(u.bv)));
+          li.appendChild(MechRow.build({
+            name: u.name, model: u.model, role: u.role, icon: u.icon, tons: u.tons, bv: u.bv,
+            gunnery: u.gunnery, piloting: u.piloting, unknown: u.unknown, notMech: !u.mech && !u.unknown
+          }));
           list.appendChild(li);
         });
         statusBox.appendChild(list);

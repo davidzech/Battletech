@@ -492,9 +492,7 @@ dialog .link-field .refresh {
 dialog .link-field .refresh:hover:not(:disabled), dialog .link-field .refresh:focus-visible { color: var(--accent); border-color: var(--accent); outline: none; }
 dialog .link-field .refresh:disabled { opacity: 0.35; cursor: not-allowed; }
 .link-field .refresh.spinning svg { color: var(--accent); animation: spin 0.8s linear infinite; }
-.hc-units { list-style: none; margin: 0.6rem 0 0; padding: 0; max-height: 9.5rem; overflow-y: auto; border-top: 1px solid var(--line); }
-.hc-units li { display: flex; justify-content: space-between; gap: 1rem; padding: 0.25rem 0; border-bottom: 1px solid var(--line); color: var(--muted); }
-.hc-units b { color: var(--text); font-weight: 700; }
+.hc-units { list-style: none; margin: 0.6rem 0 0; padding: 0; max-height: 18.8rem; overflow-y: auto; display: grid; gap: 0.4rem; }
 .wiz-recap { margin: 0.25rem 0 0.75rem; padding-left: 1.1rem; }
 .wiz-footer { display: flex; align-items: center; gap: 0.9rem; margin-top: 1rem; }
 .wiz-count { font: 700 0.8rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
@@ -512,31 +510,50 @@ dialog.deploy { width: min(54rem, calc(100vw - 2rem)); }
 .deploy-meter { margin: 0.5rem 0 0; font: 700 1.1rem var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
 .deploy-meter.over { color: #ff7a59; }
 .deploy-list { list-style: none; margin: 0.75rem 0; padding: 0; max-height: 50vh; overflow-y: auto; border-top: 1px solid var(--line); }
-.deploy-unit { border-bottom: 1px solid var(--line); }
-.deploy-unit:hover { background: rgb(242 184 0 / 0.06); }
+.deploy-unit { margin-bottom: 0.5rem; }
 dialog .deploy-unit label {
   display: grid;
-  grid-template-columns: auto minmax(7rem, 1.3fr) minmax(8rem, 2fr) minmax(7rem, 1.2fr) auto 4rem;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.7rem;
   margin: 0;
-  padding: 0.55rem 0.4rem;
   cursor: pointer;
-  font: 0.95rem var(--body);
+  font: inherit;
   letter-spacing: normal;
   text-transform: none;
 }
+.deploy-unit:hover .mech-row { border-color: rgb(242 184 0 / 0.6); }
+.deploy-unit.picked .mech-row { background: color-mix(in srgb, var(--accent) 38%, var(--bg)); border-color: var(--accent); }
 .deploy-unit.unavailable { opacity: 0.5; }
 .deploy-unit.unavailable label { cursor: not-allowed; }
-.du-name { font: 700 1rem var(--display); letter-spacing: 0.05em; text-transform: uppercase; }
-.du-meta, .du-pilot { color: var(--muted); font-size: 0.85rem; }
-.du-bv { font: 700 1.05rem var(--display); text-align: right; }
-.du-tags .tag { font: 700 0.7rem var(--display); letter-spacing: 0.08em; text-transform: uppercase; padding: 0.1rem 0.4rem; border: 1px solid currentColor; }
-.du-tags .warn { color: var(--accent); }
-.du-tags .bad { color: #ff7a59; }
+
+/* A mech row in the style of MekBay's: role band, icon, model over a bold name, and BV / tonnage / pilot chips. */
+.mech-row {
+  display: grid;
+  grid-template-columns: 1.7rem 4.4rem minmax(0, 1fr);
+  align-items: stretch;
+  min-height: 5.6rem;
+  background: var(--panel);
+  border: 1px solid var(--line);
+}
+.mr-role { display: flex; align-items: center; justify-content: center; overflow: hidden; color: var(--accent-ink); background: var(--accent); }
+.mr-role > span { white-space: nowrap; font: 700 0.68rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; writing-mode: vertical-rl; transform: rotate(180deg); }
+.mr-icon { align-self: center; justify-self: center; width: 4rem; height: auto; max-height: 4.2rem; object-fit: contain; }
+.mr-main { display: grid; align-content: center; gap: 0.1rem; min-width: 0; padding: 0.4rem 0.8rem 0.4rem 0.3rem; }
+.mr-model { min-height: 1.15em; font-size: 0.85rem; color: var(--muted); }
+.mr-name { font: 700 1.25rem/1.15 var(--display); letter-spacing: 0.03em; overflow-wrap: anywhere; }
+.mr-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.25rem; }
+.mr-chip { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.12rem 0.5rem; font: 700 0.85rem var(--display); letter-spacing: 0.04em; background: rgb(0 0 0 / 0.4); }
+.mr-chip .mr-ico { display: inline-flex; }
+.mr-chip svg { width: 0.95rem; height: 0.95rem; fill: currentColor; }
+.mr-chip.pilot { color: var(--accent-ink); background: var(--accent); }
+.mr-chip.warn { color: var(--accent); background: transparent; border: 1px solid currentColor; text-transform: uppercase; font-size: 0.7rem; letter-spacing: 0.08em; }
+.mr-chip.bad { color: #ff7a59; background: transparent; border: 1px solid currentColor; text-transform: uppercase; font-size: 0.7rem; letter-spacing: 0.08em; }
+.mech-row.destroyed .mr-icon { filter: grayscale(1); opacity: 0.6; }
 @media (max-width: 40rem) {
-  dialog .deploy-unit label { grid-template-columns: auto 1fr auto; }
-  .du-meta, .du-pilot, .du-tags { grid-column: 2 / 4; }
+  .mech-row { grid-template-columns: 1.5rem 3.4rem minmax(0, 1fr); }
+  .mr-icon { width: 3.2rem; }
+  .mr-name { font-size: 1.1rem; }
 }
 dialog .optional { color: var(--muted, #9a9a9a); text-transform: none; letter-spacing: 0; }
 dialog .hint { margin: 0.4rem 0 0; font-size: 0.85rem; color: var(--muted, #9a9a9a); }

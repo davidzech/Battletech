@@ -83,6 +83,7 @@ func NewHandler(contentRoot string, store *Store, opts ...Option) http.Handler {
 	}
 
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /icons/{file}", s.icon)
 	mux.HandleFunc("GET /static/{file}", func(w http.ResponseWriter, r *http.Request) {
 		name := path.Base(r.PathValue("file"))
 		if tag, ok := staticETags[name]; ok {

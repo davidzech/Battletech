@@ -7,7 +7,7 @@ import (
 	"sync"
 )
 
-//go:generate go run gen_units.go
+//go:generate go run gen_units.go gen_common.go
 
 // unitsIndexJSON is the slice of MekBay's unit catalog the site needs (see gen_units.go). The full
 // data/units.json is not shipped in the Docker image, so this is embedded instead.
@@ -18,14 +18,16 @@ var unitsIndexJSON []byte
 // Unit is one catalog entry: Name is MekBay's unit ID (e.g. BMMadCat_H), which is what a saved force
 // stores in each unit's `unit` field.
 type Unit struct {
-	Name    string  `json:"name"`
-	Chassis string  `json:"chassis"`
-	Model   string  `json:"model"`
-	BV      int     `json:"bv"` // base battle value, before pilot skills
-	Tons    float64 `json:"tons"`
-	Class   string  `json:"weightClass"` // Light, Medium, Heavy, Assault...
-	Role    string  `json:"role"`        // Master Unit List role
-	Type    string  `json:"type"`        // Mek, Tank, ProtoMek...
+	Name     string  `json:"name"`
+	Chassis  string  `json:"chassis"`
+	Model    string  `json:"model"`
+	BV       int     `json:"bv"` // base battle value, before pilot skills
+	Tons     float64 `json:"tons"`
+	Class    string  `json:"weightClass"` // Light, Medium, Heavy, Assault...
+	Role     string  `json:"role"`        // Master Unit List role
+	Type     string  `json:"type"`        // Mek, Tank, ProtoMek...
+	TechBase string  `json:"techBase"`    // Clan, Inner Sphere, Mixed
+	Icon     string  `json:"icon"`        // file name in icons/ (mechs only; "" for anything else)
 }
 
 var (

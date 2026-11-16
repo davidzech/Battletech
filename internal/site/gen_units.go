@@ -22,6 +22,8 @@ type entry struct {
 	Class   string  `json:"weightClass"`
 	Role    string  `json:"role"`
 	Type    string  `json:"type"`
+	Tech    string  `json:"techBase"`
+	Icon    string  `json:"icon,omitempty"` // in data/units.json: the path inside mm-data; written to the index as iconFile(path)
 }
 
 func main() {
@@ -38,6 +40,14 @@ func main() {
 			log.Fatal(err)
 		}
 		doc.Units = list
+	}
+	for i := range doc.Units {
+		// Only mechs have vendored icons (see gen_icons.go); anything else shows a default one.
+		if doc.Units[i].Type == "Mek" && doc.Units[i].Icon != "" {
+			doc.Units[i].Icon = iconFile(doc.Units[i].Icon)
+		} else {
+			doc.Units[i].Icon = ""
+		}
 	}
 	sort.Slice(doc.Units, func(i, j int) bool { return doc.Units[i].Name < doc.Units[j].Name })
 	out, err := json.Marshal(doc.Units)

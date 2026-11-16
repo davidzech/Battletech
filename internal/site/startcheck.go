@@ -15,10 +15,16 @@ import (
 
 // startCheckUnit is one hangar unit as the starting check counts it.
 type startCheckUnit struct {
-	Name    string `json:"name"`
-	BV      int    `json:"bv"`
-	Mech    bool   `json:"mech"`
-	Unknown bool   `json:"unknown"` // not in the unit catalog, so its BV can't be worked out
+	Name     string  `json:"name"` // the Clan name when the design has one
+	Model    string  `json:"model"`
+	Role     string  `json:"role"`
+	Icon     string  `json:"icon"` // URL
+	Tons     float64 `json:"tons"`
+	BV       int     `json:"bv"`
+	Gunnery  int     `json:"gunnery"`
+	Piloting int     `json:"piloting"`
+	Mech     bool    `json:"mech"`
+	Unknown  bool    `json:"unknown"` // not in the unit catalog, so its BV can't be worked out
 }
 
 // startCheck is the result of checking a hangar against a campaign's starting conditions.
@@ -40,11 +46,12 @@ func checkStartingHangar(h HangarForce, c *Campaign) startCheck {
 	for _, hu := range h.Units {
 		u, ok := unitByName(hu.Unit)
 		if !ok {
-			res.Units = append(res.Units, startCheckUnit{Name: hu.Unit, Unknown: true})
+			res.Units = append(res.Units, startCheckUnit{Name: hu.Unit, Icon: defaultIconURL(""), Gunnery: hu.Gunnery, Piloting: hu.Piloting, Unknown: true})
 			unknown = append(unknown, hu.Unit)
 			continue
 		}
-		cu := startCheckUnit{Name: displayName(u), BV: u.BV, Mech: u.Type == "Mek"}
+		name, model := unitNames(u)
+		cu := startCheckUnit{Name: name, Model: model, Role: u.Role, Icon: iconURL(u), Tons: u.Tons, BV: u.BV, Gunnery: hu.Gunnery, Piloting: hu.Piloting, Mech: u.Type == "Mek"}
 		res.Units = append(res.Units, cu)
 		res.BV += cu.BV
 		if cu.Mech {

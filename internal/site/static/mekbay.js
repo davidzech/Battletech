@@ -45,28 +45,21 @@
   }
 
   function row(u) {
-    var li = el('li', 'deploy-unit' + (u.destroyed || u.unknown ? ' unavailable' : ''));
+    var unavailable = u.destroyed || u.unknown;
+    var li = el('li', 'deploy-unit' + (unavailable ? ' unavailable' : '') + (selected[u.id] ? ' picked' : ''));
     var label = el('label');
     var box = document.createElement('input');
     box.type = 'checkbox';
     box.checked = !!selected[u.id];
-    box.disabled = u.destroyed || u.unknown;
+    box.disabled = unavailable;
     box.addEventListener('change', function () {
       if (box.checked) selected[u.id] = true; else delete selected[u.id];
+      li.classList.toggle('picked', box.checked);
       error.textContent = '';
       update();
     });
     label.appendChild(box);
-    label.appendChild(el('span', 'du-name', u.name));
-    var meta = [u.class, u.tons ? u.tons + ' t' : '', u.role].filter(Boolean).join(' · ');
-    label.appendChild(el('span', 'du-meta', meta));
-    label.appendChild(el('span', 'du-pilot', (u.pilot || 'Unnamed pilot') + ' ' + u.gunnery + '/' + u.piloting));
-    var tags = el('span', 'du-tags');
-    if (u.destroyed) tags.appendChild(el('span', 'tag bad', 'Destroyed'));
-    else if (u.unknown) tags.appendChild(el('span', 'tag bad', 'Unknown unit'));
-    else if (u.damaged) tags.appendChild(el('span', 'tag warn', 'Damaged'));
-    label.appendChild(tags);
-    label.appendChild(el('span', 'du-bv', u.unknown ? '?' : fmt(u.bv)));
+    label.appendChild(MechRow.build(u));
     li.appendChild(label);
     return li;
   }

@@ -213,7 +213,7 @@ func hangarFixture() HangarForce {
 func TestHangarViewsAndDeployProblem(t *testing.T) {
 	h := hangarFixture()
 	views := hangarViews(h)
-	if v := views[0]; v.Name != "Mad Dog Prime" || v.BV != 2351 || v.Pilot != "Anya" || v.Class != "Heavy" || v.Tons != 60 || v.InDeployed {
+	if v := views[0]; v.Name != "Mad Dog" || v.Model != "Prime" || v.Icon != "/icons/vulture.png" || v.BV != 2351 || v.Pilot != "Anya" || v.Class != "Heavy" || v.Tons != 60 || v.InDeployed {
 		t.Errorf("vulture view = %+v", v)
 	}
 	if v := views[1]; !v.InDeployed || !v.Damaged || v.BV <= 0 {
@@ -401,6 +401,9 @@ func TestDeployFlow(t *testing.T) {
 	}
 	addPilot("Katarina")
 	p := body(t, srv, page, cookie)
+	if i, j := strings.Index(p, "/static/mechrow.js"), strings.Index(p, "/static/mekbay.js"); i < 0 || j < 0 || i > j {
+		t.Fatal("the scenario page should load mechrow.js before mekbay.js")
+	}
 	if !strings.Contains(p, `id="deploy-open"`) || !strings.Contains(p, "Add your MekBay user ID under Company details") || !strings.Contains(p, "up to 10000 BV") {
 		t.Fatalf("read-only page: %.900s", p)
 	}
@@ -415,7 +418,7 @@ func TestDeployFlow(t *testing.T) {
 	if r.StatusCode != http.StatusOK || json.NewDecoder(r.Body).Decode(&view) != nil {
 		t.Fatalf("hangar json: %d", r.StatusCode)
 	}
-	if view.Limit != 10000 || view.CanModify || view.HasOperation || len(view.Units) != 8 || view.Units[0].Name != "Mad Dog Prime" || view.Units[0].BV != 2351 {
+	if view.Limit != 10000 || view.CanModify || view.HasOperation || len(view.Units) != 8 || view.Units[0].Name != "Mad Dog" || view.Units[0].BV != 2351 {
 		t.Fatalf("hangar view = %+v", view)
 	}
 	if r := post(t, srv, "/api/mekbay/deploy", deploy(mine), cookie, srv.URL); r.StatusCode != http.StatusForbidden {

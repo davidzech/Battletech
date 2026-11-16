@@ -45,7 +45,8 @@
     </div>
   </form>
 </dialog>
-{{end}}<script src="/static/campaign.js" defer></script>
+{{end}}<script src="/static/mechrow.js" defer></script>
+<script src="/static/campaign.js" defer></script>
 {{if .Run.Started}}<section class="pilots" id="pilots" data-campaign="{{.Campaign.Slug}}">
 <h2>Named pilots</h2>
 {{if .PilotsNeeded}}<p class="need">This campaign needs {{.Campaign.StartingNamedPilots}} named pilots before you can deploy. Name {{.PilotsNeeded}} more.</p>

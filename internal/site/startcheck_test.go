@@ -54,7 +54,7 @@ func TestCheckStartingHangar(t *testing.T) {
 	if !ok.OK || ok.Mechs != 4 || ok.BV != 997+1178+1251+2219 || len(ok.Problems) != 0 || ok.MaxBV != 6000 || ok.MinMechs != 4 || len(ok.Units) != 4 {
 		t.Fatalf("a valid hangar: %+v", ok)
 	}
-	if ok.Units[0].Name != "Mist Lynx E" || !ok.Units[0].Mech || ok.Units[0].BV != 997 {
+	if ok.Units[0].Name != "Mist Lynx" || ok.Units[0].Model != "E" || ok.Units[0].Role != "Striker" || ok.Units[0].Icon != "/icons/koshi_e.png" || ok.Units[0].Tons != 25 || !ok.Units[0].Mech || ok.Units[0].BV != 997 {
 		t.Errorf("unit = %+v", ok.Units[0])
 	}
 

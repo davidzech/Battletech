@@ -48,7 +48,9 @@ func opForDraft(c *Campaign, sc *Scenario) (ForceDraft, error) {
 // hangarUnitView is one hangar unit as the deploy popup shows it.
 type hangarUnitView struct {
 	ID         string  `json:"id"`
-	Name       string  `json:"name"`
+	Name       string  `json:"name"`  // the Clan name when the design has one
+	Model      string  `json:"model"` // e.g. "Prime"
+	Icon       string  `json:"icon"`  // URL of the unit's icon
 	Class      string  `json:"class"`
 	Role       string  `json:"role"`
 	Tons       float64 `json:"tons"`
@@ -62,15 +64,28 @@ type hangarUnitView struct {
 	InDeployed bool    `json:"inDeployed"`
 }
 
-var parenName = regexp.MustCompile(`^.*\((.+)\)$`)
+var chassisNames = regexp.MustCompile(`^(.*?)\s*\((.+)\)$`)
 
-// displayName prefers the Clan name of a two-named chassis: "Koshi (Mist Lynx)" E becomes "Mist Lynx E".
-func displayName(u Unit) string {
-	chassis := u.Chassis
-	if m := parenName.FindStringSubmatch(chassis); m != nil {
-		chassis = m[1]
+// unitNames returns the name to show for a unit and its model. A design with two names is written "Inner Sphere
+// name (Clan name)" in the catalog, and the Clan name always wins: "Vulture (Mad Dog)" is shown as "Mad Dog". Only
+// Clan-tech designs follow that pattern; the few Inner Sphere ones with a parenthesis ("Katana (Crockett)") have no
+// Clan name, so they keep their first name.
+func unitNames(u Unit) (name, model string) {
+	name = u.Chassis
+	if m := chassisNames.FindStringSubmatch(u.Chassis); m != nil {
+		if u.TechBase == "Clan" {
+			name = m[2]
+		} else {
+			name = m[1]
+		}
 	}
-	return strings.TrimSpace(chassis + " " + u.Model)
+	return name, u.Model
+}
+
+// displayName is a unit's name and model on one line, e.g. "Mad Dog Prime".
+func displayName(u Unit) string {
+	name, model := unitNames(u)
+	return strings.TrimSpace(name + " " + model)
 }
 
 // hangarViews describes every unit of a hangar for the deploy popup.
@@ -79,10 +94,11 @@ func hangarViews(h HangarForce) []hangarUnitView {
 	for _, hu := range h.Units {
 		v := hangarUnitView{ID: hu.ID, Pilot: hu.Pilot, Gunnery: hu.Gunnery, Piloting: hu.Piloting, Damaged: hu.Damaged, Destroyed: hu.Destroyed, InDeployed: sameGroupName(hu.Group, deployedGroup)}
 		if u, ok := unitByName(hu.Unit); ok {
-			v.Name, v.Class, v.Role, v.Tons = displayName(u), u.Class, u.Role, u.Tons
+			v.Name, v.Model = unitNames(u)
+			v.Class, v.Role, v.Tons, v.Icon = u.Class, u.Role, u.Tons, iconURL(u)
 			v.BV = u.BV // base BV: this campaign ignores pilot skills, so skill can never be a way to game the BV cap
 		} else {
-			v.Name, v.Unknown = hu.Unit, true
+			v.Name, v.Unknown, v.Icon = hu.Unit, true, defaultIconURL("")
 		}
 		views = append(views, v)
 	}
