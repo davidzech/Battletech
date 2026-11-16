@@ -898,3 +898,6 @@ details.more > summary:focus-visible { outline: none; }
 .rec-state { font: 700 0.7rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
 .rec-state.kia { color: #e5594f; }
 .rec-delete { color: #e5594f; border-color: #7a3a34; }
+.alloc-headrow { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; margin: 1rem 0 0.4rem; }
+.alloc-headrow .alloc-head, .alloc-headrow .alloc-remaining { margin: 0; }
+.alloc-headrow .alloc-remaining { text-align: right; }

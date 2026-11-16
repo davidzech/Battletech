@@ -55,9 +55,12 @@
     stats.forEach(function (b) { boxes.appendChild(b); });
     spBody.appendChild(boxes);
 
+    // "Level up" on the left, how much SP is still unallocated right-justified on the same line.
     var remaining = el('p', 'alloc-remaining');
-    spBody.appendChild(el('h3', 'alloc-head', 'Level up'));
-    spBody.appendChild(remaining);
+    var headRow = el('div', 'alloc-headrow');
+    headRow.appendChild(el('h3', 'alloc-head', 'Level up'));
+    headRow.appendChild(remaining);
+    spBody.appendChild(headRow);
     var rows = ladders.map(function (l) {
       return SPAllocator.row(p, l, { ladders: ladders, budget: p.pool, step: STEP, base: p.base, onEdit: function () { spError.textContent = ''; }, refresh: refresh });
     });
