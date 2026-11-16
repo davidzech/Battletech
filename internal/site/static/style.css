@@ -832,3 +832,16 @@ html:not(.js) .wp-toggle, html:not(.js) .wp-stamp { display: none; }
   .wp-text .redact, .wp-stamp { transition: none; }
   .wp-text > .redact, .wp-text > * .redact { transition-delay: 0s; }
 }
+
+/* The unit hover card on the overview's hangar summary. */
+.unit-tip { position: fixed; z-index: 50; max-width: 18rem; padding: 0.6rem 0.75rem; background: var(--panel-2); border: 1px solid var(--line); border-left: 3px solid var(--accent); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.6); pointer-events: none; }
+.unit-tip[hidden] { display: none; }
+.unit-tip .tip-head { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.3rem; }
+.unit-tip .tip-head img { flex: none; object-fit: contain; }
+.unit-tip .tip-head b { display: block; font: 700 1.1rem var(--display); letter-spacing: 0.05em; text-transform: uppercase; }
+.unit-tip .tip-model { display: block; font-size: 0.8rem; color: var(--muted); }
+.unit-tip .tag { margin-bottom: 0.3rem; display: inline-block; }
+.unit-tip .tip-facts { display: grid; grid-template-columns: auto 1fr; gap: 0.15rem 0.8rem; margin: 0; font-size: 0.85rem; }
+.unit-tip dt { font: 700 0.7rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); align-self: center; }
+.unit-tip dd { margin: 0; }
+.force-summary .icons img:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }

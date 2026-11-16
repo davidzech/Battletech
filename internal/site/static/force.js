@@ -22,6 +22,53 @@
     box.appendChild(retry);
   }
 
+  // ---- The hover card: one floating element, filled with the unit under the pointer (or focused with the keyboard).
+  var tip = el('div', 'unit-tip');
+  tip.setAttribute('role', 'tooltip');
+  tip.id = 'unit-tip';
+  tip.hidden = true;
+  document.body.appendChild(tip);
+
+  function fillTip(u) {
+    tip.textContent = '';
+    var head = el('div', 'tip-head');
+    var img = document.createElement('img');
+    img.src = u.icon; img.alt = ''; img.width = 42; img.height = 36;
+    head.appendChild(img);
+    var names = el('div');
+    names.appendChild(el('b', null, u.name));
+    if (u.model) names.appendChild(el('span', 'tip-model', u.model));
+    head.appendChild(names);
+    tip.appendChild(head);
+    if (u.destroyed) tip.appendChild(el('span', 'tag bad', 'Destroyed'));
+    else if (u.damaged) tip.appendChild(el('span', 'tag', 'Damaged'));
+    var facts = el('dl', 'tip-facts');
+    function fact(k, v) { facts.appendChild(el('dt', null, k)); facts.appendChild(el('dd', null, v)); }
+    if (u.unknown) {
+      fact('Catalog', 'Unknown unit, so its BV is unknown');
+    } else {
+      fact('Role', u.role || '—');
+      if (u.class) fact('Class', u.class);
+      fact('Tonnage', String(u.tons));
+      fact('Base BV', commas(u.bv));
+    }
+    if (u.pilot) fact('Pilot', u.pilot + ' (' + u.gunnery + '/' + u.piloting + ')');
+    else fact('Skills', u.gunnery + '/' + u.piloting);
+    tip.appendChild(facts);
+  }
+
+  function placeTip(x, y) {
+    var pad = 14, w = tip.offsetWidth, h = tip.offsetHeight;
+    var left = x + pad, top = y + pad;
+    if (left + w > window.innerWidth - 8) left = Math.max(8, x - pad - w);
+    if (top + h > window.innerHeight - 8) top = Math.max(8, y - pad - h);
+    tip.style.left = left + 'px';
+    tip.style.top = top + 'px';
+  }
+
+  function showTip(u, x, y) { fillTip(u); tip.hidden = false; placeTip(x, y); }
+  function hideTip() { tip.hidden = true; }
+
   function render(data) {
     box.textContent = '';
     var units = data.units || [];
@@ -37,9 +84,16 @@
     var icons = el('span', 'icons');
     units.slice(0, CAP).forEach(function (u) {
       var img = document.createElement('img');
-      img.src = u.icon; img.alt = u.name; img.title = u.name + (u.model ? ' ' + u.model : '');
+      img.src = u.icon; img.alt = u.name + (u.model ? ' ' + u.model : '');
       img.width = 42; img.height = 36;
+      img.tabIndex = 0;
+      img.setAttribute('aria-describedby', 'unit-tip');
       if (u.destroyed) img.className = 'destroyed';
+      img.addEventListener('mouseenter', function (e) { showTip(u, e.clientX, e.clientY); });
+      img.addEventListener('mousemove', function (e) { placeTip(e.clientX, e.clientY); });
+      img.addEventListener('mouseleave', hideTip);
+      img.addEventListener('focus', function () { var r = img.getBoundingClientRect(); showTip(u, r.left, r.bottom); });
+      img.addEventListener('blur', hideTip);
       icons.appendChild(img);
     });
     if (units.length > CAP) icons.appendChild(el('span', 'more', '+' + (units.length - CAP)));
