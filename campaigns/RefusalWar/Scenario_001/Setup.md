@@ -51,7 +51,7 @@ Use the Mountain Lake battlemap.
 
 **Firebase:** hex 1402.
 
-**Waypoints:** shuffle waypoints A, B, C and D, and place them face down on hexes 1007, 1908, 1315 and 2616. Shuffle waypoints E and F and stack them face down on the firebase, hex 1402. Shuffle waypoints G and H and place them on turns 4 and 5 of the turn tracker.
+**Waypoints:** shuffle **Waypoint A**, **B**, **C** and **D**, and place them face down on hexes 1007, 1908, 1315 and 2616. Shuffle **Waypoint E** and **F** and stack them face down on the firebase, hex 1402. Shuffle **Waypoint G** and **H** and place them on turns 4 and 5 of the turn tracker.
 
 ## Forces
 
@@ -72,7 +72,7 @@ Field any force up to 10,000 BV.
 
 ### OpFor 2
 
-**Deployment:** reserve. They enter the map when waypoint H is revealed (see Waypoints).
+**Deployment:** reserve. They enter the map when **Waypoint H** is revealed (see Waypoints).
 
 - [Howler](https://mekbay.com/?gs=cbt&shareUnit=BMBaboon&tab=Sheet) (3/4) Missile Boat: Rurik
 - [Kit Fox Prime](https://mekbay.com/?gs=cbt&shareUnit=BMUller_Prime&tab=Sheet) (3/4) Sniper: Sybille
@@ -96,13 +96,13 @@ Field any force up to 10,000 BV.
 
 You happen upon a supply transport vehicle. Your scanner indicates a high level of protium in the truck bed. Its front left wheel has completely detached, and the crew is eerily missing. They must have left to recover the vehicle at a later time. No matter, it belongs to Clan Wolf now.
 
-+100 SP if you occupy an adjacent hex.
+**+100 SP** if you occupy an adjacent hex.
 
 ### Waypoint B
 
 You notice a trio of large mechanical footprints, without a doubt battlemechs. You immediately recognize one of the patterns to be those of a Fire Moth. You radio your star mates to brace themselves, it won't be long until reinforcements arrive.
 
-Reveal waypoints G and H on the turn tracker, remove waypoint G and place waypoint H on turn 4. Only do this if turn 3 hasn't been reached yet. Roll 1d6 to predetermine which edge the reinforcements will arrive on turn 4.
+Reveal **Waypoint G** and **H** on the turn tracker, remove **Waypoint G** and place **Waypoint H** on turn 4. Only do this if turn 3 hasn't been reached yet. Roll 1d6 to predetermine which edge the reinforcements will arrive on turn 4.
 
 ### Waypoint C
 
@@ -122,7 +122,7 @@ Destroy the remains and fulfill what the aerospace fighters could not. The build
 
 ### Waypoint F
 
-If waypoint F has already been revealed, nothing happens.
+If **Waypoint F** has already been revealed, nothing happens.
 
 Your radar begins detecting pips in the far distance. One... two... now three. It dawns on you that a full Jade Falcon Star is tasked with defending this plant. Such is the way of the Clans.
 
