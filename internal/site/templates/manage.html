@@ -56,6 +56,7 @@
     </div>
   </form>
 </dialog>
+<p class="records-link"><button type="button" class="link-button" id="records-open">Manage Pilot Records&hellip;</button></p>
 <section class="danger-zone" id="danger-zone" data-campaign="{{.Campaign.Slug}}">
 <h2>Danger zone</h2>
 <p class="muted">Deleting this campaign removes {{.Play.CompanyName}}&rsquo;s progress in it: its named pilots and the link to its hangar. Your company and anything saved in MekBay are not touched.</p>
@@ -72,9 +73,8 @@
   </form>
 </dialog>
 </section>
-<p class="records-link"><button type="button" class="link-button" id="records-open">Pilot records&hellip;</button></p>
 <dialog id="records-dialog" class="wizard" aria-labelledby="records-title">
-  <h2 id="records-title">Pilot records</h2>
+  <h2 id="records-title">Manage pilot records</h2>
   <p class="muted">Every named pilot this campaign has had. Use this to correct a misclick or a mismatch: bring a pilot killed in action back, or delete a record for good.</p>
   <ul class="records-list" id="records-list">
 {{range .Pilots}}<li data-pilot="{{.ID}}" data-name="{{.Name}}"><img src="{{.PortraitURL}}" alt="" width="40" height="40"><span class="rec-name">{{.Name}}</span><span class="rec-state{{if .Fallen}} kia{{end}}">{{if .Fallen}}Killed in action{{else}}Active{{end}}</span>{{if .Fallen}}<button type="button" class="rec-revive">Revive</button>{{end}}<button type="button" class="rec-delete">Delete</button></li>
