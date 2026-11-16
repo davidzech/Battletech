@@ -414,6 +414,11 @@ dialog.wizard { width: min(46rem, calc(100vw - 2rem)); }
 .force-units { margin: 0.4rem 0 1rem; }
 /* One line for the hangar, in the same card style (and so the same width) as the pilot rows above it. */
 .force-summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.3rem 1rem; padding: 0.55rem 0.75rem; background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--accent); }
+.force-summary { align-items: center; }
+.force-summary .icons { display: flex; align-items: center; gap: 0.2rem; flex-wrap: wrap; }
+.force-summary .icons img { width: 3.2rem; height: auto; max-height: 2.4rem; object-fit: contain; }
+.force-summary .icons img.destroyed { opacity: 0.35; }
+.force-summary .icons .more { font: 700 0.8rem var(--display); letter-spacing: 0.06em; color: var(--muted); padding-left: 0.2rem; }
 .force-summary b { font: 700 1.05rem var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
 .force-summary .notes { font: 700 0.65rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
 .force-summary .total { margin-left: auto; font: 700 1.5rem var(--display); letter-spacing: 0.04em; color: var(--accent); }

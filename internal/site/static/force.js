@@ -32,6 +32,18 @@
       if (u.destroyed) destroyed++; else if (u.damaged) damaged++;
     });
     var row = el('div', 'force-summary');
+    // The first few units as icons (more would crowd the row; the rest are only counted).
+    var CAP = 8;
+    var icons = el('span', 'icons');
+    units.slice(0, CAP).forEach(function (u) {
+      var img = document.createElement('img');
+      img.src = u.icon; img.alt = u.name; img.title = u.name + (u.model ? ' ' + u.model : '');
+      img.width = 42; img.height = 36;
+      if (u.destroyed) img.className = 'destroyed';
+      icons.appendChild(img);
+    });
+    if (units.length > CAP) icons.appendChild(el('span', 'more', '+' + (units.length - CAP)));
+    row.appendChild(icons);
     row.appendChild(el('b', null, units.length + (units.length === 1 ? ' unit' : ' units')));
     var notes = [];
     if (damaged) notes.push(damaged + ' damaged');
