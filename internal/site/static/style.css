@@ -851,6 +851,7 @@ html:not(.js) .wp-toggle, html:not(.js) .wp-stamp { display: none; }
 .pilot-main .stat-boxes { margin: 0.6rem 0 0.5rem; max-width: 100%; }
 .pilot-stat.unalloc b { color: var(--accent); }
 .alloc-base { grid-column: 1 / -1; font-size: 0.75rem; color: var(--muted); }
+.alloc-base.changed { color: var(--accent); font-weight: 600; }
 .sp-earn { display: flex; flex-wrap: wrap; align-items: end; gap: 0.6rem; margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--line); }
 .sp-earn label { display: grid; gap: 0.3rem; font: 700 0.8rem var(--display); letter-spacing: 0.08em; text-transform: uppercase; }
 .sp-earn input { width: 7rem; }
