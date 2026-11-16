@@ -12,12 +12,7 @@
 <div class="briefing-text">{{.Scenario.BriefingHTML}}</div>
 </section>
 {{end}}<section class="panel">{{.Scenario.SetupHTML}}</section>
-{{if .Scenario.Forces}}<details class="fold">
-<summary>Force files</summary>
-<div class="fold-body"><p class="muted">MegaMek unit lists (.mul) for the opposing forces. Load them in <a href="https://mekbay.com" target="_blank" rel="noopener noreferrer">MekBay</a> or MegaMek.</p>
-<p class="downloads">{{range .Scenario.Forces}}<a class="button" href="/{{$.Campaign.Slug}}/{{$.Scenario.Slug}}/forces/{{.File}}" download>Download {{.Label}} (.mul)</a>{{end}}</p></div>
-</details>
-{{end}}{{if and .Play.Configured .Scenario.Forces}}<section class="mekbay" id="mekbay-op" data-campaign="{{.Campaign.Slug}}" data-scenario="{{.Scenario.Slug}}">
+{{if and .Play.Configured .Scenario.Forces}}<section class="mekbay" id="mekbay-op" data-campaign="{{.Campaign.Slug}}" data-scenario="{{.Scenario.Slug}}">
 <h2>MekBay operation</h2>
 {{if .MekBayOp}}<p class="muted">Your hangar and this scenario's OpFor, loaded together with the OpFor as the hostile force.</p>
 <p class="downloads"><a class="button" href="{{.MekBayOp}}" target="_blank" rel="noopener noreferrer">Open in MekBay</a>{{if .Play.CanModify}}<button type="button" class="button" id="mekbay-rebuild">Reset OpFor</button>{{end}}</p>
@@ -36,6 +31,11 @@
 <div class="wp-text" id="{{.ID}}-text">{{.HTML}}</div>
 </li>
 {{end}}</ul></div>
+</details>
+{{end}}{{if .Scenario.Forces}}<details class="fold">
+<summary>Force files</summary>
+<div class="fold-body"><p class="muted">MegaMek unit lists (.mul) for the opposing forces. Load them in <a href="https://mekbay.com" target="_blank" rel="noopener noreferrer">MekBay</a> or MegaMek.</p>
+<p class="downloads">{{range .Scenario.Forces}}<a class="button" href="/{{$.Campaign.Slug}}/{{$.Scenario.Slug}}/forces/{{.File}}" download>Download {{.Label}} (.mul)</a>{{end}}</p></div>
 </details>
 {{end}}<details class="fold">
 <summary>Outcome</summary>
