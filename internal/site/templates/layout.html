@@ -13,8 +13,8 @@
 <header class="top">
   <a class="brand" href="/"><span class="mark">&#9632;</span> Campaigns</a>
   <nav class="crumbs" aria-label="Breadcrumb">{{range $i, $c := .Crumbs}}{{if $i}}<span class="sep">/</span>{{end}}{{if $c.Menu}}<details class="crumb-menu"><summary>{{$c.Label}}</summary><ul>{{range $c.Menu}}<li><a href="{{.URL}}"{{if .Current}} aria-current="page"{{end}}>{{.Label}}</a></li>{{end}}</ul></details>{{else}}<a href="{{$c.URL}}">{{$c.Label}}</a>{{end}}{{end}}</nav>
-  {{if .Play.HangarURL}}<a class="chip" id="hangar-link" href="{{.Play.HangarURL}}" target="_blank" rel="noopener noreferrer">Your hangar &rsaquo;</a>
-  {{end}}<button id="seed-btn" type="button" class="chip" aria-haspopup="dialog">{{if not .Seed}}Set seed{{else if not .Play.Configured}}Finish setup{{else}}Seed <code>{{.SeedHint}}</code>{{end}}</button>
+  {{if .Run.Started}}<a class="chip" id="hangar-link" href="{{.Run.HangarURL}}" target="_blank" rel="noopener noreferrer">Your hangar &rsaquo;</a>
+  {{end}}<button id="seed-btn" type="button" class="chip" aria-haspopup="dialog">{{if not .Seed}}Set seed{{else if not .Play.Configured}}Finish setup{{else}}<span class="company">{{.Play.CompanyName}}</span> <code>{{.SeedHint}}</code>{{end}}</button>
 </header>
 <main>
 {{template "content" .}}
@@ -32,30 +32,22 @@
     <p id="seed-error" class="form-error" role="alert"></p>
     <div class="form-actions">
       <button type="submit" class="button">Use this seed</button>
-      {{if .Seed}}<button type="button" id="open-setup">Campaign details</button>{{end}}
+      {{if .Seed}}<button type="button" id="open-setup">Company details</button>{{end}}
       <button type="button" id="seed-cancel">Not now</button>
     </div>
   </form>
   <form id="setup-form" autocomplete="off" novalidate hidden>
-    <h2>Set up your campaign</h2>
-    <p>Your campaign is tracked by a MekBay hangar. Paste its link, and tell us how many humans are playing.</p>
-    <label for="hangar-input">MekBay hangar link</label>
-    <input id="hangar-input" class="wide" name="hangar" type="url" value="{{.Play.HangarURL}}" placeholder="https://mekbay.com/?instance=…" spellcheck="false" required>
-    <fieldset class="players">
-      <legend>Human players</legend>
-      {{$n := .Play.Players}}
-      <label class="pill"><input type="radio" name="players" value="1"{{if or (eq $n 0) (eq $n 1)}} checked{{end}}><span>1</span></label>
-      <label class="pill"><input type="radio" name="players" value="2"{{if eq $n 2}} checked{{end}}><span>2</span></label>
-      <label class="pill"><input type="radio" name="players" value="3"{{if eq $n 3}} checked{{end}}><span>3</span></label>
-      <label class="pill"><input type="radio" name="players" value="4"{{if eq $n 4}} checked{{end}}><span>4</span></label>
-    </fieldset>
+    <h2>Name your company</h2>
+    <p>Every company has a name in the lore, like Wolf&rsquo;s Dragoons or the Kell Hounds. Yours is tracked under this seed, across every campaign it runs.</p>
+    <label for="company-input">Company name</label>
+    <input id="company-input" class="wide" name="company" value="{{.Play.CompanyName}}" maxlength="40" placeholder="Wolf&rsquo;s Dragoons" autocomplete="off" spellcheck="false" required>
     <label for="owner-input">MekBay user ID <span class="optional">(optional)</span></label>
     <input id="owner-input" class="wide" name="owner" type="password" placeholder="{{if .Play.CanModify}}Saved. Leave blank to keep it{{else}}Leave blank for read-only{{end}}" spellcheck="false" autocomplete="off">
-    <p class="hint">{{if .Play.CanModify}}<strong>Modify mode is on.</strong> {{end}}Giving the ID of the MekBay account that owns the hangar lets this site change the hangar for you (repairs and the like). It works like a password for that account's MekBay forces, so only enter it if you trust this site. Without it the site can only read your hangar.</p>
+    <p class="hint">{{if .Play.CanModify}}<strong>Modify mode is on.</strong> {{end}}Giving the ID of the MekBay account that owns the hangar lets this site change the hangar for you (repairs and the like). It works like a password for that account's MekBay forces, so only enter it if you trust this site. Without it the site can only read your hangars.</p>
     {{if .Play.CanModify}}<label class="check"><input type="checkbox" name="clear_owner" value="1"> Turn modify mode off and forget the ID</label>{{end}}
     <p id="setup-error" class="form-error" role="alert"></p>
     <div class="form-actions">
-      <button type="submit" class="button">Save campaign</button>
+      <button type="submit" class="button">Save company</button>
       <button type="button" id="setup-back">Back</button>
       <button type="button" id="setup-cancel">Not now</button>
     </div>

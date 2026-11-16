@@ -72,10 +72,23 @@ func TestParseHangar(t *testing.T) {
 	}
 }
 
-func TestParsePlayers(t *testing.T) {
-	for in, ok := range map[string]bool{"1": true, "4": true, " 3 ": true, "0": false, "5": false, "-1": false, "x": false, "": false} {
-		if _, err := parsePlayers(in); (err == nil) != ok {
-			t.Errorf("parsePlayers(%q) ok=%v, want %v", in, err == nil, ok)
+func TestParseCompanyName(t *testing.T) {
+	for in, want := range map[string]string{
+		"Wolf's Dragoons":         "Wolf's Dragoons",
+		"  Kell   Hounds ":        "Kell Hounds",
+		"Wolf\nDragoons":          "Wolf Dragoons",
+		"Wolf’s Dragoons":         "Wolf’s Dragoons",
+		"1st Somerset Strikers":   "1st Somerset Strikers",
+		"Gray Death Legion (GDL)": "Gray Death Legion (GDL)",
+		"Écureuils d'Or":          "Écureuils d'Or",
+	} {
+		if got, err := parseCompanyName(in); err != nil || got != want {
+			t.Errorf("parseCompanyName(%q) = %q, %v; want %q", in, got, err, want)
+		}
+	}
+	for _, bad := range []string{"", "   ", "-Dragoons", "<script>alert(1)</script>", "Wolf\x00Dragoons", strings.Repeat("a", 41), "Dragoons/../"} {
+		if _, err := parseCompanyName(bad); err == nil {
+			t.Errorf("parseCompanyName(%q) should fail", bad)
 		}
 	}
 }
@@ -180,53 +193,115 @@ func TestSeedAndCampaignFlow(t *testing.T) {
 		t.Fatal("no hangar link before setup")
 	}
 
-	// Setup needs a seed cookie, a valid hangar and 1-4 players.
-	if r := post(t, srv, "/api/campaign", url.Values{"hangar": {goodHangar}, "players": {"2"}}, nil, ""); r.StatusCode != http.StatusBadRequest {
-		t.Fatalf("setup without a seed: got %d", r.StatusCode)
+	// Naming the company needs a seed cookie and a sensible name.
+	if r := post(t, srv, "/api/company", url.Values{"company": {"Wolf's Dragoons"}}, nil, ""); r.StatusCode != http.StatusBadRequest {
+		t.Fatalf("company without a seed: got %d", r.StatusCode)
 	}
-	if r := post(t, srv, "/api/campaign", url.Values{"hangar": {"https://evil.example/?instance=" + goodInstance}, "players": {"2"}}, cookie, ""); r.StatusCode != http.StatusBadRequest {
-		t.Fatalf("bad hangar: got %d", r.StatusCode)
+	for _, bad := range []string{"", "   ", "<b>", strings.Repeat("a", 41)} {
+		if r := post(t, srv, "/api/company", url.Values{"company": {bad}}, cookie, ""); r.StatusCode != http.StatusBadRequest {
+			t.Fatalf("bad company %q: got %d", bad, r.StatusCode)
+		}
 	}
-	if r := post(t, srv, "/api/campaign", url.Values{"hangar": {goodHangar}, "players": {"5"}}, cookie, ""); r.StatusCode != http.StatusBadRequest {
-		t.Fatalf("bad player count: got %d", r.StatusCode)
-	}
-	if pt, _, _ := store.Playthrough(ctx, id); pt.Configured() {
-		t.Fatal("rejected setups must not be saved")
-	}
-
-	// Cross-origin posts are refused.
-	if r := post(t, srv, "/api/campaign", url.Values{"hangar": {goodHangar}, "players": {"2"}}, cookie, "https://evil.example"); r.StatusCode != http.StatusForbidden {
+	if r := post(t, srv, "/api/company", url.Values{"company": {"Wolf's Dragoons"}}, cookie, "https://evil.example"); r.StatusCode != http.StatusForbidden {
 		t.Fatalf("cross-origin: got %d", r.StatusCode)
 	}
-
-	// A valid setup is saved.
-	if r := post(t, srv, "/api/campaign", url.Values{"hangar": {goodHangar}, "players": {"3"}}, cookie, srv.URL); r.StatusCode != http.StatusNoContent {
-		t.Fatalf("good setup: got %d", r.StatusCode)
+	if pt, _, _ := store.Playthrough(ctx, id); pt.Configured() {
+		t.Fatal("rejected requests must not name the company")
 	}
-	pt, _, _ := store.Playthrough(ctx, id)
-	if !pt.Configured() || pt.Players != 3 || pt.HangarInstance != goodInstance || pt.HangarSel != goodSel || pt.HangarURL != goodHangar {
-		t.Fatalf("setup not saved correctly: %+v", pt)
+	// A campaign can't be started before the company has a name.
+	camp := url.Values{"campaign": {"refusalwar"}, "hangar": {goodHangar}}
+	if r := post(t, srv, "/api/campaign/start", camp, cookie, srv.URL); r.StatusCode != http.StatusBadRequest {
+		t.Fatalf("start before naming the company: got %d", r.StatusCode)
 	}
 
-	// Entering the same seed again (say, on another device) finds the finished setup.
+	// A good name is saved, tidied.
+	if r := post(t, srv, "/api/company", url.Values{"company": {"  Wolf's   Dragoons "}}, cookie, srv.URL); r.StatusCode != http.StatusNoContent {
+		t.Fatalf("good company: got %d", r.StatusCode)
+	}
+	if pt, _, _ := store.Playthrough(ctx, id); !pt.Configured() || pt.CompanyName != "Wolf's Dragoons" {
+		t.Fatalf("company not saved correctly: %+v", pt)
+	}
+
+	// Entering the same seed again (say, on another device) finds the named company.
 	res = post(t, srv, "/api/seed", url.Values{"seed": {"wolfpack2026"}}, nil, "")
 	var out strings.Builder
 	buf := make([]byte, 256)
 	n, _ := res.Body.Read(buf)
 	out.Write(buf[:n])
 	if !strings.Contains(out.String(), `"configured":true`) {
-		t.Fatalf("existing campaign should report configured: %q", out.String())
+		t.Fatalf("existing company should report configured: %q", out.String())
 	}
 	page := body(t, srv, "/", cookie)
-	if !strings.Contains(page, "Seed <code>wolf…</code>") {
-		t.Fatal("configured page should show the seed chip")
+	if !strings.Contains(page, `<span class="company">Wolf&#39;s Dragoons</span> <code>wolf…</code>`) {
+		t.Fatalf("configured page should show the company and seed chip: %.1500s", page)
 	}
-	// The header links straight to the player's MekBay hangar.
-	if !strings.Contains(page, `id="hangar-link" href="`+strings.ReplaceAll(goodHangar, "&", "&amp;")+`" target="_blank" rel="noopener noreferrer"`) {
-		t.Fatalf("configured page should link to the hangar, got: %s", page[:min(len(page), 1800)])
+	if strings.Contains(page, `id="hangar-link"`) {
+		t.Fatal("no hangar link before a campaign is started")
 	}
 	if strings.Contains(page, `id="theme"`) {
 		t.Fatal("the theme toggle is gone")
+	}
+
+	// The campaign page offers to start it.
+	if c := body(t, srv, "/refusalwar/", cookie); !strings.Contains(c, `id="run-open"`) || !strings.Contains(c, "Start this campaign") || strings.Contains(c, "Campaign started") {
+		t.Fatalf("unstarted campaign page: %.1500s", c)
+	}
+
+	// Starting needs a seed, the same origin, a known campaign and a valid hangar link.
+	for name, c := range map[string]struct {
+		form   url.Values
+		cookie *http.Cookie
+		origin string
+		status int
+	}{
+		"no seed":          {camp, nil, srv.URL, http.StatusBadRequest},
+		"cross-origin":     {camp, cookie, "https://evil.example", http.StatusForbidden},
+		"unknown campaign": {url.Values{"campaign": {"nope"}, "hangar": {goodHangar}}, cookie, srv.URL, http.StatusNotFound},
+		"bad hangar":       {url.Values{"campaign": {"refusalwar"}, "hangar": {"https://evil.example/?instance=" + goodInstance}}, cookie, srv.URL, http.StatusBadRequest},
+	} {
+		if r := post(t, srv, "/api/campaign/start", c.form, c.cookie, c.origin); r.StatusCode != c.status {
+			t.Errorf("start, %s: got %d, want %d", name, r.StatusCode, c.status)
+		}
+	}
+	if _, ok, _ := store.Run(ctx, id, "refusalwar"); ok {
+		t.Fatal("rejected starts must not start the campaign")
+	}
+
+	// A valid start records the campaign's own hangar.
+	if r := post(t, srv, "/api/campaign/start", camp, cookie, srv.URL); r.StatusCode != http.StatusNoContent {
+		t.Fatalf("good start: got %d", r.StatusCode)
+	}
+	run, ok, _ := store.Run(ctx, id, "refusalwar")
+	if !ok || !run.Started() || run.HangarInstance != goodInstance || run.HangarSel != goodSel || run.HangarURL != goodHangar || run.Campaign != "refusalwar" {
+		t.Fatalf("campaign not started correctly: %+v (started=%v)", run, ok)
+	}
+	if _, ok, _ := store.Run(ctx, id, "another-campaign"); ok {
+		t.Fatal("starting one campaign must not start another")
+	}
+
+	// That campaign's pages link straight to its hangar; other pages don't.
+	link := `id="hangar-link" href="` + strings.ReplaceAll(goodHangar, "&", "&amp;") + `" target="_blank" rel="noopener noreferrer"`
+	for _, path := range []string{"/refusalwar/", "/refusalwar/scenario_000/"} {
+		if !strings.Contains(body(t, srv, path, cookie), link) {
+			t.Errorf("%s should link to the hangar", path)
+		}
+	}
+	if strings.Contains(body(t, srv, "/", cookie), `id="hangar-link"`) {
+		t.Error("the home page isn't in a campaign, so it has no hangar link")
+	}
+	if c := body(t, srv, "/refusalwar/", cookie); !strings.Contains(c, "Campaign started") || !strings.Contains(c, "Change hangar link") {
+		t.Errorf("started campaign page: %.1500s", c)
+	}
+
+	// Starting again changes the hangar link and keeps a single run.
+	other := "https://mekbay.com/?instance=01a12f98-8a21-7d12-b43d-52bb70872376"
+	if r := post(t, srv, "/api/campaign/start", url.Values{"campaign": {"refusalwar"}, "hangar": {other}}, cookie, srv.URL); r.StatusCode != http.StatusNoContent {
+		t.Fatalf("change hangar: got %d", r.StatusCode)
+	}
+	var runs int
+	_ = store.db.QueryRow(`SELECT COUNT(*) FROM campaign_runs`).Scan(&runs)
+	if run, _, _ := store.Run(ctx, id, "refusalwar"); runs != 1 || run.HangarInstance != "01a12f98-8a21-7d12-b43d-52bb70872376" || run.HangarSel != "" {
+		t.Fatalf("changing the hangar should update the one run: %d runs, %+v", runs, run)
 	}
 }
 
@@ -253,11 +328,11 @@ func TestModifyModeIsOptionalAndPrivate(t *testing.T) {
 	cookie := res.Cookies()[0]
 	id := playthroughID("wolfpack2026")
 	setup := func(extra url.Values) int {
-		v := url.Values{"hangar": {goodHangar}, "players": {"2"}}
+		v := url.Values{"company": {"Wolf's Dragoons"}}
 		for k, vs := range extra {
 			v[k] = vs
 		}
-		return post(t, srv, "/api/campaign", v, cookie, srv.URL).StatusCode
+		return post(t, srv, "/api/company", v, cookie, srv.URL).StatusCode
 	}
 
 	// Without a UID the campaign is read-only.

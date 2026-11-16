@@ -12,7 +12,7 @@
 <div class="briefing-text">{{.Scenario.BriefingHTML}}</div>
 </section>
 {{end}}<section class="panel">{{.Scenario.SetupHTML}}</section>
-{{if and .Play.Configured .Scenario.Forces}}<section class="mekbay" id="mekbay-op">
+{{if and .Run.Started .Scenario.Forces}}<section class="mekbay" id="mekbay-op">
 <h2>Deploy your force</h2>
 <p class="muted">Choose which mechs from your hangar fly this mission{{if .Scenario.BVLimit}}, up to {{.Scenario.BVLimit}} BV{{end}}. The site sorts your MekBay hangar into <em>Deployed</em> and <em>Hangar</em> groups and sets up the OpFor against them.</p>
 <p class="downloads"><button type="button" class="button" id="deploy-open">Deploy force&hellip;</button>{{if .MekBayOp}}<a class="button" href="{{.MekBayOp}}" target="_blank" rel="noopener noreferrer">Open in MekBay</a>{{end}}</p>
@@ -22,12 +22,16 @@
 <p class="deploy-meter" id="deploy-meter"></p>
 <p class="muted" id="deploy-status">Loading your hangar&hellip;</p>
 <ul class="deploy-list" id="deploy-list"></ul>
-{{if not .Play.CanModify}}<p class="muted">The site can only read your hangar. Add your MekBay user ID under Campaign details to let it deploy for you.</p>
+{{if not .Play.CanModify}}<p class="muted">The site can only read your hangar. Add your MekBay user ID under Company details to let it deploy for you.</p>
 {{end}}<label class="check" id="deploy-reset-row" hidden><input type="checkbox" id="deploy-reset"> Reset the OpFor (wipes any damage recorded on it)</label>
 <p id="deploy-error" class="form-error" role="alert"></p>
 <div class="form-actions"><button type="button" class="button alert" id="deploy-go" disabled>Deploy</button><button type="button" id="deploy-cancel">Cancel</button></div>
 </dialog>
 <script src="/static/mekbay.js" defer></script>
+{{else if and .Play.Configured .Scenario.Forces}}<section class="mekbay">
+<h2>Deploy your force</h2>
+<p class="muted"><a href="/{{.Campaign.Slug}}/">Start this campaign</a> to deploy a force from your MekBay hangar.</p>
+</section>
 {{end}}{{if .Scenario.Waypoints}}<details class="fold waypoints">
 <summary>Waypoints</summary>
 <div class="fold-body"><p class="muted">Reveal a waypoint only when the game calls for it. Each stays redacted until you reveal it.</p>

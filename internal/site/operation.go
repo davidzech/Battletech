@@ -122,9 +122,10 @@ func deployProblem(h HangarForce, ids []string, bvLimit int) string {
 	return ""
 }
 
-// mekbayRequest is what both MekBay endpoints need first: the seed's playthrough with a registered hangar, and the
-// campaign and scenario named by the request. It writes the error response itself and reports ok=false.
-func (s *Server) mekbayRequest(w http.ResponseWriter, r *http.Request) (pt Playthrough, c *Campaign, sc *Scenario, ok bool) {
+// mekbayRequest is what both MekBay endpoints need first: the seed's playthrough, the campaign and scenario named by
+// the request, and the playthrough's run of that campaign (which holds its hangar). It writes the error response
+// itself and reports ok=false.
+func (s *Server) mekbayRequest(w http.ResponseWriter, r *http.Request) (pt Playthrough, run CampaignRun, c *Campaign, sc *Scenario, ok bool) {
 	seed := currentSeed(r)
 	if seed == "" {
 		http.Error(w, "Choose a seed first.", http.StatusBadRequest)
@@ -146,25 +147,34 @@ func (s *Server) mekbayRequest(w http.ResponseWriter, r *http.Request) (pt Playt
 		return
 	}
 	if !found || !pt.Configured() {
-		http.Error(w, "Register your MekBay hangar first.", http.StatusBadRequest)
+		http.Error(w, "Name your company first.", http.StatusBadRequest)
 		return
 	}
-	return pt, c, sc, true
+	run, started, err := s.store.Run(r.Context(), pt.ID, c.Slug)
+	if err != nil {
+		http.Error(w, "could not load campaign", http.StatusInternalServerError)
+		return
+	}
+	if !started {
+		http.Error(w, "Start this campaign first.", http.StatusBadRequest)
+		return
+	}
+	return pt, run, c, sc, true
 }
 
 // hangarJSON lists the player's hangar for the deploy popup, with the scenario's BV limit.
 func (s *Server) hangarJSON(w http.ResponseWriter, r *http.Request) {
-	pt, _, sc, ok := s.mekbayRequest(w, r)
+	pt, run, c, sc, ok := s.mekbayRequest(w, r)
 	if !ok {
 		return
 	}
-	h, err := s.mekbay.ReadHangar(r.Context(), pt.HangarInstance)
+	h, err := s.mekbay.ReadHangar(r.Context(), run.HangarInstance)
 	if err != nil {
 		log.Printf("read hangar for %s: %v", sc.ID, err)
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
-	op, hasOp, err := s.store.MekBayOperation(r.Context(), playthroughID(currentSeed(r)), sc.ID)
+	op, hasOp, err := s.store.MekBayOperation(r.Context(), pt.ID, c.Slug, sc.ID)
 	if err != nil {
 		http.Error(w, "could not load operation", http.StatusInternalServerError)
 		return
@@ -191,7 +201,7 @@ func (s *Server) deploy(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
-	pt, c, sc, ok := s.mekbayRequest(w, r)
+	pt, run, c, sc, ok := s.mekbayRequest(w, r)
 	if !ok {
 		return
 	}
@@ -200,7 +210,7 @@ func (s *Server) deploy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ids := r.PostForm["units"]
-	h, err := s.mekbay.ReadHangar(r.Context(), pt.HangarInstance)
+	h, err := s.mekbay.ReadHangar(r.Context(), run.HangarInstance)
 	if err != nil {
 		log.Printf("read hangar for %s: %v", sc.ID, err)
 		http.Error(w, err.Error(), http.StatusBadGateway)
@@ -210,8 +220,7 @@ func (s *Server) deploy(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, msg, http.StatusBadRequest)
 		return
 	}
-	id := playthroughID(currentSeed(r))
-	existing, has, err := s.store.MekBayOperation(r.Context(), id, sc.ID)
+	existing, has, err := s.store.MekBayOperation(r.Context(), pt.ID, c.Slug, sc.ID)
 	if err != nil {
 		http.Error(w, "could not load operation", http.StatusInternalServerError)
 		return
@@ -224,7 +233,7 @@ func (s *Server) deploy(w http.ResponseWriter, r *http.Request) {
 	}
 	res, err := s.mekbay.SyncOperation(r.Context(), OperationRequest{
 		OwnerUID:         pt.OwnerUID,
-		CampaignInstance: pt.HangarInstance,
+		CampaignInstance: run.HangarInstance,
 		DeployedUnitIDs:  ids,
 		OpFor:            draft,
 		OpForInstance:    existing.OpForInstance,
@@ -238,7 +247,7 @@ func (s *Server) deploy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	op := MekBayOperation(res)
-	if err := s.store.SaveMekBayOperation(r.Context(), id, sc.ID, op); err != nil {
+	if err := s.store.SaveMekBayOperation(r.Context(), pt.ID, c.Slug, sc.ID, op); err != nil {
 		http.Error(w, "deployed in MekBay but could not remember it", http.StatusInternalServerError)
 		return
 	}

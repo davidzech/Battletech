@@ -362,21 +362,6 @@ dialog button:not(.button) {
 }
 dialog button:not(.button):hover { border-color: var(--accent); color: var(--accent); }
 
-.players { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
-.players legend { width: 100%; }
-.pill { margin: 0 !important; cursor: pointer; }
-.pill input { position: absolute; opacity: 0; pointer-events: none; }
-.pill span {
-  display: inline-block;
-  min-width: 2.6rem;
-  padding: 0.45rem 0.9rem;
-  text-align: center;
-  font: 700 1rem var(--display);
-  border: 1px solid var(--line);
-}
-.pill input:checked + span { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
-.pill input:focus-visible + span { outline: 2px solid var(--text); outline-offset: 2px; }
-
 /* Deploy popup: the player's hangar as a pick list with a BV meter. */
 dialog.deploy { width: min(54rem, calc(100vw - 2rem)); }
 .deploy-meter { margin: 0.5rem 0 0; font: 700 1.1rem var(--display); letter-spacing: 0.06em; text-transform: uppercase; }

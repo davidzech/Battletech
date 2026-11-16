@@ -354,7 +354,7 @@ func TestDeployFlow(t *testing.T) {
 		t.Fatal("the deploy section must be hidden without a registered hangar")
 	}
 
-	// No seed, then a seed without a hangar: both refused.
+	// No seed, then a seed with no company, then a company whose campaign isn't started: all refused.
 	if r := get(t, srv, hangar, nil); r.StatusCode != http.StatusBadRequest {
 		t.Fatalf("hangar without a seed: %d", r.StatusCode)
 	}
@@ -362,21 +362,27 @@ func TestDeployFlow(t *testing.T) {
 	cookie := res.Cookies()[0]
 	id := playthroughID("wolfpack2026")
 	if r := get(t, srv, hangar, cookie); r.StatusCode != http.StatusBadRequest {
-		t.Fatalf("hangar before registering one: %d", r.StatusCode)
+		t.Fatalf("hangar before naming the company: %d", r.StatusCode)
+	}
+	if r := post(t, srv, "/api/company", url.Values{"company": {"Wolf's Dragoons"}}, cookie, srv.URL); r.StatusCode != http.StatusNoContent {
+		t.Fatalf("company: %d", r.StatusCode)
+	}
+	if r := get(t, srv, hangar, cookie); r.StatusCode != http.StatusBadRequest {
+		t.Fatalf("hangar before starting the campaign: %d", r.StatusCode)
 	}
 	if r := post(t, srv, "/api/mekbay/deploy", deploy(mine), cookie, srv.URL); r.StatusCode != http.StatusBadRequest {
-		t.Fatalf("deploy before registering a hangar: %d", r.StatusCode)
+		t.Fatalf("deploy before starting the campaign: %d", r.StatusCode)
 	}
-	if strings.Contains(body(t, srv, page, cookie), `id="mekbay-op"`) {
-		t.Fatal("the deploy section must stay hidden before the hangar is registered")
+	if p := body(t, srv, page, cookie); strings.Contains(p, `id="mekbay-op"`) || !strings.Contains(p, "Start this campaign") {
+		t.Fatalf("an unstarted campaign should point to its start button, not offer deploying: %.900s", p)
 	}
 
-	// Hangar but no owner UID: the player can look and pick, but the site can't deploy for them.
-	if r := post(t, srv, "/api/campaign", url.Values{"hangar": {goodHangar}, "players": {"2"}}, cookie, srv.URL); r.StatusCode != http.StatusNoContent {
-		t.Fatalf("setup: %d", r.StatusCode)
+	// A started campaign without an owner UID: the player can look and pick, but the site can't deploy for them.
+	if r := post(t, srv, "/api/campaign/start", url.Values{"campaign": {"refusalwar"}, "hangar": {goodHangar}}, cookie, srv.URL); r.StatusCode != http.StatusNoContent {
+		t.Fatalf("start: %d", r.StatusCode)
 	}
 	p := body(t, srv, page, cookie)
-	if !strings.Contains(p, `id="deploy-open"`) || !strings.Contains(p, "Add your MekBay user ID under Campaign details") || !strings.Contains(p, "up to 10000 BV") {
+	if !strings.Contains(p, `id="deploy-open"`) || !strings.Contains(p, "Add your MekBay user ID under Company details") || !strings.Contains(p, "up to 10000 BV") {
 		t.Fatalf("read-only page: %.900s", p)
 	}
 	r := get(t, srv, hangar, cookie)
@@ -398,10 +404,10 @@ func TestDeployFlow(t *testing.T) {
 	}
 
 	// Modify mode: the page says so, and the server checks the choice before touching MekBay.
-	if r := post(t, srv, "/api/campaign", url.Values{"hangar": {goodHangar}, "players": {"2"}, "owner": {ownerUID}}, cookie, srv.URL); r.StatusCode != http.StatusNoContent {
-		t.Fatalf("setup with owner: %d", r.StatusCode)
+	if r := post(t, srv, "/api/company", url.Values{"company": {"Wolf's Dragoons"}, "owner": {ownerUID}}, cookie, srv.URL); r.StatusCode != http.StatusNoContent {
+		t.Fatalf("company with owner: %d", r.StatusCode)
 	}
-	if p := body(t, srv, page, cookie); strings.Contains(p, "Add your MekBay user ID under Campaign details") || strings.Contains(p, ownerUID) {
+	if p := body(t, srv, page, cookie); strings.Contains(p, "Add your MekBay user ID under Company details") || strings.Contains(p, ownerUID) {
 		t.Fatal("modify mode should drop the read-only note, and never show the UID")
 	}
 	for name, c := range map[string]struct {
@@ -445,7 +451,7 @@ func TestDeployFlow(t *testing.T) {
 	if len(req.OpFor.Groups) != 2 || req.OpFor.Groups[0].Name != "OpFor 1" || req.OpFor.Groups[0].Units[0].BV <= 0 {
 		t.Errorf("opfor groups = %+v", req.OpFor.Groups)
 	}
-	if op, ok, _ := store.MekBayOperation(ctx, id, "scenario_001"); !ok || op.OperationID == "" || op.OpForInstance == "" {
+	if op, ok, _ := store.MekBayOperation(ctx, id, "refusalwar", "scenario_001"); !ok || op.OperationID == "" || op.OpForInstance == "" {
 		t.Fatalf("operation not remembered: %+v", op)
 	}
 	if p := body(t, srv, page, cookie); !strings.Contains(p, `href="https://mekbay.com/?operation=op-`+goodInstance[:8]+`"`) {

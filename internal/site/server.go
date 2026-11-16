@@ -52,6 +52,7 @@ type Page struct {
 	Seed     string      // the visitor's seed ("" if none chosen yet)
 	SeedHint string      // short form of Seed for the header
 	Play     Playthrough // the visitor's playthrough (zero value if no seed)
+	Run      CampaignRun // the playthrough's run of this page's campaign (zero value until it is started)
 	MekBayOp string      // link to the scenario's MekBay operation, once created ("" until then)
 	Commit   string      // git commit the server was built from, short form ("dev" if unknown)
 }
@@ -87,7 +88,8 @@ func NewHandler(contentRoot string, store *Store, opts ...Option) http.Handler {
 		http.ServeFileFS(w, r, assets, path.Join("static", name))
 	})
 	mux.HandleFunc("POST /api/seed", s.setSeed)
-	mux.HandleFunc("POST /api/campaign", s.setCampaign)
+	mux.HandleFunc("POST /api/company", s.setCompany)
+	mux.HandleFunc("POST /api/campaign/start", s.startCampaign)
 	mux.HandleFunc("GET /api/mekbay/hangar", s.hangarJSON)
 	mux.HandleFunc("POST /api/mekbay/deploy", s.deploy)
 	mux.HandleFunc("GET /{$}", s.home)
@@ -110,6 +112,13 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name
 			log.Printf("load playthrough: %v", err)
 		} else {
 			p.Play = pt
+			if p.Campaign != nil {
+				if run, _, err := s.store.Run(r.Context(), id, p.Campaign.Slug); err != nil {
+					log.Printf("load campaign run: %v", err)
+				} else {
+					p.Run = run
+				}
+			}
 		}
 	}
 	p.Commit = shortCommit(buildCommit)
@@ -186,7 +195,7 @@ func (s *Server) scenario(w http.ResponseWriter, r *http.Request) {
 	}
 	var opLink string
 	if seed := currentSeed(r); seed != "" && len(sc.Forces) > 0 {
-		if op, ok, err := s.store.MekBayOperation(r.Context(), playthroughID(seed), sc.ID); err != nil {
+		if op, ok, err := s.store.MekBayOperation(r.Context(), playthroughID(seed), c.Slug, sc.ID); err != nil {
 			log.Printf("load mekbay operation: %v", err)
 		} else if ok {
 			opLink = OperationURL(op.OperationID)

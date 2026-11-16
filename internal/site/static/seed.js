@@ -1,5 +1,6 @@
 // Seed popup. Step 1: choose or randomly generate a seed (the server sets the cookie).
-// Step 2 (new campaigns only): paste the MekBay hangar link and pick the number of human players.
+// Step 2 (new companies only): name the company and, optionally, give the MekBay user ID that owns its hangars
+// (modify mode). Each campaign's hangar link is asked for on the campaign page, when the campaign is started.
 (function () {
   var dialog = document.getElementById('seed-dialog');
   if (!dialog || typeof dialog.showModal !== 'function') return;
@@ -8,7 +9,7 @@
   var setupForm = document.getElementById('setup-form');
   var input = document.getElementById('seed-input');
   var seedError = document.getElementById('seed-error');
-  var hangarInput = document.getElementById('hangar-input');
+  var companyInput = document.getElementById('company-input');
   var ownerInput = document.getElementById('owner-input');
   var setupError = document.getElementById('setup-error');
 
@@ -66,26 +67,12 @@
     if (clean !== input.value) input.value = clean;
   }
 
-  // Mirrors the server's check (the server is still the authority).
-  function hangarProblem(raw) {
-    var u;
-    try { u = new URL(raw.trim()); } catch (e) { return 'Paste a MekBay hangar link, like https://mekbay.com/?instance=…'; }
-    var host = u.hostname.toLowerCase();
-    if (u.protocol !== 'https:' || (host !== 'mekbay.com' && host !== 'www.mekbay.com')) {
-      return 'Paste a MekBay hangar link, like https://mekbay.com/?instance=…';
-    }
-    if (!UUID.test((u.searchParams.get('instance') || '').toLowerCase())) return 'That MekBay link has no valid instance id (?instance=…).';
-    var sel = (u.searchParams.get('sel') || '').toLowerCase();
-    if (sel && !UUID.test(sel)) return 'That MekBay link has an invalid selection id (&sel=…).';
-    return '';
-  }
-
   function showStep(step) {
     seedForm.hidden = step !== 'seed';
     setupForm.hidden = step !== 'setup';
     seedError.textContent = '';
     setupError.textContent = '';
-    if (step === 'seed') { input.focus(); input.select(); } else { hangarInput.focus(); }
+    if (step === 'seed') { input.focus(); input.select(); } else { companyInput.focus(); }
   }
 
   function openDialog(step) {
@@ -108,7 +95,7 @@
   }
 
   input.addEventListener('input', function () { sanitize(); seedError.textContent = ''; });
-  hangarInput.addEventListener('input', function () { setupError.textContent = ''; });
+  companyInput.addEventListener('input', function () { setupError.textContent = ''; });
   ownerInput.addEventListener('input', function () { setupError.textContent = ''; });
 
   document.getElementById('seed-random').addEventListener('click', function () {
@@ -149,17 +136,15 @@
 
   setupForm.addEventListener('submit', function (e) {
     e.preventDefault();
-    var problem = hangarProblem(hangarInput.value);
-    if (problem) { setupError.textContent = problem; return; }
-    var players = setupForm.querySelector('input[name="players"]:checked');
+    var company = companyInput.value.trim();
+    if (!company) { setupError.textContent = 'Name your company.'; return; }
     var owner = ownerInput.value.trim().toLowerCase();
-    if (owner && !UUID.test(owner)) { setupError.textContent = 'That doesn\'t look like a MekBay user ID (it should be a UUID).'; return; }
+    if (owner && !UUID.test(owner)) { setupError.textContent = 'That doesn't look like a MekBay user ID (it should be a UUID).'; return; }
     var clear = setupForm.querySelector('input[name="clear_owner"]:checked');
-    post('/api/campaign', 'hangar=' + encodeURIComponent(hangarInput.value.trim()) + '&players=' + encodeURIComponent(players ? players.value : '') +
-      '&owner=' + encodeURIComponent(owner) + (clear ? '&clear_owner=1' : ''))
+    post('/api/company', 'company=' + encodeURIComponent(company) + '&owner=' + encodeURIComponent(owner) + (clear ? '&clear_owner=1' : ''))
       .then(function (res) {
         if (res.ok) { location.reload(); return; }
-        return res.text().then(function (t) { setupError.textContent = t.trim() || 'Could not save the campaign.'; });
+        return res.text().then(function (t) { setupError.textContent = t.trim() || 'Could not save the company.'; });
       }, function () { setupError.textContent = 'Could not reach the server.'; });
   });
 

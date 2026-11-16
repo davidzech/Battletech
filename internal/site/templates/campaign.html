@@ -1,7 +1,30 @@
 {{define "content"}}<p class="kicker">Campaign</p>
 <h1 class="bt-title">{{.Campaign.Label}}</h1>
 <section class="panel">{{if .Campaign.IntroHTML}}{{.Campaign.IntroHTML}}{{else}}<p class="muted">Campaign briefing coming soon.</p>{{end}}</section>
-<h2>Scenarios</h2>
+{{if not .Seed}}<p class="muted">Choose a seed (top right) to track your company through this campaign.</p>
+{{else if not .Play.Configured}}<p class="muted">Name your company (top right) to start this campaign.</p>
+{{else}}<section class="mekbay" id="campaign-run" data-campaign="{{.Campaign.Slug}}">
+<h2>{{if .Run.Started}}Campaign started{{else}}Start this campaign{{end}}</h2>
+{{if .Run.Started}}<p class="muted">{{.Play.CompanyName}} is running this campaign. Its MekBay hangar holds your mechs, and scenarios deploy from it.</p>
+<p class="downloads"><a class="button" href="{{.Run.HangarURL}}" target="_blank" rel="noopener noreferrer">Open hangar</a><button type="button" class="button" id="run-open">Change hangar link</button></p>
+{{else}}<p class="muted">Each campaign has its own MekBay hangar: the force {{.Play.CompanyName}} fields in it. Paste the link to start.</p>
+<p class="downloads"><button type="button" class="button" id="run-open">Start campaign&hellip;</button></p>
+{{end}}</section>
+<dialog id="run-dialog" aria-labelledby="run-title">
+  <form id="run-form" autocomplete="off" novalidate>
+    <h2 id="run-title">{{if .Run.Started}}Change hangar link{{else}}Start {{.Campaign.Label}}{{end}}</h2>
+    <p>Paste the link to this campaign&rsquo;s MekBay hangar, the force holding all of your mechs.</p>
+    <label for="run-hangar">MekBay hangar link</label>
+    <input id="run-hangar" class="wide" name="hangar" type="url" value="{{.Run.HangarURL}}" placeholder="https://mekbay.com/?instance=&hellip;" spellcheck="false" required>
+    <p id="run-error" class="form-error" role="alert"></p>
+    <div class="form-actions">
+      <button type="submit" class="button">{{if .Run.Started}}Save link{{else}}Start campaign{{end}}</button>
+      <button type="button" id="run-cancel">Cancel</button>
+    </div>
+  </form>
+</dialog>
+<script src="/static/campaign.js" defer></script>
+{{end}}<h2>Scenarios</h2>
 <ul class="cards">
 {{range .Cards}}<li><a class="card" href="{{.URL}}"><span class="num">{{.Num}}</span><span class="name">{{.Name}}{{if .Sub}}<span class="sub">{{.Sub}}</span>{{end}}</span><span class="go">Open &rsaquo;</span></a></li>
 {{end}}</ul>

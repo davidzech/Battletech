@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
-	"strconv"
 	"strings"
+	"unicode/utf8"
 )
 
 // Hangar is a parsed MekBay hangar link such as
@@ -43,13 +43,16 @@ func parseHangar(raw string) (Hangar, error) {
 	return Hangar{URL: raw, Instance: instance, Sel: sel}, nil
 }
 
-// parsePlayers validates the human player count (1 to 4).
-func parsePlayers(raw string) (int, error) {
-	n, err := strconv.Atoi(strings.TrimSpace(raw))
-	if err != nil || n < 1 || n > 4 {
-		return 0, errors.New("Choose between 1 and 4 human players.")
+// companyName allows the kinds of names the lore uses ("Wolf's Dragoons", "1st Somerset Strikers", "Kell Hounds").
+var companyName = regexp.MustCompile(`^[\p{L}\p{N}][\p{L}\p{N} '’.,&:!()\-]*$`)
+
+// parseCompanyName validates and tidies a company name: 1 to 40 characters, with runs of spaces collapsed.
+func parseCompanyName(raw string) (string, error) {
+	name := strings.Join(strings.Fields(raw), " ")
+	if n := utf8.RuneCountInString(name); n < 1 || n > 40 || !companyName.MatchString(name) {
+		return "", errors.New("Name your company with 1 to 40 letters, numbers and spaces (apostrophes, hyphens and a few marks are fine).")
 	}
-	return n, nil
+	return name, nil
 }
 
 // parseOwnerUID validates the optional MekBay account UID (the id MekBay keeps in the owner's browser).
@@ -62,8 +65,8 @@ func parseOwnerUID(raw string) (string, error) {
 	return uid, nil
 }
 
-// setCampaign saves the hangar link, player count and optional owner UID for the visitor's playthrough.
-func (s *Server) setCampaign(w http.ResponseWriter, r *http.Request) {
+// setCompany saves the company's name and the optional MekBay owner UID for the visitor's playthrough.
+func (s *Server) setCompany(w http.ResponseWriter, r *http.Request) {
 	if !sameOrigin(r) {
 		http.Error(w, "cross-origin request refused", http.StatusForbidden)
 		return
@@ -78,12 +81,7 @@ func (s *Server) setCampaign(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
-	hangar, err := parseHangar(r.PostFormValue("hangar"))
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	players, err := parsePlayers(r.PostFormValue("players"))
+	name, err := parseCompanyName(r.PostFormValue("company"))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -95,27 +93,71 @@ func (s *Server) setCampaign(w http.ResponseWriter, r *http.Request) {
 	}
 	id := playthroughID(seed)
 	if _, err := s.store.EnsurePlaythrough(r.Context(), id); err != nil {
-		http.Error(w, "could not save campaign", http.StatusInternalServerError)
+		http.Error(w, "could not save company", http.StatusInternalServerError)
 		return
 	}
-	if err := s.store.SaveSetup(r.Context(), id, hangar, players); err != nil {
-		http.Error(w, "could not save campaign", http.StatusInternalServerError)
+	if err := s.store.SetCompanyName(r.Context(), id, name); err != nil {
+		http.Error(w, "could not save company", http.StatusInternalServerError)
 		return
 	}
 	// Modify mode is optional: a UID turns it on, "clear_owner" turns it off, and leaving the field blank
 	// keeps whatever is already saved (the UID is never sent back to the page to prefill it).
 	if owner != "" || r.PostFormValue("clear_owner") == "1" {
 		if err := s.store.SetOwnerUID(r.Context(), id, owner); err != nil {
-			http.Error(w, "could not save campaign", http.StatusInternalServerError)
+			http.Error(w, "could not save company", http.StatusInternalServerError)
 			return
 		}
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// startCampaign starts one of the campaigns for the visitor's playthrough, with that campaign's own MekBay hangar.
+// Posting again for a started campaign changes its hangar link.
+func (s *Server) startCampaign(w http.ResponseWriter, r *http.Request) {
+	if !sameOrigin(r) {
+		http.Error(w, "cross-origin request refused", http.StatusForbidden)
+		return
+	}
+	seed := currentSeed(r)
+	if seed == "" {
+		http.Error(w, "Choose a seed first.", http.StatusBadRequest)
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 4096)
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	c, ok := s.lib.Campaign(r.PostFormValue("campaign"))
+	if !ok {
+		http.Error(w, "unknown campaign", http.StatusNotFound)
+		return
+	}
+	id := playthroughID(seed)
+	pt, found, err := s.store.Playthrough(r.Context(), id)
+	if err != nil {
+		http.Error(w, "could not load playthrough", http.StatusInternalServerError)
+		return
+	}
+	if !found || !pt.Configured() {
+		http.Error(w, "Name your company first.", http.StatusBadRequest)
+		return
+	}
+	hangar, err := parseHangar(r.PostFormValue("hangar"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := s.store.StartRun(r.Context(), id, c.Slug, hangar); err != nil {
+		http.Error(w, "could not start the campaign", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // setSeed validates a chosen seed, records its playthrough and stores the seed in a cookie. The
-// reply says whether that playthrough already has its campaign setup, so the page knows whether
-// to ask for the hangar link and player count.
+// reply says whether that playthrough's company is already named, so the page knows whether to
+// ask for the company's details.
 func (s *Server) setSeed(w http.ResponseWriter, r *http.Request) {
 	if !sameOrigin(r) {
 		http.Error(w, "cross-origin request refused", http.StatusForbidden)
