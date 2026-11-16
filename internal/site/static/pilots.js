@@ -82,9 +82,11 @@
     // the dialog throws it away).
     earn.addEventListener('submit', function (e) {
       e.preventDefault();
+      e.stopPropagation(); // this form sits inside the dialog's form: its submit must not also trigger Apply
       var n = parseInt(input.value, 10);
       if (isNaN(n) || n < 1) { spError.textContent = 'Enter how much SP the pilot earned.'; return; }
       if (p.earned + n > 10000) { spError.textContent = 'That is too much SP to add at once.'; return; }
+      if (!window.confirm('Add ' + n + ' earned SP to ' + p.name + '? It is staged until you press Apply, and Clear or closing this window discards it.')) return;
       p.earned += n;
       p.pool += n;
       spError.textContent = '';
@@ -133,6 +135,7 @@
     dialog.addEventListener('close', function () { if (dirty) location.reload(); });
     document.getElementById('sp-form').addEventListener('submit', function (e) {
       e.preventDefault();
+      if (e.target !== e.currentTarget) return; // only the dialog's own submit (Apply), never a form nested in it
       if (!current || apply.disabled) return;
       var parts = ['pilot=' + encodeURIComponent(current.id), 'earned=' + current.earned];
       ladders.forEach(function (l) { parts.push(l.key + '=' + current.sp[l.key]); });
