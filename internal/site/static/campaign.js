@@ -62,12 +62,14 @@
 
   var ladders = JSON.parse(wiz.dataset.ladders);
   var budget = parseInt(wiz.dataset.sp, 10) || 0;
+  var STEP = 10; // the sliders and the number boxes' arrows both move this many SP at a time
   var pilotCount = parseInt(wiz.dataset.pilots, 10) || 0;
   var total = pilotCount + 1; // a step per pilot, then the hangar link
 
   var title = document.getElementById('wiz-title');
   var body = document.getElementById('wiz-body');
   var error = document.getElementById('wiz-error');
+  var hint = document.getElementById('wiz-hint');
   var back = document.getElementById('wiz-back');
   var next = document.getElementById('wiz-next');
   var count = document.getElementById('wiz-count');
@@ -103,9 +105,9 @@
     var row = el('div', 'alloc-row');
     var name = el('label', 'alloc-name', l.name);
     var slider = document.createElement('input');
-    slider.type = 'range'; slider.min = 0; slider.max = budget; slider.step = 10;
+    slider.type = 'range'; slider.min = 0; slider.max = budget; slider.step = STEP;
     var number = document.createElement('input');
-    number.type = 'number'; number.min = 0; number.max = budget; number.step = 1; number.inputMode = 'numeric';
+    number.type = 'number'; number.min = 0; number.max = budget; number.step = STEP; number.inputMode = 'numeric';
     name.appendChild(number);
     row.appendChild(name);
     row.appendChild(slider);
@@ -155,8 +157,8 @@
     nameLabel.setAttribute('for', 'wiz-name');
     var nameInput = document.createElement('input');
     nameInput.type = 'text'; nameInput.id = 'wiz-name'; nameInput.maxLength = 30; nameInput.autocomplete = 'off';
-    nameInput.placeholder = 'Star Captain Alrek'; nameInput.spellcheck = false; nameInput.value = p.name;
-    nameInput.addEventListener('input', function () { p.name = nameInput.value; error.textContent = ''; });
+    nameInput.placeholder = 'Alrek'; nameInput.spellcheck = false; nameInput.value = p.name;
+    nameInput.addEventListener('input', function () { p.name = nameInput.value; error.textContent = ''; updateNext(); });
     nameBlock.appendChild(nameLabel);
     nameBlock.appendChild(nameInput);
     var boxes = el('div', 'stat-boxes');
@@ -174,6 +176,7 @@
       remaining.classList.toggle('done', left === 0);
       rows.forEach(function (r) { r.show(); });
       stats.forEach(function (b, i) { b.show(p.sp[ladders[i].key]); });
+      updateNext();
     }
     body.appendChild(el('h3', 'alloc-head', 'Allocate SP'));
     body.appendChild(remaining);
@@ -202,7 +205,7 @@
     var input = document.createElement('input');
     input.id = 'wiz-hangar'; input.className = 'wide'; input.type = 'url'; input.spellcheck = false;
     input.placeholder = 'https://mekbay.com/?instance=…'; input.value = hangar;
-    input.addEventListener('input', function () { hangar = input.value; error.textContent = ''; });
+    input.addEventListener('input', function () { hangar = input.value; error.textContent = ''; updateNext(); });
     body.appendChild(label);
     body.appendChild(input);
     input.focus();
@@ -217,7 +220,16 @@
     progress.setAttribute('aria-valuenow', step + 1);
     back.hidden = step === 0;
     next.textContent = step === total - 1 ? 'Start campaign' : 'Next';
-    next.disabled = busy;
+    updateNext();
+  }
+
+  // Next stays disabled until everything this step needs has been decided, and the line beside it says what is
+  // still missing, so a dimmed button is never a mystery.
+  function updateNext() {
+    var missing = problem();
+    next.disabled = busy || missing !== '';
+    hint.textContent = busy ? '' : missing;
+    if (missing) next.title = missing; else next.removeAttribute('title');
   }
 
   // The problem with the current step, or ''.
@@ -239,13 +251,13 @@
       ladders.forEach(function (l) { parts.push('pilot' + idx + '_' + l.key + '=' + p.sp[l.key]); });
     });
     busy = true;
-    next.disabled = true;
+    updateNext();
     post(parts.join('&')).then(function (res) {
       if (res.ok) { location.reload(); return; }
       busy = false;
-      next.disabled = false;
+      updateNext();
       return res.text().then(function (t) { error.textContent = t.trim() || 'Could not start the campaign.'; });
-    }, function () { busy = false; next.disabled = false; error.textContent = 'Could not reach the server.'; });
+    }, function () { busy = false; updateNext(); error.textContent = 'Could not reach the server.'; });
   }
 
   document.getElementById('wiz-form').addEventListener('submit', function (e) {

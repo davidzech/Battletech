@@ -443,6 +443,9 @@ dialog .alloc-name {
 }
 .alloc-name input { width: 4.5rem; }
 .alloc-row input[type="range"] { width: 100%; accent-color: var(--accent); }
+.wiz-hint { min-height: 1.4em; margin: 0.8rem 0 0; color: var(--accent); font-size: 0.9rem; }
+.wizard .wiz-hint + .form-error { min-height: 0; margin: 0; }
+dialog.wizard button.button:disabled { opacity: 0.4; cursor: not-allowed; filter: grayscale(0.5); }
 .wiz-recap { margin: 0.25rem 0 0.75rem; padding-left: 1.1rem; }
 .wiz-footer { display: flex; align-items: center; gap: 0.9rem; margin-top: 1rem; }
 .wiz-count { font: 700 0.8rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }

@@ -27,6 +27,7 @@
   <form id="wiz-form" autocomplete="off" novalidate>
     <h2 id="wiz-title"></h2>
     <div id="wiz-body"></div>
+    <p id="wiz-hint" class="wiz-hint" aria-live="polite"></p>
     <p id="wiz-error" class="form-error" role="alert"></p>
     <div class="form-actions">
       <button type="button" id="wiz-back">Back</button>
@@ -65,7 +66,7 @@
 {{end}}</ul>
 {{if .CanAddPilot}}<form id="pilot-add" class="pilot-add" autocomplete="off">
 <label for="pilot-name">Name a pilot</label>
-<input id="pilot-name" name="name" maxlength="30" placeholder="Star Captain Alrek" spellcheck="false" required>
+<input id="pilot-name" name="name" maxlength="30" placeholder="Alrek" spellcheck="false" required>
 <button type="submit" class="button">Add named pilot</button>
 </form>
 {{end}}<p id="pilot-error" class="form-error" role="alert"></p>
