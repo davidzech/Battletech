@@ -98,7 +98,7 @@
     return ladders.map(function (l) { return l.name + ' ' + reach(l, p.sp[l.key]).level; }).join(' · ');
   }
 
-  // One column of the allocator: a slider and a number box for the same amount, and what that buys.
+  // One column of the allocator: a slider and a number box for the same amount of SP.
   function allocatorRow(p, l, refresh) {
     var row = el('div', 'alloc-row');
     var name = el('label', 'alloc-name', l.name);
@@ -106,19 +106,10 @@
     slider.type = 'range'; slider.min = 0; slider.max = budget; slider.step = 10;
     var number = document.createElement('input');
     number.type = 'number'; number.min = 0; number.max = budget; number.step = 1; number.inputMode = 'numeric';
-    var preview = el('span', 'alloc-preview');
     name.appendChild(number);
     row.appendChild(name);
     row.appendChild(slider);
-    row.appendChild(preview);
 
-    function show() {
-      var spent = p.sp[l.key];
-      slider.value = spent; number.value = spent;
-      var r = reach(l, spent), n = upcoming(l, spent);
-      preview.textContent = l.name + ' ' + r.level +
-        (n ? ' — level ' + n.level + ' at ' + n.sp + ' SP' : ' — top level');
-    }
     function set(raw) {
       var n = parseInt(raw, 10);
       if (isNaN(n) || n < 0) n = 0;
@@ -129,9 +120,26 @@
     }
     slider.addEventListener('input', function () { set(slider.value); });
     number.addEventListener('input', function () { set(number.value); });
-    row.show = show;
-    show();
+    row.show = function () { slider.value = p.sp[l.key]; number.value = p.sp[l.key]; };
+    row.show();
     return row;
+  }
+
+  // The big number for one column: the level the SP allocated so far reaches, and what the next level takes.
+  function statBox(l) {
+    var box = el('div', 'stat-box');
+    var value = el('span', 'stat-value');
+    var next = el('span', 'stat-next');
+    box.appendChild(el('span', 'stat-label', l.name));
+    box.appendChild(value);
+    box.appendChild(next);
+    box.show = function (spent) {
+      var r = reach(l, spent), n = upcoming(l, spent);
+      value.textContent = r.level;
+      next.textContent = n ? 'next: ' + n.level + ' at ' + n.sp + ' SP' : 'top level';
+      box.classList.toggle('up', r.level !== l.base);
+    };
+    return box;
   }
 
   function renderPilot(idx) {
@@ -140,29 +148,36 @@
     body.textContent = '';
     body.appendChild(el('p', 'muted', 'Only named pilots improve their skills, use Edge and earn abilities. Name this pilot, then allocate their ' + budget + ' starting SP across the four columns. Every point has to go somewhere.'));
 
+    // The name, with the pilot's four numbers beside it.
+    var top = el('div', 'pilot-top');
+    var nameBlock = el('div', 'pilot-name');
     var nameLabel = el('label', null, 'Name');
     nameLabel.setAttribute('for', 'wiz-name');
     var nameInput = document.createElement('input');
     nameInput.id = 'wiz-name'; nameInput.className = 'wide'; nameInput.maxLength = 30;
     nameInput.placeholder = 'Star Captain Alrek'; nameInput.spellcheck = false; nameInput.value = p.name;
     nameInput.addEventListener('input', function () { p.name = nameInput.value; error.textContent = ''; });
-    body.appendChild(nameLabel);
-    body.appendChild(nameInput);
+    nameBlock.appendChild(nameLabel);
+    nameBlock.appendChild(nameInput);
+    var boxes = el('div', 'stat-boxes');
+    var stats = ladders.map(statBox);
+    stats.forEach(function (b) { boxes.appendChild(b); });
+    top.appendChild(nameBlock);
+    top.appendChild(boxes);
+    body.appendChild(top);
 
     var remaining = el('p', 'alloc-remaining');
-    var summary = el('p', 'alloc-summary');
     var rows = ladders.map(function (l) { return allocatorRow(p, l, refresh); });
     function refresh() {
       var left = budget - spentOf(p);
       remaining.textContent = left + ' of ' + budget + ' SP left to allocate';
       remaining.classList.toggle('done', left === 0);
       rows.forEach(function (r) { r.show(); });
-      summary.textContent = summaryOf(p);
+      stats.forEach(function (b, i) { b.show(p.sp[ladders[i].key]); });
     }
     body.appendChild(el('h3', 'alloc-head', 'Allocate SP'));
     body.appendChild(remaining);
     rows.forEach(function (r) { body.appendChild(r); });
-    body.appendChild(summary);
     refresh();
     nameInput.focus();
   }
