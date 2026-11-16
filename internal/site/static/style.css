@@ -484,7 +484,7 @@ dialog .pilot-name input::placeholder { color: var(--muted); font-weight: 400; o
 .alloc-remaining.done { color: var(--text); }
 .alloc-row {
   display: grid;
-  grid-template-columns: 12rem 1fr;
+  grid-template-columns: 13rem 1fr;
   gap: 0.2rem 0.9rem;
   align-items: center;
   padding: 0.5rem 0;
@@ -500,7 +500,7 @@ dialog .alloc-name {
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
-.alloc-name input { width: 4.5rem; }
+.alloc-name input { width: 6rem; } /* room for four digits and the spinner arrows */
 .alloc-row input[type="range"] { width: 100%; accent-color: var(--accent); }
 .wiz-hint { min-height: 1.4em; margin: 0.8rem 0 0; color: var(--accent); font-size: 0.9rem; }
 .wizard .wiz-hint + .form-error { min-height: 0; margin: 0; }
