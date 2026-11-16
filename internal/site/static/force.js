@@ -57,16 +57,18 @@
     tip.appendChild(facts);
   }
 
-  function placeTip(x, y) {
-    var pad = 14, w = tip.offsetWidth, h = tip.offsetHeight;
-    var left = x + pad, top = y + pad;
-    if (left + w > window.innerWidth - 8) left = Math.max(8, x - pad - w);
-    if (top + h > window.innerHeight - 8) top = Math.max(8, y - pad - h);
+  // The card hangs off the icon it describes: below it, left-aligned, or above it when there is no room underneath, and
+  // kept inside the viewport horizontally.
+  function showTip(u, anchor) {
+    fillTip(u);
+    tip.hidden = false;
+    var r = anchor.getBoundingClientRect(), w = tip.offsetWidth, h = tip.offsetHeight, gap = 6;
+    var left = Math.min(Math.max(8, r.left), window.innerWidth - w - 8);
+    var top = r.bottom + gap;
+    if (top + h > window.innerHeight - 8 && r.top - gap - h >= 8) top = r.top - gap - h;
     tip.style.left = left + 'px';
     tip.style.top = top + 'px';
   }
-
-  function showTip(u, x, y) { fillTip(u); tip.hidden = false; placeTip(x, y); }
   function hideTip() { tip.hidden = true; }
 
   function render(data) {
@@ -89,10 +91,9 @@
       img.tabIndex = 0;
       img.setAttribute('aria-describedby', 'unit-tip');
       if (u.destroyed) img.className = 'destroyed';
-      img.addEventListener('mouseenter', function (e) { showTip(u, e.clientX, e.clientY); });
-      img.addEventListener('mousemove', function (e) { placeTip(e.clientX, e.clientY); });
+      img.addEventListener('mouseenter', function () { showTip(u, img); });
       img.addEventListener('mouseleave', hideTip);
-      img.addEventListener('focus', function () { var r = img.getBoundingClientRect(); showTip(u, r.left, r.bottom); });
+      img.addEventListener('focus', function () { showTip(u, img); });
       img.addEventListener('blur', hideTip);
       icons.appendChild(img);
     });

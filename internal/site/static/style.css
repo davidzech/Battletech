@@ -844,4 +844,5 @@ html:not(.js) .wp-toggle, html:not(.js) .wp-stamp { display: none; }
 .unit-tip .tip-facts { display: grid; grid-template-columns: auto 1fr; gap: 0.15rem 0.8rem; margin: 0; font-size: 0.85rem; }
 .unit-tip dt { font: 700 0.7rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); align-self: center; }
 .unit-tip dd { margin: 0; }
-.force-summary .icons img:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.force-summary .icons img { transition: border-color 0.12s, background-color 0.12s; cursor: default; }
+.force-summary .icons img:hover, .force-summary .icons img:focus-visible { border-color: var(--accent); background: rgba(255, 204, 0, 0.1); outline: none; }
