@@ -139,7 +139,7 @@
     var company = companyInput.value.trim();
     if (!company) { setupError.textContent = 'Name your company.'; return; }
     var owner = ownerInput.value.trim().toLowerCase();
-    if (owner && !UUID.test(owner)) { setupError.textContent = 'That doesn't look like a MekBay user ID (it should be a UUID).'; return; }
+    if (owner && !UUID.test(owner)) { setupError.textContent = "That doesn't look like a MekBay user ID (it should be a UUID)."; return; }
     var clear = setupForm.querySelector('input[name="clear_owner"]:checked');
     post('/api/company', 'company=' + encodeURIComponent(company) + '&owner=' + encodeURIComponent(owner) + (clear ? '&clear_owner=1' : ''))
       .then(function (res) {
