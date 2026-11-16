@@ -79,7 +79,7 @@
     earn.autocomplete = 'off';
     var label = el('label', null, 'Add earned SP');
     var input = document.createElement('input');
-    input.type = 'number'; input.min = 1; input.max = 10000; input.step = STEP; input.inputMode = 'numeric'; input.placeholder = '0';
+    input.type = 'number'; input.min = 0; input.max = 10000; input.step = STEP; input.inputMode = 'numeric'; input.placeholder = '0';
     label.appendChild(input);
     var addBtn = el('button', null, 'Add');
     addBtn.type = 'submit';
