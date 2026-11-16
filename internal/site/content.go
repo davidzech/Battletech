@@ -75,7 +75,13 @@ type Campaign struct {
 	// StartingMinMechs is how many mechs the starting hangar must hold at least (Intro.md front matter
 	// starting_min_mechs); 0 if not given.
 	StartingMinMechs int
-	Scenarios        []Scenario
+	// Faction is the side the player's force fights for (Intro.md front matter faction), which decides the ranks of its named
+	// pilots; see factions.go. Empty or unknown turns ranks off.
+	Faction string
+	// Ranks is the rank ladder of the campaign's named pilots, lowest first: the Intro.md `ranks` list if it has one, else its
+	// faction's.
+	Ranks     []string
+	Scenarios []Scenario
 }
 
 // PlayersLabel describes how many players the campaign is for, e.g. "1-2 players", "1 player", or "" if the
@@ -154,6 +160,9 @@ type frontData struct {
 	// StartingMinMechs is how many mechs the starting hangar must hold at least (Intro.md).
 	StartingMinMechs int    `yaml:"starting_min_mechs"`
 	DefaultNext      string `yaml:"default_next"`
+	// Faction and Ranks are described on Campaign (Intro.md).
+	Faction string   `yaml:"faction"`
+	Ranks   []string `yaml:"ranks"`
 }
 
 // readMarkdown splits optional YAML front matter from a Markdown file. A missing file yields zero values.
@@ -270,6 +279,10 @@ func (l Library) load(name string) (*Campaign, bool) {
 	c.MinPlayers, c.MaxPlayers = meta.MinPlayers, meta.MaxPlayers
 	c.StartingNamedPilots, c.StartingPilotSP, c.StartingBV = meta.StartingNamedPilots, meta.StartingPilotSP, meta.StartingBV
 	c.StartingMinMechs = meta.StartingMinMechs
+	c.Faction = meta.Faction
+	if c.Ranks = meta.Ranks; len(c.Ranks) == 0 {
+		c.Ranks = factionRanks(meta.Faction)
+	}
 	_, kw := readMarkdown(filepath.Join(dir, "Keywords.md"))
 	c.IntroHTML = renderMarkdown(intro, false)
 	c.KeywordsHTML = renderMarkdown(kw, true)

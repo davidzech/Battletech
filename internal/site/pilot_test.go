@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -91,9 +92,9 @@ func TestKirbyExample(t *testing.T) {
 func TestPilotView(t *testing.T) {
 	views, alive := pilotViews([]NamedPilot{
 		{ID: "a", Name: "Alrek", SP: SPAllocation{Gunnery: 300, Piloting: 50}, TotalSP: 400},
-		{ID: "b", Name: "Katarina", Fallen: true},
-	})
-	if alive != 1 || len(views) != 2 {
+		{ID: "b", Name: "Katarina", Fallen: true, Rank: "High"},
+	}, []string{"Low", "High"})
+	if alive != 1 || len(views) != 2 || views[0].Rank != "Low" || views[1].Rank != "High" {
 		t.Fatalf("alive %d of %d", alive, len(views))
 	}
 	a := views[0]
@@ -1119,7 +1120,7 @@ func TestRenamePilots(t *testing.T) {
 	if ps[0].Name != "ALREK PRIME" || ps[1].Name != "Katarina the Fallen" {
 		t.Errorf("names after renaming: %q %q", ps[0].Name, ps[1].Name)
 	}
-	if page := body(t, srv, "/refusalwar/manage/", cookie); !strings.Contains(page, `class="rec-edit"`) || !strings.Contains(page, `rec-name-text">ALREK PRIME<`) {
+	if page := body(t, srv, "/refusalwar/manage/", cookie); strings.Count(page, `class="name-edit"`) != 3 || !strings.Contains(page, `class="name-edit"`) || !strings.Contains(page, `name-text">ALREK PRIME<`) {
 		t.Error("the records dialog should offer the pencil and show the new name")
 	}
 }
@@ -1140,5 +1141,168 @@ func TestStatBoxCaptions(t *testing.T) {
 	}
 	if page := body(t, srv, "/refusalwar/manage/", cookie); !strings.Contains(page, `stat-next">max<`) {
 		t.Error("a column at its top level should say max")
+	}
+}
+
+func TestRankHelpers(t *testing.T) {
+	ranks := []string{"MechWarrior", "Star Commander", "Khan"}
+	for stored, want := range map[string]string{"": "MechWarrior", "Khan": "Khan", "Star Commander": "Star Commander", "General": "MechWarrior", "khan": "MechWarrior"} {
+		if got := rankFor(ranks, stored); got != want {
+			t.Errorf("rankFor(%q) = %q, want %q", stored, got, want)
+		}
+	}
+	if rankFor(nil, "Khan") != "" {
+		t.Error("a campaign without ranks shows none")
+	}
+	if !validRank(ranks, "Khan") || validRank(ranks, "khan") || validRank(ranks, "") || validRank(nil, "Khan") {
+		t.Error("validRank")
+	}
+}
+
+// Each campaign picks its faction (and so its ranks) in Intro.md; a campaign may also list its own ranks.
+func TestCampaignFactionAndRanks(t *testing.T) {
+	rw := refusalWar(t)
+	want := []string{"MechWarrior", "Star Commander", "Star Captain", "Star Colonel", "Galaxy Commander", "saKhan", "Khan"}
+	if rw.Faction != "clan" || strings.Join(rw.Ranks, "|") != strings.Join(want, "|") {
+		t.Fatalf("Refusal War: faction %q, ranks %v", rw.Faction, rw.Ranks)
+	}
+	// The returned ladders are copies: changing one never changes the faction.
+	rw.Ranks[0] = "X"
+	if factionRanks("clan")[0] != "MechWarrior" {
+		t.Error("factionRanks should hand out copies")
+	}
+	if factionRanks("nope") != nil || factionRanks("") != nil {
+		t.Error("an unknown or empty faction has no ranks")
+	}
+
+	root := t.TempDir()
+	mk := func(slug, intro string) {
+		dir := filepath.Join(root, slug)
+		if err := os.MkdirAll(filepath.Join(dir, "Scenario_000"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "Intro.md"), []byte(intro), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mk("plain", "---\nmin_players: 1\n---\n")
+	mk("unknown", "---\nfaction: martians\n---\n")
+	mk("custom", "---\nfaction: clan\nranks:\n  - Sergeant\n  - Lieutenant\n  - Captain\n---\n")
+	lib := Library{Root: root}
+	if c, ok := lib.Campaign("plain"); !ok || c.Ranks != nil || c.Faction != "" {
+		t.Errorf("a campaign with no faction has no ranks: %+v", c)
+	}
+	if c, ok := lib.Campaign("unknown"); !ok || c.Ranks != nil {
+		t.Errorf("an unknown faction turns ranks off: %+v", c)
+	}
+	if c, ok := lib.Campaign("custom"); !ok || strings.Join(c.Ranks, "|") != "Sergeant|Lieutenant|Captain" {
+		t.Errorf("a campaign's own ranks replace its faction's: %+v", c)
+	}
+}
+
+// rankStore checks the rank column on both databases, in a campaign of its own.
+func rankStore(t *testing.T, s *Store, id string) {
+	t.Helper()
+	ctx := context.Background()
+	const camp = "rankcamp"
+	a, err := s.AddPilot(ctx, id, camp, "Alrek", "", SPAllocation{}, 4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	get := func() NamedPilot {
+		ps, _ := s.Pilots(ctx, id, camp)
+		return ps[0]
+	}
+	if got := get().Rank; got != "" {
+		t.Fatalf("a new pilot has no stored rank (the lowest is shown): %q", got)
+	}
+	if err := s.SetPilotRank(ctx, id, camp, a.ID, "Star Captain"); err != nil {
+		t.Fatal(err)
+	}
+	if got := get().Rank; got != "Star Captain" {
+		t.Fatalf("rank = %q", got)
+	}
+	if err := s.SetPilotRank(ctx, id, camp, "nobody", "Khan"); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("unknown pilot: %v", err)
+	}
+	if err := s.SetPilotRank(ctx, id, "another", a.ID, "Khan"); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("another campaign's pilot: %v", err)
+	}
+}
+
+func TestPilotRanksEndToEnd(t *testing.T) {
+	srv, store, cookie := startedCompany(t)
+	ctx := context.Background()
+	id := playthroughID("wolfpack2026")
+	ps, _ := store.Pilots(ctx, id, "refusalwar")
+	pilot := ps[0]
+	form := func(kv ...string) url.Values {
+		v := url.Values{"campaign": {"refusalwar"}, "pilot": {pilot.ID}}
+		for i := 0; i+1 < len(kv); i += 2 {
+			v.Set(kv[i], kv[i+1])
+		}
+		return v
+	}
+	status := func(v url.Values) int { return post(t, srv, "/api/pilots/rank", v, cookie, srv.URL).StatusCode }
+
+	// Everyone starts as a MechWarrior, shown under the portrait, with every rank offered in the picker.
+	page := body(t, srv, "/refusalwar/manage/", cookie)
+	for _, want := range []string{`class="rank-btn"`, ">MechWarrior</button>", `id="rank-dialog"`, `<option value="Star Captain">`, `<option value="saKhan">`, `<option value="Khan">`, `data-rank="MechWarrior"`} {
+		if !strings.Contains(page, want) {
+			t.Errorf("the manage page is missing %q", want)
+		}
+	}
+	if strings.Count(page, "<option value=") != 7 {
+		t.Errorf("the picker should list the seven Clan ranks, got %d options", strings.Count(page, "<option value="))
+	}
+
+	if got := post(t, srv, "/api/pilots/rank", form("rank", "Khan"), cookie, "https://evil.example").StatusCode; got != http.StatusForbidden {
+		t.Errorf("cross-origin: %d", got)
+	}
+	for name, c := range map[string]struct {
+		v      url.Values
+		status int
+	}{
+		"not a rank":    {form("rank", "General"), http.StatusBadRequest},
+		"wrong case":    {form("rank", "khan"), http.StatusBadRequest},
+		"blank":         {form("rank", ""), http.StatusBadRequest},
+		"unknown pilot": {form("pilot", "nobody", "rank", "Khan"), http.StatusNotFound},
+	} {
+		if got := status(c.v); got != c.status {
+			t.Errorf("%s: got %d, want %d", name, got, c.status)
+		}
+	}
+	if ps, _ := store.Pilots(ctx, id, "refusalwar"); ps[0].Rank != "" {
+		t.Fatalf("refused requests changed the rank: %q", ps[0].Rank)
+	}
+	if got := status(form("rank", "Star Captain")); got != http.StatusNoContent {
+		t.Fatalf("set rank: %d", got)
+	}
+	page = body(t, srv, "/refusalwar/manage/", cookie)
+	if !strings.Contains(page, ">Star Captain</button>") || !strings.Contains(page, `data-rank="Star Captain"`) {
+		t.Error("the card should show the new rank")
+	}
+	if over := body(t, srv, "/refusalwar/", cookie); !strings.Contains(over, "Star Captain &middot; ") {
+		t.Error("the overview should show the rank beside the SP")
+	}
+	// A pilot Killed in Action keeps their rank, shown (but not editable) in the memorial.
+	if got := post(t, srv, "/api/pilots/fallen", form(), cookie, srv.URL).StatusCode; got != http.StatusNoContent {
+		t.Fatal(got)
+	}
+	page = body(t, srv, "/refusalwar/manage/", cookie)
+	if !strings.Contains(page, `<span class="rank-label">Star Captain</span>`) {
+		t.Error("the memorial should show the rank as a label")
+	}
+}
+
+// The stat boxes say "Abilities" (a full "Edge abilities" wraps); the slider rows keep the full name.
+func TestStatBoxLabels(t *testing.T) {
+	srv, _, cookie := startedCompany(t)
+	page := body(t, srv, "/refusalwar/manage/", cookie)
+	if !strings.Contains(page, `stat-label">Abilities<`) || strings.Contains(page, `stat-label">Edge abilities<`) {
+		t.Error("the pilot cards' boxes should say Abilities")
+	}
+	if !strings.Contains(page, `&#34;name&#34;:&#34;Edge abilities&#34;`) || !strings.Contains(page, `&#34;short&#34;:&#34;Abilities&#34;`) {
+		t.Errorf("the ladders JSON should keep the full name and add the short one")
 	}
 }

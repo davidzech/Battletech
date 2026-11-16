@@ -928,14 +928,14 @@ dialog .sp-staged button.link-button:hover { color: var(--text); background: non
 
 /* Editing a pilot's name in the records dialog: a pencil, then a text field with the confirm button embedded in it. */
 .rec-name { display: flex; align-items: center; gap: 0.5rem; }
-.rec-name-text { overflow-wrap: anywhere; }
-dialog button.rec-edit { display: inline-flex; padding: 0.25rem; color: var(--muted); background: none; border: 0; cursor: pointer; }
-dialog button.rec-edit:hover, dialog button.rec-edit:focus-visible { color: var(--accent); background: none; }
-.rec-name-form { position: relative; flex: 1; min-width: 10rem; }
-.rec-name-form input { width: 100%; padding: 0.4rem 2.4rem 0.4rem 0.6rem; font: 700 1rem var(--display); letter-spacing: 0.05em; text-transform: uppercase; }
-dialog button.rec-name-ok { position: absolute; top: 2px; right: 2px; bottom: 2px; display: inline-flex; align-items: center; padding: 0 0.5rem; color: var(--accent-ink); background: var(--accent); border: 0; cursor: pointer; }
-dialog button.rec-name-ok:hover { background: var(--accent); filter: brightness(1.12); }
-dialog button.rec-name-ok:disabled { opacity: 0.5; cursor: wait; }
+.name-text { overflow-wrap: anywhere; }
+dialog button.name-edit { display: inline-flex; padding: 0.25rem; color: var(--muted); background: none; border: 0; cursor: pointer; }
+dialog button.name-edit:hover, dialog button.name-edit:focus-visible { color: var(--accent); background: none; }
+.name-form { position: relative; flex: 1; min-width: 10rem; }
+.name-form input { width: 100%; padding: 0.4rem 2.4rem 0.4rem 0.6rem; font: 700 1rem var(--display); letter-spacing: 0.05em; text-transform: uppercase; }
+dialog button.name-ok { position: absolute; top: 2px; right: 2px; bottom: 2px; display: inline-flex; align-items: center; padding: 0 0.5rem; color: var(--accent-ink); background: var(--accent); border: 0; cursor: pointer; }
+dialog button.name-ok:hover { background: var(--accent); filter: brightness(1.12); }
+dialog button.name-ok:disabled { opacity: 0.5; cursor: wait; }
 
 /* The site's own confirmation dialog (confirm.js). */
 dialog.confirm-dialog { width: min(30rem, calc(100vw - 2rem)); }
@@ -947,3 +947,26 @@ dialog.confirm-dialog.danger h2 { color: #ff8d83; }
    height, font and centring, whichever style they have, so they line up exactly. */
 .form-actions > button, .form-actions > .button { box-sizing: border-box; height: 2.5rem; margin: 0; padding: 0 1.1rem; display: inline-flex; align-items: center; justify-content: center; font: 700 0.85rem var(--display); letter-spacing: 0.1em; line-height: 1; text-transform: uppercase; }
 .form-actions > button:not(.button) { border: 1px solid var(--line); }
+
+/* The pilot's portrait with their rank underneath, and the rank picker. */
+.pilot-side { display: flex; flex-direction: column; gap: 0.35rem; width: 6rem; flex: none; }
+.rank-btn, .rank-label { display: block; width: 100%; padding: 0.3rem 0.2rem; text-align: center; font: 700 0.62rem/1.2 var(--display); letter-spacing: 0.08em; text-transform: uppercase; overflow-wrap: anywhere; }
+button.rank-btn { color: var(--text); background: var(--bg); border: 1px solid var(--line); cursor: pointer; }
+button.rank-btn:hover, button.rank-btn:focus-visible { color: var(--accent); border-color: var(--accent); outline: none; }
+.rank-label { color: var(--muted); }
+dialog select { display: block; width: 100%; margin-top: 0.4rem; padding: 0.55rem 0.7rem; font: 700 1rem var(--display); letter-spacing: 0.05em; color: var(--text); background: var(--bg); border: 1px solid var(--line); }
+dialog select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* The name pencil on a pilot card (the same editor as in Manage Pilot Records). */
+.pilot-head h3 { display: flex; align-items: center; gap: 0.3rem; }
+.pilot-head h3 .name-form { min-width: 12rem; }
+.pilot-head h3 .name-form input { font-size: 1.1rem; }
+.pilot-head h3 button.name-edit { padding: 0.25rem; color: var(--muted); background: none; border: 0; cursor: pointer; }
+.pilot-head h3 button.name-edit:hover, .pilot-head h3 button.name-edit:focus-visible { color: var(--accent); outline: none; }
+/* The name editor on a pilot card sits outside any dialog, so it carries its own field and embedded confirm button styles. */
+.pilot-head h3 .name-form { position: relative; flex: 1; min-width: 12rem; }
+.pilot-head h3 .name-form input { width: 100%; padding: 0.4rem 2.4rem 0.4rem 0.6rem; font: 700 1.1rem var(--display); letter-spacing: 0.05em; text-transform: uppercase; color: var(--text); background: var(--bg); border: 1px solid var(--line); }
+.pilot-head h3 .name-form input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.pilot-head h3 button.name-ok { position: absolute; top: 2px; right: 2px; bottom: 2px; display: inline-flex; align-items: center; padding: 0 0.5rem; color: var(--accent-ink); background: var(--accent); border: 0; cursor: pointer; }
+.pilot-head h3 button.name-ok:hover { filter: brightness(1.12); }
+.pilot-head h3 button.name-ok:disabled { opacity: 0.5; cursor: wait; }

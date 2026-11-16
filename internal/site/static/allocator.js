@@ -95,7 +95,7 @@
     var bar = el('span', 'stat-bar');
     var fill = el('span');
     bar.appendChild(fill);
-    box.appendChild(el('span', 'stat-label', l.name));
+    box.appendChild(el('span', 'stat-label', l.short || l.name)); // the stat box's own, shorter label when there is one
     box.appendChild(main);
     box.appendChild(next);
     box.appendChild(bar);

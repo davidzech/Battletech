@@ -428,3 +428,24 @@ func (s *Server) renamePilot(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
+
+// setRank sets a pilot's cosmetic rank, which must be one of the campaign's ranks.
+func (s *Server) setRank(w http.ResponseWriter, r *http.Request) {
+	pt, c, ok := s.pilotRequest(w, r)
+	if !ok {
+		return
+	}
+	rank := r.PostFormValue("rank")
+	if !validRank(c.Ranks, rank) {
+		http.Error(w, "Pick a rank from the list.", http.StatusBadRequest)
+		return
+	}
+	if err := s.store.SetPilotRank(r.Context(), pt.ID, c.Slug, r.PostFormValue("pilot"), rank); errors.Is(err, sql.ErrNoRows) {
+		http.Error(w, "No such pilot.", http.StatusNotFound)
+		return
+	} else if err != nil {
+		http.Error(w, "could not save the rank", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}

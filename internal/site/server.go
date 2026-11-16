@@ -53,6 +53,7 @@ type Page struct {
 	Run       CampaignRun // the playthrough's run of this page's campaign (zero value until it is started)
 	Pilots    []PilotView // the run's named pilots
 	MaxPilots int         // most living named pilots a command may have
+	Ranks     []string    // the campaign's pilot ranks, lowest first (empty when it has none)
 	Memorial  bool        // at least one named pilot was killed in action
 	Ladders   string      // the pilot improvement ladders as JSON, for the pilot builder's live preview
 	Portraits string      // the portrait list as JSON, for the portrait picker
@@ -106,6 +107,7 @@ func NewHandler(contentRoot string, store *Store, opts ...Option) http.Handler {
 	mux.HandleFunc("POST /api/pilots/revive", s.revivePilot)
 	mux.HandleFunc("POST /api/pilots/reset", s.resetPilotSP)
 	mux.HandleFunc("POST /api/pilots/rename", s.renamePilot)
+	mux.HandleFunc("POST /api/pilots/rank", s.setRank)
 	mux.HandleFunc("POST /api/pilots/total", s.setPilotTotal)
 	mux.HandleFunc("POST /api/pilots/delete", s.deletePilot)
 	mux.HandleFunc("POST /api/pilots/portrait", s.setPortrait)
@@ -144,7 +146,8 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name
 					if err != nil {
 						log.Printf("load named pilots: %v", err)
 					}
-					p.Pilots, _ = pilotViews(pilots)
+					p.Pilots, _ = pilotViews(pilots, p.Campaign.Ranks)
+					p.Ranks = p.Campaign.Ranks
 					for _, v := range p.Pilots {
 						p.Memorial = p.Memorial || v.Fallen
 					}

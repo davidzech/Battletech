@@ -64,8 +64,30 @@ func (l ladder) next(sp int) (r ladderRow, ok bool) {
 
 // laddersJSON is the four ladders as JSON, handed to the campaign page so the pilot builder can preview levels with
 // exactly the rules the server uses.
+// boxLabels are shorter names for the stat boxes, where "Edge abilities" would wrap onto two lines. Everywhere else (the slider
+// rows, for instance) a column keeps its full name.
+var boxLabels = map[string]string{"edge_abilities": "Abilities"}
+
+// boxLabel is the name a column shows in its stat box.
+func boxLabel(l ladder) string {
+	if s, ok := boxLabels[l.Key]; ok {
+		return s
+	}
+	return l.Name
+}
+
+// ladderView is a ladder as the pages receive it: the ladder plus the label for its stat box.
+type ladderView struct {
+	ladder
+	Short string `json:"short"`
+}
+
 var laddersJSON = func() string {
-	b, err := json.Marshal([]ladder{gunneryLadder, pilotingLadder, edgeTokensLadder, edgeAbilitiesLadder})
+	var views []ladderView
+	for _, l := range []ladder{gunneryLadder, pilotingLadder, edgeTokensLadder, edgeAbilitiesLadder} {
+		views = append(views, ladderView{l, boxLabel(l)})
+	}
+	b, err := json.Marshal(views)
 	if err != nil {
 		panic(err)
 	}
@@ -91,6 +113,8 @@ type NamedPilot struct {
 	// Portrait is the portrait the pilot picked (a file in portraits/); "" for a pilot from before portraits existed,
 	// who is shown the one portraitOf works out for them.
 	Portrait string
+	// Rank is the pilot's cosmetic rank (a name from the campaign's ranks); "" until one is chosen, which reads as the lowest.
+	Rank string
 	// TotalSP is every SP the pilot has earned. The four columns in SP hold what has been allocated so far, so what is
 	// still unallocated is TotalSP minus their sum (see Unallocated).
 	TotalSP int
@@ -119,10 +143,11 @@ func (p NamedPilot) EdgeAbilities() int { return edgeAbilitiesLadder.at(p.SP.Edg
 // pilotColumn is one column of a pilot as the campaign page shows it.
 type pilotColumn struct {
 	Name    string
-	SP      int  // SP allocated to this column
-	Level   int  // level reached
-	HasNext bool // false at the top of the ladder
-	NextAt  int  // SP the column needs in total to reach the next level
+	Label   string // the (possibly shorter) name for the column's stat box
+	SP      int    // SP allocated to this column
+	Level   int    // level reached
+	HasNext bool   // false at the top of the ladder
+	NextAt  int    // SP the column needs in total to reach the next level
 	NextLvl int
 	Percent int // how far along to the next level, 0 to 100 (100 at the top of the ladder)
 }
@@ -131,15 +156,16 @@ type pilotColumn struct {
 type PilotView struct {
 	ID, Name                                 string
 	Portrait, PortraitURL                    string // the file picked (or worked out) and where it is served
+	Rank                                     string // the pilot's rank (the lowest if none was chosen); "" when the campaign has no ranks
 	Fallen                                   bool
 	Gunnery, Piloting, EdgeTokens, Abilities int
 	Earned, Unallocated, Allocated           int // total SP earned, the part not yet in a column, and the part that is
 	Columns                                  []pilotColumn
 }
 
-func (p NamedPilot) view() PilotView {
+func (p NamedPilot) view(ranks []string) PilotView {
 	col := func(l ladder, sp int) pilotColumn {
-		c := pilotColumn{Name: l.Name, SP: sp, Level: l.at(sp).Level}
+		c := pilotColumn{Name: l.Name, Label: boxLabel(l), SP: sp, Level: l.at(sp).Level}
 		c.Percent = 100
 		if n, ok := l.next(sp); ok {
 			c.HasNext, c.NextAt, c.NextLvl = true, n.SP, n.Level
@@ -148,7 +174,7 @@ func (p NamedPilot) view() PilotView {
 		return c
 	}
 	return PilotView{
-		ID: p.ID, Name: p.Name, Fallen: p.Fallen, Portrait: portraitOf(p.ID, p.Portrait), PortraitURL: portraitURL(portraitOf(p.ID, p.Portrait)),
+		ID: p.ID, Name: p.Name, Rank: rankFor(ranks, p.Rank), Fallen: p.Fallen, Portrait: portraitOf(p.ID, p.Portrait), PortraitURL: portraitURL(portraitOf(p.ID, p.Portrait)),
 		Gunnery: p.Gunnery(), Piloting: p.Piloting(), EdgeTokens: p.EdgeTokens(), Abilities: p.EdgeAbilities(),
 		Earned: p.Earned(), Unallocated: p.Unallocated(), Allocated: p.SP.Total(),
 		Columns: []pilotColumn{
@@ -159,9 +185,9 @@ func (p NamedPilot) view() PilotView {
 }
 
 // pilotViews prepares a campaign's pilots for display and counts how many are still alive.
-func pilotViews(pilots []NamedPilot) (views []PilotView, alive int) {
+func pilotViews(pilots []NamedPilot, ranks []string) (views []PilotView, alive int) {
 	for _, p := range pilots {
-		views = append(views, p.view())
+		views = append(views, p.view(ranks))
 		if !p.Fallen {
 			alive++
 		}

@@ -35,6 +35,67 @@
     });
   }
 
+  // ---- Renaming a pilot: a pencil turns the name into a text field with a confirm check embedded in it. Used on the pilot cards
+  // and in Manage Pilot Records, and a new name is shown in both places at once.
+  var PENCIL_DONE = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
+
+  // Shows a pilot's new name everywhere on the page.
+  function setPilotName(id, name) {
+    document.querySelectorAll('#pilots li.pilot[data-pilot="' + id + '"], #records-list li[data-pilot="' + id + '"]').forEach(function (row) {
+      row.dataset.name = name;
+      var text = row.querySelector('.name-text');
+      if (text) text.textContent = name;
+      var edit = row.querySelector('.name-edit');
+      if (edit) edit.setAttribute('aria-label', 'Edit ' + name + '\u2019s name');
+    });
+  }
+
+  // o: {id, nameBox, nameText, edit, current() -> the name now, error(message)}
+  function attachNameEditor(o) {
+    var form = null;
+    function close() {
+      if (!form) return;
+      form.remove();
+      form = null;
+      o.nameText.hidden = false;
+      o.edit.hidden = false;
+    }
+    o.edit.addEventListener('click', function () {
+      if (form) return;
+      o.error('');
+      form = el('form', 'name-form');
+      var input = document.createElement('input');
+      input.type = 'text'; input.maxLength = 30; input.autocomplete = 'off'; input.spellcheck = false;
+      input.value = o.current();
+      input.setAttribute('aria-label', 'Pilot name');
+      var ok = el('button', 'name-ok');
+      ok.type = 'submit'; ok.title = 'Save the name'; ok.setAttribute('aria-label', 'Save the name');
+      ok.innerHTML = PENCIL_DONE; // a constant defined above, never data
+      form.appendChild(input);
+      form.appendChild(ok);
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        var name = input.value.trim();
+        if (!name) { o.error('Give your pilot a name.'); return; }
+        if (name === o.current()) { close(); return; }
+        ok.disabled = true;
+        o.error('');
+        post('/api/pilots/rename', 'pilot=' + encodeURIComponent(o.id) + '&name=' + encodeURIComponent(name)).then(function (res) {
+          ok.disabled = false;
+          if (res.ok) { setPilotName(o.id, name); close(); return; }
+          return res.text().then(function (t) { o.error(t.trim() || 'Something went wrong.'); });
+        }, function () { ok.disabled = false; o.error('Could not reach the server.'); });
+      });
+      input.addEventListener('keydown', function (e) { if (e.key === 'Escape') { e.stopPropagation(); e.preventDefault(); close(); } });
+      o.nameText.hidden = true;
+      o.edit.hidden = true;
+      o.nameBox.appendChild(form);
+      input.focus();
+      input.select();
+    });
+  }
+
   // ---- The Manage SP dialog: a level-up screen. The pilot's earned SP that isn't in any column yet is spent with the same
   // sliders and number boxes as the start wizard; the boxes show the levels the spending reaches before it is applied.
   var dialog = document.getElementById('sp-dialog');
@@ -154,8 +215,48 @@
     });
   }
 
+  // ---- Rank: a cosmetic rank under the portrait, picked from a list in a small dialog.
+  var rankDialog = document.getElementById('rank-dialog');
+  var rankSelect = document.getElementById('rank-select');
+  var rankError = document.getElementById('rank-error');
+  var rankPilot = null; // the pilot's row whose rank is being changed
+  if (rankDialog && typeof rankDialog.showModal === 'function') {
+    document.getElementById('rank-cancel').addEventListener('click', function () { rankDialog.close(); });
+    rankDialog.addEventListener('click', function (e) { if (e.target === rankDialog) rankDialog.close(); });
+    document.getElementById('rank-form').addEventListener('submit', function (e) {
+      e.preventDefault();
+      if (!rankPilot) return;
+      rankError.textContent = '';
+      post('/api/pilots/rank', 'pilot=' + encodeURIComponent(rankPilot.dataset.pilot) + '&rank=' + encodeURIComponent(rankSelect.value)).then(function (res) {
+        if (res.ok) { location.reload(); return; }
+        return res.text().then(function (t) { rankError.textContent = t.trim() || 'Could not save the rank.'; });
+      }, function () { rankError.textContent = 'Could not reach the server.'; });
+    });
+  }
+  function openRank(li) {
+    rankPilot = li;
+    rankError.textContent = '';
+    document.getElementById('rank-title').textContent = 'Change ' + li.dataset.name + '\u2019s rank';
+    rankSelect.value = li.dataset.rank;
+    rankDialog.showModal();
+    rankSelect.focus();
+  }
+
   box.querySelectorAll('li.pilot').forEach(function (li) {
     var id = li.dataset.pilot;
+    var cardEdit = li.querySelector('.pilot-head .name-edit');
+    if (cardEdit) {
+      attachNameEditor({
+        id: id,
+        nameBox: li.querySelector('.pilot-head h3'),
+        nameText: li.querySelector('.pilot-head .name-text'),
+        edit: cardEdit,
+        current: function () { return li.dataset.name; },
+        error: function (m) { error.textContent = m; }
+      });
+    }
+    var rankBtn = li.querySelector('.rank-btn');
+    if (rankBtn && rankDialog) rankBtn.addEventListener('click', function () { openRank(li); });
     var manage = li.querySelector('.pilot-sp');
     if (manage && dialog) manage.addEventListener('click', function () { openSP(li); });
 
@@ -198,7 +299,6 @@
   if (records && typeof records.showModal === 'function') {
     var recError = document.getElementById('records-error');
     var recDirty = false;
-    var PENCIL_DONE = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
     document.getElementById('records-open').addEventListener('click', function () { recError.textContent = ''; records.showModal(); });
     document.getElementById('records-close').addEventListener('click', function () { records.close(); });
     records.addEventListener('click', function (e) { if (e.target === records) records.close(); });
@@ -224,49 +324,14 @@
     }
 
     records.querySelectorAll('#records-list li[data-pilot]').forEach(function (li) {
-      // The name: a pencil turns it into a text field with a confirm button embedded in it.
-      var nameBox = li.querySelector('.rec-name');
-      var nameText = li.querySelector('.rec-name-text');
-      var edit = li.querySelector('.rec-edit');
-      var nameForm = null;
-      function closeNameEdit() {
-        if (!nameForm) return;
-        nameForm.remove();
-        nameForm = null;
-        nameText.hidden = false;
-        edit.hidden = false;
-      }
-      edit.addEventListener('click', function () {
-        if (nameForm) return;
-        recError.textContent = '';
-        nameForm = el('form', 'rec-name-form');
-        var input = document.createElement('input');
-        input.type = 'text'; input.maxLength = 30; input.autocomplete = 'off'; input.spellcheck = false;
-        input.value = li.dataset.name;
-        input.setAttribute('aria-label', 'Pilot name');
-        var ok = el('button', 'rec-name-ok');
-        ok.type = 'submit'; ok.title = 'Save the name'; ok.setAttribute('aria-label', 'Save the name');
-        ok.innerHTML = PENCIL_DONE; // a constant defined above, never data
-        nameForm.appendChild(input);
-        nameForm.appendChild(ok);
-        nameForm.addEventListener('submit', function (e) {
-          e.preventDefault();
-          var name = input.value.trim();
-          if (!name) { recError.textContent = 'Give your pilot a name.'; return; }
-          if (name === li.dataset.name) { closeNameEdit(); return; }
-          recAct('/api/pilots/rename', li, ok, 'name=' + encodeURIComponent(name), function () {
-            li.dataset.name = name;
-            nameText.textContent = name;
-            edit.setAttribute('aria-label', 'Edit ' + name + '\u2019s name');
-            closeNameEdit();
-          });
-        });
-        input.addEventListener('keydown', function (e) { if (e.key === 'Escape') { e.stopPropagation(); e.preventDefault(); closeNameEdit(); } });
-        nameText.hidden = true;
-        edit.hidden = true;
-        nameBox.appendChild(nameForm);
-        input.focus();
-        input.select();
+      // The name, editable with the pencil (shared with the pilot cards).
+      attachNameEditor({
+        id: li.dataset.pilot,
+        nameBox: li.querySelector('.rec-name'),
+        nameText: li.querySelector('.name-text'),
+        edit: li.querySelector('.name-edit'),
+        current: function () { return li.dataset.name; },
+        error: function (m) { recError.textContent = m; }
       });
 
       var revive = li.querySelector('.rec-revive');

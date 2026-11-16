@@ -91,6 +91,7 @@ func (s *Store) schemaStatements() []string {
 	campaign         TEXT NOT NULL,
 	name             TEXT NOT NULL,
 	portrait         TEXT NOT NULL DEFAULT '',
+	rank             TEXT NOT NULL DEFAULT '',
 	created_at       %s,
 	fallen           INTEGER NOT NULL DEFAULT 0,
 	sp_gunnery       INTEGER NOT NULL DEFAULT 0 CHECK (sp_gunnery >= 0),
@@ -161,6 +162,9 @@ func (s *Store) init() error {
 	// Columns added after a table first shipped. CREATE TABLE IF NOT EXISTS leaves an existing table as it was, so they
 	// are added here (neither database has ADD COLUMN IF NOT EXISTS in common).
 	if err := s.ensureColumn("named_pilots", "portrait", "TEXT NOT NULL DEFAULT ''"); err != nil {
+		return fmt.Errorf("migrate schema: %w", err)
+	}
+	if err := s.ensureColumn("named_pilots", "rank", "TEXT NOT NULL DEFAULT ''"); err != nil {
 		return fmt.Errorf("migrate schema: %w", err)
 	}
 	if err := s.ensureColumn("named_pilots", "sp_total", "INTEGER NOT NULL DEFAULT 0"); err != nil {
@@ -354,11 +358,11 @@ func (s *Store) SaveMekBayOperation(ctx context.Context, playthroughID, campaign
 	return err
 }
 
-const pilotColumns = `id, name, portrait, fallen, sp_gunnery, sp_piloting, sp_edge_tokens, sp_edge_abilities, sp_total`
+const pilotColumns = `id, name, portrait, rank, fallen, sp_gunnery, sp_piloting, sp_edge_tokens, sp_edge_abilities, sp_total`
 
 func scanPilot(row interface{ Scan(...any) error }) (p NamedPilot, err error) {
 	var fallen int
-	err = row.Scan(&p.ID, &p.Name, &p.Portrait, &fallen, &p.SP.Gunnery, &p.SP.Piloting, &p.SP.EdgeTokens, &p.SP.EdgeAbilities, &p.TotalSP)
+	err = row.Scan(&p.ID, &p.Name, &p.Portrait, &p.Rank, &fallen, &p.SP.Gunnery, &p.SP.Piloting, &p.SP.EdgeTokens, &p.SP.EdgeAbilities, &p.TotalSP)
 	p.Fallen = fallen != 0
 	return p, err
 }
@@ -730,4 +734,18 @@ func (s *Store) RenamePilot(ctx context.Context, playthroughID, campaign, pilotI
 		return sql.ErrNoRows
 	}
 	return tx.Commit()
+}
+
+// SetPilotRank sets a pilot's cosmetic rank. The caller checks it against the campaign's ranks (sql.ErrNoRows if there is no
+// such pilot).
+func (s *Store) SetPilotRank(ctx context.Context, playthroughID, campaign, pilotID, rank string) error {
+	res, err := s.db.ExecContext(ctx,
+		s.q(`UPDATE named_pilots SET rank = ? WHERE id = ? AND playthrough_id = ? AND campaign = ?`), rank, pilotID, playthroughID, campaign)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
 }
