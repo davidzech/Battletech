@@ -12,7 +12,9 @@ import (
 const (
 	goodInstance = "01a12f9e-188f-7158-ad67-3fc9700ec733"
 	goodSel      = "01a12f9d-a79b-717d-8c84-d5da73d2f9a5"
-	goodHangar   = "https://mekbay.com/?instance=" + goodInstance + "&sel=" + goodSel
+	// goodHangar is a link as a player pastes it, with a unit selection; the site keeps only goodHangarURL.
+	goodHangar    = "https://mekbay.com/?instance=" + goodInstance + "&sel=" + goodSel
+	goodHangarURL = "https://mekbay.com/?instance=" + goodInstance
 )
 
 func TestValidSeed(t *testing.T) {
@@ -46,28 +48,45 @@ func TestPlaythroughIDIsStableAndOpaque(t *testing.T) {
 }
 
 func TestParseHangar(t *testing.T) {
-	good, err := parseHangar("  " + strings.ToUpper(goodHangar[:8]) + goodHangar[8:] + " ")
-	if err != nil || good.Instance != goodInstance || good.Sel != goodSel {
-		t.Fatalf("good link rejected or misparsed: %+v, %v", good, err)
-	}
-	if h, err := parseHangar("https://mekbay.com/?instance=" + goodInstance); err != nil || h.Sel != "" {
-		t.Fatalf("link without sel should be fine: %+v, %v", h, err)
-	}
-	for _, bad := range []string{
-		"",
-		"not a url",
-		"http://mekbay.com/?instance=" + goodInstance,    // not https
-		"https://evil.example/?instance=" + goodInstance, // wrong host
-		"https://mekbay.com.evil.example/?instance=" + goodInstance,
-		"https://user@mekbay.com/?instance=" + goodInstance,
-		"https://mekbay.com:8443/?instance=" + goodInstance,
-		"https://mekbay.com/", // no instance
-		"https://mekbay.com/?instance=nope",
-		"https://mekbay.com/?instance=" + goodInstance + "&sel=nope",
+	// A pasted link is reduced to the hangar: https://mekbay.com/?instance=<id>.
+	for name, in := range map[string]string{
+		"the link as MekBay gives it":    goodHangar,
+		"surrounding space and capitals": "  " + strings.ToUpper(goodHangar[:8]) + goodHangar[8:] + " ",
+		"no unit selection":              "https://mekbay.com/?instance=" + goodInstance,
+		"a garbled unit selection":       "https://mekbay.com/?instance=" + goodInstance + "&sel=nope",
+		"tracking and other parameters":  "https://mekbay.com/?utm_source=x&instance=" + goodInstance + "&operation=abc&tab=Sheet",
+		"a fragment":                     "https://mekbay.com/?instance=" + goodInstance + "#top",
+		"the www host":                   "https://www.mekbay.com/?instance=" + goodInstance,
+		"a path":                         "https://mekbay.com/units/?instance=" + goodInstance,
+		"friendly and enemy forces":      "https://mekbay.com/?instance=" + goodInstance + ",enemy:01a12f98-8a21-7d12-b43d-52bb70872376&sel=" + goodSel,
+		"the enemy listed first":         "https://mekbay.com/?instance=enemy:01a12f98-8a21-7d12-b43d-52bb70872376," + goodInstance,
+		"several enemies around ours":    "https://mekbay.com/?instance=enemy:01a12f98-8a21-7d12-b43d-52bb70872376, " + goodInstance + ",enemy:01a12f98-8a21-7d12-b43d-52bb70872377",
 	} {
-		if _, err := parseHangar(bad); err == nil {
-			t.Errorf("parseHangar(%q) should fail", bad)
+		h, err := parseHangar(in)
+		if err != nil || h.Instance != goodInstance || h.URL != goodHangarURL {
+			t.Errorf("%s: parseHangar(%q) = %+v, %v; want %s", name, in, h, err, goodHangarURL)
 		}
+	}
+	for name, bad := range map[string]string{
+		"nothing":                  "",
+		"not a url":                "not a url",
+		"not https":                "http://mekbay.com/?instance=" + goodInstance,
+		"another site":             "https://evil.example/?instance=" + goodInstance,
+		"a lookalike host":         "https://mekbay.com.evil.example/?instance=" + goodInstance,
+		"a user in the link":       "https://user@mekbay.com/?instance=" + goodInstance,
+		"a port":                   "https://mekbay.com:8443/?instance=" + goodInstance,
+		"no instance":              "https://mekbay.com/",
+		"a bad instance":           "https://mekbay.com/?instance=nope",
+		"only enemy forces":        "https://mekbay.com/?instance=enemy:" + goodInstance,
+		"a bad first friendly one": "https://mekbay.com/?instance=nope," + goodInstance,
+		"an operation link":        "https://mekbay.com/?operation=01a1e329-5a80-76bb-8f8c-5443d79bcd02",
+	} {
+		if h, err := parseHangar(bad); err == nil {
+			t.Errorf("%s: parseHangar(%q) should fail, got %+v", name, bad, h)
+		}
+	}
+	if _, err := parseHangar("https://mekbay.com/?operation=01a1e329-5a80-76bb-8f8c-5443d79bcd02"); err == nil || !strings.Contains(err.Error(), "operation link") {
+		t.Errorf("an operation link should say so, got %v", err)
 	}
 }
 
@@ -269,7 +288,7 @@ func TestSeedAndCampaignFlow(t *testing.T) {
 		t.Fatalf("good start: got %d", r.StatusCode)
 	}
 	run, ok, _ := store.Run(ctx, id, "refusalwar")
-	if !ok || !run.Started() || run.HangarInstance != goodInstance || run.HangarSel != goodSel || run.HangarURL != goodHangar || run.Campaign != "refusalwar" {
+	if !ok || !run.Started() || run.HangarInstance != goodInstance || run.HangarURL != goodHangarURL || run.Campaign != "refusalwar" {
 		t.Fatalf("campaign not started correctly: %+v (started=%v)", run, ok)
 	}
 	if _, ok, _ := store.Run(ctx, id, "another-campaign"); ok {
@@ -277,7 +296,7 @@ func TestSeedAndCampaignFlow(t *testing.T) {
 	}
 
 	// That campaign's pages link straight to its hangar; other pages don't.
-	link := `id="hangar-link" href="` + strings.ReplaceAll(goodHangar, "&", "&amp;") + `" target="_blank" rel="noopener noreferrer"`
+	link := `id="hangar-link" href="` + goodHangarURL + `" target="_blank" rel="noopener noreferrer"`
 	for _, path := range []string{"/refusalwar/", "/refusalwar/scenario_000/"} {
 		if !strings.Contains(body(t, srv, path, cookie), link) {
 			t.Errorf("%s should link to the hangar", path)
@@ -297,7 +316,7 @@ func TestSeedAndCampaignFlow(t *testing.T) {
 	}
 	var runs int
 	_ = store.db.QueryRow(`SELECT COUNT(*) FROM campaign_runs`).Scan(&runs)
-	if run, _, _ := store.Run(ctx, id, "refusalwar"); runs != 1 || run.HangarInstance != "01a12f98-8a21-7d12-b43d-52bb70872376" || run.HangarSel != "" {
+	if run, _, _ := store.Run(ctx, id, "refusalwar"); runs != 1 || run.HangarInstance != "01a12f98-8a21-7d12-b43d-52bb70872376" || run.HangarURL != "https://mekbay.com/?instance=01a12f98-8a21-7d12-b43d-52bb70872376" {
 		t.Fatalf("changing the hangar should update the one run: %d runs, %+v", runs, run)
 	}
 }

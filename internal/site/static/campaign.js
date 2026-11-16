@@ -9,14 +9,47 @@
   var UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
   var HANGAR_HELP = 'Paste a MekBay hangar link, like https://mekbay.com/?instance=…';
 
-  // Mirrors the server's check of a hangar link.
-  function hangarProblem(raw) {
-    var u;
-    try { u = new URL(raw.trim()); } catch (e) { return HANGAR_HELP; }
-    var host = u.hostname.toLowerCase();
-    if (u.protocol !== 'https:' || (host !== 'mekbay.com' && host !== 'www.mekbay.com')) return HANGAR_HELP;
-    if (!UUID.test((u.searchParams.get('instance') || '').toLowerCase())) return 'That MekBay link has no valid instance id (?instance=…).';
+  // Mirrors the server's reading of a hangar link (parseHangar in setup.go): any MekBay link will do, and only the
+  // hangar's instance ID matters. A list of forces ("<mine>,enemy:<theirs>") gives its friendly force.
+  function friendlyInstance(list) {
+    var entries = (list || '').split(',');
+    for (var i = 0; i < entries.length; i++) {
+      var entry = entries[i].trim().toLowerCase();
+      if (entry.indexOf('enemy:') === 0) continue;
+      return UUID.test(entry) ? entry : '';
+    }
     return '';
+  }
+
+  function mekbayUrl(raw) {
+    var u;
+    try { u = new URL(raw.trim()); } catch (e) { return null; }
+    var host = u.hostname.toLowerCase();
+    if (u.protocol !== 'https:' || u.username || u.password || u.port || (host !== 'mekbay.com' && host !== 'www.mekbay.com')) return null;
+    return u;
+  }
+
+  // The link reduced to just the hangar, https://mekbay.com/?instance=<id>, or '' if it isn't a hangar link.
+  function canonicalHangar(raw) {
+    var u = mekbayUrl(raw);
+    var id = u ? friendlyInstance(u.searchParams.get('instance')) : '';
+    return id ? 'https://mekbay.com/?instance=' + id : '';
+  }
+
+  function hangarProblem(raw) {
+    if (canonicalHangar(raw)) return '';
+    var u = mekbayUrl(raw);
+    if (!u) return HANGAR_HELP;
+    if (u.searchParams.get('operation') && !u.searchParams.get('instance')) return 'That is an operation link. Paste the link to your hangar instead (it has ?instance=\u2026).';
+    return 'That MekBay link has no valid instance id (?instance=\u2026).';
+  }
+
+  // A pasted link often carries more than the hangar (the selected unit, an operation, enemy forces...). As soon as it is
+  // recognised as a hangar link the box is rewritten to just the hangar, so what is shown is what is used.
+  function trimField(input) {
+    var plain = canonicalHangar(input.value);
+    if (plain && plain !== input.value.trim()) input.value = plain;
+    return input.value;
   }
 
   function el(tag, cls, text) {
@@ -43,12 +76,12 @@
     var runError = document.getElementById('run-error');
     runOpen.addEventListener('click', function () { runError.textContent = ''; runDialog.showModal(); runInput.focus(); });
     document.getElementById('run-cancel').addEventListener('click', function () { runDialog.close(); });
-    runInput.addEventListener('input', function () { runError.textContent = ''; });
+    runInput.addEventListener('input', function () { trimField(runInput); runError.textContent = ''; });
     document.getElementById('run-form').addEventListener('submit', function (e) {
       e.preventDefault();
       var bad = hangarProblem(runInput.value);
       if (bad) { runError.textContent = bad; return; }
-      post('campaign=' + encodeURIComponent(box.dataset.campaign) + '&hangar=' + encodeURIComponent(runInput.value.trim())).then(function (res) {
+      post('campaign=' + encodeURIComponent(box.dataset.campaign) + '&hangar=' + encodeURIComponent(canonicalHangar(runInput.value) || runInput.value.trim())).then(function (res) {
         if (res.ok) { location.reload(); return; }
         return res.text().then(function (t) { runError.textContent = t.trim() || 'Could not save the hangar link.'; });
       }, function () { runError.textContent = 'Could not reach the server.'; });
@@ -236,10 +269,12 @@
   // Called whenever the link changes: once it has the right shape, read the hangar (after a short pause, so typing
   // doesn't send a request per key).
   function scheduleCheck(delay) {
-    clearTimeout(checkTimer);
     var link = hangar.trim();
-    if (hangarProblem(link)) { check = { link: '', state: 'idle', message: '', result: null }; renderCheck(); return; }
+    if (hangarProblem(link)) { clearTimeout(checkTimer); check = { link: '', state: 'idle', message: '', result: null }; renderCheck(); return; }
+    // The same link as before (a keystroke that trims back to it, say): whatever is pending or already read stands.
+    // Clearing the pending timer here would cancel its read for good.
     if (check.link === link && check.state !== 'idle') { renderCheck(); return; }
+    clearTimeout(checkTimer);
     check = { link: link, state: 'checking', message: '', result: null };
     renderCheck();
     checkTimer = setTimeout(function () { runCheck(link); }, delay);
@@ -370,7 +405,7 @@
     input.id = 'wiz-hangar'; input.className = 'wide'; input.type = 'url'; input.spellcheck = false;
     input.placeholder = 'https://mekbay.com/?instance=\u2026'; input.value = hangar;
     input.addEventListener('input', function () {
-      hangar = input.value; error.textContent = '';
+      hangar = trimField(input); error.textContent = '';
       scheduleCheck(350);
       syncRefresh();
       updateNext();
@@ -439,7 +474,7 @@
   }
 
   function submit() {
-    var parts = ['campaign=' + encodeURIComponent(wiz.dataset.campaign), 'hangar=' + encodeURIComponent(hangar.trim())];
+    var parts = ['campaign=' + encodeURIComponent(wiz.dataset.campaign), 'hangar=' + encodeURIComponent(canonicalHangar(hangar) || hangar.trim())];
     pilots.forEach(function (p, idx) {
       parts.push('pilot' + idx + '_name=' + encodeURIComponent(p.name.trim()));
       ladders.forEach(function (l) { parts.push('pilot' + idx + '_' + l.key + '=' + p.sp[l.key]); });

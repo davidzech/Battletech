@@ -73,11 +73,11 @@ func storeContract(t *testing.T, s *Store) {
 	if r, ok, err := s.Run(ctx, id, "refusalwar"); err != nil || ok || r.Started() {
 		t.Fatalf("nothing started yet: %+v ok=%v err=%v", r, ok, err)
 	}
-	hangar := Hangar{URL: goodHangar, Instance: goodInstance, Sel: goodSel}
+	hangar := Hangar{URL: goodHangarURL, Instance: goodInstance}
 	if err := s.StartRun(ctx, id, "refusalwar", hangar); err != nil {
 		t.Fatal(err)
 	}
-	if r, ok, _ := s.Run(ctx, id, "refusalwar"); !ok || !r.Started() || r.Campaign != "refusalwar" || r.HangarInstance != goodInstance || r.HangarSel != goodSel || r.HangarURL != goodHangar {
+	if r, ok, _ := s.Run(ctx, id, "refusalwar"); !ok || !r.Started() || r.Campaign != "refusalwar" || r.HangarInstance != goodInstance || r.HangarURL != goodHangarURL {
 		t.Fatalf("run not stored: %+v", r)
 	}
 	if err := s.StartRun(ctx, id, "another", Hangar{URL: "u2", Instance: "i2"}); err != nil {
@@ -86,7 +86,7 @@ func storeContract(t *testing.T, s *Store) {
 	if err := s.StartRun(ctx, id, "refusalwar", Hangar{URL: "u3", Instance: "i3"}); err != nil {
 		t.Fatalf("starting again should change the hangar: %v", err)
 	}
-	if r, _, _ := s.Run(ctx, id, "refusalwar"); r.HangarInstance != "i3" || r.HangarSel != "" {
+	if r, _, _ := s.Run(ctx, id, "refusalwar"); r.HangarInstance != "i3" || r.HangarURL != "u3" {
 		t.Fatalf("hangar not changed: %+v", r)
 	}
 	if r, _, _ := s.Run(ctx, id, "another"); r.HangarInstance != "i2" {
@@ -231,7 +231,7 @@ func migrationContract(t *testing.T, s *Store, withOwner bool) {
 	if err := s.SetCompanyName(ctx, "seed-a", "Wolf's Dragoons"); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.StartRun(ctx, "seed-a", "refusalwar", Hangar{URL: goodHangar, Instance: goodInstance}); err != nil {
+	if err := s.StartRun(ctx, "seed-a", "refusalwar", Hangar{URL: goodHangarURL, Instance: goodInstance}); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.SaveMekBayOperation(ctx, "seed-a", "refusalwar", "scenario_000", MekBayOperation{OpForInstance: "f", OperationID: "o"}); err != nil {

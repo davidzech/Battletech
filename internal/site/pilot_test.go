@@ -188,7 +188,7 @@ func pilotStore(t *testing.T, s *Store, id string) {
 
 	// Starting a campaign creates its run and pilots together, and only once.
 	start := []NewPilot{{Name: "Alrek", SP: SPAllocation{Gunnery: 90, EdgeTokens: 60}}, {Name: "Katarina", SP: SPAllocation{Piloting: 100, EdgeTokens: 50}}}
-	hangar := Hangar{URL: goodHangar, Instance: goodInstance}
+	hangar := Hangar{URL: goodHangarURL, Instance: goodInstance}
 	if err := s.StartRunWithPilots(ctx, id, "wizard", hangar, start); err != nil {
 		t.Fatal(err)
 	}
@@ -264,7 +264,7 @@ func TestNamedPilotsFlow(t *testing.T) {
 	}
 	id := playthroughID("wolfpack2026")
 	// A campaign started without pilots (before they were part of starting one) has to name them afterwards.
-	if err := store.StartRun(ctx, id, "refusalwar", Hangar{URL: goodHangar, Instance: goodInstance, Sel: goodSel}); err != nil {
+	if err := store.StartRun(ctx, id, "refusalwar", Hangar{URL: goodHangarURL, Instance: goodInstance}); err != nil {
 		t.Fatal(err)
 	}
 

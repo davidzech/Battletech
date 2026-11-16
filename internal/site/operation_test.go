@@ -378,7 +378,7 @@ func TestDeployFlow(t *testing.T) {
 	}
 
 	// A started campaign without an owner UID: the player can look and pick, but the site can't deploy for them.
-	if err := store.StartRun(ctx, id, "refusalwar", Hangar{URL: goodHangar, Instance: goodInstance, Sel: goodSel}); err != nil {
+	if err := store.StartRun(ctx, id, "refusalwar", Hangar{URL: goodHangarURL, Instance: goodInstance}); err != nil {
 		t.Fatal(err)
 	}
 

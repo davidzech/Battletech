@@ -11,17 +11,35 @@ import (
 	"unicode/utf8"
 )
 
-// Hangar is a parsed MekBay hangar link such as
-// https://mekbay.com/?instance=01a12f9e-188f-7158-ad67-3fc9700ec733&sel=01a12f9d-a79b-717d-8c84-d5da73d2f9a5
+// Hangar is a MekBay hangar link reduced to what the site needs: the force's instance ID. Whatever else a pasted link
+// carries (the selected unit, an operation, tracking parameters, enemy forces) is dropped.
 type Hangar struct {
-	URL      string // the link as pasted (trimmed)
-	Instance string // required ?instance= id
-	Sel      string // optional ?sel= id
+	URL      string // the canonical link, https://mekbay.com/?instance=<id>
+	Instance string // the hangar force's instance ID
 }
 
 var uuidPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 
-// parseHangar validates a MekBay hangar link: https, on mekbay.com, with an instance id.
+// friendlyInstance picks our own force out of a MekBay "instance" value, which lists forces separated by commas, the
+// hostile ones prefixed "enemy:" (instance=<mine>,enemy:<theirs>). It is the first entry that isn't hostile, or "" if
+// there is none or it isn't a valid ID.
+func friendlyInstance(list string) string {
+	for _, entry := range strings.Split(list, ",") {
+		entry = strings.ToLower(strings.TrimSpace(entry))
+		if strings.HasPrefix(entry, "enemy:") {
+			continue
+		}
+		if uuidPattern.MatchString(entry) {
+			return entry
+		}
+		return ""
+	}
+	return ""
+}
+
+// parseHangar accepts any MekBay link to a hangar and reduces it to https://mekbay.com/?instance=<id>. The link must be
+// https, on mekbay.com, with an instance ID. Extra parameters are harmless and are dropped, the unit selection
+// (&sel=) among them; a list of forces ("<mine>,enemy:<theirs>") gives its friendly force.
 func parseHangar(raw string) (Hangar, error) {
 	raw = strings.TrimSpace(raw)
 	u, err := url.Parse(raw)
@@ -33,15 +51,14 @@ func parseHangar(raw string) (Hangar, error) {
 		return Hangar{}, errors.New("Paste a MekBay hangar link, like https://mekbay.com/?instance=…")
 	}
 	q := u.Query()
-	instance := strings.ToLower(q.Get("instance"))
-	if !uuidPattern.MatchString(instance) {
+	instance := friendlyInstance(q.Get("instance"))
+	if instance == "" {
+		if q.Get("operation") != "" && q.Get("instance") == "" {
+			return Hangar{}, errors.New("That is an operation link. Paste the link to your hangar instead (it has ?instance=…).")
+		}
 		return Hangar{}, errors.New("That MekBay link has no valid instance id (?instance=…).")
 	}
-	sel := strings.ToLower(q.Get("sel"))
-	if sel != "" && !uuidPattern.MatchString(sel) {
-		return Hangar{}, errors.New("That MekBay link has an invalid selection id (&sel=…).")
-	}
-	return Hangar{URL: raw, Instance: instance, Sel: sel}, nil
+	return Hangar{URL: "https://mekbay.com/?instance=" + instance, Instance: instance}, nil
 }
 
 // companyName allows the kinds of names the lore uses ("Wolf's Dragoons", "1st Somerset Strikers", "Kell Hounds").

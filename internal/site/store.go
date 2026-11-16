@@ -37,9 +37,8 @@ func (p Playthrough) CanModify() bool { return p.OwnerUID != "" }
 // its own MekBay hangar.
 type CampaignRun struct {
 	Campaign       string // the campaign's slug, e.g. "refusalwar"
-	HangarURL      string // the MekBay hangar link, as the player pasted it
+	HangarURL      string // the MekBay hangar link, reduced to https://mekbay.com/?instance=<id>
 	HangarInstance string // the link's ?instance= id
-	HangarSel      string // the link's optional ?sel= id
 }
 
 // Started reports whether the campaign has been started (a zero CampaignRun means it hasn't).
@@ -76,7 +75,6 @@ func (s *Store) schemaStatements() []string {
 	started_at      %s,
 	hangar_url      TEXT NOT NULL DEFAULT '',
 	hangar_instance TEXT NOT NULL DEFAULT '',
-	hangar_sel      TEXT NOT NULL DEFAULT '',
 	PRIMARY KEY (playthrough_id, campaign)
 )`, s.timestampColumn()),
 		`CREATE TABLE IF NOT EXISTS mekbay_operations (
@@ -284,9 +282,9 @@ func (s *Store) SetOwnerUID(ctx context.Context, id, uid string) error {
 // Run loads a playthrough's run through a campaign; ok is false if the campaign hasn't been started.
 func (s *Store) Run(ctx context.Context, playthroughID, campaign string) (r CampaignRun, ok bool, err error) {
 	err = s.db.QueryRowContext(ctx,
-		s.q(`SELECT campaign, hangar_url, hangar_instance, hangar_sel FROM campaign_runs WHERE playthrough_id = ? AND campaign = ?`),
+		s.q(`SELECT campaign, hangar_url, hangar_instance FROM campaign_runs WHERE playthrough_id = ? AND campaign = ?`),
 		playthroughID, campaign,
-	).Scan(&r.Campaign, &r.HangarURL, &r.HangarInstance, &r.HangarSel)
+	).Scan(&r.Campaign, &r.HangarURL, &r.HangarInstance)
 	if errors.Is(err, sql.ErrNoRows) {
 		return CampaignRun{}, false, nil
 	}
@@ -297,9 +295,9 @@ func (s *Store) Run(ctx context.Context, playthroughID, campaign string) (r Camp
 // keeps when it was started.
 func (s *Store) StartRun(ctx context.Context, playthroughID, campaign string, h Hangar) error {
 	_, err := s.db.ExecContext(ctx,
-		s.q(`INSERT INTO campaign_runs (playthrough_id, campaign, hangar_url, hangar_instance, hangar_sel) VALUES (?, ?, ?, ?, ?)
-		     ON CONFLICT (playthrough_id, campaign) DO UPDATE SET hangar_url = excluded.hangar_url, hangar_instance = excluded.hangar_instance, hangar_sel = excluded.hangar_sel`),
-		playthroughID, campaign, h.URL, h.Instance, h.Sel)
+		s.q(`INSERT INTO campaign_runs (playthrough_id, campaign, hangar_url, hangar_instance) VALUES (?, ?, ?, ?)
+		     ON CONFLICT (playthrough_id, campaign) DO UPDATE SET hangar_url = excluded.hangar_url, hangar_instance = excluded.hangar_instance`),
+		playthroughID, campaign, h.URL, h.Instance)
 	return err
 }
 
@@ -436,8 +434,8 @@ func (s *Store) StartRunWithPilots(ctx context.Context, playthroughID, campaign 
 		return ErrAlreadyStarted
 	}
 	if _, err := tx.ExecContext(ctx,
-		s.q(`INSERT INTO campaign_runs (playthrough_id, campaign, hangar_url, hangar_instance, hangar_sel) VALUES (?, ?, ?, ?, ?)`),
-		playthroughID, campaign, h.URL, h.Instance, h.Sel); err != nil {
+		s.q(`INSERT INTO campaign_runs (playthrough_id, campaign, hangar_url, hangar_instance) VALUES (?, ?, ?, ?)`),
+		playthroughID, campaign, h.URL, h.Instance); err != nil {
 		return err
 	}
 	for _, p := range pilots {
