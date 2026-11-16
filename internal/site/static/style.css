@@ -850,7 +850,6 @@ html:not(.js) .wp-toggle, html:not(.js) .wp-stamp { display: none; }
 /* Manage page: pilot cards with the wizard's stat boxes, and the Manage SP dialog. */
 .pilot-main .stat-boxes { margin: 0.6rem 0 0.5rem; max-width: 100%; }
 .pilot-stat.unalloc b { color: var(--accent); }
-.pilot-actions { display: flex; flex-wrap: wrap; gap: 0.6rem; margin: 0.4rem 0 0; }
 .alloc-base { grid-column: 1 / -1; font-size: 0.75rem; color: var(--muted); }
 .sp-earn { display: flex; flex-wrap: wrap; align-items: end; gap: 0.6rem; margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--line); }
 .sp-earn label { display: grid; gap: 0.3rem; font: 700 0.8rem var(--display); letter-spacing: 0.08em; text-transform: uppercase; }
@@ -860,7 +859,6 @@ html:not(.js) .wp-toggle, html:not(.js) .wp-stamp { display: none; }
 /* Manage page: pilot cards with the wizard's stat boxes, and the Manage SP dialog. */
 .pilot-main .stat-boxes { margin: 0.6rem 0 0.5rem; max-width: 100%; }
 .pilot-stat.unalloc b { color: var(--accent); }
-.pilot-actions { display: flex; flex-wrap: wrap; gap: 0.6rem; margin: 0.4rem 0 0; }
 .alloc-base { grid-column: 1 / -1; font-size: 0.75rem; color: var(--muted); }
 .sp-earn { display: flex; flex-wrap: wrap; align-items: end; gap: 0.6rem; margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--line); }
 .sp-earn label { display: grid; gap: 0.3rem; font: 700 0.8rem var(--display); letter-spacing: 0.08em; text-transform: uppercase; }
@@ -868,13 +866,15 @@ html:not(.js) .wp-toggle, html:not(.js) .wp-stamp { display: none; }
 #sp-dialog .stat-boxes { margin-top: 0.5rem; }
 
 /* The "More" drop-down on a pilot card, and the memorial for pilots killed in action. */
-.pilot-actions { align-items: flex-start; }
+/* Manage SP and More form one split button: the More segment is a darker yellow, joined by a thin seam. */
+.pilot-actions { display: flex; align-items: flex-start; gap: 2px; margin: 0.4rem 0 0; }
+.pilot-actions .pilot-sp { clip-path: none; }
 details.more { position: relative; }
-details.more > summary { list-style: none; cursor: pointer; padding: 0.5rem 0.9rem; font: 700 0.8rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--text); background: var(--bg); border: 1px solid var(--line); user-select: none; }
+details.more > summary { display: inline-block; list-style: none; cursor: pointer; padding: 0.6rem 0.9rem; font: 700 0.9rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent-ink); background: var(--accent); filter: brightness(0.78); clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%); user-select: none; }
 details.more > summary::-webkit-details-marker { display: none; }
-details.more > summary::after { content: ""; display: inline-block; margin-left: 0.55rem; vertical-align: 0.15em; border: 0.3rem solid transparent; border-top-color: currentColor; border-bottom-width: 0; transition: transform 0.15s; }
+details.more > summary::after { content: ""; display: inline-block; margin-left: 0.5rem; vertical-align: 0.12em; border: 0.3rem solid transparent; border-top-color: currentColor; border-bottom-width: 0; transition: transform 0.15s; }
 details.more[open] > summary::after { transform: rotate(180deg); }
-details.more > summary:hover, details.more[open] > summary, details.more > summary:focus-visible { border-color: var(--accent); color: var(--accent); }
+details.more > summary:hover, details.more[open] > summary, details.more > summary:focus-visible { filter: brightness(0.95); outline: none; }
 .more-menu { position: absolute; z-index: 5; top: calc(100% + 0.25rem); left: 0; min-width: 14rem; padding: 0.25rem; background: var(--panel-2); border: 1px solid var(--line); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.6); }
 .more-menu button { display: block; width: 100%; padding: 0.55rem 0.7rem; text-align: left; font: 0.9rem var(--sans, inherit); color: var(--text); background: none; border: 0; cursor: pointer; }
 .more-menu button:hover, .more-menu button:focus-visible { background: rgba(229, 89, 79, 0.15); color: #ff8d83; }
