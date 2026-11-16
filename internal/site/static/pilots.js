@@ -36,7 +36,7 @@
   }
 
   // ---- Renaming a pilot: a pencil turns the name into a text field with a confirm check embedded in it. Used on the pilot cards
-  // and in Manage Pilot Records, and a new name is shown in both places at once.
+  // and in Advanced Management, and a new name is shown in both places at once.
   var PENCIL_DONE = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
 
   // Shows a pilot's new name everywhere on the page.
@@ -216,7 +216,7 @@
   }
 
   // ---- Edge abilities: whenever a pilot's Edge abilities level is above the number they have learned, the card offers a picker with one
-  // combo box for each new ability. The choice is permanent: Manage Pilot Records resets it.
+  // combo box for each new ability. The choice is permanent: Advanced Management resets it.
   var skillDialog = document.getElementById('skill-dialog');
   var abilityCatalog = JSON.parse(box.dataset.abilities || '[]');
   var CATEGORY_ORDER = ['Attack', 'Indirect Fire', 'Defense', 'Heat', 'Melee', 'Movement'];
@@ -321,7 +321,7 @@
     var learned = (li.dataset.learned || '').split(' ').filter(Boolean);
     var available = abilityCatalog.filter(function (a) { return learned.indexOf(a.id) < 0; });
     document.getElementById('skill-title').textContent = li.dataset.name + ': choose ' + (pending === 1 ? 'a new Edge ability' : pending + ' new Edge abilities');
-    document.getElementById('skill-intro').textContent = 'As a named pilot reaches a new level of Edge abilities, they choose one from the list. This choice is permanent: it can only be undone from Manage Pilot Records.';
+    document.getElementById('skill-intro').textContent = 'As a named pilot reaches a new level of Edge abilities, they choose one from the list. This choice is permanent: it can only be undone from Advanced Management.';
     skillSlots.textContent = '';
     skillSelects = [];
     for (var i = 0; i < pending; i++) {
@@ -365,7 +365,7 @@
       var names = ids.map(function (id) { return abilityById(id).name; });
       Confirm.ask({
         title: 'Learn ' + names.join(', ') + '?',
-        message: 'This choice is permanent. To undo it you will have to reset ' + skillPilot.dataset.name + '\u2019s Edge abilities under Manage Pilot Records.',
+        message: 'This choice is permanent. To undo it you will have to reset ' + skillPilot.dataset.name + '\u2019s Edge abilities under Advanced Management.',
         confirmLabel: 'Learn', danger: true
       }).then(function (ok) {
         if (!ok) return;
@@ -540,7 +540,7 @@
       kia.addEventListener('click', function () {
         Confirm.ask({
           title: 'Mark ' + li.dataset.name + ' as Killed in Action?',
-          message: 'They move to the Memorial and are out of the campaign. Their record stays, and you can bring them back under Manage Pilot Records.',
+          message: 'They move to the Memorial and are out of the campaign. Their record stays, and you can bring them back under Advanced Management.',
           confirmLabel: 'Killed in Action', danger: true
         }).then(function (ok) { if (ok) send('/api/pilots/fallen', 'pilot=' + encodeURIComponent(id), kia); });
       });
@@ -554,7 +554,7 @@
   document.addEventListener('click', function (e) { closeMenus(e.target.closest ? e.target.closest('details.more') : null); });
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeMenus(null); });
 
-  // ---- Manage Pilot Records: edit a name, revive, delete, reset abilities or override the total SP, to correct a misclick or a
+  // ---- Advanced Management: edit a name, revive, delete, reset abilities or override the total SP, to correct a misclick or a
   // desync. Every action updates its row in place and leaves the dialog open; the page behind is refreshed when the dialog
   // is closed (if anything changed).
   var records = document.getElementById('records-dialog');

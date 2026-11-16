@@ -499,7 +499,7 @@ func (s *Server) learnAbilities(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// resetEdgeAbilities forgets a pilot's learned Edge abilities (Manage Pilot Records).
+// resetEdgeAbilities forgets a pilot's learned Edge abilities (Advanced Management).
 func (s *Server) resetEdgeAbilities(w http.ResponseWriter, r *http.Request) {
 	pt, c, ok := s.pilotRequest(w, r)
 	if !ok {

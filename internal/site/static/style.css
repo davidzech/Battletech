@@ -911,7 +911,7 @@ details.more > summary:focus-visible { outline: none; }
 .pilot.kia .rank-label { opacity: 0.7; }
 .kia-stamp { position: absolute; left: 50%; top: 50%; padding: 0.1rem 0.55rem; font: 700 1.55rem/1.2 var(--display); letter-spacing: 0.14em; text-transform: uppercase; white-space: nowrap; color: #ff5a4d; background: rgba(10, 8, 8, 0.6); border: 3px solid #e5594f; border-radius: 3px; text-shadow: 0 0 6px rgba(0, 0, 0, 0.9); transform: translate(-50%, -50%) rotate(-16deg); pointer-events: none; }
 /* The pilot records link at the bottom of the page is deliberately quiet. */
-.records-link { margin: 1.5rem 0 0; }
+.danger-action { margin: 0 0 1.4rem; }
 .link-button { padding: 0; background: none; border: 0; color: var(--muted); font: 0.8rem var(--display); letter-spacing: 0.08em; text-transform: uppercase; text-decoration: underline; text-underline-offset: 0.2em; cursor: pointer; }
 .link-button:hover, .link-button:focus-visible { color: var(--text); }
 .records-list { list-style: none; margin: 0.75rem 0; padding: 0; display: grid; gap: 0.4rem; }
@@ -969,7 +969,7 @@ button.rank-btn:hover, button.rank-btn:focus-visible { color: var(--accent); bor
 dialog select { display: block; width: 100%; margin-top: 0.4rem; padding: 0.55rem 0.7rem; font: 700 1rem var(--display); letter-spacing: 0.05em; color: var(--text); background: var(--bg); border: 1px solid var(--line); }
 dialog select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 
-/* The name pencil on a pilot card (the same editor as in Manage Pilot Records). */
+/* The name pencil on a pilot card (the same editor as in Advanced Management). */
 .pilot-head h3 { display: flex; align-items: center; gap: 0.3rem; }
 .pilot-head h3 .name-form { min-width: 12rem; }
 .pilot-head h3 .name-form input { font-size: 1.1rem; }
