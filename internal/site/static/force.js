@@ -52,8 +52,7 @@
       fact('Tonnage', String(u.tons));
       fact('Base BV', commas(u.bv));
     }
-    if (u.pilot) fact('Pilot', u.pilot + ' (' + u.gunnery + '/' + u.piloting + ')');
-    else fact('Skills', u.gunnery + '/' + u.piloting);
+    if (u.pilot) fact('Pilot', u.pilot);
     tip.appendChild(facts);
   }
 
