@@ -100,7 +100,8 @@
   </form>
 </dialog>
 <section class="hangar-units" id="hangar-units" data-campaign="{{.Campaign.Slug}}" data-cached="{{.ForceJSON}}">
-<div class="hangar-units-head"><h2>Hangar</h2><span class="hangar-units-summary" id="hangar-units-summary"></span></div>
+<h2>Hangar</h2>
+<div class="hangar-units-summary" id="hangar-units-summary"></div>
 <p class="muted">{{.Play.CompanyName}}&rsquo;s MekBay hangar holds your mechs, and scenarios deploy from it.</p>
 <p class="downloads" id="campaign-run" data-campaign="{{.Campaign.Slug}}"><a class="button" href="{{.Run.HangarURL}}" target="_blank" rel="noopener noreferrer">Open hangar</a><button type="button" class="button" id="run-open">Change hangar link</button></p>
 <div class="mech-list" id="hangar-units-list"><p class="muted">Reading your hangar&hellip;</p></div>
@@ -140,6 +141,7 @@
 </dialog>
 <script src="/static/confirm.js" defer></script>
 <script src="/static/mechrow.js" defer></script>
+<script src="/static/forcesummary.js" defer></script>
 <script src="/static/hangarlist.js" defer></script>
 <script src="/static/portraitpicker.js" defer></script>
 <script src="/static/allocator.js" defer></script>

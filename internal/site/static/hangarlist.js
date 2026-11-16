@@ -1,5 +1,5 @@
-// Manage page: the full list of the mechs in the campaign's MekBay hangar, as the same full-size mech rows the deploy popup uses
-// (mechrow.js, which must load first). Like the overview, the page embeds the hangar as it was last read, so the list paints at once and
+// Manage page: the campaign's MekBay hangar as an at-a-glance summary card (forcesummary.js) above the full list of its mechs, as the same mech
+// rows the deploy popup uses (mechrow.js). Both scripts must load first. Like the overview, the page embeds the hangar as it was last read, so the list paints at once and
 // the live read (GET /api/campaign/force) only refreshes it; only a run that has never been read shows "Reading your hangar...". Names,
 // roles and models go in as text, never HTML.
 (function () {
@@ -14,14 +14,13 @@
     if (text !== undefined) e.textContent = text;
     return e;
   }
-  function commas(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
-
+  // The same at-a-glance card as the campaign overview: unit icons with hover details, the count, and the total BV in big yellow.
   function render(data) {
     var units = data.units || [];
     list.textContent = '';
-    var bv = 0;
-    units.forEach(function (u) { if (!u.unknown) bv += u.bv; });
-    summary.textContent = units.length ? units.length + (units.length === 1 ? ' unit' : ' units') + ' · ' + commas(bv) + ' BV' : '';
+    summary.textContent = '';
+    var card = typeof ForceSummary !== 'undefined' ? ForceSummary.build(data) : null;
+    if (card) summary.appendChild(card);
     if (!units.length) {
       list.appendChild(el('p', 'muted', 'Your hangar has no units in it yet. Add some in MekBay.'));
       return;

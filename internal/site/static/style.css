@@ -1027,8 +1027,8 @@ dialog button.rec-skills-reset:disabled { opacity: 0.4; cursor: not-allowed; }
 /* Manage page: the full list of the hangar's mechs, as the same rows as the deploy popup. */
 .hangar-units { margin: 2rem 0 0; }
 .hangar-units .downloads { margin: 0.6rem 0 0.9rem; }
-.hangar-units-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0.3rem 1rem; }
-.hangar-units-summary { font: 700 0.8rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.hangar-units-summary { margin: 0.5rem 0 0.9rem; }
+.hangar-units-summary:empty { display: none; }
 .mech-list { display: grid; gap: 0.4rem; margin-top: 0.6rem; }
 /* The Hangar list has a little more room than the compact rows in the popup and the wizard: about 5.2rem tall, with the icon, name and chips
    sized between the two. */
