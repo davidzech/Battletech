@@ -200,7 +200,7 @@ func (s *Server) startCampaign(w http.ResponseWriter, r *http.Request) {
 		}
 		read = &h
 	}
-	if err := s.store.StartRunWithPilots(r.Context(), id, c.Slug, hangar, pilots); errors.Is(err, ErrAlreadyStarted) {
+	if err := s.store.StartRunWithPilots(r.Context(), id, c.Slug, hangar, pilots, c.StartingWarchest); errors.Is(err, ErrAlreadyStarted) {
 		http.Error(w, "This campaign has already been started.", http.StatusConflict)
 		return
 	} else if err != nil {

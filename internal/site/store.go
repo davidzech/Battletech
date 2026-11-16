@@ -39,7 +39,11 @@ type CampaignRun struct {
 	Campaign       string // the campaign's slug, e.g. "refusalwar"
 	HangarURL      string // the MekBay hangar link, reduced to https://mekbay.com/?instance=<id>
 	HangarInstance string // the link's ?instance= id
+	Warchest       int    // the force's finances in SP; starts at the campaign's starting_warchest
 }
+
+// WarchestText is the warchest with a thousands separator, e.g. "4,500".
+func (r CampaignRun) WarchestText() string { return withCommas(r.Warchest) }
 
 // Started reports whether the campaign has been started (a zero CampaignRun means it hasn't).
 func (r CampaignRun) Started() bool { return r.HangarInstance != "" }
@@ -175,6 +179,9 @@ func (s *Store) init() error {
 	}
 	// Columns added after a table first shipped. CREATE TABLE IF NOT EXISTS leaves an existing table as it was, so they
 	// are added here (neither database has ADD COLUMN IF NOT EXISTS in common).
+	if err := s.ensureColumn("campaign_runs", "warchest", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
 	if err := s.ensureColumn("named_pilots", "portrait", "TEXT NOT NULL DEFAULT ''"); err != nil {
 		return fmt.Errorf("migrate schema: %w", err)
 	}
@@ -326,9 +333,9 @@ func (s *Store) SetOwnerUID(ctx context.Context, id, uid string) error {
 // Run loads a playthrough's run through a campaign; ok is false if the campaign hasn't been started.
 func (s *Store) Run(ctx context.Context, playthroughID, campaign string) (r CampaignRun, ok bool, err error) {
 	err = s.db.QueryRowContext(ctx,
-		s.q(`SELECT campaign, hangar_url, hangar_instance FROM campaign_runs WHERE playthrough_id = ? AND campaign = ?`),
+		s.q(`SELECT campaign, hangar_url, hangar_instance, warchest FROM campaign_runs WHERE playthrough_id = ? AND campaign = ?`),
 		playthroughID, campaign,
-	).Scan(&r.Campaign, &r.HangarURL, &r.HangarInstance)
+	).Scan(&r.Campaign, &r.HangarURL, &r.HangarInstance, &r.Warchest)
 	if errors.Is(err, sql.ErrNoRows) {
 		return CampaignRun{}, false, nil
 	}
@@ -568,7 +575,7 @@ var ErrAlreadyStarted = errors.New("this campaign has already been started")
 
 // StartRunWithPilots starts a campaign and creates its starting named pilots, all or nothing. It refuses
 // (ErrAlreadyStarted) if the campaign was already started, so submitting the wizard twice can't make duplicate pilots.
-func (s *Store) StartRunWithPilots(ctx context.Context, playthroughID, campaign string, h Hangar, pilots []NewPilot) error {
+func (s *Store) StartRunWithPilots(ctx context.Context, playthroughID, campaign string, h Hangar, pilots []NewPilot, warchest int) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -584,8 +591,8 @@ func (s *Store) StartRunWithPilots(ctx context.Context, playthroughID, campaign 
 		return ErrAlreadyStarted
 	}
 	if _, err := tx.ExecContext(ctx,
-		s.q(`INSERT INTO campaign_runs (playthrough_id, campaign, hangar_url, hangar_instance) VALUES (?, ?, ?, ?)`),
-		playthroughID, campaign, h.URL, h.Instance); err != nil {
+		s.q(`INSERT INTO campaign_runs (playthrough_id, campaign, hangar_url, hangar_instance, warchest) VALUES (?, ?, ?, ?, ?)`),
+		playthroughID, campaign, h.URL, h.Instance, warchest); err != nil {
 		return err
 	}
 	for _, p := range pilots {

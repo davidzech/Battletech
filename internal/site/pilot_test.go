@@ -192,22 +192,22 @@ func pilotStore(t *testing.T, s *Store, id string) {
 	// Starting a campaign creates its run and pilots together, and only once.
 	start := []NewPilot{{Name: "Alrek", SP: SPAllocation{Gunnery: 90, EdgeTokens: 60}}, {Name: "Katarina", SP: SPAllocation{Piloting: 100, EdgeTokens: 50}}}
 	hangar := Hangar{URL: goodHangarURL, Instance: goodInstance}
-	if err := s.StartRunWithPilots(ctx, id, "wizard", hangar, start); err != nil {
+	if err := s.StartRunWithPilots(ctx, id, "wizard", hangar, start, 4500); err != nil {
 		t.Fatal(err)
 	}
-	if r, ok, _ := s.Run(ctx, id, "wizard"); !ok || r.HangarInstance != goodInstance {
+	if r, ok, _ := s.Run(ctx, id, "wizard"); !ok || r.HangarInstance != goodInstance || r.Warchest != 4500 || r.WarchestText() != "4,500" {
 		t.Fatalf("run not started: %+v", r)
 	}
 	if ps, _ := s.Pilots(ctx, id, "wizard"); len(ps) != 2 || ps[0].Name != "Alrek" || ps[0].SP != start[0].SP || ps[1].SP != start[1].SP || ps[1].Piloting() != 4 {
 		t.Fatalf("starting pilots = %+v", ps)
 	}
-	if err := s.StartRunWithPilots(ctx, id, "wizard", hangar, start); !errors.Is(err, ErrAlreadyStarted) {
+	if err := s.StartRunWithPilots(ctx, id, "wizard", hangar, start, 4500); !errors.Is(err, ErrAlreadyStarted) {
 		t.Fatalf("starting twice should be refused, got %v", err)
 	}
 	if ps, _ := s.Pilots(ctx, id, "wizard"); len(ps) != 2 {
 		t.Fatalf("a refused start must not add pilots: %+v", ps)
 	}
-	if err := s.StartRunWithPilots(ctx, "no-such-playthrough", "wizard", hangar, start); err == nil {
+	if err := s.StartRunWithPilots(ctx, "no-such-playthrough", "wizard", hangar, start, 4500); err == nil {
 		t.Fatal("a run needs a playthrough")
 	}
 }

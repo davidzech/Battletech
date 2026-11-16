@@ -75,6 +75,8 @@ type Campaign struct {
 	// StartingMinMechs is how many mechs the starting hangar must hold at least (Intro.md front matter
 	// starting_min_mechs); 0 if not given.
 	StartingMinMechs int
+	// StartingWarchest is the SP the company's warchest starts the campaign with (Intro.md front matter starting_warchest); 0 if not given.
+	StartingWarchest int
 	// Faction is the side the player's force fights for (Intro.md front matter faction), which decides the ranks of its named
 	// pilots; see factions.go. Empty or unknown turns ranks off.
 	Faction string
@@ -158,7 +160,9 @@ type frontData struct {
 	// StartingBV is the battle value of the force a company starts the campaign with (Intro.md).
 	StartingBV int `yaml:"starting_bv"`
 	// StartingMinMechs is how many mechs the starting hangar must hold at least (Intro.md).
-	StartingMinMechs int    `yaml:"starting_min_mechs"`
+	StartingMinMechs int `yaml:"starting_min_mechs"`
+	// StartingWarchest is the SP the warchest starts with (Intro.md).
+	StartingWarchest int    `yaml:"starting_warchest"`
 	DefaultNext      string `yaml:"default_next"`
 	// Faction and Ranks are described on Campaign (Intro.md).
 	Faction string   `yaml:"faction"`
@@ -279,6 +283,7 @@ func (l Library) load(name string) (*Campaign, bool) {
 	c.MinPlayers, c.MaxPlayers = meta.MinPlayers, meta.MaxPlayers
 	c.StartingNamedPilots, c.StartingPilotSP, c.StartingBV = meta.StartingNamedPilots, meta.StartingPilotSP, meta.StartingBV
 	c.StartingMinMechs = meta.StartingMinMechs
+	c.StartingWarchest = meta.StartingWarchest
 	c.Faction = meta.Faction
 	if c.Ranks = meta.Ranks; len(c.Ranks) == 0 {
 		c.Ranks = factionRanks(meta.Faction)
@@ -416,6 +421,9 @@ func renderBriefing(src string) template.HTML {
 	html = strings.ReplaceAll(html, "<p>—", `<p class="cite">`+"—")
 	return template.HTML(html)
 }
+
+// StartingWarchestText is the starting warchest with a thousands separator, e.g. "4,500".
+func (c *Campaign) StartingWarchestText() string { return withCommas(c.StartingWarchest) }
 
 // StartingBVText is the starting BV with a thousands separator, e.g. "6,000".
 func (c *Campaign) StartingBVText() string { return withCommas(c.StartingBV) }

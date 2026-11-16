@@ -19,6 +19,7 @@
 <ul class="start-rules">
 {{if or .Campaign.StartingMinMechs .Campaign.StartingBV}}<li>Your hangar holds {{if .Campaign.StartingMinMechs}}<b>at least {{.Campaign.StartingMinMechs}} mechs</b>{{end}}{{if and .Campaign.StartingMinMechs .Campaign.StartingBV}}, totalling {{end}}{{if .Campaign.StartingBV}}<b>up to {{.Campaign.StartingBVText}} BV</b>{{end}} (base BV, whatever the pilots&rsquo; skills).</li>
 {{end}}{{if .Campaign.StartingNamedPilots}}<li>You create <b>{{.Campaign.StartingNamedPilots}} named pilots</b>, each allocating <b>{{.Campaign.StartingPilotSP}} SP</b>.</li>
+{{end}}{{if .Campaign.StartingWarchest}}<li>Your warchest starts at <b>{{.Campaign.StartingWarchestText}} SP</b>.</li>
 {{end}}<li>You link this campaign&rsquo;s MekBay hangar, the force {{.Play.CompanyName}} fields in it.</li>
 </ul>
 <p class="downloads"><button type="button" class="button" id="wizard-open">Start campaign&hellip;</button></p>

@@ -1058,3 +1058,4 @@ dialog button.rec-skills-reset:disabled { opacity: 0.4; cursor: not-allowed; }
 .mech-list .mr-name { font-size: 1.15rem; }
 .mech-list .mr-chips { gap: 0.35rem; margin-top: 0.25rem; }
 .mech-list .mr-chip { padding: 0.09rem 0.48rem; font-size: 0.77rem; }
+#campaign-run { margin-top: 1.1rem; }
