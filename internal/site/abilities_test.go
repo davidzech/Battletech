@@ -263,6 +263,10 @@ func TestEdgeAbilitiesThroughThePages(t *testing.T) {
 	if got := learn(pilot.ID, "nimble"); got != http.StatusBadRequest {
 		t.Errorf("nothing pending any more: %d", got)
 	}
+	// The chip names its ability for the hover card script, and carries no native tooltip (that would double up with ours).
+	if !strings.Contains(p, `class="skill-chip" tabindex="0" data-ability="marksman" aria-describedby="skill-tip">Marksman</span>`) || strings.Contains(p, `class="skill-chip" tabindex="0" title=`) {
+		t.Error("a learned ability's chip should name its ability and have no title attribute")
+	}
 
 	// More levels, more choices at once; each only once.
 	if err := store.AwardSP(ctx, id, "refusalwar", pilot.ID, SPAllocation{EdgeAbilities: 540}); err != nil { // 600: level 4

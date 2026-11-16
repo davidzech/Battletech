@@ -1006,3 +1006,8 @@ button.button.skill-pick { padding: 0.4rem 0.9rem; font-size: 0.75rem; }
 .rec-skills-text { flex: 1 1 14rem; }
 .rec-skills-text b { color: var(--text); }
 dialog button.rec-skills-reset:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* The hover card for a learned Edge ability: the picker's ability card in a floating panel. */
+.skill-tip { position: fixed; z-index: 60; width: min(26rem, calc(100vw - 1rem)); pointer-events: none; box-shadow: 0 8px 22px rgba(0, 0, 0, 0.65); }
+.skill-tip[hidden] { display: none; }
+.skill-tip .skill-card { margin: 0; min-height: 0; background-color: var(--panel-2); }

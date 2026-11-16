@@ -284,6 +284,37 @@
     skillError.textContent = '';
   }
 
+  // ---- Hover card for a learned ability, like the one on the mech icons of the overview: the same ability card as the picker, in a
+  // floating panel anchored under the chip (above it when there is no room below), shown on hover and on keyboard focus.
+  var skillTip = el('div', 'skill-tip');
+  skillTip.id = 'skill-tip';
+  skillTip.setAttribute('role', 'tooltip');
+  skillTip.hidden = true;
+  var skillTipCard = el('div', 'skill-card');
+  skillTip.appendChild(skillTipCard);
+  document.body.appendChild(skillTip);
+
+  function showSkillTip(chip) {
+    var a = abilityById(chip.dataset.ability);
+    if (!a) return;
+    fillAbilityCard(skillTipCard, a);
+    skillTip.hidden = false;
+    var r = chip.getBoundingClientRect(), w = skillTip.offsetWidth, h = skillTip.offsetHeight, gap = 6;
+    var left = Math.min(Math.max(8, r.left), window.innerWidth - w - 8);
+    var top = r.bottom + gap;
+    if (top + h > window.innerHeight - 8 && r.top - gap - h >= 8) top = r.top - gap - h;
+    skillTip.style.left = left + 'px';
+    skillTip.style.top = top + 'px';
+  }
+  function hideSkillTip() { skillTip.hidden = true; }
+  box.querySelectorAll('.skill-chip').forEach(function (chip) {
+    chip.addEventListener('mouseenter', function () { showSkillTip(chip); });
+    chip.addEventListener('mouseleave', hideSkillTip);
+    chip.addEventListener('focus', function () { showSkillTip(chip); });
+    chip.addEventListener('blur', hideSkillTip);
+  });
+  window.addEventListener('scroll', hideSkillTip, true); // a fixed card would drift away from its chip
+
   function openSkills(li) {
     skillPilot = li;
     var pending = parseInt(li.dataset.edgePending, 10) || 0;
