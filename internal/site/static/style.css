@@ -406,12 +406,16 @@ dialog.wizard { width: min(46rem, calc(100vw - 2rem)); }
 .force-table td.who > div { display: flex; align-items: center; gap: 0.6rem; min-width: 0; }
 .force-table td.who img { flex: none; object-fit: cover; object-position: top; background: var(--bg); }
 /* The overview's pilots: portrait, name and the same boxes with yellow numbers as the start wizard. */
-.roster { list-style: none; margin: 0.5rem 0 1rem; padding: 0; display: grid; gap: 0.6rem; }
-.roster-pilot { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem; padding: 0.6rem 0.75rem; background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--accent); }
-.roster-pilot img { flex: none; width: 4.5rem; height: 4.5rem; object-fit: cover; object-position: top; background: var(--bg); border: 1px solid var(--line); }
+.roster { list-style: none; margin: 0.5rem 0 1rem; padding: 0; display: grid; gap: 0.4rem; }
+.roster-pilot { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.9rem; padding: 0.35rem 0.6rem; background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--accent); }
+.roster-pilot img { flex: none; width: 2.75rem; height: 2.75rem; object-fit: cover; object-position: top; background: var(--bg); border: 1px solid var(--line); }
 .roster-name { flex: 1 1 9rem; display: grid; gap: 0.15rem; min-width: 0; }
-.roster-name b { font: 700 1.2rem var(--display); letter-spacing: 0.06em; text-transform: uppercase; overflow-wrap: anywhere; }
-.roster-name span { font: 700 0.75rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.roster-name b { font: 700 1.05rem var(--display); letter-spacing: 0.06em; text-transform: uppercase; overflow-wrap: anywhere; }
+.roster-name span { font: 700 0.65rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.roster-pilot .stat-boxes { grid-template-columns: repeat(4, 4.2rem); gap: 0.3rem; }
+.roster-pilot .stat-box { grid-template-rows: auto auto; padding: 0.2rem 0.2rem 0.25rem; gap: 0; }
+.roster-pilot .stat-label { font-size: 0.55rem; }
+.roster-pilot .stat-value { font-size: 1.5rem; }
 @media (max-width: 40rem) { .roster-pilot .stat-boxes { flex-basis: 100%; } }
 .unit-table td.who { font-weight: 600; }
 .unit-table td.who small { font-weight: 400; color: var(--muted); }
