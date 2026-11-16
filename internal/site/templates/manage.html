@@ -28,17 +28,17 @@
 <div class="pilot-main">
 <div class="pilot-head"><h3>{{.Name}}</h3><span class="pilot-stat">SP earned <b>{{.Earned}}</b></span>{{if .Unallocated}}<span class="pilot-stat unalloc">Unallocated <b>{{.Unallocated}}</b></span>{{end}}</div>
 <div class="stat-boxes">{{range .Columns}}<div class="stat-box"><span class="stat-label">{{.Name}}</span><span class="stat-value">{{.Level}}</span><span class="stat-next">{{if .HasNext}}<b>{{.NextLvl}}</b>: {{.SP}}/{{.NextAt}} SP{{else}}max{{end}}</span></div>{{end}}</div>
-<div class="pilot-actions"><button type="button" class="button pilot-sp">Manage SP{{if .Unallocated}} ({{.Unallocated}}){{end}}</button><details class="more"><summary>More</summary><div class="more-menu"><button type="button" class="pilot-kia">Mark as killed in action</button></div></details></div>
+<div class="pilot-actions"><button type="button" class="button pilot-sp">Manage SP{{if .Unallocated}} ({{.Unallocated}}){{end}}</button><details class="more"><summary>More</summary><div class="more-menu"><button type="button" class="pilot-kia"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg><span>Mark as Killed in Action</span></button></div></details></div>
 </div></div>
 </li>
 {{end}}{{end}}</ul>
 {{if .Memorial}}<h2 class="memorial-head">Memorial</h2>
-<p class="muted">Pilots killed in action. They stay on record but are out of the campaign.</p>
+<p class="muted">Pilots Killed in Action. They stay on record but are out of the campaign.</p>
 <ul class="pilot-list memorial">
 {{range .Pilots}}{{if .Fallen}}<li class="pilot kia" data-pilot="{{.ID}}" data-name="{{.Name}}">
 <div class="pilot-card"><span class="portrait-btn"><img src="{{.PortraitURL}}" alt="" width="96" height="96"></span>
 <div class="pilot-main">
-<div class="pilot-head"><h3>{{.Name}}</h3><span class="tag bad">Killed in action</span><span class="pilot-stat">SP earned <b>{{.Earned}}</b></span></div>
+<div class="pilot-head"><h3>{{.Name}}</h3><span class="tag bad">Killed in Action</span><span class="pilot-stat">SP earned <b>{{.Earned}}</b></span></div>
 <div class="stat-boxes">{{range .Columns}}<div class="stat-box"><span class="stat-label">{{.Name}}</span><span class="stat-value">{{.Level}}</span></div>{{end}}</div>
 </div></div>
 </li>
@@ -75,10 +75,10 @@
 </section>
 <dialog id="records-dialog" class="wizard" aria-labelledby="records-title">
   <h2 id="records-title">Manage pilot records</h2>
-  <p class="muted">Every named pilot this campaign has had. Use this to correct a misclick or a mismatch: bring a pilot killed in action back, delete a record for good, factory-reset a pilot's abilities, or override their total SP.</p>
+  <p class="muted">Every named pilot this campaign has had. Use this to correct a misclick or a mismatch: bring a pilot Killed in Action back, delete a record for good, factory-reset a pilot's abilities, or override their total SP.</p>
   <ul class="records-list" id="records-list">
 {{range .Pilots}}<li data-pilot="{{.ID}}" data-name="{{.Name}}" data-total="{{.Earned}}" data-allocated="{{.Allocated}}">
-<div class="rec-top"><img src="{{.PortraitURL}}" alt="" width="40" height="40"><span class="rec-name"><span class="rec-name-text">{{.Name}}</span><button type="button" class="rec-edit" title="Edit name" aria-label="Edit {{.Name}}&rsquo;s name"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button></span><span class="rec-state{{if .Fallen}} kia{{end}}">{{if .Fallen}}Killed in action{{else}}Active{{end}}</span>{{if .Fallen}}<button type="button" class="rec-revive">Revive</button>{{end}}<button type="button" class="rec-delete">Delete</button></div>
+<div class="rec-top"><img src="{{.PortraitURL}}" alt="" width="40" height="40"><span class="rec-name"><span class="rec-name-text">{{.Name}}</span><button type="button" class="rec-edit" title="Edit name" aria-label="Edit {{.Name}}&rsquo;s name"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button></span><span class="rec-state{{if .Fallen}} kia{{end}}">{{if .Fallen}}Killed in Action{{else}}Active{{end}}</span>{{if .Fallen}}<button type="button" class="rec-revive">Revive</button>{{end}}<button type="button" class="rec-delete">Delete</button></div>
 <div class="rec-sp"><span class="rec-sp-text">Total <b class="rec-n-total">{{.Earned}}</b> SP &middot; allocated <b class="rec-n-alloc">{{.Allocated}}</b> &middot; unallocated <b class="rec-n-unalloc">{{.Unallocated}}</b></span><button type="button" class="rec-total">Set total SP</button><button type="button" class="rec-reset">Reset abilities</button></div>
 <form class="rec-total-form" hidden><label>New total SP <input type="number" min="0" max="1000000" step="10" inputmode="numeric"></label><button type="submit" class="button">Save</button><button type="button" class="rec-total-cancel">Cancel</button></form>
 </li>

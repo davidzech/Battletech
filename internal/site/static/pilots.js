@@ -169,7 +169,7 @@
     var kia = li.querySelector('.pilot-kia');
     if (kia) {
       kia.addEventListener('click', function () {
-        if (!window.confirm('Mark ' + li.dataset.name + ' as killed in action? They are removed from your active pilots (you can bring them back under Pilot records).')) return;
+        if (!window.confirm('Mark ' + li.dataset.name + ' as Killed in Action? They are removed from your active pilots (you can bring them back under Pilot records).')) return;
         send('/api/pilots/fallen', 'pilot=' + encodeURIComponent(id), kia);
       });
     }
