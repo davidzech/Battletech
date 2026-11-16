@@ -85,7 +85,7 @@
   var busy = false;
 
   function reach(l, spent) {
-    var r = { level: l.base, handicap: 0, sp: 0 };
+    var r = { level: l.base, sp: 0 };
     l.rows.forEach(function (row) { if (spent >= row.sp) r = row; });
     return r;
   }
@@ -94,9 +94,8 @@
     return null;
   }
   function spentOf(p) { return ladders.reduce(function (sum, l) { return sum + p.sp[l.key]; }, 0); }
-  function handicapOf(p) { return ladders.reduce(function (sum, l) { return sum + reach(l, p.sp[l.key]).handicap; }, 0); }
   function summaryOf(p) {
-    return ladders.map(function (l) { return l.name + ' ' + reach(l, p.sp[l.key]).level; }).join(' · ') + ' · Handicap ' + handicapOf(p);
+    return ladders.map(function (l) { return l.name + ' ' + reach(l, p.sp[l.key]).level; }).join(' · ');
   }
 
   // One column of the allocator: a slider and a number box for the same amount, and what that buys.
@@ -117,7 +116,7 @@
       var spent = p.sp[l.key];
       slider.value = spent; number.value = spent;
       var r = reach(l, spent), n = upcoming(l, spent);
-      preview.textContent = l.name + ' ' + r.level + (r.handicap ? ' (handicap +' + r.handicap + ')' : '') +
+      preview.textContent = l.name + ' ' + r.level +
         (n ? ' — level ' + n.level + ' at ' + n.sp + ' SP' : ' — top level');
     }
     function set(raw) {

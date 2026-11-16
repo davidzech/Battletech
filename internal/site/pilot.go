@@ -14,12 +14,11 @@ import (
 // maxNamedPilots is how many named pilots a command may have at once (a fallen pilot doesn't count).
 const maxNamedPilots = 4
 
-// ladderRow is one step of an improvement ladder: reaching Level costs SP in total (cumulative, not per step) and
-// adds Handicap (that level's handicap alone, not added to earlier steps').
+// ladderRow is one step of an improvement ladder: reaching Level costs SP in total (cumulative, not per step).
+// (The book also gives each step a handicap, used to balance opposing forces; this campaign doesn't track it.)
 type ladderRow struct {
-	Level    int `json:"level"`
-	Handicap int `json:"handicap"`
-	SP       int `json:"sp"`
+	Level int `json:"level"`
+	SP    int `json:"sp"`
 }
 
 // ladder is one column of the improvement table: the level a pilot starts at, and the steps above it.
@@ -33,16 +32,16 @@ type ladder struct {
 // The Named Pilot Improvement Table (Classic BattleTech columns). Gunnery and Piloting get better as the number
 // falls; Edge tokens and Edge abilities as it rises. The Alpha Strike "Skill" column isn't used by this site.
 var (
-	gunneryLadder    = ladder{"gunnery", "Gunnery", 4, []ladderRow{{3, 12, 300}, {2, 28, 700}, {1, 48, 1200}, {0, 88, 2200}}}
-	pilotingLadder   = ladder{"piloting", "Piloting", 5, []ladderRow{{4, 4, 100}, {3, 8, 200}, {2, 28, 700}, {1, 48, 1200}}}
+	gunneryLadder    = ladder{"gunnery", "Gunnery", 4, []ladderRow{{3, 300}, {2, 700}, {1, 1200}, {0, 2200}}}
+	pilotingLadder   = ladder{"piloting", "Piloting", 5, []ladderRow{{4, 100}, {3, 200}, {2, 700}, {1, 1200}}}
 	edgeTokensLadder = ladder{"edge_tokens", "Edge tokens", 1, []ladderRow{
-		{2, 2, 60}, {3, 5, 120}, {4, 8, 200}, {5, 12, 300}, {6, 17, 420}, {7, 22, 560}, {8, 29, 720}, {9, 36, 900}, {10, 44, 1100},
+		{2, 60}, {3, 120}, {4, 200}, {5, 300}, {6, 420}, {7, 560}, {8, 720}, {9, 900}, {10, 1100},
 	}}
-	edgeAbilitiesLadder = ladder{"edge_abilities", "Edge abilities", 0, []ladderRow{{1, 2, 60}, {2, 8, 180}, {3, 14, 360}, {4, 24, 600}, {5, 36, 900}}}
+	edgeAbilitiesLadder = ladder{"edge_abilities", "Edge abilities", 0, []ladderRow{{1, 60}, {2, 180}, {3, 360}, {4, 600}, {5, 900}}}
 )
 
 // at is the step a column has reached with sp allocated to it: the highest row it can afford, or the base level
-// (with no handicap) if none.
+// if none.
 func (l ladder) at(sp int) ladderRow {
 	reached := ladderRow{Level: l.Base}
 	for _, r := range l.Rows {
@@ -108,13 +107,6 @@ func (p NamedPilot) EdgeTokens() int { return edgeTokensLadder.at(p.SP.EdgeToken
 // EdgeAbilities is how many Edge abilities the pilot has earned.
 func (p NamedPilot) EdgeAbilities() int { return edgeAbilitiesLadder.at(p.SP.EdgeAbilities).Level }
 
-// Handicap is the pilot's handicap: the sum of the handicaps of the step each column has reached. Commands compare
-// their pilots' average handicap with their opponent's to hand the weaker side extra points.
-func (p NamedPilot) Handicap() int {
-	return gunneryLadder.at(p.SP.Gunnery).Handicap + pilotingLadder.at(p.SP.Piloting).Handicap +
-		edgeTokensLadder.at(p.SP.EdgeTokens).Handicap + edgeAbilitiesLadder.at(p.SP.EdgeAbilities).Handicap
-}
-
 // pilotColumn is one column of a pilot as the campaign page shows it.
 type pilotColumn struct {
 	Name    string
@@ -130,7 +122,7 @@ type PilotView struct {
 	ID, Name                                 string
 	Fallen                                   bool
 	Gunnery, Piloting, EdgeTokens, Abilities int
-	Handicap, Earned                         int
+	Earned                                   int
 	Columns                                  []pilotColumn
 }
 
@@ -145,7 +137,7 @@ func (p NamedPilot) view() PilotView {
 	return PilotView{
 		ID: p.ID, Name: p.Name, Fallen: p.Fallen,
 		Gunnery: p.Gunnery(), Piloting: p.Piloting(), EdgeTokens: p.EdgeTokens(), Abilities: p.EdgeAbilities(),
-		Handicap: p.Handicap(), Earned: p.Earned(),
+		Earned: p.Earned(),
 		Columns: []pilotColumn{
 			col(gunneryLadder, p.SP.Gunnery), col(pilotingLadder, p.SP.Piloting),
 			col(edgeTokensLadder, p.SP.EdgeTokens), col(edgeAbilitiesLadder, p.SP.EdgeAbilities),

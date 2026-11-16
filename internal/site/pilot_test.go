@@ -14,40 +14,40 @@ import (
 
 func TestLadders(t *testing.T) {
 	for _, c := range []struct {
-		l                   ladder
-		sp, level, handicap int
+		l         ladder
+		sp, level int
 	}{
 		// Gunnery starts at 4 and improves one step at a time as cumulative SP is reached.
-		{gunneryLadder, 0, 4, 0},
-		{gunneryLadder, 299, 4, 0},
-		{gunneryLadder, 300, 3, 12},
-		{gunneryLadder, 699, 3, 12},
-		{gunneryLadder, 700, 2, 28},
-		{gunneryLadder, 1200, 1, 48},
-		{gunneryLadder, 2200, 0, 88},
-		{gunneryLadder, 99999, 0, 88}, // the top of the ladder holds
+		{gunneryLadder, 0, 4},
+		{gunneryLadder, 299, 4},
+		{gunneryLadder, 300, 3},
+		{gunneryLadder, 699, 3},
+		{gunneryLadder, 700, 2},
+		{gunneryLadder, 1200, 1},
+		{gunneryLadder, 2200, 0},
+		{gunneryLadder, 99999, 0}, // the top of the ladder holds
 		// Piloting starts at 5 and stops at 1.
-		{pilotingLadder, 99, 5, 0},
-		{pilotingLadder, 100, 4, 4},
-		{pilotingLadder, 200, 3, 8},
-		{pilotingLadder, 700, 2, 28},
-		{pilotingLadder, 1200, 1, 48},
-		{pilotingLadder, 5000, 1, 48},
+		{pilotingLadder, 99, 5},
+		{pilotingLadder, 100, 4},
+		{pilotingLadder, 200, 3},
+		{pilotingLadder, 700, 2},
+		{pilotingLadder, 1200, 1},
+		{pilotingLadder, 5000, 1},
 		// Edge tokens start at 1.
-		{edgeTokensLadder, 59, 1, 0},
-		{edgeTokensLadder, 60, 2, 2},
-		{edgeTokensLadder, 120, 3, 5},
-		{edgeTokensLadder, 560, 7, 22},
-		{edgeTokensLadder, 1100, 10, 44},
+		{edgeTokensLadder, 59, 1},
+		{edgeTokensLadder, 60, 2},
+		{edgeTokensLadder, 120, 3},
+		{edgeTokensLadder, 560, 7},
+		{edgeTokensLadder, 1100, 10},
 		// Edge abilities start at none.
-		{edgeAbilitiesLadder, 59, 0, 0},
-		{edgeAbilitiesLadder, 60, 1, 2},
-		{edgeAbilitiesLadder, 180, 2, 8},
-		{edgeAbilitiesLadder, 900, 5, 36},
-		{edgeAbilitiesLadder, 5000, 5, 36},
+		{edgeAbilitiesLadder, 59, 0},
+		{edgeAbilitiesLadder, 60, 1},
+		{edgeAbilitiesLadder, 180, 2},
+		{edgeAbilitiesLadder, 900, 5},
+		{edgeAbilitiesLadder, 5000, 5},
 	} {
-		if got := c.l.at(c.sp); got.Level != c.level || got.Handicap != c.handicap {
-			t.Errorf("%s at %d SP = level %d handicap %d, want level %d handicap %d", c.l.Name, c.sp, got.Level, got.Handicap, c.level, c.handicap)
+		if got := c.l.at(c.sp); got.Level != c.level {
+			t.Errorf("%s at %d SP = level %d, want level %d", c.l.Name, c.sp, got.Level, c.level)
 		}
 	}
 	if n, ok := gunneryLadder.next(0); !ok || n.SP != 300 || n.Level != 3 {
@@ -62,8 +62,8 @@ func TestLadders(t *testing.T) {
 	// Every ladder's SP costs must rise, or a cheaper step could be skipped.
 	for _, l := range []ladder{gunneryLadder, pilotingLadder, edgeTokensLadder, edgeAbilitiesLadder} {
 		for i := 1; i < len(l.Rows); i++ {
-			if l.Rows[i].SP <= l.Rows[i-1].SP || l.Rows[i].Handicap <= l.Rows[i-1].Handicap {
-				t.Errorf("%s: row %d (%+v) must cost and weigh more than the one before", l.Name, i, l.Rows[i])
+			if l.Rows[i].SP <= l.Rows[i-1].SP {
+				t.Errorf("%s: row %d (%+v) must cost more than the one before", l.Name, i, l.Rows[i])
 			}
 		}
 	}
@@ -73,16 +73,16 @@ func TestLadders(t *testing.T) {
 // Edge tokens and 30 into Edge abilities, then later 60 more into abilities.
 func TestKirbyExample(t *testing.T) {
 	kirby := NamedPilot{Name: "Kirby", SP: SPAllocation{EdgeTokens: 120, EdgeAbilities: 30}}
-	if kirby.EdgeTokens() != 3 || kirby.EdgeAbilities() != 0 || kirby.Handicap() != 5 || kirby.Earned() != 150 {
-		t.Fatalf("Kirby after 150 SP: tokens %d, abilities %d, handicap %d, earned %d (the book says 3, 0, 5)", kirby.EdgeTokens(), kirby.EdgeAbilities(), kirby.Handicap(), kirby.Earned())
+	if kirby.EdgeTokens() != 3 || kirby.EdgeAbilities() != 0 || kirby.Earned() != 150 {
+		t.Fatalf("Kirby after 150 SP: tokens %d, abilities %d, earned %d (the book says 3, 0, 150)", kirby.EdgeTokens(), kirby.EdgeAbilities(), kirby.Earned())
 	}
 	kirby.SP.EdgeAbilities += 60
-	if kirby.SP.EdgeAbilities != 90 || kirby.EdgeAbilities() != 1 || kirby.Handicap() != 7 {
-		t.Fatalf("Kirby after 60 more: abilities SP %d, abilities %d, handicap %d (the book says 90, 1, 7)", kirby.SP.EdgeAbilities, kirby.EdgeAbilities(), kirby.Handicap())
+	if kirby.SP.EdgeAbilities != 90 || kirby.EdgeAbilities() != 1 {
+		t.Fatalf("Kirby after 60 more: abilities SP %d, abilities %d (the book says 90, 1)", kirby.SP.EdgeAbilities, kirby.EdgeAbilities())
 	}
-	// A brand new pilot is a standard 4/5 pilot with one Edge token and no handicap.
-	if p := (NamedPilot{}); p.Gunnery() != 4 || p.Piloting() != 5 || p.EdgeTokens() != 1 || p.EdgeAbilities() != 0 || p.Handicap() != 0 {
-		t.Errorf("new pilot = %d/%d, edge %d, abilities %d, handicap %d", p.Gunnery(), p.Piloting(), p.EdgeTokens(), p.EdgeAbilities(), p.Handicap())
+	// A brand new pilot is a standard 4/5 pilot with one Edge token and no abilities.
+	if p := (NamedPilot{}); p.Gunnery() != 4 || p.Piloting() != 5 || p.EdgeTokens() != 1 || p.EdgeAbilities() != 0 {
+		t.Errorf("new pilot = %d/%d, edge %d, abilities %d", p.Gunnery(), p.Piloting(), p.EdgeTokens(), p.EdgeAbilities())
 	}
 }
 
@@ -95,7 +95,7 @@ func TestPilotView(t *testing.T) {
 		t.Fatalf("alive %d of %d", alive, len(views))
 	}
 	a := views[0]
-	if a.Gunnery != 3 || a.Piloting != 5 || a.Handicap != 12 || a.Earned != 350 || !views[1].Fallen {
+	if a.Gunnery != 3 || a.Piloting != 5 || a.Earned != 350 || !views[1].Fallen {
 		t.Errorf("view = %+v", a)
 	}
 	g, p := a.Columns[0], a.Columns[1]
@@ -349,8 +349,8 @@ func TestNamedPilotsFlow(t *testing.T) {
 		t.Fatalf("allocation = %+v", ps[0].SP)
 	}
 	c = body(t, srv, "/refusalwar/", cookie)
-	if !strings.Contains(c, "<b>3</b>") || !strings.Contains(c, "Handicap <b>14</b>") || !strings.Contains(c, "SP earned <b>360</b>") || !strings.Contains(c, "next level 2 at 700 SP") {
-		t.Fatalf("the page should show the new levels (gunnery 3, handicap 12+2): %.4000s", c)
+	if !strings.Contains(c, "<b>3</b>") || !strings.Contains(c, "SP earned <b>360</b>") || !strings.Contains(c, "next level 2 at 700 SP") {
+		t.Fatalf("the page should show the new levels (gunnery 3, edge 2): %.4000s", c)
 	}
 
 	// A fallen pilot is marked as such, can't earn more, and frees their place.
