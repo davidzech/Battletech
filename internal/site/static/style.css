@@ -987,7 +987,21 @@ button.button.skill-pick { padding: 0.4rem 0.9rem; font-size: 0.75rem; }
 .pilot.kia .skill-chip { color: var(--muted); }
 .skill-slot { margin-top: 0.9rem; }
 .skill-slot label { display: block; margin-bottom: 0.1rem; font: 700 0.8rem var(--display); letter-spacing: 0.08em; text-transform: uppercase; }
-.skill-desc { margin: 0.4rem 0 0; font-size: 0.85rem; line-height: 1.45; min-height: 3.6em; }
+/* The ability card under a combo box in the picker: name, a category pill in the category's colour, and the rule. */
+.skill-card { --cat: var(--accent); margin-top: 0.55rem; min-height: 6.4rem; padding: 0.75rem 1rem 0.85rem; background: linear-gradient(135deg, color-mix(in srgb, var(--cat) 12%, var(--panel)), var(--panel) 65%); border: 1px solid color-mix(in srgb, var(--cat) 30%, var(--line)); border-left: 3px solid var(--cat); }
+.skill-card.empty { display: flex; align-items: center; background: var(--bg); border: 1px dashed var(--line); border-left: 3px solid var(--line); color: var(--muted); }
+.skill-card-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.8rem; margin-bottom: 0.45rem; }
+.skill-name { font: 700 1.2rem var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
+.skill-cat { padding: 0.12rem 0.55rem; font: 700 0.65rem var(--display); letter-spacing: 0.12em; text-transform: uppercase; color: var(--cat); border: 1px solid var(--cat); background: color-mix(in srgb, var(--cat) 14%, transparent); }
+.skill-rule { margin: 0; font-size: 0.92rem; line-height: 1.55; color: color-mix(in srgb, var(--text) 82%, var(--muted)); }
+.skill-trigger { font-weight: 700; color: var(--text); }
+.skill-rule .tw { font-size: 0.84rem; color: var(--muted); }
+.skill-card.cat-attack { --cat: #e5594f; }
+.skill-card.cat-defense { --cat: #4f9de5; }
+.skill-card.cat-heat { --cat: #e5933b; }
+.skill-card.cat-indirect-fire { --cat: #a97be5; }
+.skill-card.cat-melee { --cat: #d46a9c; }
+.skill-card.cat-movement { --cat: #5fc47e; }
 .rec-skills { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.7rem; font-size: 0.85rem; color: var(--muted); }
 .rec-skills-text { flex: 1 1 14rem; }
 .rec-skills-text b { color: var(--text); }

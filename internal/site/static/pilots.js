@@ -231,14 +231,54 @@
     return null;
   }
 
+  // A rule starts with its trigger, which the book prints in bold: everything up to the first ":" that isn't inside parentheses (Protector's
+  // trigger has a "(TW: 1 hex)" aside in it). Returns [trigger including its colon, the rest]; the trigger is "" if there is no colon.
+  function splitTrigger(text) {
+    var depth = 0;
+    for (var i = 0; i < text.length; i++) {
+      var ch = text.charAt(i);
+      if (ch === '(') depth++;
+      else if (ch === ')') depth = Math.max(0, depth - 1);
+      else if (ch === ':' && depth === 0) return [text.slice(0, i + 1), text.slice(i + 1)];
+    }
+    return ['', text];
+  }
+
+  // Appends text to a parent, with each "(TW: ...)" aside (the Total Warfare version of a rule) in its own dimmed span.
+  function appendRule(parent, text) {
+    text.split(/(\(TW:[^)]*\))/).forEach(function (part, i) {
+      if (!part) return;
+      if (i % 2) parent.appendChild(el('span', 'tw', part)); else parent.appendChild(document.createTextNode(part));
+    });
+  }
+
+  // The ability card under a combo box: the ability's name, a category pill, and its rule with the trigger in bold. null empties it.
+  function fillAbilityCard(card, a) {
+    card.textContent = '';
+    card.className = 'skill-card' + (a ? ' cat-' + a.category.toLowerCase().replace(/[^a-z]+/g, '-') : ' empty');
+    if (!a) { card.appendChild(el('p', 'skill-rule', 'Choose an ability to read what it does.')); return; }
+    var head = el('div', 'skill-card-head');
+    head.appendChild(el('span', 'skill-name', a.name));
+    head.appendChild(el('span', 'skill-cat', a.category));
+    card.appendChild(head);
+    var rule = el('p', 'skill-rule');
+    var parts = splitTrigger(a.text);
+    if (parts[0]) {
+      var trigger = el('b', 'skill-trigger');
+      appendRule(trigger, parts[0]);
+      rule.appendChild(trigger);
+    }
+    appendRule(rule, parts[1]);
+    card.appendChild(rule);
+  }
+
   // Each combo box lists the abilities the pilot doesn't have yet, grouped by category; one chosen in another box is greyed out here, and
   // the chosen ability's rule is shown under its box.
   function syncSkills() {
     var chosen = skillSelects.map(function (s) { return s.value; });
     skillSelects.forEach(function (s, i) {
       [].forEach.call(s.options, function (o) { o.disabled = o.value !== '' && chosen.some(function (c, j) { return j !== i && c === o.value; }); });
-      var a = abilityById(s.value);
-      s.parentNode.querySelector('.skill-desc').textContent = a ? a.category + ': ' + a.text : 'Choose an ability to read what it does.';
+      fillAbilityCard(s.parentNode.querySelector('.skill-card'), abilityById(s.value));
     });
     skillLearn.disabled = chosen.some(function (c) { return c === ''; });
     skillError.textContent = '';
@@ -275,7 +315,7 @@
       select.addEventListener('change', syncSkills);
       slot.appendChild(label);
       slot.appendChild(select);
-      slot.appendChild(el('p', 'skill-desc muted', ''));
+      slot.appendChild(el('div', 'skill-card empty'));
       skillSlots.appendChild(slot);
       skillSelects.push(select);
     }
