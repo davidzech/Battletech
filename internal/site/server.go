@@ -53,6 +53,7 @@ type Page struct {
 	Run       CampaignRun // the playthrough's run of this page's campaign (zero value until it is started)
 	Pilots    []PilotView // the run's named pilots
 	MaxPilots int         // most living named pilots a command may have
+	Memorial  bool        // at least one named pilot was killed in action
 	Ladders   string      // the pilot improvement ladders as JSON, for the pilot builder's live preview
 	Portraits string      // the portrait list as JSON, for the portrait picker
 	MekBayOp  string      // link to the scenario's MekBay operation, once created ("" until then)
@@ -141,6 +142,9 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name
 						log.Printf("load named pilots: %v", err)
 					}
 					p.Pilots, _ = pilotViews(pilots)
+					for _, v := range p.Pilots {
+						p.Memorial = p.Memorial || v.Fallen
+					}
 					p.MaxPilots = maxNamedPilots
 				}
 			}

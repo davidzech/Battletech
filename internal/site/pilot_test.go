@@ -834,13 +834,13 @@ func TestReviveAndDeletePilots(t *testing.T) {
 	if got := do("/api/pilots/revive", a.ID); got != http.StatusNotFound {
 		t.Errorf("reviving a living pilot: %d", got)
 	}
-	// Killed in action: gone from the active list, still in the records, and revivable.
+	// Killed in action: moved from the active list to the memorial, still in the records, and revivable.
 	if got := do("/api/pilots/fallen", a.ID); got != http.StatusNoContent {
 		t.Fatalf("kia: %d", got)
 	}
 	page := body(t, srv, "/refusalwar/manage/", cookie)
-	if !strings.Contains(page, "Killed in action") || strings.Contains(page, `<li class="pilot" data-pilot="`+a.ID) || !strings.Contains(page, `<li class="pilot" data-pilot="`+b.ID) {
-		t.Error("the killed pilot should leave the active list but stay in the records")
+	if !strings.Contains(page, "Memorial") || strings.Contains(page, `<li class="pilot" data-pilot="`+a.ID) || !strings.Contains(page, `<li class="pilot kia" data-pilot="`+a.ID) || !strings.Contains(page, `<li class="pilot" data-pilot="`+b.ID) {
+		t.Error("the killed pilot should leave the active list for the memorial, and stay in the records")
 	}
 	if over := body(t, srv, "/refusalwar/", cookie); strings.Contains(over, a.Name+"</b>") {
 		t.Error("the overview should not show a pilot killed in action")

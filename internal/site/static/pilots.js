@@ -162,6 +162,13 @@
     }
   });
 
+  // ---- The "More" menus on the pilot cards: a native <details>, closed again by a click anywhere else or by Escape.
+  function closeMenus(except) {
+    box.querySelectorAll('details.more[open]').forEach(function (d) { if (d !== except) d.removeAttribute('open'); });
+  }
+  document.addEventListener('click', function (e) { closeMenus(e.target.closest ? e.target.closest('details.more') : null); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeMenus(null); });
+
   // ---- Pilot records: revive or delete a pilot, to correct a misclick or a desync.
   var records = document.getElementById('records-dialog');
   if (records && typeof records.showModal === 'function') {

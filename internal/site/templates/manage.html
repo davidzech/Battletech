@@ -28,11 +28,22 @@
 <div class="pilot-main">
 <div class="pilot-head"><h3>{{.Name}}</h3><span class="pilot-stat">SP earned <b>{{.Earned}}</b></span>{{if .Unallocated}}<span class="pilot-stat unalloc">Unallocated <b>{{.Unallocated}}</b></span>{{end}}</div>
 <div class="stat-boxes">{{range .Columns}}<div class="stat-box"><span class="stat-label">{{.Name}}</span><span class="stat-value">{{.Level}}</span><span class="stat-next">{{if .HasNext}}next: {{.NextLvl}} at {{.NextAt}} SP{{else}}top level{{end}}</span></div>{{end}}</div>
-<p class="pilot-actions"><button type="button" class="button pilot-sp">Manage SP{{if .Unallocated}} ({{.Unallocated}}){{end}}</button><button type="button" class="pilot-kia">Killed in action</button></p>
+<div class="pilot-actions"><button type="button" class="button pilot-sp">Manage SP{{if .Unallocated}} ({{.Unallocated}}){{end}}</button><details class="more"><summary>More</summary><div class="more-menu"><button type="button" class="pilot-kia">Mark as killed in action</button></div></details></div>
 </div></div>
 </li>
 {{end}}{{end}}</ul>
-<p id="pilot-error" class="form-error" role="alert"></p>
+{{if .Memorial}}<h2 class="memorial-head">Memorial</h2>
+<p class="muted">Pilots killed in action. They stay on record but are out of the campaign.</p>
+<ul class="pilot-list memorial">
+{{range .Pilots}}{{if .Fallen}}<li class="pilot kia" data-pilot="{{.ID}}" data-name="{{.Name}}">
+<div class="pilot-card"><span class="portrait-btn"><img src="{{.PortraitURL}}" alt="" width="96" height="96"></span>
+<div class="pilot-main">
+<div class="pilot-head"><h3>{{.Name}}</h3><span class="tag bad">Killed in action</span><span class="pilot-stat">SP earned <b>{{.Earned}}</b></span></div>
+<div class="stat-boxes">{{range .Columns}}<div class="stat-box"><span class="stat-label">{{.Name}}</span><span class="stat-value">{{.Level}}</span></div>{{end}}</div>
+</div></div>
+</li>
+{{end}}{{end}}</ul>
+{{end}}<p id="pilot-error" class="form-error" role="alert"></p>
 </section>
 <dialog id="sp-dialog" class="wizard" aria-labelledby="sp-title">
   <form id="sp-form" autocomplete="off" novalidate>
