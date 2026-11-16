@@ -56,6 +56,7 @@ type Page struct {
 	CanAddPilot  bool        // the command has room for another named pilot
 	MaxPilots    int         // most living named pilots a command may have
 	Ladders      string      // the pilot improvement ladders as JSON, for the pilot builder's live preview
+	Portraits    string      // the portrait list as JSON, for the portrait picker
 	MekBayOp     string      // link to the scenario's MekBay operation, once created ("" until then)
 	Commit       string      // git commit the server was built from, short form ("dev" if unknown)
 }
@@ -84,6 +85,7 @@ func NewHandler(contentRoot string, store *Store, opts ...Option) http.Handler {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /icons/{file}", s.icon)
+	mux.HandleFunc("GET /portraits/{file}", s.portrait)
 	mux.HandleFunc("GET /static/{file}", func(w http.ResponseWriter, r *http.Request) {
 		name := path.Base(r.PathValue("file"))
 		if tag, ok := staticETags[name]; ok {
@@ -98,6 +100,7 @@ func NewHandler(contentRoot string, store *Store, opts ...Option) http.Handler {
 	mux.HandleFunc("POST /api/pilots", s.addPilot)
 	mux.HandleFunc("POST /api/pilots/sp", s.awardSP)
 	mux.HandleFunc("POST /api/pilots/fallen", s.pilotFallen)
+	mux.HandleFunc("POST /api/pilots/portrait", s.setPortrait)
 	mux.HandleFunc("GET /api/mekbay/hangar", s.hangarJSON)
 	mux.HandleFunc("POST /api/mekbay/deploy", s.deploy)
 	mux.HandleFunc("GET /{$}", s.home)
@@ -121,7 +124,7 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name
 		} else {
 			p.Play = pt
 			if p.Campaign != nil {
-				p.Ladders = laddersJSON
+				p.Ladders, p.Portraits = laddersJSON, portraitsJSON()
 				if run, _, err := s.store.Run(r.Context(), id, p.Campaign.Slug); err != nil {
 					log.Printf("load campaign run: %v", err)
 				} else {

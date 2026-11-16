@@ -86,10 +86,13 @@ func (a SPAllocation) Total() int { return a.Gunnery + a.Piloting + a.EdgeTokens
 // NamedPilot is one of a command's named pilots. Their SP lives only as allocations, because the book has a pilot
 // allocate every SP the moment they earn it, so the "total SP earned" is just the sum.
 type NamedPilot struct {
-	ID     string
-	Name   string
-	Fallen bool // died, and is permanently removed from the campaign (kept so the record isn't lost)
-	SP     SPAllocation
+	ID   string
+	Name string
+	// Portrait is the portrait the pilot picked (a file in portraits/); "" for a pilot from before portraits existed,
+	// who is shown the one portraitOf works out for them.
+	Portrait string
+	Fallen   bool // died, and is permanently removed from the campaign (kept so the record isn't lost)
+	SP       SPAllocation
 }
 
 // Earned is the pilot's total SP earned.
@@ -120,6 +123,7 @@ type pilotColumn struct {
 // PilotView is a named pilot with everything the campaign page shows already worked out.
 type PilotView struct {
 	ID, Name                                 string
+	Portrait, PortraitURL                    string // the file picked (or worked out) and where it is served
 	Fallen                                   bool
 	Gunnery, Piloting, EdgeTokens, Abilities int
 	Earned                                   int
@@ -135,7 +139,7 @@ func (p NamedPilot) view() PilotView {
 		return c
 	}
 	return PilotView{
-		ID: p.ID, Name: p.Name, Fallen: p.Fallen,
+		ID: p.ID, Name: p.Name, Fallen: p.Fallen, Portrait: portraitOf(p.ID, p.Portrait), PortraitURL: portraitURL(portraitOf(p.ID, p.Portrait)),
 		Gunnery: p.Gunnery(), Piloting: p.Piloting(), EdgeTokens: p.EdgeTokens(), Abilities: p.EdgeAbilities(),
 		Earned: p.Earned(),
 		Columns: []pilotColumn{
@@ -156,11 +160,15 @@ func pilotViews(pilots []NamedPilot) (views []PilotView, alive int) {
 	return views, alive
 }
 
-// NewPilot is a pilot to create along with a campaign run: a name and the SP allocated at the start.
+// NewPilot is a pilot to create along with a campaign run: a name, their portrait and the SP allocated at the start.
 type NewPilot struct {
-	Name string
-	SP   SPAllocation
+	Name     string
+	Portrait string
+	SP       SPAllocation
 }
+
+// ErrPortraitTaken is returned when another living pilot of the campaign already has the portrait.
+var ErrPortraitTaken = errors.New("another pilot already has that portrait")
 
 // ErrPilotLimit is returned when a command already has the most named pilots it may have.
 var ErrPilotLimit = errors.New("you can have at most four named pilots at a time")

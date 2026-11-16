@@ -90,6 +90,7 @@ func (s *Store) schemaStatements() []string {
 	playthrough_id   TEXT NOT NULL REFERENCES playthroughs(id) ON DELETE CASCADE,
 	campaign         TEXT NOT NULL,
 	name             TEXT NOT NULL,
+	portrait         TEXT NOT NULL DEFAULT '',
 	created_at       %s,
 	fallen           INTEGER NOT NULL DEFAULT 0,
 	sp_gunnery       INTEGER NOT NULL DEFAULT 0 CHECK (sp_gunnery >= 0),
@@ -156,7 +157,22 @@ func (s *Store) init() error {
 			return fmt.Errorf("apply schema: %w", err)
 		}
 	}
+	// Columns added after a table first shipped. CREATE TABLE IF NOT EXISTS leaves an existing table as it was, so they
+	// are added here (neither database has ADD COLUMN IF NOT EXISTS in common).
+	if err := s.ensureColumn("named_pilots", "portrait", "TEXT NOT NULL DEFAULT ''"); err != nil {
+		return fmt.Errorf("migrate schema: %w", err)
+	}
 	return nil
+}
+
+// ensureColumn adds a column to a table that doesn't have it yet.
+func (s *Store) ensureColumn(table, column, definition string) error {
+	has, err := s.columnExists(table, column)
+	if err != nil || has {
+		return err
+	}
+	_, err = s.db.Exec("ALTER TABLE " + table + " ADD COLUMN " + column + " " + definition)
+	return err
 }
 
 // OpenSQLite opens (creating if needed) the SQLite database at path and applies the schema.
@@ -328,11 +344,11 @@ func (s *Store) SaveMekBayOperation(ctx context.Context, playthroughID, campaign
 	return err
 }
 
-const pilotColumns = `id, name, fallen, sp_gunnery, sp_piloting, sp_edge_tokens, sp_edge_abilities`
+const pilotColumns = `id, name, portrait, fallen, sp_gunnery, sp_piloting, sp_edge_tokens, sp_edge_abilities`
 
 func scanPilot(row interface{ Scan(...any) error }) (p NamedPilot, err error) {
 	var fallen int
-	err = row.Scan(&p.ID, &p.Name, &fallen, &p.SP.Gunnery, &p.SP.Piloting, &p.SP.EdgeTokens, &p.SP.EdgeAbilities)
+	err = row.Scan(&p.ID, &p.Name, &p.Portrait, &fallen, &p.SP.Gunnery, &p.SP.Piloting, &p.SP.EdgeTokens, &p.SP.EdgeAbilities)
 	p.Fallen = fallen != 0
 	return p, err
 }
@@ -359,7 +375,7 @@ func (s *Store) Pilots(ctx context.Context, playthroughID, campaign string) ([]N
 
 // AddPilot names a new pilot with the given starting SP. A command may have at most max living named pilots
 // (ErrPilotLimit otherwise).
-func (s *Store) AddPilot(ctx context.Context, playthroughID, campaign, name string, start SPAllocation, max int) (NamedPilot, error) {
+func (s *Store) AddPilot(ctx context.Context, playthroughID, campaign, name, portrait string, start SPAllocation, max int) (NamedPilot, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return NamedPilot{}, err
@@ -374,10 +390,21 @@ func (s *Store) AddPilot(ctx context.Context, playthroughID, campaign, name stri
 	if alive >= max {
 		return NamedPilot{}, ErrPilotLimit
 	}
-	p := NamedPilot{ID: newID(), Name: name, SP: start}
+	if portrait != "" {
+		var same int
+		if err := tx.QueryRowContext(ctx,
+			s.q(`SELECT COUNT(*) FROM named_pilots WHERE playthrough_id = ? AND campaign = ? AND fallen = 0 AND portrait = ?`),
+			playthroughID, campaign, portrait).Scan(&same); err != nil {
+			return NamedPilot{}, err
+		}
+		if same > 0 {
+			return NamedPilot{}, ErrPortraitTaken
+		}
+	}
+	p := NamedPilot{ID: newID(), Name: name, Portrait: portrait, SP: start}
 	if _, err := tx.ExecContext(ctx,
-		s.q(`INSERT INTO named_pilots (id, playthrough_id, campaign, name, sp_gunnery, sp_piloting, sp_edge_tokens, sp_edge_abilities) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`),
-		p.ID, playthroughID, campaign, name, start.Gunnery, start.Piloting, start.EdgeTokens, start.EdgeAbilities); err != nil {
+		s.q(`INSERT INTO named_pilots (id, playthrough_id, campaign, name, portrait, sp_gunnery, sp_piloting, sp_edge_tokens, sp_edge_abilities) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`),
+		p.ID, playthroughID, campaign, name, portrait, start.Gunnery, start.Piloting, start.EdgeTokens, start.EdgeAbilities); err != nil {
 		return NamedPilot{}, err
 	}
 	return p, tx.Commit()
@@ -440,10 +467,39 @@ func (s *Store) StartRunWithPilots(ctx context.Context, playthroughID, campaign 
 	}
 	for _, p := range pilots {
 		if _, err := tx.ExecContext(ctx,
-			s.q(`INSERT INTO named_pilots (id, playthrough_id, campaign, name, sp_gunnery, sp_piloting, sp_edge_tokens, sp_edge_abilities) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`),
-			newID(), playthroughID, campaign, p.Name, p.SP.Gunnery, p.SP.Piloting, p.SP.EdgeTokens, p.SP.EdgeAbilities); err != nil {
+			s.q(`INSERT INTO named_pilots (id, playthrough_id, campaign, name, portrait, sp_gunnery, sp_piloting, sp_edge_tokens, sp_edge_abilities) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`),
+			newID(), playthroughID, campaign, p.Name, p.Portrait, p.SP.Gunnery, p.SP.Piloting, p.SP.EdgeTokens, p.SP.EdgeAbilities); err != nil {
 			return err
 		}
+	}
+	return tx.Commit()
+}
+
+// SetPilotPortrait changes a living pilot's portrait. sql.ErrNoRows if there is no such living pilot, ErrPortraitTaken if
+// another living pilot of the campaign already has it.
+func (s *Store) SetPilotPortrait(ctx context.Context, playthroughID, campaign, pilotID, portrait string) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var same int
+	if err := tx.QueryRowContext(ctx,
+		s.q(`SELECT COUNT(*) FROM named_pilots WHERE playthrough_id = ? AND campaign = ? AND fallen = 0 AND portrait = ? AND id <> ?`),
+		playthroughID, campaign, portrait, pilotID).Scan(&same); err != nil {
+		return err
+	}
+	if same > 0 {
+		return ErrPortraitTaken
+	}
+	res, err := tx.ExecContext(ctx,
+		s.q(`UPDATE named_pilots SET portrait = ? WHERE id = ? AND playthrough_id = ? AND campaign = ? AND fallen = 0`),
+		portrait, pilotID, playthroughID, campaign)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return sql.ErrNoRows
 	}
 	return tx.Commit()
 }

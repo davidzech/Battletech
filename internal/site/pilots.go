@@ -62,8 +62,24 @@ func (s *Server) addPilot(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if _, err := s.store.AddPilot(r.Context(), pt.ID, c.Slug, name, SPAllocation{}, maxNamedPilots); errors.Is(err, ErrPilotLimit) {
+	portrait := r.PostFormValue("portrait")
+	if portrait != "" && !validPortrait(portrait) {
+		http.Error(w, "Pick a portrait from the list.", http.StatusBadRequest)
+		return
+	}
+	if portrait == "" {
+		existing, err := s.store.Pilots(r.Context(), pt.ID, c.Slug)
+		if err != nil {
+			http.Error(w, "could not load named pilots", http.StatusInternalServerError)
+			return
+		}
+		portrait = randomPortrait(livingPortraits(existing))
+	}
+	if _, err := s.store.AddPilot(r.Context(), pt.ID, c.Slug, name, portrait, SPAllocation{}, maxNamedPilots); errors.Is(err, ErrPilotLimit) {
 		http.Error(w, fmt.Sprintf("You can have at most %d named pilots at a time.", maxNamedPilots), http.StatusBadRequest)
+		return
+	} else if errors.Is(err, ErrPortraitTaken) {
+		http.Error(w, "Another pilot already has that portrait.", http.StatusBadRequest)
 		return
 	} else if err != nil {
 		http.Error(w, "could not save the pilot", http.StatusInternalServerError)
@@ -142,6 +158,7 @@ func (s *Server) pilotFallen(w http.ResponseWriter, r *http.Request) {
 func parseStartingPilots(r *http.Request, c *Campaign) ([]NewPilot, error) {
 	var out []NewPilot
 	seen := map[string]bool{}
+	takenPortraits := map[string]bool{}
 	for i := 0; i < c.StartingNamedPilots; i++ {
 		prefix := "pilot" + strconv.Itoa(i) + "_"
 		name, err := parsePilotName(r.PostFormValue(prefix + "name"))
@@ -165,7 +182,59 @@ func parseStartingPilots(r *http.Request, c *Campaign) ([]NewPilot, error) {
 		if a.Total() != c.StartingPilotSP {
 			return nil, fmt.Errorf("%s must allocate exactly %d SP (%d allocated).", name, c.StartingPilotSP, a.Total())
 		}
-		out = append(out, NewPilot{Name: name, SP: a})
+		portrait := r.PostFormValue(prefix + "portrait")
+		if portrait != "" && !validPortrait(portrait) {
+			return nil, fmt.Errorf("%s: pick a portrait from the list.", name)
+		}
+		if portrait != "" && takenPortraits[portrait] {
+			return nil, errors.New("Two of your pilots can't share a portrait.")
+		}
+		if portrait != "" {
+			takenPortraits[portrait] = true
+		}
+		out = append(out, NewPilot{Name: name, Portrait: portrait, SP: a})
+	}
+	// A pilot sent without a portrait (not something the wizard does) is given a random free one.
+	for i := range out {
+		if out[i].Portrait == "" {
+			out[i].Portrait = randomPortrait(takenPortraits)
+			takenPortraits[out[i].Portrait] = true
+		}
 	}
 	return out, nil
+}
+
+// livingPortraits are the portraits the living pilots in the list have picked.
+func livingPortraits(pilots []NamedPilot) map[string]bool {
+	taken := map[string]bool{}
+	for _, p := range pilots {
+		if !p.Fallen && p.Portrait != "" {
+			taken[p.Portrait] = true
+		}
+	}
+	return taken
+}
+
+// setPortrait changes a living pilot's portrait.
+func (s *Server) setPortrait(w http.ResponseWriter, r *http.Request) {
+	pt, c, ok := s.pilotRequest(w, r)
+	if !ok {
+		return
+	}
+	portrait := r.PostFormValue("portrait")
+	if !validPortrait(portrait) {
+		http.Error(w, "Pick a portrait from the list.", http.StatusBadRequest)
+		return
+	}
+	if err := s.store.SetPilotPortrait(r.Context(), pt.ID, c.Slug, r.PostFormValue("pilot"), portrait); errors.Is(err, sql.ErrNoRows) {
+		http.Error(w, "No such living pilot.", http.StatusNotFound)
+		return
+	} else if errors.Is(err, ErrPortraitTaken) {
+		http.Error(w, "Another pilot already has that portrait.", http.StatusBadRequest)
+		return
+	} else if err != nil {
+		http.Error(w, "could not save the portrait", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

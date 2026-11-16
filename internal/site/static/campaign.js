@@ -109,12 +109,18 @@
   var progress = document.getElementById('wiz-progress');
   var bar = document.getElementById('wiz-bar');
 
+  var portraits = JSON.parse(wiz.dataset.portraits || '[]');
   var pilots = [];
   for (var i = 0; i < pilotCount; i++) {
     var sp = {};
     ladders.forEach(function (l) { sp[l.key] = 0; });
-    pilots.push({ name: '', sp: sp });
+    pilots.push({ name: '', sp: sp, portrait: '' });
   }
+  // Every pilot starts with a random portrait nobody else has been given.
+  pilots.forEach(function (p) {
+    var free = portraits.filter(function (q) { return !pilots.some(function (o) { return o.portrait === q.file; }); });
+    if (free.length) p.portrait = free[Math.floor(Math.random() * free.length)].file;
+  });
   var hangar = '';
   var step = 0;
   var busy = false;
@@ -182,7 +188,27 @@
 
     // The name, with the pilot's four numbers beside it.
     var top = el('div', 'pilot-top');
+    var idBlock = el('div', 'pilot-id');
     var nameBlock = el('div', 'pilot-name');
+    // The portrait: click it to pick another from the grid.
+    var portraitBtn = el('button', 'portrait-btn');
+    portraitBtn.type = 'button';
+    portraitBtn.title = 'Choose a portrait';
+    portraitBtn.setAttribute('aria-label', 'Choose a portrait');
+    var portraitImg = document.createElement('img');
+    portraitImg.alt = ''; portraitImg.width = 96; portraitImg.height = 96;
+    portraitImg.src = '/portraits/' + p.portrait;
+    portraitBtn.appendChild(portraitImg);
+    portraitBtn.appendChild(el('span', 'portrait-edit', 'Change'));
+    portraitBtn.addEventListener('click', function () {
+      if (typeof PortraitPicker === 'undefined') return;
+      PortraitPicker.open({
+        portraits: portraits, selected: p.portrait,
+        taken: pilots.filter(function (o) { return o !== p; }).map(function (o) { return o.portrait; }),
+        onPick: function (file) { p.portrait = file; portraitImg.src = '/portraits/' + file; }
+      });
+    });
+
     var nameLabel = el('label', null, 'Name');
     nameLabel.setAttribute('for', 'wiz-name');
     var nameInput = document.createElement('input');
@@ -194,7 +220,9 @@
     var boxes = el('div', 'stat-boxes');
     var stats = ladders.map(statBox);
     stats.forEach(function (b) { boxes.appendChild(b); });
-    top.appendChild(nameBlock);
+    idBlock.appendChild(portraitBtn);
+    idBlock.appendChild(nameBlock);
+    top.appendChild(idBlock);
     top.appendChild(boxes);
     body.appendChild(top);
 
@@ -477,6 +505,7 @@
     var parts = ['campaign=' + encodeURIComponent(wiz.dataset.campaign), 'hangar=' + encodeURIComponent(canonicalHangar(hangar) || hangar.trim())];
     pilots.forEach(function (p, idx) {
       parts.push('pilot' + idx + '_name=' + encodeURIComponent(p.name.trim()));
+      if (p.portrait) parts.push('pilot' + idx + '_portrait=' + encodeURIComponent(p.portrait));
       ladders.forEach(function (l) { parts.push('pilot' + idx + '_' + l.key + '=' + p.sp[l.key]); });
     });
     busy = true;

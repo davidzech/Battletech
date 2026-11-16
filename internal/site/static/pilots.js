@@ -46,6 +46,18 @@
         send('/api/pilots/sp', parts.join('&'), award.querySelector('button'));
       });
     }
+    var portraitBtn = li.querySelector('button.portrait-btn');
+    if (portraitBtn) {
+      portraitBtn.addEventListener('click', function () {
+        if (typeof PortraitPicker === 'undefined') return;
+        var taken = [];
+        box.querySelectorAll('li.pilot').forEach(function (o) { if (o !== li && o.dataset.portrait) taken.push(o.dataset.portrait); });
+        PortraitPicker.open({
+          portraits: JSON.parse(box.dataset.portraits || '[]'), selected: li.dataset.portrait, taken: taken,
+          onPick: function (file) { send('/api/pilots/portrait', 'pilot=' + encodeURIComponent(id) + '&portrait=' + encodeURIComponent(file)); }
+        });
+      });
+    }
     var fallen = li.querySelector('.pilot-fallen');
     if (fallen) {
       fallen.addEventListener('click', function () {

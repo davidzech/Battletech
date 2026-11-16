@@ -28,7 +28,7 @@
     </div>
   </form>
 </dialog>
-{{else}}<dialog id="start-wizard" class="wizard" aria-labelledby="wiz-title" data-campaign="{{.Campaign.Slug}}" data-pilots="{{.Campaign.StartingNamedPilots}}" data-sp="{{.Campaign.StartingPilotSP}}" data-ladders="{{.Ladders}}">
+{{else}}<dialog id="start-wizard" class="wizard" aria-labelledby="wiz-title" data-campaign="{{.Campaign.Slug}}" data-pilots="{{.Campaign.StartingNamedPilots}}" data-sp="{{.Campaign.StartingPilotSP}}" data-ladders="{{.Ladders}}" data-portraits="{{.Portraits}}">
   <form id="wiz-form" autocomplete="off" novalidate>
     <h2 id="wiz-title"></h2>
     <div id="wiz-body"></div>
@@ -45,14 +45,17 @@
     </div>
   </form>
 </dialog>
-{{end}}<script src="/static/mechrow.js" defer></script>
+{{end}}<script src="/static/portraitpicker.js" defer></script>
+<script src="/static/mechrow.js" defer></script>
 <script src="/static/campaign.js" defer></script>
-{{if .Run.Started}}<section class="pilots" id="pilots" data-campaign="{{.Campaign.Slug}}">
+{{if .Run.Started}}<section class="pilots" id="pilots" data-campaign="{{.Campaign.Slug}}" data-portraits="{{.Portraits}}">
 <h2>Named pilots</h2>
 {{if .PilotsNeeded}}<p class="need">This campaign needs {{.Campaign.StartingNamedPilots}} named pilots before you can deploy. Name {{.PilotsNeeded}} more.</p>
 {{else}}<p class="muted">Only named pilots improve their skills, use Edge and earn Edge abilities. A command may have up to {{.MaxPilots}} at a time.</p>
 {{end}}<ul class="pilot-list">
-{{range .Pilots}}<li class="pilot{{if .Fallen}} fallen{{end}}" data-pilot="{{.ID}}">
+{{range .Pilots}}<li class="pilot{{if .Fallen}} fallen{{end}}" data-pilot="{{.ID}}" data-portrait="{{if not .Fallen}}{{.Portrait}}{{end}}">
+<div class="pilot-card">{{if .Fallen}}<span class="portrait-btn"><img src="{{.PortraitURL}}" alt="" width="96" height="96"></span>{{else}}<button type="button" class="portrait-btn" title="Change portrait" aria-label="Change {{.Name}}'s portrait"><img src="{{.PortraitURL}}" alt="" width="96" height="96"><span class="portrait-edit">Change</span></button>{{end}}
+<div class="pilot-main">
 <div class="pilot-head"><h3>{{.Name}}</h3>{{if .Fallen}}<span class="tag bad">Fallen</span>{{end}}
 <span class="pilot-stat">Gunnery <b>{{.Gunnery}}</b></span><span class="pilot-stat">Piloting <b>{{.Piloting}}</b></span><span class="pilot-stat">Edge <b>{{.EdgeTokens}}</b></span><span class="pilot-stat">Abilities <b>{{.Abilities}}</b></span><span class="pilot-stat">SP earned <b>{{.Earned}}</b></span></div>
 <ul class="pilot-cols">{{range .Columns}}<li><span class="col-name">{{.Name}}</span> <span>{{.SP}} SP</span> <span class="muted">{{if .HasNext}}next level {{.NextLvl}} at {{.NextAt}} SP{{else}}top level{{end}}</span></li>
@@ -68,6 +71,7 @@
 <p class="muted">Pilots allocate every SP as they earn it. Split it across the columns however you like.</p>
 <button type="button" class="pilot-fallen">Mark as fallen</button>
 </details>{{end}}
+</div></div>
 </li>
 {{end}}</ul>
 {{if .CanAddPilot}}<form id="pilot-add" class="pilot-add" autocomplete="off">

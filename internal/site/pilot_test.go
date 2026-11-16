@@ -134,19 +134,19 @@ func pilotStore(t *testing.T, s *Store, id string) {
 	if ps, err := s.Pilots(ctx, id, "refusalwar"); err != nil || len(ps) != 0 {
 		t.Fatalf("no pilots yet: %v %v", ps, err)
 	}
-	a, err := s.AddPilot(ctx, id, "refusalwar", "Alrek", SPAllocation{Gunnery: 150}, 2)
+	a, err := s.AddPilot(ctx, id, "refusalwar", "Alrek", "", SPAllocation{Gunnery: 150}, 2)
 	if err != nil || a.ID == "" || a.Name != "Alrek" {
 		t.Fatalf("add pilot: %+v, %v", a, err)
 	}
-	b, err := s.AddPilot(ctx, id, "refusalwar", "Katarina", SPAllocation{}, 2)
+	b, err := s.AddPilot(ctx, id, "refusalwar", "Katarina", "", SPAllocation{}, 2)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.AddPilot(ctx, id, "refusalwar", "Third", SPAllocation{}, 2); !errors.Is(err, ErrPilotLimit) {
+	if _, err := s.AddPilot(ctx, id, "refusalwar", "Third", "", SPAllocation{}, 2); !errors.Is(err, ErrPilotLimit) {
 		t.Fatalf("the limit should refuse a third pilot, got %v", err)
 	}
 	// Another campaign has its own pilots.
-	if _, err := s.AddPilot(ctx, id, "another", "Elsewhere", SPAllocation{}, 2); err != nil {
+	if _, err := s.AddPilot(ctx, id, "another", "Elsewhere", "", SPAllocation{}, 2); err != nil {
 		t.Fatalf("pilots belong to a campaign: %v", err)
 	}
 	ps, err := s.Pilots(ctx, id, "refusalwar")
@@ -179,7 +179,7 @@ func pilotStore(t *testing.T, s *Store, id string) {
 	if err := s.AwardSP(ctx, id, "refusalwar", b.ID, SPAllocation{Gunnery: 1}); !errors.Is(err, sql.ErrNoRows) {
 		t.Fatalf("the fallen earn nothing: %v", err)
 	}
-	if _, err := s.AddPilot(ctx, id, "refusalwar", "Replacement", SPAllocation{}, 2); err != nil {
+	if _, err := s.AddPilot(ctx, id, "refusalwar", "Replacement", "", SPAllocation{}, 2); err != nil {
 		t.Fatalf("a fallen pilot should free a place: %v", err)
 	}
 	if ps, _ := s.Pilots(ctx, id, "refusalwar"); len(ps) != 3 || !ps[1].Fallen {
@@ -473,5 +473,70 @@ func TestStartedCompanyHelper(t *testing.T) {
 	_, store, _ := startedCompany(t)
 	if run, ok, _ := store.Run(context.Background(), playthroughID("wolfpack2026"), "refusalwar"); !ok || !run.Started() {
 		t.Fatal("helper should start the campaign")
+	}
+}
+
+func TestPortraits(t *testing.T) {
+	all := portraits()
+	if len(all) < 70 {
+		t.Fatalf("only %d portraits embedded", len(all))
+	}
+	for _, p := range all {
+		if !validPortrait(p.File) || p.Group == "" || p.Label == "" {
+			t.Errorf("bad portrait %+v", p)
+		}
+	}
+	if validPortrait("../x.png") || validPortrait("") || validPortrait("nope.png") {
+		t.Error("invalid names accepted")
+	}
+	// Legacy pilots (no stored portrait) get a stable one; a picked one wins.
+	if first := portraitOf("abc", ""); first != portraitOf("abc", "") || !validPortrait(first) {
+		t.Error("fallback portrait not stable or invalid")
+	}
+	if portraitOf("abc", all[3].File) != all[3].File {
+		t.Error("picked portrait ignored")
+	}
+	// A random pick avoids the taken ones.
+	taken := map[string]bool{}
+	for _, p := range all[1:] {
+		taken[p.File] = true
+	}
+	if randomPortrait(taken) != all[0].File {
+		t.Error("random pick used a taken portrait")
+	}
+}
+
+// portraitStore checks the portrait rules on a store (run for both databases from storeContract, in a campaign of its own).
+func portraitStore(t *testing.T, s *Store, id string) {
+	t.Helper()
+	ctx := context.Background()
+	pa, pb := portraits()[0].File, portraits()[1].File
+	a, err := s.AddPilot(ctx, id, "portraitcamp", "Alrek", pa, SPAllocation{}, 4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.AddPilot(ctx, id, "portraitcamp", "Katarina", pa, SPAllocation{}, 4); !errors.Is(err, ErrPortraitTaken) {
+		t.Fatalf("same portrait: %v", err)
+	}
+	b, err := s.AddPilot(ctx, id, "portraitcamp", "Katarina", pb, SPAllocation{}, 4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetPilotPortrait(ctx, id, "portraitcamp", b.ID, pa); !errors.Is(err, ErrPortraitTaken) {
+		t.Fatalf("change to a taken one: %v", err)
+	}
+	pc := portraits()[2].File
+	if err := s.SetPilotPortrait(ctx, id, "portraitcamp", b.ID, pc); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetPilotPortrait(ctx, id, "portraitcamp", "nobody", portraits()[3].File); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("unknown pilot: %v", err)
+	}
+	// A fallen pilot frees their portrait.
+	if err := s.MarkFallen(ctx, id, "portraitcamp", a.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.AddPilot(ctx, id, "portraitcamp", "Heir", pa, SPAllocation{}, 4); err != nil {
+		t.Fatalf("fallen pilot's portrait should be free: %v", err)
 	}
 }
