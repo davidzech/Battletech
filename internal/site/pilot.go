@@ -91,12 +91,18 @@ type NamedPilot struct {
 	// Portrait is the portrait the pilot picked (a file in portraits/); "" for a pilot from before portraits existed,
 	// who is shown the one portraitOf works out for them.
 	Portrait string
-	Fallen   bool // died, and is permanently removed from the campaign (kept so the record isn't lost)
-	SP       SPAllocation
+	// TotalSP is every SP the pilot has earned. The four columns in SP hold what has been allocated so far, so what is
+	// still unallocated is TotalSP minus their sum (see Unallocated).
+	TotalSP int
+	Fallen  bool // died, and is permanently removed from the campaign (kept so the record isn't lost)
+	SP      SPAllocation
 }
 
-// Earned is the pilot's total SP earned.
-func (p NamedPilot) Earned() int { return p.SP.Total() }
+// Earned is the pilot's total SP earned, allocated or not.
+func (p NamedPilot) Earned() int { return p.TotalSP }
+
+// Unallocated is the earned SP not yet allocated to a column.
+func (p NamedPilot) Unallocated() int { return max(0, p.TotalSP-p.SP.Total()) }
 
 // Gunnery is the pilot's current Gunnery skill (lower is better).
 func (p NamedPilot) Gunnery() int { return gunneryLadder.at(p.SP.Gunnery).Level }
@@ -126,7 +132,7 @@ type PilotView struct {
 	Portrait, PortraitURL                    string // the file picked (or worked out) and where it is served
 	Fallen                                   bool
 	Gunnery, Piloting, EdgeTokens, Abilities int
-	Earned                                   int
+	Earned, Unallocated                      int
 	Columns                                  []pilotColumn
 }
 
@@ -141,7 +147,7 @@ func (p NamedPilot) view() PilotView {
 	return PilotView{
 		ID: p.ID, Name: p.Name, Fallen: p.Fallen, Portrait: portraitOf(p.ID, p.Portrait), PortraitURL: portraitURL(portraitOf(p.ID, p.Portrait)),
 		Gunnery: p.Gunnery(), Piloting: p.Piloting(), EdgeTokens: p.EdgeTokens(), Abilities: p.EdgeAbilities(),
-		Earned: p.Earned(),
+		Earned: p.Earned(), Unallocated: p.Unallocated(),
 		Columns: []pilotColumn{
 			col(gunneryLadder, p.SP.Gunnery), col(pilotingLadder, p.SP.Piloting),
 			col(edgeTokensLadder, p.SP.EdgeTokens), col(edgeAbilitiesLadder, p.SP.EdgeAbilities),

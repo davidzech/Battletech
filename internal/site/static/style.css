@@ -846,3 +846,23 @@ html:not(.js) .wp-toggle, html:not(.js) .wp-stamp { display: none; }
 .unit-tip dd { margin: 0; }
 .force-summary .icons img { transition: border-color 0.12s, background-color 0.12s; cursor: default; }
 .force-summary .icons img:hover, .force-summary .icons img:focus-visible { border-color: var(--accent); background: rgba(255, 204, 0, 0.1); outline: none; }
+
+/* Manage page: pilot cards with the wizard's stat boxes, and the Manage SP dialog. */
+.pilot-main .stat-boxes { margin: 0.6rem 0 0.5rem; max-width: 100%; }
+.pilot-stat.unalloc b { color: var(--accent); }
+.pilot-actions { display: flex; flex-wrap: wrap; gap: 0.6rem; margin: 0.4rem 0 0; }
+.alloc-base { grid-column: 1 / -1; font-size: 0.75rem; color: var(--muted); }
+.sp-earn { display: flex; flex-wrap: wrap; align-items: end; gap: 0.6rem; margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--line); }
+.sp-earn label { display: grid; gap: 0.3rem; font: 700 0.8rem var(--display); letter-spacing: 0.08em; text-transform: uppercase; }
+.sp-earn input { width: 7rem; }
+#sp-dialog .stat-boxes { margin-top: 0.5rem; }
+
+/* Manage page: pilot cards with the wizard's stat boxes, and the Manage SP dialog. */
+.pilot-main .stat-boxes { margin: 0.6rem 0 0.5rem; max-width: 100%; }
+.pilot-stat.unalloc b { color: var(--accent); }
+.pilot-actions { display: flex; flex-wrap: wrap; gap: 0.6rem; margin: 0.4rem 0 0; }
+.alloc-base { grid-column: 1 / -1; font-size: 0.75rem; color: var(--muted); }
+.sp-earn { display: flex; flex-wrap: wrap; align-items: end; gap: 0.6rem; margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--line); }
+.sp-earn label { display: grid; gap: 0.3rem; font: 700 0.8rem var(--display); letter-spacing: 0.08em; text-transform: uppercase; }
+.sp-earn input { width: 7rem; }
+#sp-dialog .stat-boxes { margin-top: 0.5rem; }

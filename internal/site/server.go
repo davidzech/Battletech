@@ -101,6 +101,8 @@ func NewHandler(contentRoot string, store *Store, opts ...Option) http.Handler {
 	mux.HandleFunc("GET /api/campaign/force", s.forceJSON)
 	mux.HandleFunc("POST /api/pilots", s.addPilot)
 	mux.HandleFunc("POST /api/pilots/sp", s.awardSP)
+	mux.HandleFunc("POST /api/pilots/earn", s.earnSP)
+	mux.HandleFunc("POST /api/pilots/allocate", s.allocateSP)
 	mux.HandleFunc("POST /api/pilots/fallen", s.pilotFallen)
 	mux.HandleFunc("POST /api/pilots/portrait", s.setPortrait)
 	mux.HandleFunc("GET /api/mekbay/hangar", s.hangarJSON)

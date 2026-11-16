@@ -252,3 +252,63 @@ func (s *Server) deleteCampaign(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
+
+// earnSP records SP a pilot has earned (for instance from a scenario). It is unallocated until spent with allocateSP.
+func (s *Server) earnSP(w http.ResponseWriter, r *http.Request) {
+	pt, c, ok := s.pilotRequest(w, r)
+	if !ok {
+		return
+	}
+	n, err := parseSP(r.PostFormValue("sp"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if n == 0 {
+		http.Error(w, "Enter how much SP the pilot earned.", http.StatusBadRequest)
+		return
+	}
+	if err := s.store.EarnSP(r.Context(), pt.ID, c.Slug, r.PostFormValue("pilot"), n); errors.Is(err, sql.ErrNoRows) {
+		http.Error(w, "No such living pilot.", http.StatusNotFound)
+		return
+	} else if err != nil {
+		http.Error(w, "could not save the SP", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// allocateSP spends a pilot's unallocated SP across their four columns. The form holds the SP to add to each column,
+// not their new totals; the server refuses more than the pilot has unallocated.
+func (s *Server) allocateSP(w http.ResponseWriter, r *http.Request) {
+	pt, c, ok := s.pilotRequest(w, r)
+	if !ok {
+		return
+	}
+	var a SPAllocation
+	for field, dst := range map[string]*int{
+		"gunnery": &a.Gunnery, "piloting": &a.Piloting, "edge_tokens": &a.EdgeTokens, "edge_abilities": &a.EdgeAbilities,
+	} {
+		n, err := parseSP(r.PostFormValue(field))
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		*dst = n
+	}
+	if a.Total() == 0 {
+		http.Error(w, "Allocate some SP first.", http.StatusBadRequest)
+		return
+	}
+	if err := s.store.AllocateSP(r.Context(), pt.ID, c.Slug, r.PostFormValue("pilot"), a); errors.Is(err, sql.ErrNoRows) {
+		http.Error(w, "No such living pilot.", http.StatusNotFound)
+		return
+	} else if errors.Is(err, ErrNotEnoughSP) {
+		http.Error(w, "That is more SP than the pilot has unallocated.", http.StatusBadRequest)
+		return
+	} else if err != nil {
+		http.Error(w, "could not save the SP", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}

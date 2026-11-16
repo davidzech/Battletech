@@ -96,7 +96,8 @@ func (s *Store) schemaStatements() []string {
 	sp_gunnery       INTEGER NOT NULL DEFAULT 0 CHECK (sp_gunnery >= 0),
 	sp_piloting      INTEGER NOT NULL DEFAULT 0 CHECK (sp_piloting >= 0),
 	sp_edge_tokens   INTEGER NOT NULL DEFAULT 0 CHECK (sp_edge_tokens >= 0),
-	sp_edge_abilities INTEGER NOT NULL DEFAULT 0 CHECK (sp_edge_abilities >= 0)
+	sp_edge_abilities INTEGER NOT NULL DEFAULT 0 CHECK (sp_edge_abilities >= 0),
+	sp_total         INTEGER NOT NULL DEFAULT 0 CHECK (sp_total >= 0)
 )`, s.timestampColumn()),
 		`CREATE INDEX IF NOT EXISTS named_pilots_by_run ON named_pilots (playthrough_id, campaign)`,
 	}
@@ -160,6 +161,15 @@ func (s *Store) init() error {
 	// Columns added after a table first shipped. CREATE TABLE IF NOT EXISTS leaves an existing table as it was, so they
 	// are added here (neither database has ADD COLUMN IF NOT EXISTS in common).
 	if err := s.ensureColumn("named_pilots", "portrait", "TEXT NOT NULL DEFAULT ''"); err != nil {
+		return fmt.Errorf("migrate schema: %w", err)
+	}
+	if err := s.ensureColumn("named_pilots", "sp_total", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return fmt.Errorf("migrate schema: %w", err)
+	}
+	// A pilot's total can never be below what they have allocated. Pilots from before the total was tracked had every SP
+	// allocated, so this sets their total to that sum (and does nothing to any pilot that is already consistent).
+	if _, err := s.db.Exec(`UPDATE named_pilots SET sp_total = sp_gunnery + sp_piloting + sp_edge_tokens + sp_edge_abilities
+		WHERE sp_total < sp_gunnery + sp_piloting + sp_edge_tokens + sp_edge_abilities`); err != nil {
 		return fmt.Errorf("migrate schema: %w", err)
 	}
 	return nil
@@ -344,11 +354,11 @@ func (s *Store) SaveMekBayOperation(ctx context.Context, playthroughID, campaign
 	return err
 }
 
-const pilotColumns = `id, name, portrait, fallen, sp_gunnery, sp_piloting, sp_edge_tokens, sp_edge_abilities`
+const pilotColumns = `id, name, portrait, fallen, sp_gunnery, sp_piloting, sp_edge_tokens, sp_edge_abilities, sp_total`
 
 func scanPilot(row interface{ Scan(...any) error }) (p NamedPilot, err error) {
 	var fallen int
-	err = row.Scan(&p.ID, &p.Name, &p.Portrait, &fallen, &p.SP.Gunnery, &p.SP.Piloting, &p.SP.EdgeTokens, &p.SP.EdgeAbilities)
+	err = row.Scan(&p.ID, &p.Name, &p.Portrait, &fallen, &p.SP.Gunnery, &p.SP.Piloting, &p.SP.EdgeTokens, &p.SP.EdgeAbilities, &p.TotalSP)
 	p.Fallen = fallen != 0
 	return p, err
 }
@@ -401,10 +411,10 @@ func (s *Store) AddPilot(ctx context.Context, playthroughID, campaign, name, por
 			return NamedPilot{}, ErrPortraitTaken
 		}
 	}
-	p := NamedPilot{ID: newID(), Name: name, Portrait: portrait, SP: start}
+	p := NamedPilot{ID: newID(), Name: name, Portrait: portrait, SP: start, TotalSP: start.Total()}
 	if _, err := tx.ExecContext(ctx,
-		s.q(`INSERT INTO named_pilots (id, playthrough_id, campaign, name, portrait, sp_gunnery, sp_piloting, sp_edge_tokens, sp_edge_abilities) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`),
-		p.ID, playthroughID, campaign, name, portrait, start.Gunnery, start.Piloting, start.EdgeTokens, start.EdgeAbilities); err != nil {
+		s.q(`INSERT INTO named_pilots (id, playthrough_id, campaign, name, portrait, sp_gunnery, sp_piloting, sp_edge_tokens, sp_edge_abilities, sp_total) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`),
+		p.ID, playthroughID, campaign, name, portrait, start.Gunnery, start.Piloting, start.EdgeTokens, start.EdgeAbilities, start.Total()); err != nil {
 		return NamedPilot{}, err
 	}
 	return p, tx.Commit()
@@ -413,9 +423,9 @@ func (s *Store) AddPilot(ctx context.Context, playthroughID, campaign, name, por
 // AwardSP adds SP to a living pilot's columns (sql.ErrNoRows if there is no such pilot, or they have fallen).
 func (s *Store) AwardSP(ctx context.Context, playthroughID, campaign, pilotID string, a SPAllocation) error {
 	res, err := s.db.ExecContext(ctx,
-		s.q(`UPDATE named_pilots SET sp_gunnery = sp_gunnery + ?, sp_piloting = sp_piloting + ?, sp_edge_tokens = sp_edge_tokens + ?, sp_edge_abilities = sp_edge_abilities + ?
+		s.q(`UPDATE named_pilots SET sp_gunnery = sp_gunnery + ?, sp_piloting = sp_piloting + ?, sp_edge_tokens = sp_edge_tokens + ?, sp_edge_abilities = sp_edge_abilities + ?, sp_total = sp_total + ?
 		     WHERE id = ? AND playthrough_id = ? AND campaign = ? AND fallen = 0`),
-		a.Gunnery, a.Piloting, a.EdgeTokens, a.EdgeAbilities, pilotID, playthroughID, campaign)
+		a.Gunnery, a.Piloting, a.EdgeTokens, a.EdgeAbilities, a.Total(), pilotID, playthroughID, campaign)
 	if err != nil {
 		return err
 	}
@@ -423,6 +433,51 @@ func (s *Store) AwardSP(ctx context.Context, playthroughID, campaign, pilotID st
 		return sql.ErrNoRows
 	}
 	return nil
+}
+
+// ErrNotEnoughSP is returned when more SP is allocated than the pilot has unallocated.
+var ErrNotEnoughSP = errors.New("that is more SP than the pilot has unallocated")
+
+// EarnSP adds earned SP to a living pilot's total, unallocated until they spend it (sql.ErrNoRows if there is no such
+// living pilot).
+func (s *Store) EarnSP(ctx context.Context, playthroughID, campaign, pilotID string, n int) error {
+	res, err := s.db.ExecContext(ctx,
+		s.q(`UPDATE named_pilots SET sp_total = sp_total + ? WHERE id = ? AND playthrough_id = ? AND campaign = ? AND fallen = 0`),
+		n, pilotID, playthroughID, campaign)
+	if err != nil {
+		return err
+	}
+	if r, _ := res.RowsAffected(); r == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
+// AllocateSP spends a living pilot's unallocated SP: a is added to their four columns, and may not exceed what is
+// unallocated (total minus the columns' sum), checked in the same statement that writes it so two requests can't both
+// spend the same SP. sql.ErrNoRows if there is no such living pilot, ErrNotEnoughSP if a is too much.
+func (s *Store) AllocateSP(ctx context.Context, playthroughID, campaign, pilotID string, a SPAllocation) error {
+	res, err := s.db.ExecContext(ctx,
+		s.q(`UPDATE named_pilots SET sp_gunnery = sp_gunnery + ?, sp_piloting = sp_piloting + ?, sp_edge_tokens = sp_edge_tokens + ?, sp_edge_abilities = sp_edge_abilities + ?
+		     WHERE id = ? AND playthrough_id = ? AND campaign = ? AND fallen = 0
+		       AND sp_total - (sp_gunnery + sp_piloting + sp_edge_tokens + sp_edge_abilities) >= ?`),
+		a.Gunnery, a.Piloting, a.EdgeTokens, a.EdgeAbilities, pilotID, playthroughID, campaign, a.Total())
+	if err != nil {
+		return err
+	}
+	if r, _ := res.RowsAffected(); r > 0 {
+		return nil
+	}
+	var one int
+	err = s.db.QueryRowContext(ctx,
+		s.q(`SELECT 1 FROM named_pilots WHERE id = ? AND playthrough_id = ? AND campaign = ? AND fallen = 0`), pilotID, playthroughID, campaign).Scan(&one)
+	if errors.Is(err, sql.ErrNoRows) {
+		return sql.ErrNoRows
+	}
+	if err != nil {
+		return err
+	}
+	return ErrNotEnoughSP
 }
 
 // MarkFallen records that a pilot died, which frees their place among the command's named pilots
@@ -467,8 +522,8 @@ func (s *Store) StartRunWithPilots(ctx context.Context, playthroughID, campaign 
 	}
 	for _, p := range pilots {
 		if _, err := tx.ExecContext(ctx,
-			s.q(`INSERT INTO named_pilots (id, playthrough_id, campaign, name, portrait, sp_gunnery, sp_piloting, sp_edge_tokens, sp_edge_abilities) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`),
-			newID(), playthroughID, campaign, p.Name, p.Portrait, p.SP.Gunnery, p.SP.Piloting, p.SP.EdgeTokens, p.SP.EdgeAbilities); err != nil {
+			s.q(`INSERT INTO named_pilots (id, playthrough_id, campaign, name, portrait, sp_gunnery, sp_piloting, sp_edge_tokens, sp_edge_abilities, sp_total) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`),
+			newID(), playthroughID, campaign, p.Name, p.Portrait, p.SP.Gunnery, p.SP.Piloting, p.SP.EdgeTokens, p.SP.EdgeAbilities, p.SP.Total()); err != nil {
 			return err
 		}
 	}

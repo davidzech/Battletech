@@ -125,60 +125,13 @@
   var step = 0;
   var busy = false;
 
-  function reach(l, spent) {
-    var r = { level: l.base, sp: 0 };
-    l.rows.forEach(function (row) { if (spent >= row.sp) r = row; });
-    return r;
-  }
-  function upcoming(l, spent) {
-    for (var j = 0; j < l.rows.length; j++) if (spent < l.rows[j].sp) return l.rows[j];
-    return null;
-  }
-  function spentOf(p) { return ladders.reduce(function (sum, l) { return sum + p.sp[l.key]; }, 0); }
-
-  // One column of the allocator: a slider and a number box for the same amount of SP.
+  // The ladder maths, the sliders and the stat boxes are shared with the Manage SP dialog (allocator.js).
+  function reach(l, spent) { return SPAllocator.reach(l, spent); }
+  function spentOf(p) { return SPAllocator.spentOf(p, ladders); }
   function allocatorRow(p, l, refresh) {
-    var row = el('div', 'alloc-row');
-    var name = el('label', 'alloc-name', l.name);
-    var slider = document.createElement('input');
-    slider.type = 'range'; slider.min = 0; slider.max = budget; slider.step = STEP;
-    var number = document.createElement('input');
-    number.type = 'number'; number.min = 0; number.max = budget; number.step = STEP; number.inputMode = 'numeric';
-    name.appendChild(number);
-    row.appendChild(name);
-    row.appendChild(slider);
-
-    function set(raw) {
-      var n = parseInt(raw, 10);
-      if (isNaN(n) || n < 0) n = 0;
-      var others = spentOf(p) - p.sp[l.key];
-      p.sp[l.key] = Math.min(n, Math.max(0, budget - others)); // never more than is left to allocate
-      error.textContent = '';
-      refresh();
-    }
-    slider.addEventListener('input', function () { set(slider.value); });
-    number.addEventListener('input', function () { set(number.value); });
-    row.show = function () { slider.value = p.sp[l.key]; number.value = p.sp[l.key]; };
-    row.show();
-    return row;
+    return SPAllocator.row(p, l, { ladders: ladders, budget: budget, step: STEP, refresh: refresh, onEdit: function () { error.textContent = ''; } });
   }
-
-  // The big number for one column: the level the SP allocated so far reaches, and what the next level takes.
-  function statBox(l) {
-    var box = el('div', 'stat-box');
-    var value = el('span', 'stat-value');
-    var next = el('span', 'stat-next');
-    box.appendChild(el('span', 'stat-label', l.name));
-    box.appendChild(value);
-    box.appendChild(next);
-    box.show = function (spent) {
-      var r = reach(l, spent), n = upcoming(l, spent);
-      value.textContent = r.level;
-      next.textContent = n ? 'next: ' + n.level + ' at ' + n.sp + ' SP' : 'top level';
-      box.classList.toggle('up', r.level !== l.base);
-    };
-    return box;
-  }
+  function statBox(l) { return SPAllocator.statBox(l); }
 
   function renderPilot(idx) {
     var p = pilots[idx];

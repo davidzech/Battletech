@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -73,7 +74,7 @@ func TestLadders(t *testing.T) {
 // TestKirbyExample replays the worked example in the book (Hot Spots: Draconis Reach, p. 34): Kirby puts 120 SP into
 // Edge tokens and 30 into Edge abilities, then later 60 more into abilities.
 func TestKirbyExample(t *testing.T) {
-	kirby := NamedPilot{Name: "Kirby", SP: SPAllocation{EdgeTokens: 120, EdgeAbilities: 30}}
+	kirby := NamedPilot{Name: "Kirby", SP: SPAllocation{EdgeTokens: 120, EdgeAbilities: 30}, TotalSP: 150}
 	if kirby.EdgeTokens() != 3 || kirby.EdgeAbilities() != 0 || kirby.Earned() != 150 {
 		t.Fatalf("Kirby after 150 SP: tokens %d, abilities %d, earned %d (the book says 3, 0, 150)", kirby.EdgeTokens(), kirby.EdgeAbilities(), kirby.Earned())
 	}
@@ -89,14 +90,14 @@ func TestKirbyExample(t *testing.T) {
 
 func TestPilotView(t *testing.T) {
 	views, alive := pilotViews([]NamedPilot{
-		{ID: "a", Name: "Alrek", SP: SPAllocation{Gunnery: 300, Piloting: 50}},
+		{ID: "a", Name: "Alrek", SP: SPAllocation{Gunnery: 300, Piloting: 50}, TotalSP: 400},
 		{ID: "b", Name: "Katarina", Fallen: true},
 	})
 	if alive != 1 || len(views) != 2 {
 		t.Fatalf("alive %d of %d", alive, len(views))
 	}
 	a := views[0]
-	if a.Gunnery != 3 || a.Piloting != 5 || a.Earned != 350 || !views[1].Fallen {
+	if a.Gunnery != 3 || a.Piloting != 5 || a.Earned != 400 || a.Unallocated != 50 || !views[1].Fallen {
 		t.Errorf("view = %+v", a)
 	}
 	g, p := a.Columns[0], a.Columns[1]
@@ -350,7 +351,7 @@ func TestNamedPilotsFlow(t *testing.T) {
 		t.Fatalf("allocation = %+v", ps[0].SP)
 	}
 	c = body(t, srv, "/refusalwar/manage/", cookie)
-	if !strings.Contains(c, "<b>3</b>") || !strings.Contains(c, "SP earned <b>360</b>") || !strings.Contains(c, "next level 2 at 700 SP") {
+	if !strings.Contains(c, `<span class="stat-value">3</span>`) || !strings.Contains(c, "SP earned <b>360</b>") || !strings.Contains(c, "next: 2 at 700 SP") {
 		t.Fatalf("the page should show the new levels (gunnery 3, edge 2): %.4000s", c)
 	}
 
@@ -593,14 +594,14 @@ func TestManageAndOverview(t *testing.T) {
 			t.Errorf("overview is missing %q", want)
 		}
 	}
-	for _, not := range []string{`id="pilot-add"`, `id="delete-dialog"`, `id="run-dialog"`, `class="award-form"`} {
+	for _, not := range []string{`id="pilot-add"`, `id="delete-dialog"`, `id="run-dialog"`, `class="pilot-sp"`} {
 		if strings.Contains(over, not) {
 			t.Errorf("overview should not hold %q", not)
 		}
 	}
 	// The manage page holds all of them.
 	man := body(t, srv, "/refusalwar/manage/", cookie)
-	for _, want := range []string{`id="run-dialog"`, `id="delete-dialog"`, `class="award-form"`, "Open hangar"} {
+	for _, want := range []string{`id="run-dialog"`, `id="delete-dialog"`, `id="sp-dialog"`, `class="button pilot-sp"`, "Open hangar"} {
 		if !strings.Contains(man, want) {
 			t.Errorf("manage page is missing %q", want)
 		}
@@ -655,5 +656,165 @@ func TestManageNeedsAStartedCampaign(t *testing.T) {
 	}
 	if r, _ := client.Get(srv.URL + "/nope/manage/"); r.StatusCode != http.StatusNotFound {
 		t.Errorf("unknown campaign: %d", r.StatusCode)
+	}
+}
+
+// spStore checks earning and allocating SP, in a campaign of its own (run for both databases from storeContract).
+func spStore(t *testing.T, s *Store, id string) {
+	t.Helper()
+	ctx := context.Background()
+	const camp = "spcamp"
+	a, err := s.AddPilot(ctx, id, camp, "Alrek", "", SPAllocation{Gunnery: 90, EdgeTokens: 60}, 4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	get := func() NamedPilot {
+		ps, _ := s.Pilots(ctx, id, camp)
+		for _, p := range ps {
+			if p.ID == a.ID {
+				return p
+			}
+		}
+		t.Fatal("pilot vanished")
+		return NamedPilot{}
+	}
+	if p := get(); p.TotalSP != 150 || p.Unallocated() != 0 {
+		t.Fatalf("a new pilot has allocated every starting SP: %+v", p)
+	}
+	if err := s.EarnSP(ctx, id, camp, a.ID, 300); err != nil {
+		t.Fatal(err)
+	}
+	if p := get(); p.TotalSP != 450 || p.Unallocated() != 300 || p.SP.Total() != 150 {
+		t.Fatalf("after earning 300: %+v", p)
+	}
+	// Allocating spends only what is unallocated.
+	if err := s.AllocateSP(ctx, id, camp, a.ID, SPAllocation{Gunnery: 200, Piloting: 101}); !errors.Is(err, ErrNotEnoughSP) {
+		t.Fatalf("301 of 300: %v", err)
+	}
+	if p := get(); p.Unallocated() != 300 {
+		t.Fatalf("a refused allocation changed the pilot: %+v", p)
+	}
+	if err := s.AllocateSP(ctx, id, camp, a.ID, SPAllocation{Gunnery: 200, Piloting: 50}); err != nil {
+		t.Fatal(err)
+	}
+	if p := get(); p.SP != (SPAllocation{Gunnery: 290, Piloting: 50, EdgeTokens: 60}) || p.TotalSP != 450 || p.Unallocated() != 50 {
+		t.Fatalf("after allocating 250: %+v", p)
+	}
+	if err := s.AllocateSP(ctx, id, camp, a.ID, SPAllocation{EdgeAbilities: 50}); err != nil {
+		t.Fatalf("the last 50: %v", err)
+	}
+	if err := s.AllocateSP(ctx, id, camp, a.ID, SPAllocation{Gunnery: 1}); !errors.Is(err, ErrNotEnoughSP) {
+		t.Fatalf("nothing left: %v", err)
+	}
+	if err := s.AllocateSP(ctx, id, camp, "nobody", SPAllocation{Gunnery: 1}); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("unknown pilot: %v", err)
+	}
+	if err := s.EarnSP(ctx, id, "another", a.ID, 5); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("another campaign's pilot: %v", err)
+	}
+	// The direct award (used by /api/pilots/sp) raises the total along with the columns, leaving nothing unallocated.
+	if err := s.AwardSP(ctx, id, camp, a.ID, SPAllocation{Gunnery: 10}); err != nil {
+		t.Fatal(err)
+	}
+	if p := get(); p.TotalSP != 460 || p.Unallocated() != 0 {
+		t.Fatalf("after a direct award: %+v", p)
+	}
+	if err := s.MarkFallen(ctx, id, camp, a.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.EarnSP(ctx, id, camp, a.ID, 5); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("the fallen earn nothing: %v", err)
+	}
+}
+
+func TestSPEndpoints(t *testing.T) {
+	srv, store, cookie := startedCompany(t)
+	ctx := context.Background()
+	id := playthroughID("wolfpack2026")
+	ps, _ := store.Pilots(ctx, id, "refusalwar")
+	pilot := ps[0].ID
+	form := func(kv ...string) url.Values {
+		v := url.Values{"campaign": {"refusalwar"}, "pilot": {pilot}}
+		for i := 0; i+1 < len(kv); i += 2 {
+			v.Set(kv[i], kv[i+1])
+		}
+		return v
+	}
+	status := func(path string, v url.Values) int { return post(t, srv, path, v, cookie, srv.URL).StatusCode }
+	for name, c := range map[string]struct {
+		path   string
+		v      url.Values
+		status int
+	}{
+		"earn nothing":        {"/api/pilots/earn", form(), http.StatusBadRequest},
+		"earn negative":       {"/api/pilots/earn", form("sp", "-5"), http.StatusBadRequest},
+		"earn text":           {"/api/pilots/earn", form("sp", "lots"), http.StatusBadRequest},
+		"allocate with none":  {"/api/pilots/allocate", form("gunnery", "10"), http.StatusBadRequest},
+		"allocate zero":       {"/api/pilots/allocate", form("gunnery", "0"), http.StatusBadRequest},
+		"earn for a stranger": {"/api/pilots/earn", form("pilot", "nobody", "sp", "10"), http.StatusNotFound},
+		"cross-origin earn":   {"/api/pilots/earn", form("sp", "10"), http.StatusForbidden},
+	} {
+		var got int
+		if name == "cross-origin earn" {
+			got = post(t, srv, c.path, c.v, cookie, "https://evil.example").StatusCode
+		} else {
+			got = status(c.path, c.v)
+		}
+		if got != c.status {
+			t.Errorf("%s: got %d, want %d", name, got, c.status)
+		}
+	}
+	if got := status("/api/pilots/earn", form("sp", "300")); got != http.StatusNoContent {
+		t.Fatalf("earn: %d", got)
+	}
+	if got := status("/api/pilots/allocate", form("gunnery", "200", "piloting", "101")); got != http.StatusBadRequest {
+		t.Errorf("over-allocating: %d", got)
+	}
+	if got := status("/api/pilots/allocate", form("gunnery", "200", "piloting", "100")); got != http.StatusNoContent {
+		t.Fatalf("allocate: %d", got)
+	}
+	ps, _ = store.Pilots(ctx, id, "refusalwar")
+	if p := ps[0]; p.TotalSP != 450 || p.Unallocated() != 0 || p.SP.Gunnery != 290 || p.SP.Piloting != 100 {
+		t.Errorf("after earn and allocate: %+v", p)
+	}
+}
+
+// A database from before pilots had a total gets one: every SP they had was allocated, so the total is the columns' sum.
+func TestMigrateSPTotal(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "old.db")
+	s, err := OpenSQLite(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	id := playthroughID("oldseed99")
+	if _, err := s.EnsurePlaythrough(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+	// An old row: the columns hold SP, the total was never written.
+	if _, err := s.db.Exec(`INSERT INTO named_pilots (id, playthrough_id, campaign, name, sp_gunnery, sp_edge_tokens) VALUES ('p1', ?, 'refusalwar', 'Alrek', 90, 60)`, id); err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
+	s, err = OpenSQLite(path) // opening again runs the schema fix-ups
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	ps, err := s.Pilots(ctx, id, "refusalwar")
+	if err != nil || len(ps) != 1 || ps[0].TotalSP != 150 || ps[0].Unallocated() != 0 {
+		t.Fatalf("migrated pilot: %+v %v", ps, err)
+	}
+	// And it leaves a consistent pilot alone: unallocated SP survives a reopen.
+	if err := s.EarnSP(ctx, id, "refusalwar", "p1", 40); err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
+	if s, err = OpenSQLite(path); err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if ps, _ := s.Pilots(ctx, id, "refusalwar"); ps[0].TotalSP != 190 || ps[0].Unallocated() != 40 {
+		t.Fatalf("after reopening: %+v", ps[0])
 	}
 }
