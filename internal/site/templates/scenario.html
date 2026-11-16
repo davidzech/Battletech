@@ -20,7 +20,7 @@
 {{if .MekBayOp}}<p class="muted">Your hangar and this scenario's OpFor, loaded together with the OpFor as the hostile force.</p>
 <p class="downloads"><a class="button" href="{{.MekBayOp}}" target="_blank" rel="noopener noreferrer">Open in MekBay</a>{{if .Play.CanModify}}<button type="button" class="button" id="mekbay-rebuild">Reset OpFor</button>{{end}}</p>
 {{else if .Play.CanModify}}<p class="muted">Create a MekBay operation with your hangar and a fresh copy of this scenario's OpFor (one group per OpFor).</p>
-<p class="downloads"><button type="button" class="button" id="mekbay-create">Create operation</button></p>
+<p class="downloads"><button type="button" class="button alert" id="mekbay-create">Create operation</button></p>
 {{else}}<p class="muted">To have the site create this operation for you, add your MekBay user ID under Campaign details.</p>
 {{end}}<p id="mekbay-error" class="form-error" role="alert"></p>
 </section>

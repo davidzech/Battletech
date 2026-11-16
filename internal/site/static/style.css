@@ -22,6 +22,8 @@
   --muted: #9a978b;
   --accent: #f2b800;
   --accent-ink: #14110a;
+  --alert: #c8372d;
+  --alert-ink: #fff4ee;
   --link: #ffd24a;
   --display: "Bahnschrift", "Arial Narrow", "Roboto Condensed", "Helvetica Neue", Arial, sans-serif;
   --body: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -238,6 +240,9 @@ th {
   clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%);
 }
 .button:hover { color: var(--accent-ink); filter: brightness(1.12); }
+/* Red variant for actions that commit something outside the site (creating the MekBay operation). */
+.button.alert { background: var(--alert); color: var(--alert-ink); }
+.button.alert:hover { color: var(--alert-ink); }
 /* A <button class="button"> looks like the link buttons: no default border, pointer cursor. */
 button.button { border: 0; cursor: pointer; }
 button.button:disabled { opacity: 0.6; cursor: wait; filter: none; }
