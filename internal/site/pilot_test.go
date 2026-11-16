@@ -351,7 +351,7 @@ func TestNamedPilotsFlow(t *testing.T) {
 		t.Fatalf("allocation = %+v", ps[0].SP)
 	}
 	c = body(t, srv, "/refusalwar/manage/", cookie)
-	if !strings.Contains(c, `<span class="stat-value">3</span>`) || !strings.Contains(c, "SP earned <b>360</b>") || !strings.Contains(c, "<b>2</b>: 300/700 SP") {
+	if !strings.Contains(c, `<span class="stat-value">3</span>`) || !strings.Contains(c, "SP earned <b>360</b>") || !strings.Contains(c, "300/700 SP &rarr; <b>2</b>") {
 		t.Fatalf("the page should show the new levels (gunnery 3, edge 2): %.4000s", c)
 	}
 
@@ -1124,7 +1124,7 @@ func TestRenamePilots(t *testing.T) {
 	}
 }
 
-// The stat boxes say how close each column is to its next level, as "<next level>: SP/needed SP" with the level in bold, and "max" at the top.
+// The stat boxes say how close each column is to its next level, as "SP/needed SP -> <next level>" with the level in bold, and "max" at the top.
 func TestStatBoxCaptions(t *testing.T) {
 	srv, store, cookie := startedCompany(t)
 	ctx := context.Background()
@@ -1132,7 +1132,7 @@ func TestStatBoxCaptions(t *testing.T) {
 	ps, _ := store.Pilots(ctx, id, "refusalwar")
 	// The starting pilots hold 90 or 60 SP in some columns: closeness shows as SP/needed.
 	page := body(t, srv, "/refusalwar/manage/", cookie)
-	if !strings.Contains(page, `stat-next"><b>4</b>: 0/100 SP<`) || strings.Contains(page, "top level") || strings.Contains(page, "next:") || strings.Contains(page, " at 100 SP") {
+	if !strings.Contains(page, `stat-next">0/100 SP &rarr; <b>4</b><`) || strings.Contains(page, "top level") || strings.Contains(page, "next:") || strings.Contains(page, " at 100 SP") {
 		t.Errorf("captions should read next: SP/needed SP: %.1500s", page)
 	}
 	if err := store.AwardSP(ctx, id, "refusalwar", ps[0].ID, SPAllocation{Gunnery: 1000000}); err != nil {
