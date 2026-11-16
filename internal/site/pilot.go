@@ -124,6 +124,7 @@ type pilotColumn struct {
 	HasNext bool // false at the top of the ladder
 	NextAt  int  // SP the column needs in total to reach the next level
 	NextLvl int
+	Percent int // how far along to the next level, 0 to 100 (100 at the top of the ladder)
 }
 
 // PilotView is a named pilot with everything the campaign page shows already worked out.
@@ -139,8 +140,10 @@ type PilotView struct {
 func (p NamedPilot) view() PilotView {
 	col := func(l ladder, sp int) pilotColumn {
 		c := pilotColumn{Name: l.Name, SP: sp, Level: l.at(sp).Level}
+		c.Percent = 100
 		if n, ok := l.next(sp); ok {
 			c.HasNext, c.NextAt, c.NextLvl = true, n.SP, n.Level
+			c.Percent = min(100, (sp*100+n.SP/2)/n.SP) // rounded, like the browser's
 		}
 		return c
 	}

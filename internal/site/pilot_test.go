@@ -351,7 +351,7 @@ func TestNamedPilotsFlow(t *testing.T) {
 		t.Fatalf("allocation = %+v", ps[0].SP)
 	}
 	c = body(t, srv, "/refusalwar/manage/", cookie)
-	if !strings.Contains(c, `<span class="stat-value">3</span>`) || !strings.Contains(c, "SP earned <b>360</b>") || !strings.Contains(c, `300/700 SP<span class="stat-to"><span class="stat-arrow"`) || !strings.Contains(c, "<b>2</b>") {
+	if !strings.Contains(c, `<span class="stat-value">3</span>`) || !strings.Contains(c, "SP earned <b>360</b>") || !strings.Contains(c, `stat-next">300/700 SP<`) || !strings.Contains(c, "<b>2</b>") || !strings.Contains(c, `stat-bar"><span style="width: 43%"`) {
 		t.Fatalf("the page should show the new levels (gunnery 3, edge 2): %.4000s", c)
 	}
 
@@ -1124,7 +1124,7 @@ func TestRenamePilots(t *testing.T) {
 	}
 }
 
-// The stat boxes say how close each column is to its next level, as "SP/needed SP, an arrow, then the next level" with the level in bold, and "max" at the top.
+// The stat boxes say how close each column is to its next level, as "SP/needed SP" under the level, with a progress bar and a tiny next level beside the number, and "max" at the top.
 func TestStatBoxCaptions(t *testing.T) {
 	srv, store, cookie := startedCompany(t)
 	ctx := context.Background()
@@ -1132,7 +1132,7 @@ func TestStatBoxCaptions(t *testing.T) {
 	ps, _ := store.Pilots(ctx, id, "refusalwar")
 	// The starting pilots hold 90 or 60 SP in some columns: closeness shows as SP/needed.
 	page := body(t, srv, "/refusalwar/manage/", cookie)
-	if !strings.Contains(page, `stat-next">0/100 SP<span class="stat-to"><span class="stat-arrow"`) || strings.Contains(page, "top level") || strings.Contains(page, "next:") || strings.Contains(page, " at 100 SP") {
+	if !strings.Contains(page, `stat-next">0/100 SP<`) || strings.Contains(page, "top level") || strings.Contains(page, "next:") || strings.Contains(page, " at 100 SP") {
 		t.Errorf("captions should read next: SP/needed SP: %.1500s", page)
 	}
 	if err := store.AwardSP(ctx, id, "refusalwar", ps[0].ID, SPAllocation{Gunnery: 1000000}); err != nil {

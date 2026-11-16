@@ -11,7 +11,7 @@
 // added, and the controls show the column's whole total, with what it holds now as their minimum.
 (function () {
   // The arrow between the SP so far and the next level, drawn rather than typed so it reads clearly in any font.
-  var ARROW = '<svg viewBox="0 0 16 10" width="16" height="10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 5h13M10 1l4 4-4 4"/></svg>';
+  var ARROW = '<svg viewBox="0 0 16 10" width="16" height="10" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 5h13M10 1l4 4-4 4"/></svg>';
 
   function el(tag, cls, text) {
     var e = document.createElement(tag);
@@ -74,30 +74,42 @@
     return r;
   }
 
-  // The big number for one column: the level the SP allocated so far reaches, and what the next level takes.
+  // The box for one column: a big, centred level; a tiny "-> next level" at its lower right; the SP so far over the SP the next
+  // level takes; and a yellow progress bar for how far along that is. At the top of the ladder it says "max" with a full bar.
   function statBox(l) {
     var box = el('div', 'stat-box');
     var value = el('span', 'stat-value');
+    var to = el('span', 'stat-to');
+    var arrow = el('span', 'stat-arrow');
+    arrow.setAttribute('aria-hidden', 'true');
+    arrow.innerHTML = ARROW; // a constant defined above, never data
+    var nextLevel = el('b');
+    to.appendChild(arrow);
+    to.appendChild(nextLevel);
+    var wrap = el('span', 'stat-valwrap'); // only the value sits in the flow, so it stays centred whatever the "to" says
+    wrap.appendChild(value);
+    wrap.appendChild(to);
+    var main = el('span', 'stat-main');
+    main.appendChild(wrap);
     var next = el('span', 'stat-next');
+    var bar = el('span', 'stat-bar');
+    var fill = el('span');
+    bar.appendChild(fill);
     box.appendChild(el('span', 'stat-label', l.name));
-    box.appendChild(value);
+    box.appendChild(main);
     box.appendChild(next);
+    box.appendChild(bar);
     box.show = function (spent) {
       var r = reach(l, spent), n = upcoming(l, spent);
       value.textContent = r.level;
-      // "SP/needed SP -> <next level>", the next level in bold yellow, or "max" at the top of the ladder.
-      next.textContent = '';
+      to.hidden = !n;
       if (n) {
-        next.appendChild(document.createTextNode(spent + '/' + n.sp + ' SP'));
-        var to = el('span', 'stat-to'); // the arrow and the level wrap together, never apart
-        var arrow = el('span', 'stat-arrow');
-        arrow.setAttribute('aria-hidden', 'true');
-        arrow.innerHTML = ARROW; // a constant defined above, never data
-        to.appendChild(arrow);
-        to.appendChild(el('b', null, String(n.level)));
-        next.appendChild(to);
+        nextLevel.textContent = String(n.level);
+        next.textContent = spent + '/' + n.sp + ' SP';
+        fill.style.width = Math.min(100, Math.round(spent / n.sp * 100)) + '%';
       } else {
         next.textContent = 'max';
+        fill.style.width = '100%';
       }
       box.classList.toggle('up', r.level !== l.base);
     };
