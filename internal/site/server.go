@@ -50,7 +50,6 @@ type Page struct {
 	Cards    []Card
 	Images   []string    // URLs of the scenario's images
 	Seed     string      // the visitor's seed ("" if none chosen yet)
-	SeedHint string      // short form of Seed for the header
 	Play     Playthrough // the visitor's playthrough (zero value if no seed)
 	Run      CampaignRun // the playthrough's run of this page's campaign (zero value until it is started)
 	MekBayOp string      // link to the scenario's MekBay operation, once created ("" until then)
@@ -104,7 +103,7 @@ func NewHandler(contentRoot string, store *Store, opts ...Option) http.Handler {
 
 func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name string, p Page) {
 	if seed := currentSeed(r); seed != "" {
-		p.Seed, p.SeedHint = seed, seedHint(seed)
+		p.Seed = seed
 		id := playthroughID(seed)
 		if _, err := s.store.EnsurePlaythrough(r.Context(), id); err != nil {
 			log.Printf("ensure playthrough: %v", err)

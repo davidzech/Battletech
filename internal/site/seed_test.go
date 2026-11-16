@@ -232,8 +232,11 @@ func TestSeedAndCampaignFlow(t *testing.T) {
 		t.Fatalf("existing company should report configured: %q", out.String())
 	}
 	page := body(t, srv, "/", cookie)
-	if !strings.Contains(page, `<span class="company">Wolf&#39;s Dragoons</span> <code>wolf…</code>`) {
-		t.Fatalf("configured page should show the company and seed chip: %.1500s", page)
+	if !strings.Contains(page, `<span class="company">Wolf&#39;s Dragoons</span></button>`) {
+		t.Fatalf("configured page should show the company name on the chip: %.1500s", page)
+	}
+	if strings.Contains(page, "wolf…") {
+		t.Fatal("the header chip should not show the seed")
 	}
 	if strings.Contains(page, `id="hangar-link"`) {
 		t.Fatal("no hangar link before a campaign is started")
