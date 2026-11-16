@@ -52,7 +52,17 @@ func parsePlayers(raw string) (int, error) {
 	return n, nil
 }
 
-// setCampaign saves the hangar link and player count for the visitor's playthrough.
+// parseOwnerUID validates the optional MekBay account UID (the id MekBay keeps in the owner's browser).
+// An empty value is fine and means "don't change".
+func parseOwnerUID(raw string) (string, error) {
+	uid := strings.ToLower(strings.TrimSpace(raw))
+	if uid != "" && !uuidPattern.MatchString(uid) {
+		return "", errors.New("That doesn't look like a MekBay user ID (it should be a UUID like 01234567-89ab-cdef-0123-456789abcdef).")
+	}
+	return uid, nil
+}
+
+// setCampaign saves the hangar link, player count and optional owner UID for the visitor's playthrough.
 func (s *Server) setCampaign(w http.ResponseWriter, r *http.Request) {
 	if !sameOrigin(r) {
 		http.Error(w, "cross-origin request refused", http.StatusForbidden)
@@ -78,6 +88,11 @@ func (s *Server) setCampaign(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	owner, err := parseOwnerUID(r.PostFormValue("owner"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	id := playthroughID(seed)
 	if _, err := s.store.EnsurePlaythrough(r.Context(), id); err != nil {
 		http.Error(w, "could not save campaign", http.StatusInternalServerError)
@@ -86,6 +101,14 @@ func (s *Server) setCampaign(w http.ResponseWriter, r *http.Request) {
 	if err := s.store.SaveSetup(r.Context(), id, hangar, players); err != nil {
 		http.Error(w, "could not save campaign", http.StatusInternalServerError)
 		return
+	}
+	// Modify mode is optional: a UID turns it on, "clear_owner" turns it off, and leaving the field blank
+	// keeps whatever is already saved (the UID is never sent back to the page to prefill it).
+	if owner != "" || r.PostFormValue("clear_owner") == "1" {
+		if err := s.store.SetOwnerUID(r.Context(), id, owner); err != nil {
+			http.Error(w, "could not save campaign", http.StatusInternalServerError)
+			return
+		}
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

@@ -49,6 +49,10 @@
       <label class="pill"><input type="radio" name="players" value="3"{{if eq $n 3}} checked{{end}}><span>3</span></label>
       <label class="pill"><input type="radio" name="players" value="4"{{if eq $n 4}} checked{{end}}><span>4</span></label>
     </fieldset>
+    <label for="owner-input">MekBay user ID <span class="optional">(optional)</span></label>
+    <input id="owner-input" class="wide" name="owner" type="password" placeholder="{{if .Play.CanModify}}Saved. Leave blank to keep it{{else}}Leave blank for read-only{{end}}" spellcheck="false" autocomplete="off">
+    <p class="hint">{{if .Play.CanModify}}<strong>Modify mode is on.</strong> {{end}}Giving the ID of the MekBay account that owns the hangar lets this site change the hangar for you (repairs and the like). It works like a password for that account's MekBay forces, so only enter it if you trust this site. Without it the site can only read your hangar.</p>
+    {{if .Play.CanModify}}<label class="check"><input type="checkbox" name="clear_owner" value="1"> Turn modify mode off and forget the ID</label>{{end}}
     <p id="setup-error" class="form-error" role="alert"></p>
     <div class="form-actions">
       <button type="submit" class="button">Save campaign</button>

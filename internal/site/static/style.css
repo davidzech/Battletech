@@ -138,7 +138,8 @@ a:hover { color: var(--accent); }
 
 /* Angular, clipped-corner panels */
 .panel {
-  background: var(--panel);
+  /* clip-path also cuts the border along the angled corner, so a gradient redraws it there (18px cut: 18/sqrt2 = 12.73px) */
+  background: linear-gradient(225deg, transparent 12.73px, var(--line) 12.73px 13.73px, transparent 13.73px) top right / 18px 18px no-repeat border-box, var(--panel);
   border: 1px solid var(--line);
   border-left: 4px solid var(--accent);
   padding: 0.5rem 1.4rem 1rem;
@@ -311,7 +312,7 @@ a.chip { display: inline-block; text-decoration: none; }
 dialog {
   width: min(34rem, calc(100vw - 2rem));
   padding: 1.25rem 1.5rem 1.5rem;
-  background: var(--panel);
+  background: linear-gradient(225deg, transparent 12.73px, var(--line) 12.73px 13.73px, transparent 13.73px) top right / 18px 18px no-repeat border-box, var(--panel);
   color: var(--text);
   border: 1px solid var(--line);
   border-left: 4px solid var(--accent);
@@ -368,6 +369,9 @@ dialog button:not(.button):hover { border-color: var(--accent); color: var(--acc
 .pill input:checked + span { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .pill input:focus-visible + span { outline: 2px solid var(--text); outline-offset: 2px; }
 
+dialog .optional { color: var(--muted, #9a9a9a); text-transform: none; letter-spacing: 0; }
+dialog .hint { margin: 0.4rem 0 0; font-size: 0.85rem; color: var(--muted, #9a9a9a); }
+dialog label.check { display: flex; align-items: center; gap: 0.5rem; text-transform: none; letter-spacing: 0; font-family: inherit; }
 .form-error { min-height: 1.4em; margin: 0.6rem 0 0; color: #ff7a59; }
 .form-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; margin-top: 0.5rem; }
 .form-actions .button { border: 0; cursor: pointer; }
@@ -378,6 +382,8 @@ dialog button:not(.button):hover { border-color: var(--accent); color: var(--acc
   margin: 1.5rem 0 2rem;
   padding: 1.1rem 1.6rem 1.5rem 1.8rem;
   background:
+    linear-gradient(225deg, transparent 18.38px, color-mix(in srgb, var(--accent) 45%, var(--line)) 18.38px 19.38px, transparent 19.38px) top right / 26px 26px no-repeat border-box,
+    linear-gradient(45deg, transparent 18.38px, color-mix(in srgb, var(--accent) 45%, var(--line)) 18.38px 19.38px, transparent 19.38px) bottom left / 26px 26px no-repeat border-box,
     repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.025) 0 1px, transparent 1px 4px),
     linear-gradient(135deg, color-mix(in srgb, var(--accent) 10%, var(--panel)), var(--panel) 55%);
   border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line));
@@ -535,7 +541,7 @@ details.fold + details.fold { margin-top: 1rem; }
 .waypoint-list { list-style: none; margin: 0.75rem 0 0; padding: 0; display: grid; gap: 0.75rem; }
 .waypoint {
   padding: 0.75rem 1.1rem 1rem;
-  background: var(--panel);
+  background: linear-gradient(225deg, transparent 9.9px, var(--line) 9.9px 10.9px, transparent 10.9px) top right / 14px 14px no-repeat border-box, var(--panel);
   border: 1px solid var(--line);
   border-left: 4px solid var(--accent);
   clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 0 100%);

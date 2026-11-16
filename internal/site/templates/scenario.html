@@ -15,6 +15,16 @@
 {{if .Scenario.Forces}}<h2>Force files</h2>
 <p class="muted">MegaMek unit lists (.mul) for the opposing forces. Load them in <a href="https://mekbay.com" target="_blank" rel="noopener noreferrer">MekBay</a> or MegaMek.</p>
 <p class="downloads">{{range .Scenario.Forces}}<a class="button" href="/{{$.Campaign.Slug}}/{{$.Scenario.Slug}}/forces/{{.File}}" download>Download {{.Label}} (.mul)</a>{{end}}</p>
+{{end}}{{if and .Play.Configured .Scenario.Forces}}<section class="mekbay" id="mekbay-op" data-campaign="{{.Campaign.Slug}}" data-scenario="{{.Scenario.Slug}}">
+<h2>MekBay operation</h2>
+{{if .MekBayOp}}<p class="muted">Your hangar and this scenario's OpFor, loaded together with the OpFor as the hostile force.</p>
+<p class="downloads"><a class="button" href="{{.MekBayOp}}" target="_blank" rel="noopener noreferrer">Open in MekBay</a>{{if .Play.CanModify}}<button type="button" class="button" id="mekbay-rebuild">Reset OpFor</button>{{end}}</p>
+{{else if .Play.CanModify}}<p class="muted">Create a MekBay operation with your hangar and a fresh copy of this scenario's OpFor (one group per OpFor).</p>
+<p class="downloads"><button type="button" class="button" id="mekbay-create">Create operation</button></p>
+{{else}}<p class="muted">To have the site create this operation for you, add your MekBay user ID under Campaign details.</p>
+{{end}}<p id="mekbay-error" class="form-error" role="alert"></p>
+</section>
+<script src="/static/mekbay.js" defer></script>
 {{end}}{{if .Scenario.Waypoints}}<details class="fold waypoints">
 <summary>Waypoints</summary>
 <div class="fold-body"><p class="muted">Reveal a waypoint only when the game calls for it. Each stays redacted until you reveal it.</p>

@@ -230,6 +230,73 @@ func TestSeedAndCampaignFlow(t *testing.T) {
 	}
 }
 
+func TestParseOwnerUID(t *testing.T) {
+	const uid = "e66a3544-8fcf-4dab-955a-f4ea2db0b610"
+	if got, err := parseOwnerUID("  " + strings.ToUpper(uid) + " "); err != nil || got != uid {
+		t.Errorf("parseOwnerUID = %q, %v", got, err)
+	}
+	if got, err := parseOwnerUID(""); err != nil || got != "" {
+		t.Errorf("blank should be allowed, got %q, %v", got, err)
+	}
+	for _, bad := range []string{"nope", uid + "x", "https://mekbay.com/?instance=" + goodInstance} {
+		if _, err := parseOwnerUID(bad); err == nil {
+			t.Errorf("parseOwnerUID(%q) should fail", bad)
+		}
+	}
+}
+
+func TestModifyModeIsOptionalAndPrivate(t *testing.T) {
+	const uid = "e66a3544-8fcf-4dab-955a-f4ea2db0b610"
+	srv, store := newTestServer(t)
+	ctx := context.Background()
+	res := post(t, srv, "/api/seed", url.Values{"seed": {"wolfpack2026"}}, nil, "")
+	cookie := res.Cookies()[0]
+	id := playthroughID("wolfpack2026")
+	setup := func(extra url.Values) int {
+		v := url.Values{"hangar": {goodHangar}, "players": {"2"}}
+		for k, vs := range extra {
+			v[k] = vs
+		}
+		return post(t, srv, "/api/campaign", v, cookie, srv.URL).StatusCode
+	}
+
+	// Without a UID the campaign is read-only.
+	if c := setup(nil); c != http.StatusNoContent {
+		t.Fatalf("setup without owner: %d", c)
+	}
+	if pt, _, _ := store.Playthrough(ctx, id); pt.CanModify() {
+		t.Fatal("no UID should mean read-only")
+	}
+	// A malformed UID is refused.
+	if c := setup(url.Values{"owner": {"not-a-uid"}}); c != http.StatusBadRequest {
+		t.Fatalf("bad owner: %d", c)
+	}
+	// A valid UID turns modify mode on, and the page never echoes it back.
+	if c := setup(url.Values{"owner": {uid}}); c != http.StatusNoContent {
+		t.Fatalf("good owner: %d", c)
+	}
+	if pt, _, _ := store.Playthrough(ctx, id); !pt.CanModify() || pt.OwnerUID != uid {
+		t.Fatalf("modify mode not saved: %+v", pt)
+	}
+	page := body(t, srv, "/", cookie)
+	if strings.Contains(page, uid) || !strings.Contains(page, "Modify mode is on.") {
+		t.Fatal("page should say modify mode is on without revealing the UID")
+	}
+	// Saving again with the field blank keeps it; the checkbox clears it.
+	if c := setup(nil); c != http.StatusNoContent {
+		t.Fatalf("resave: %d", c)
+	}
+	if pt, _, _ := store.Playthrough(ctx, id); pt.OwnerUID != uid {
+		t.Fatal("a blank owner field should keep the saved UID")
+	}
+	if c := setup(url.Values{"clear_owner": {"1"}}); c != http.StatusNoContent {
+		t.Fatalf("clear: %d", c)
+	}
+	if pt, _, _ := store.Playthrough(ctx, id); pt.CanModify() {
+		t.Fatal("clear_owner should turn modify mode off")
+	}
+}
+
 func TestInvalidCookieIsIgnored(t *testing.T) {
 	srv, _ := newTestServer(t)
 	page := body(t, srv, "/", &http.Cookie{Name: "seed", Value: "NOT VALID"})

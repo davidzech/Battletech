@@ -26,7 +26,12 @@ type Playthrough struct {
 	HangarInstance string // the link's ?instance= id
 	HangarSel      string // the link's optional ?sel= id
 	Players        int    // number of human players, 1 to 4 (0 until set up)
+	OwnerUID       string // optional MekBay account UID that owns the hangar; secret, never sent to the browser
 }
+
+// CanModify reports whether the playthrough is in modify mode: it holds the hangar owner's UID, so the site
+// is allowed to write to the MekBay hangar (MekBay only accepts changes from the owner's UID).
+func (p Playthrough) CanModify() bool { return p.OwnerUID != "" }
 
 // Configured reports whether the campaign setup (hangar and player count) has been completed.
 func (p Playthrough) Configured() bool { return p.HangarInstance != "" && p.Players >= 1 }
@@ -38,7 +43,15 @@ CREATE TABLE IF NOT EXISTS playthroughs (
 	hangar_url      TEXT NOT NULL DEFAULT '',
 	hangar_instance TEXT NOT NULL DEFAULT '',
 	hangar_sel      TEXT NOT NULL DEFAULT '',
-	players         INTEGER NOT NULL DEFAULT 0 CHECK (players BETWEEN 0 AND 4)
+	players         INTEGER NOT NULL DEFAULT 0 CHECK (players BETWEEN 0 AND 4),
+	owner_uid       TEXT NOT NULL DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS mekbay_operations (
+	playthrough_id TEXT NOT NULL REFERENCES playthroughs(id) ON DELETE CASCADE,
+	scenario_id    TEXT NOT NULL,
+	opfor_instance TEXT NOT NULL,
+	operation_id   TEXT NOT NULL,
+	PRIMARY KEY (playthrough_id, scenario_id)
 );`
 
 const postgresSchema = `
@@ -48,7 +61,15 @@ CREATE TABLE IF NOT EXISTS playthroughs (
 	hangar_url      TEXT NOT NULL DEFAULT '',
 	hangar_instance TEXT NOT NULL DEFAULT '',
 	hangar_sel      TEXT NOT NULL DEFAULT '',
-	players         INTEGER NOT NULL DEFAULT 0 CHECK (players BETWEEN 0 AND 4)
+	players         INTEGER NOT NULL DEFAULT 0 CHECK (players BETWEEN 0 AND 4),
+	owner_uid       TEXT NOT NULL DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS mekbay_operations (
+	playthrough_id TEXT NOT NULL REFERENCES playthroughs(id) ON DELETE CASCADE,
+	scenario_id    TEXT NOT NULL,
+	opfor_instance TEXT NOT NULL,
+	operation_id   TEXT NOT NULL,
+	PRIMARY KEY (playthrough_id, scenario_id)
 );`
 
 // OpenSQLite opens (creating if needed) the SQLite database at path and applies the schema.
@@ -62,6 +83,14 @@ func OpenSQLite(path string) (*Store, error) {
 	if _, err := db.Exec(sqliteSchema); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("apply schema: %w", err)
+	}
+	// Databases created before modify mode lack the owner_uid column (SQLite has no ADD COLUMN IF NOT EXISTS).
+	var has int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('playthroughs') WHERE name = 'owner_uid'`).Scan(&has); err == nil && has == 0 {
+		if _, err := db.Exec(`ALTER TABLE playthroughs ADD COLUMN owner_uid TEXT NOT NULL DEFAULT ''`); err != nil {
+			db.Close()
+			return nil, fmt.Errorf("migrate schema: %w", err)
+		}
 	}
 	return &Store{db: db}, nil
 }
@@ -82,6 +111,10 @@ func OpenPostgres(url string) (*Store, error) {
 		diag := postgresDiagnostics(db)
 		db.Close()
 		return nil, fmt.Errorf("apply schema: %w (%s)", err, diag)
+	}
+	if _, err := db.Exec(`ALTER TABLE playthroughs ADD COLUMN IF NOT EXISTS owner_uid TEXT NOT NULL DEFAULT ''`); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("migrate schema: %w", err)
 	}
 	return &Store{db: db, postgres: true}, nil
 }
@@ -140,8 +173,8 @@ func (s *Store) EnsurePlaythrough(ctx context.Context, id string) (created bool,
 // Playthrough loads a playthrough; ok is false if the ID is unknown.
 func (s *Store) Playthrough(ctx context.Context, id string) (p Playthrough, ok bool, err error) {
 	err = s.db.QueryRowContext(ctx,
-		s.q(`SELECT id, hangar_url, hangar_instance, hangar_sel, players FROM playthroughs WHERE id = ?`), id,
-	).Scan(&p.ID, &p.HangarURL, &p.HangarInstance, &p.HangarSel, &p.Players)
+		s.q(`SELECT id, hangar_url, hangar_instance, hangar_sel, players, owner_uid FROM playthroughs WHERE id = ?`), id,
+	).Scan(&p.ID, &p.HangarURL, &p.HangarInstance, &p.HangarSel, &p.Players, &p.OwnerUID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Playthrough{}, false, nil
 	}
@@ -160,4 +193,43 @@ func (s *Store) SaveSetup(ctx context.Context, id string, h Hangar, players int)
 		return sql.ErrNoRows
 	}
 	return nil
+}
+
+// SetOwnerUID stores the MekBay owner UID that puts a playthrough into modify mode; an empty uid turns it off.
+func (s *Store) SetOwnerUID(ctx context.Context, id, uid string) error {
+	res, err := s.db.ExecContext(ctx, s.q(`UPDATE playthroughs SET owner_uid = ? WHERE id = ?`), uid, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
+// MekBayOperation records the MekBay force and operation the site synthesized for one scenario of a playthrough.
+type MekBayOperation struct {
+	OpForInstance string // the OpFor force's instance ID
+	OperationID   string
+}
+
+// MekBayOperation loads the stored operation for a scenario; ok is false if none was created yet.
+func (s *Store) MekBayOperation(ctx context.Context, playthroughID, scenarioID string) (op MekBayOperation, ok bool, err error) {
+	err = s.db.QueryRowContext(ctx,
+		s.q(`SELECT opfor_instance, operation_id FROM mekbay_operations WHERE playthrough_id = ? AND scenario_id = ?`),
+		playthroughID, scenarioID,
+	).Scan(&op.OpForInstance, &op.OperationID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return MekBayOperation{}, false, nil
+	}
+	return op, err == nil, err
+}
+
+// SaveMekBayOperation stores (or replaces) the operation for a scenario of a playthrough.
+func (s *Store) SaveMekBayOperation(ctx context.Context, playthroughID, scenarioID string, op MekBayOperation) error {
+	_, err := s.db.ExecContext(ctx,
+		s.q(`INSERT INTO mekbay_operations (playthrough_id, scenario_id, opfor_instance, operation_id) VALUES (?, ?, ?, ?)
+		     ON CONFLICT (playthrough_id, scenario_id) DO UPDATE SET opfor_instance = excluded.opfor_instance, operation_id = excluded.operation_id`),
+		playthroughID, scenarioID, op.OpForInstance, op.OperationID)
+	return err
 }

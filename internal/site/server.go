@@ -52,6 +52,7 @@ type Page struct {
 	Seed     string      // the visitor's seed ("" if none chosen yet)
 	SeedHint string      // short form of Seed for the header
 	Play     Playthrough // the visitor's playthrough (zero value if no seed)
+	MekBayOp string      // link to the scenario's MekBay operation, once created ("" until then)
 	Commit   string      // git commit the server was built from, short form ("dev" if unknown)
 }
 
@@ -60,15 +61,19 @@ type Card struct{ Num, Name, Sub, URL string }
 
 // Server serves the campaigns found under the content root.
 type Server struct {
-	lib   Library
-	store *Store
-	pages map[string]*template.Template
+	lib    Library
+	store  *Store
+	pages  map[string]*template.Template
+	mekbay MekBay
 }
 
 // NewHandler returns the site's HTTP handler. Campaign files are re-read on every request,
 // so edits show up on refresh.
-func NewHandler(contentRoot string, store *Store) http.Handler {
-	s := &Server{lib: Library{Root: contentRoot}, store: store, pages: map[string]*template.Template{}}
+func NewHandler(contentRoot string, store *Store, opts ...Option) http.Handler {
+	s := &Server{lib: Library{Root: contentRoot}, store: store, pages: map[string]*template.Template{}, mekbay: &MekBayClient{}}
+	for _, o := range opts {
+		o(s)
+	}
 	for _, name := range []string{"home", "campaign", "scenario", "keywords", "notfound"} {
 		s.pages[name] = template.Must(template.ParseFS(assets, "templates/layout.html", "templates/"+name+".html"))
 	}
@@ -83,6 +88,7 @@ func NewHandler(contentRoot string, store *Store) http.Handler {
 	})
 	mux.HandleFunc("POST /api/seed", s.setSeed)
 	mux.HandleFunc("POST /api/campaign", s.setCampaign)
+	mux.HandleFunc("POST /api/mekbay/operation", s.createOperation)
 	mux.HandleFunc("GET /{$}", s.home)
 	mux.HandleFunc("GET /{campaign}/{$}", s.campaign)
 	mux.HandleFunc("GET /{campaign}/keywords/{$}", s.keywords)
@@ -177,7 +183,16 @@ func (s *Server) scenario(w http.ResponseWriter, r *http.Request) {
 	for _, img := range sc.Images {
 		images = append(images, "/"+c.Slug+"/"+sc.Slug+"/images/"+path.Base(img))
 	}
+	var opLink string
+	if seed := currentSeed(r); seed != "" && len(sc.Forces) > 0 {
+		if op, ok, err := s.store.MekBayOperation(r.Context(), playthroughID(seed), sc.ID); err != nil {
+			log.Printf("load mekbay operation: %v", err)
+		} else if ok {
+			opLink = OperationURL(op.OperationID)
+		}
+	}
 	s.render(w, r, http.StatusOK, "scenario", Page{
+		MekBayOp: opLink,
 		Images:   images,
 		Title:    sc.Title + " | " + c.Label,
 		Crumbs:   []Crumb{{Label: c.Label, URL: "/" + c.Slug + "/"}, scenarioCrumb(c, sc)},

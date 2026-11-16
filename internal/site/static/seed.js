@@ -9,6 +9,7 @@
   var input = document.getElementById('seed-input');
   var seedError = document.getElementById('seed-error');
   var hangarInput = document.getElementById('hangar-input');
+  var ownerInput = document.getElementById('owner-input');
   var setupError = document.getElementById('setup-error');
 
   var hasSeed = dialog.dataset.seed !== '';
@@ -108,6 +109,7 @@
 
   input.addEventListener('input', function () { sanitize(); seedError.textContent = ''; });
   hangarInput.addEventListener('input', function () { setupError.textContent = ''; });
+  ownerInput.addEventListener('input', function () { setupError.textContent = ''; });
 
   document.getElementById('seed-random').addEventListener('click', function () {
     input.value = randomSeed();
@@ -150,7 +152,11 @@
     var problem = hangarProblem(hangarInput.value);
     if (problem) { setupError.textContent = problem; return; }
     var players = setupForm.querySelector('input[name="players"]:checked');
-    post('/api/campaign', 'hangar=' + encodeURIComponent(hangarInput.value.trim()) + '&players=' + encodeURIComponent(players ? players.value : ''))
+    var owner = ownerInput.value.trim().toLowerCase();
+    if (owner && !UUID.test(owner)) { setupError.textContent = 'That doesn\'t look like a MekBay user ID (it should be a UUID).'; return; }
+    var clear = setupForm.querySelector('input[name="clear_owner"]:checked');
+    post('/api/campaign', 'hangar=' + encodeURIComponent(hangarInput.value.trim()) + '&players=' + encodeURIComponent(players ? players.value : '') +
+      '&owner=' + encodeURIComponent(owner) + (clear ? '&clear_owner=1' : ''))
       .then(function (res) {
         if (res.ok) { location.reload(); return; }
         return res.text().then(function (t) { setupError.textContent = t.trim() || 'Could not save the campaign.'; });

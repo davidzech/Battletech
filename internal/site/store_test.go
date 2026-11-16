@@ -50,6 +50,36 @@ func storeContract(t *testing.T, s *Store) {
 	if err := s.SaveSetup(ctx, "no-such-playthrough", hangar, 2); !errors.Is(err, sql.ErrNoRows) {
 		t.Fatalf("saving an unknown playthrough should fail with ErrNoRows, got %v", err)
 	}
+	if pt.CanModify() {
+		t.Fatal("a new playthrough starts read-only")
+	}
+	if err := s.SetOwnerUID(ctx, id, "e66a3544-8fcf-4dab-955a-f4ea2db0b610"); err != nil {
+		t.Fatal(err)
+	}
+	if pt, _, _ := s.Playthrough(ctx, id); !pt.CanModify() {
+		t.Fatal("owner UID not saved")
+	}
+	if err := s.SetOwnerUID(ctx, id, ""); err != nil {
+		t.Fatal(err)
+	}
+	if pt, _, _ := s.Playthrough(ctx, id); pt.CanModify() {
+		t.Fatal("empty UID should turn modify mode off")
+	}
+	if err := s.SetOwnerUID(ctx, "no-such-playthrough", "x"); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("unknown playthrough should fail with ErrNoRows, got %v", err)
+	}
+	if _, ok, err := s.MekBayOperation(ctx, id, "scenario_000"); err != nil || ok {
+		t.Fatalf("no operation yet: ok=%v err=%v", ok, err)
+	}
+	if err := s.SaveMekBayOperation(ctx, id, "scenario_000", MekBayOperation{OpForInstance: "f1", OperationID: "o1"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SaveMekBayOperation(ctx, id, "scenario_000", MekBayOperation{OpForInstance: "f2", OperationID: "o2"}); err != nil {
+		t.Fatalf("saving again should replace: %v", err)
+	}
+	if op, ok, _ := s.MekBayOperation(ctx, id, "scenario_000"); !ok || op.OpForInstance != "f2" || op.OperationID != "o2" {
+		t.Fatalf("operation not stored: %+v", op)
+	}
 	if err := s.SaveSetup(ctx, id, hangar, 9); err == nil {
 		t.Fatal("a player count outside 0 to 4 should be refused by the schema")
 	}
