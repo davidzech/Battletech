@@ -82,7 +82,14 @@
     box.show = function (spent) {
       var r = reach(l, spent), n = upcoming(l, spent);
       value.textContent = r.level;
-      next.textContent = n ? 'next: ' + spent + '/' + n.sp + ' SP' : 'max';
+      // "<next level>: SP/needed SP", the next level in bold yellow, or "max" at the top of the ladder.
+      next.textContent = '';
+      if (n) {
+        next.appendChild(el('b', null, String(n.level)));
+        next.appendChild(document.createTextNode(': ' + spent + '/' + n.sp + ' SP'));
+      } else {
+        next.textContent = 'max';
+      }
       box.classList.toggle('up', r.level !== l.base);
     };
     return box;
