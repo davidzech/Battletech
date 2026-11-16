@@ -179,29 +179,132 @@
   document.addEventListener('click', function (e) { closeMenus(e.target.closest ? e.target.closest('details.more') : null); });
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeMenus(null); });
 
-  // ---- Pilot records: revive or delete a pilot, to correct a misclick or a desync.
+  // ---- Manage Pilot Records: edit a name, revive, delete, reset abilities or override the total SP, to correct a misclick or a
+  // desync. Every action updates its row in place and leaves the dialog open; the page behind is refreshed when the dialog
+  // is closed (if anything changed).
   var records = document.getElementById('records-dialog');
   if (records && typeof records.showModal === 'function') {
     var recError = document.getElementById('records-error');
+    var recDirty = false;
+    var PENCIL_DONE = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
     document.getElementById('records-open').addEventListener('click', function () { recError.textContent = ''; records.showModal(); });
     document.getElementById('records-close').addEventListener('click', function () { records.close(); });
     records.addEventListener('click', function (e) { if (e.target === records) records.close(); });
-    function recAct(url, li, button) {
+    records.addEventListener('close', function () { if (recDirty) location.reload(); });
+
+    // Posts an action for one pilot. onOk runs when the server accepted it; the button is disabled meanwhile.
+    function recAct(url, li, button, extra, onOk) {
       recError.textContent = '';
       button.disabled = true;
-      post(url, 'pilot=' + encodeURIComponent(li.dataset.pilot)).then(function (res) {
-        if (res.ok) { location.reload(); return; }
+      post(url, 'pilot=' + encodeURIComponent(li.dataset.pilot) + (extra ? '&' + extra : '')).then(function (res) {
         button.disabled = false;
+        if (res.ok) { recDirty = true; onOk(); return; }
         return res.text().then(function (t) { recError.textContent = t.trim() || 'Something went wrong.'; });
       }, function () { button.disabled = false; recError.textContent = 'Could not reach the server.'; });
     }
+
+    // Shows the row's SP numbers from its data attributes.
+    function showSP(li) {
+      var total = parseInt(li.dataset.total, 10) || 0, allocated = parseInt(li.dataset.allocated, 10) || 0;
+      li.querySelector('.rec-n-total').textContent = total;
+      li.querySelector('.rec-n-alloc').textContent = allocated;
+      li.querySelector('.rec-n-unalloc').textContent = Math.max(0, total - allocated);
+    }
+
     records.querySelectorAll('#records-list li[data-pilot]').forEach(function (li) {
+      // The name: a pencil turns it into a text field with a confirm button embedded in it.
+      var nameBox = li.querySelector('.rec-name');
+      var nameText = li.querySelector('.rec-name-text');
+      var edit = li.querySelector('.rec-edit');
+      var nameForm = null;
+      function closeNameEdit() {
+        if (!nameForm) return;
+        nameForm.remove();
+        nameForm = null;
+        nameText.hidden = false;
+        edit.hidden = false;
+      }
+      edit.addEventListener('click', function () {
+        if (nameForm) return;
+        recError.textContent = '';
+        nameForm = el('form', 'rec-name-form');
+        var input = document.createElement('input');
+        input.type = 'text'; input.maxLength = 30; input.autocomplete = 'off'; input.spellcheck = false;
+        input.value = li.dataset.name;
+        input.setAttribute('aria-label', 'Pilot name');
+        var ok = el('button', 'rec-name-ok');
+        ok.type = 'submit'; ok.title = 'Save the name'; ok.setAttribute('aria-label', 'Save the name');
+        ok.innerHTML = PENCIL_DONE; // a constant defined above, never data
+        nameForm.appendChild(input);
+        nameForm.appendChild(ok);
+        nameForm.addEventListener('submit', function (e) {
+          e.preventDefault();
+          var name = input.value.trim();
+          if (!name) { recError.textContent = 'Give your pilot a name.'; return; }
+          if (name === li.dataset.name) { closeNameEdit(); return; }
+          recAct('/api/pilots/rename', li, ok, 'name=' + encodeURIComponent(name), function () {
+            li.dataset.name = name;
+            nameText.textContent = name;
+            edit.setAttribute('aria-label', 'Edit ' + name + '\u2019s name');
+            closeNameEdit();
+          });
+        });
+        input.addEventListener('keydown', function (e) { if (e.key === 'Escape') { e.stopPropagation(); e.preventDefault(); closeNameEdit(); } });
+        nameText.hidden = true;
+        edit.hidden = true;
+        nameBox.appendChild(nameForm);
+        input.focus();
+        input.select();
+      });
+
       var revive = li.querySelector('.rec-revive');
-      if (revive) revive.addEventListener('click', function () { recAct('/api/pilots/revive', li, revive); });
+      if (revive) revive.addEventListener('click', function () {
+        recAct('/api/pilots/revive', li, revive, '', function () {
+          var state = li.querySelector('.rec-state');
+          state.textContent = 'Active';
+          state.classList.remove('kia');
+          revive.remove();
+        });
+      });
+
+      var reset = li.querySelector('.rec-reset');
+      reset.addEventListener('click', function () {
+        var allocated = parseInt(li.dataset.allocated, 10) || 0;
+        if (!window.confirm('Factory-reset ' + li.dataset.name + '\u2019s abilities? Gunnery, Piloting and Edge go back to the starting levels, and all ' + allocated + ' allocated SP become unallocated. Their total SP stays the same.')) return;
+        recAct('/api/pilots/reset', li, reset, '', function () { li.dataset.allocated = 0; showSP(li); });
+      });
+
+      // Override the total SP. A total below what is already allocated has to reset the allocation, so it asks first (the
+      // server refuses it without that agreement too).
+      var form = li.querySelector('.rec-total-form');
+      var totalInput = form.querySelector('input');
+      li.querySelector('.rec-total').addEventListener('click', function () {
+        form.hidden = !form.hidden;
+        if (!form.hidden) { totalInput.value = li.dataset.total; totalInput.focus(); totalInput.select(); }
+      });
+      form.querySelector('.rec-total-cancel').addEventListener('click', function () { form.hidden = true; });
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var total = parseInt(totalInput.value, 10), allocated = parseInt(li.dataset.allocated, 10) || 0;
+        if (isNaN(total) || total < 0) { recError.textContent = 'Enter a whole number of SP, 0 or more.'; return; }
+        var resets = total < allocated;
+        if (resets && !window.confirm('Setting ' + li.dataset.name + '\u2019s total to ' + total + ' SP is below the ' + allocated + ' SP already allocated. Doing this resets all of their allocations (Gunnery, Piloting and Edge go back to the starting levels) and leaves ' + total + ' SP unallocated. Continue?')) return;
+        recAct('/api/pilots/total', li, form.querySelector('button[type=submit]'), 'total=' + total + (resets ? '&reset=1' : ''), function () {
+          li.dataset.total = total;
+          if (resets) li.dataset.allocated = 0;
+          showSP(li);
+          form.hidden = true;
+        });
+      });
+
       var del = li.querySelector('.rec-delete');
       del.addEventListener('click', function () {
         if (!window.confirm('Delete ' + li.dataset.name + ' permanently? Their record and all of their SP are lost. This cannot be undone.')) return;
-        recAct('/api/pilots/delete', li, del);
+        recAct('/api/pilots/delete', li, del, '', function () {
+          var list = li.parentNode;
+          li.remove();
+          if (!list.querySelector('li[data-pilot]')) list.appendChild(el('li', 'muted', 'No pilots.'));
+        });
       });
     });
   }

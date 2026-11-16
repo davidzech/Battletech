@@ -360,3 +360,71 @@ func (s *Server) deletePilot(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
+
+// maxTotalSP keeps a typo from setting an absurd total.
+const maxTotalSP = 1000000
+
+// resetPilotSP is the factory reset for a pilot's abilities (see Store.ResetPilotSP).
+func (s *Server) resetPilotSP(w http.ResponseWriter, r *http.Request) {
+	pt, c, ok := s.pilotRequest(w, r)
+	if !ok {
+		return
+	}
+	if err := s.store.ResetPilotSP(r.Context(), pt.ID, c.Slug, r.PostFormValue("pilot")); errors.Is(err, sql.ErrNoRows) {
+		http.Error(w, "No such pilot.", http.StatusNotFound)
+		return
+	} else if err != nil {
+		http.Error(w, "could not reset the pilot", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// setPilotTotal overrides a pilot's total SP. A total below what is allocated is refused with 409 unless the form says
+// reset=1, which the browser only sends after the player has confirmed that the allocation will be reset.
+func (s *Server) setPilotTotal(w http.ResponseWriter, r *http.Request) {
+	pt, c, ok := s.pilotRequest(w, r)
+	if !ok {
+		return
+	}
+	raw := strings.TrimSpace(r.PostFormValue("total"))
+	total, err := strconv.Atoi(raw)
+	if err != nil || total < 0 || total > maxTotalSP {
+		http.Error(w, fmt.Sprintf("The total must be a whole number from 0 to %d.", maxTotalSP), http.StatusBadRequest)
+		return
+	}
+	err = s.store.SetPilotTotal(r.Context(), pt.ID, c.Slug, r.PostFormValue("pilot"), total, r.PostFormValue("reset") == "1")
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		http.Error(w, "No such pilot.", http.StatusNotFound)
+	case errors.Is(err, ErrTotalBelowAllocated):
+		http.Error(w, "That total is below the SP already allocated. Setting it resets the pilot's allocation.", http.StatusConflict)
+	case err != nil:
+		http.Error(w, "could not save the total", http.StatusInternalServerError)
+	default:
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+// renamePilot changes a pilot's name, to correct a typo or a mix-up.
+func (s *Server) renamePilot(w http.ResponseWriter, r *http.Request) {
+	pt, c, ok := s.pilotRequest(w, r)
+	if !ok {
+		return
+	}
+	name, err := parsePilotName(r.PostFormValue("name"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	switch err := s.store.RenamePilot(r.Context(), pt.ID, c.Slug, r.PostFormValue("pilot"), name); {
+	case errors.Is(err, sql.ErrNoRows):
+		http.Error(w, "No such pilot.", http.StatusNotFound)
+	case errors.Is(err, ErrNameTaken):
+		http.Error(w, "Another pilot already has that name.", http.StatusBadRequest)
+	case err != nil:
+		http.Error(w, "could not rename the pilot", http.StatusInternalServerError)
+	default:
+		w.WriteHeader(http.StatusNoContent)
+	}
+}

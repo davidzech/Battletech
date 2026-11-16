@@ -132,7 +132,7 @@ type PilotView struct {
 	Portrait, PortraitURL                    string // the file picked (or worked out) and where it is served
 	Fallen                                   bool
 	Gunnery, Piloting, EdgeTokens, Abilities int
-	Earned, Unallocated                      int
+	Earned, Unallocated, Allocated           int // total SP earned, the part not yet in a column, and the part that is
 	Columns                                  []pilotColumn
 }
 
@@ -147,7 +147,7 @@ func (p NamedPilot) view() PilotView {
 	return PilotView{
 		ID: p.ID, Name: p.Name, Fallen: p.Fallen, Portrait: portraitOf(p.ID, p.Portrait), PortraitURL: portraitURL(portraitOf(p.ID, p.Portrait)),
 		Gunnery: p.Gunnery(), Piloting: p.Piloting(), EdgeTokens: p.EdgeTokens(), Abilities: p.EdgeAbilities(),
-		Earned: p.Earned(), Unallocated: p.Unallocated(),
+		Earned: p.Earned(), Unallocated: p.Unallocated(), Allocated: p.SP.Total(),
 		Columns: []pilotColumn{
 			col(gunneryLadder, p.SP.Gunnery), col(pilotingLadder, p.SP.Piloting),
 			col(edgeTokensLadder, p.SP.EdgeTokens), col(edgeAbilitiesLadder, p.SP.EdgeAbilities),

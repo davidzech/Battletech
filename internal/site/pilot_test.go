@@ -936,3 +936,190 @@ func TestReviveAndDeletePilots(t *testing.T) {
 		}
 	}
 }
+
+// repairStore checks the factory reset and the total override, in a campaign of its own (run for both databases).
+func repairStore(t *testing.T, s *Store, id string) {
+	t.Helper()
+	ctx := context.Background()
+	const camp = "repaircamp"
+	a, err := s.AddPilot(ctx, id, camp, "Alrek", "", SPAllocation{Gunnery: 90, EdgeTokens: 60}, 4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	get := func() NamedPilot {
+		ps, _ := s.Pilots(ctx, id, camp)
+		for _, p := range ps {
+			if p.ID == a.ID {
+				return p
+			}
+		}
+		t.Fatal("pilot vanished")
+		return NamedPilot{}
+	}
+	// Raising the total leaves the allocation alone.
+	if err := s.SetPilotTotal(ctx, id, camp, a.ID, 500, false); err != nil {
+		t.Fatal(err)
+	}
+	if p := get(); p.TotalSP != 500 || p.SP.Total() != 150 || p.Unallocated() != 350 {
+		t.Fatalf("raised total: %+v", p)
+	}
+	// Down to exactly what is allocated is fine; below it needs to reset the allocation.
+	if err := s.SetPilotTotal(ctx, id, camp, a.ID, 150, false); err != nil {
+		t.Fatalf("down to the allocated amount: %v", err)
+	}
+	if err := s.SetPilotTotal(ctx, id, camp, a.ID, 149, false); !errors.Is(err, ErrTotalBelowAllocated) {
+		t.Fatalf("below the allocation without agreeing: %v", err)
+	}
+	if p := get(); p.TotalSP != 150 || p.SP.Total() != 150 {
+		t.Fatalf("a refused override changed the pilot: %+v", p)
+	}
+	if err := s.SetPilotTotal(ctx, id, camp, a.ID, 100, true); err != nil {
+		t.Fatal(err)
+	}
+	if p := get(); p.TotalSP != 100 || p.SP.Total() != 0 || p.Unallocated() != 100 || p.Gunnery() != 4 {
+		t.Fatalf("total below the allocation, reset: %+v", p)
+	}
+	if err := s.SetPilotTotal(ctx, id, camp, "nobody", 10, false); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("unknown pilot: %v", err)
+	}
+	// The factory reset keeps the total and frees everything, for living and killed pilots alike.
+	if err := s.AllocateSP(ctx, id, camp, a.ID, SPAllocation{Gunnery: 70, Piloting: 30}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ResetPilotSP(ctx, id, camp, a.ID); err != nil {
+		t.Fatal(err)
+	}
+	if p := get(); p.TotalSP != 100 || p.SP.Total() != 0 || p.Unallocated() != 100 {
+		t.Fatalf("after the reset: %+v", p)
+	}
+	if err := s.AllocateSP(ctx, id, camp, a.ID, SPAllocation{Gunnery: 100}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.MarkFallen(ctx, id, camp, a.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ResetPilotSP(ctx, id, camp, a.ID); err != nil {
+		t.Fatalf("resetting a killed pilot: %v", err)
+	}
+	if p := get(); p.SP.Total() != 0 || p.TotalSP != 100 {
+		t.Fatalf("a killed pilot after the reset: %+v", p)
+	}
+	if err := s.ResetPilotSP(ctx, id, "another", a.ID); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("another campaign's pilot: %v", err)
+	}
+}
+
+func TestRepairEndpoints(t *testing.T) {
+	srv, store, cookie := startedCompany(t)
+	ctx := context.Background()
+	id := playthroughID("wolfpack2026")
+	ps, _ := store.Pilots(ctx, id, "refusalwar")
+	pilot := ps[0].ID
+	form := func(kv ...string) url.Values {
+		v := url.Values{"campaign": {"refusalwar"}, "pilot": {pilot}}
+		for i := 0; i+1 < len(kv); i += 2 {
+			v.Set(kv[i], kv[i+1])
+		}
+		return v
+	}
+	status := func(path string, v url.Values) int { return post(t, srv, path, v, cookie, srv.URL).StatusCode }
+
+	if got := post(t, srv, "/api/pilots/reset", form(), cookie, "https://evil.example").StatusCode; got != http.StatusForbidden {
+		t.Errorf("cross-origin reset: %d", got)
+	}
+	// The records dialog offers both repairs for every pilot.
+	page := body(t, srv, "/refusalwar/manage/", cookie)
+	for _, want := range []string{`class="rec-reset"`, `class="rec-total"`, `class="rec-total-form"`, `data-allocated="150"`, `data-total="150"`} {
+		if !strings.Contains(page, want) {
+			t.Errorf("the records dialog is missing %q", want)
+		}
+	}
+	for name, c := range map[string]struct {
+		v      url.Values
+		status int
+	}{
+		"no total":        {form(), http.StatusBadRequest},
+		"negative total":  {form("total", "-1"), http.StatusBadRequest},
+		"text total":      {form("total", "lots"), http.StatusBadRequest},
+		"absurd total":    {form("total", "99999999"), http.StatusBadRequest},
+		"below allocated": {form("total", "100"), http.StatusConflict},
+		"unknown pilot":   {form("pilot", "nobody", "total", "300"), http.StatusNotFound},
+	} {
+		if got := status("/api/pilots/total", c.v); got != c.status {
+			t.Errorf("total, %s: got %d, want %d", name, got, c.status)
+		}
+	}
+	if ps, _ := store.Pilots(ctx, id, "refusalwar"); ps[0].TotalSP != 150 || ps[0].SP.Total() != 150 {
+		t.Fatalf("refused overrides changed the pilot: %+v", ps[0])
+	}
+	if got := status("/api/pilots/total", form("total", "400")); got != http.StatusNoContent {
+		t.Fatalf("raise the total: %d", got)
+	}
+	if got := status("/api/pilots/total", form("total", "100", "reset", "1")); got != http.StatusNoContent {
+		t.Fatalf("lower the total with the reset agreed: %d", got)
+	}
+	if ps, _ := store.Pilots(ctx, id, "refusalwar"); ps[0].TotalSP != 100 || ps[0].SP.Total() != 0 {
+		t.Errorf("after the confirmed override: %+v", ps[0])
+	}
+	if got := status("/api/pilots/allocate", form("gunnery", "100")); got != http.StatusNoContent {
+		t.Fatal(got)
+	}
+	if got := status("/api/pilots/reset", form()); got != http.StatusNoContent {
+		t.Fatalf("reset: %d", got)
+	}
+	if ps, _ := store.Pilots(ctx, id, "refusalwar"); ps[0].TotalSP != 100 || ps[0].SP.Total() != 0 {
+		t.Errorf("after the factory reset: %+v", ps[0])
+	}
+	if got := status("/api/pilots/reset", form("pilot", "nobody")); got != http.StatusNotFound {
+		t.Errorf("reset of an unknown pilot: %d", got)
+	}
+}
+
+func TestRenamePilots(t *testing.T) {
+	srv, store, cookie := startedCompany(t)
+	ctx := context.Background()
+	id := playthroughID("wolfpack2026")
+	ps, _ := store.Pilots(ctx, id, "refusalwar")
+	a, b := ps[0], ps[1]
+	rename := func(pilot, name string) int {
+		return post(t, srv, "/api/pilots/rename", url.Values{"campaign": {"refusalwar"}, "pilot": {pilot}, "name": {name}}, cookie, srv.URL).StatusCode
+	}
+	if got := post(t, srv, "/api/pilots/rename", url.Values{"campaign": {"refusalwar"}, "pilot": {a.ID}, "name": {"X"}}, cookie, "https://evil.example").StatusCode; got != http.StatusForbidden {
+		t.Errorf("cross-origin rename: %d", got)
+	}
+	for name, c := range map[string]struct {
+		pilot, name string
+		status      int
+	}{
+		"blank":       {a.ID, "   ", http.StatusBadRequest},
+		"markup":      {a.ID, "<b>x</b>", http.StatusBadRequest},
+		"too long":    {a.ID, strings.Repeat("a", 31), http.StatusBadRequest},
+		"taken":       {a.ID, b.Name, http.StatusBadRequest},
+		"taken, case": {a.ID, strings.ToUpper(b.Name), http.StatusBadRequest},
+		"unknown":     {"nobody", "Valid", http.StatusNotFound},
+	} {
+		if got := rename(c.pilot, c.name); got != c.status {
+			t.Errorf("rename, %s: got %d, want %d", name, got, c.status)
+		}
+	}
+	if got := rename(a.ID, "Alrek Prime"); got != http.StatusNoContent {
+		t.Fatalf("rename: %d", got)
+	}
+	if got := rename(a.ID, "ALREK PRIME"); got != http.StatusNoContent {
+		t.Errorf("a pilot may change the case of their own name: %d", got)
+	}
+	// Killed pilots can be renamed too.
+	if got := post(t, srv, "/api/pilots/fallen", url.Values{"campaign": {"refusalwar"}, "pilot": {b.ID}}, cookie, srv.URL).StatusCode; got != http.StatusNoContent {
+		t.Fatal(got)
+	}
+	if got := rename(b.ID, "Katarina the Fallen"); got != http.StatusNoContent {
+		t.Errorf("renaming a killed pilot: %d", got)
+	}
+	ps, _ = store.Pilots(ctx, id, "refusalwar")
+	if ps[0].Name != "ALREK PRIME" || ps[1].Name != "Katarina the Fallen" {
+		t.Errorf("names after renaming: %q %q", ps[0].Name, ps[1].Name)
+	}
+	if page := body(t, srv, "/refusalwar/manage/", cookie); !strings.Contains(page, `class="rec-edit"`) || !strings.Contains(page, `rec-name-text">ALREK PRIME<`) {
+		t.Error("the records dialog should offer the pencil and show the new name")
+	}
+}

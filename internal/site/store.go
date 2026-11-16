@@ -646,3 +646,88 @@ func (s *Store) DeletePilot(ctx context.Context, playthroughID, campaign, pilotI
 	}
 	return nil
 }
+
+// ErrTotalBelowAllocated is returned when a pilot's total SP would be set below what is already allocated without
+// agreeing to reset the allocation.
+var ErrTotalBelowAllocated = errors.New("that total is below the SP already allocated")
+
+// ResetPilotSP is the factory reset for a pilot's abilities, to repair a desync or a mistake: all four columns go back to
+// zero, so the pilot is a starting 4/5 pilot again, and every SP they have earned becomes unallocated (the total is
+// unchanged). It works on living and killed pilots (sql.ErrNoRows if there is no such pilot).
+func (s *Store) ResetPilotSP(ctx context.Context, playthroughID, campaign, pilotID string) error {
+	res, err := s.db.ExecContext(ctx,
+		s.q(`UPDATE named_pilots SET sp_gunnery = 0, sp_piloting = 0, sp_edge_tokens = 0, sp_edge_abilities = 0
+		     WHERE id = ? AND playthrough_id = ? AND campaign = ?`), pilotID, playthroughID, campaign)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
+// SetPilotTotal overrides a pilot's total SP earned. A total below what is already allocated can't be honoured without
+// undoing allocations, so it is refused (ErrTotalBelowAllocated) unless resetAllocation is true, which also zeroes the
+// four columns, leaving the whole new total unallocated. sql.ErrNoRows if there is no such pilot.
+func (s *Store) SetPilotTotal(ctx context.Context, playthroughID, campaign, pilotID string, total int, resetAllocation bool) error {
+	var res sql.Result
+	var err error
+	if resetAllocation {
+		res, err = s.db.ExecContext(ctx,
+			s.q(`UPDATE named_pilots SET sp_total = ?, sp_gunnery = 0, sp_piloting = 0, sp_edge_tokens = 0, sp_edge_abilities = 0
+			     WHERE id = ? AND playthrough_id = ? AND campaign = ?`), total, pilotID, playthroughID, campaign)
+	} else {
+		res, err = s.db.ExecContext(ctx,
+			s.q(`UPDATE named_pilots SET sp_total = ?
+			     WHERE id = ? AND playthrough_id = ? AND campaign = ?
+			       AND ? >= sp_gunnery + sp_piloting + sp_edge_tokens + sp_edge_abilities`), total, pilotID, playthroughID, campaign, total)
+	}
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n > 0 {
+		return nil
+	}
+	var one int
+	err = s.db.QueryRowContext(ctx,
+		s.q(`SELECT 1 FROM named_pilots WHERE id = ? AND playthrough_id = ? AND campaign = ?`), pilotID, playthroughID, campaign).Scan(&one)
+	if errors.Is(err, sql.ErrNoRows) {
+		return sql.ErrNoRows
+	}
+	if err != nil {
+		return err
+	}
+	return ErrTotalBelowAllocated
+}
+
+// ErrNameTaken is returned when another pilot of the campaign already has the name (compared ignoring case).
+var ErrNameTaken = errors.New("another pilot already has that name")
+
+// RenamePilot changes a pilot's name, living or killed in action. Names stay unique within a campaign, ignoring case
+// (ErrNameTaken); sql.ErrNoRows if there is no such pilot.
+func (s *Store) RenamePilot(ctx context.Context, playthroughID, campaign, pilotID, name string) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var same int
+	if err := tx.QueryRowContext(ctx,
+		s.q(`SELECT COUNT(*) FROM named_pilots WHERE playthrough_id = ? AND campaign = ? AND LOWER(name) = LOWER(?) AND id <> ?`),
+		playthroughID, campaign, name, pilotID).Scan(&same); err != nil {
+		return err
+	}
+	if same > 0 {
+		return ErrNameTaken
+	}
+	res, err := tx.ExecContext(ctx,
+		s.q(`UPDATE named_pilots SET name = ? WHERE id = ? AND playthrough_id = ? AND campaign = ?`), name, pilotID, playthroughID, campaign)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return sql.ErrNoRows
+	}
+	return tx.Commit()
+}

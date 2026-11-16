@@ -892,7 +892,15 @@ details.more > summary:focus-visible { outline: none; }
 .link-button { padding: 0; background: none; border: 0; color: var(--muted); font: 0.8rem var(--display); letter-spacing: 0.08em; text-transform: uppercase; text-decoration: underline; text-underline-offset: 0.2em; cursor: pointer; }
 .link-button:hover, .link-button:focus-visible { color: var(--text); }
 .records-list { list-style: none; margin: 0.75rem 0; padding: 0; display: grid; gap: 0.4rem; }
-.records-list li { display: flex; align-items: center; gap: 0.7rem; padding: 0.3rem 0.5rem; background: var(--bg); border: 1px solid var(--line); }
+.records-list li { display: grid; gap: 0.4rem; padding: 0.4rem 0.5rem; background: var(--bg); border: 1px solid var(--line); }
+.rec-top { display: flex; align-items: center; gap: 0.7rem; }
+.rec-sp { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.7rem; padding-top: 0.35rem; border-top: 1px solid var(--line); font-size: 0.85rem; color: var(--muted); }
+.rec-sp-text { flex: 1 1 14rem; }
+.rec-sp-text b { color: var(--text); }
+.rec-total-form { display: flex; flex-wrap: wrap; align-items: end; gap: 0.6rem; }
+.rec-total-form[hidden] { display: none; }
+.rec-total-form label { display: grid; gap: 0.3rem; font: 700 0.75rem var(--display); letter-spacing: 0.08em; text-transform: uppercase; }
+.rec-total-form input { width: 8rem; }
 .records-list img { flex: none; width: 2.5rem; height: 2.5rem; object-fit: cover; object-position: top; }
 .rec-name { flex: 1; min-width: 0; font: 700 1rem var(--display); letter-spacing: 0.05em; text-transform: uppercase; overflow-wrap: anywhere; }
 .rec-state { font: 700 0.7rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
@@ -903,5 +911,16 @@ details.more > summary:focus-visible { outline: none; }
 .alloc-headrow .alloc-remaining { text-align: right; }
 .sp-staged { margin: 0.6rem 0 0; font-size: 0.85rem; color: var(--accent); }
 .sp-staged .link-button { margin-left: 0.4rem; }
-dialog .sp-staged .link-button { padding: 0; background: none; border: 0; color: var(--muted); }
-dialog .sp-staged .link-button:hover { color: var(--text); background: none; }
+dialog .sp-staged button.link-button { padding: 0; background: none; border: 0; color: var(--muted); }
+dialog .sp-staged button.link-button:hover { color: var(--text); background: none; }
+
+/* Editing a pilot's name in the records dialog: a pencil, then a text field with the confirm button embedded in it. */
+.rec-name { display: flex; align-items: center; gap: 0.5rem; }
+.rec-name-text { overflow-wrap: anywhere; }
+dialog button.rec-edit { display: inline-flex; padding: 0.25rem; color: var(--muted); background: none; border: 0; cursor: pointer; }
+dialog button.rec-edit:hover, dialog button.rec-edit:focus-visible { color: var(--accent); background: none; }
+.rec-name-form { position: relative; flex: 1; min-width: 10rem; }
+.rec-name-form input { width: 100%; padding: 0.4rem 2.4rem 0.4rem 0.6rem; font: 700 1rem var(--display); letter-spacing: 0.05em; text-transform: uppercase; }
+dialog button.rec-name-ok { position: absolute; top: 2px; right: 2px; bottom: 2px; display: inline-flex; align-items: center; padding: 0 0.5rem; color: var(--accent-ink); background: var(--accent); border: 0; cursor: pointer; }
+dialog button.rec-name-ok:hover { background: var(--accent); filter: brightness(1.12); }
+dialog button.rec-name-ok:disabled { opacity: 0.5; cursor: wait; }

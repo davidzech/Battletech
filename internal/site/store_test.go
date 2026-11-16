@@ -119,6 +119,7 @@ func storeContract(t *testing.T, s *Store) {
 	pilotStore(t, s, id)
 	portraitStore(t, s, id)
 	spStore(t, s, id)
+	repairStore(t, s, id)
 }
 
 func TestStoreSQLite(t *testing.T) {
