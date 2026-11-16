@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/yuin/goldmark"
@@ -61,7 +62,28 @@ type Campaign struct {
 	Label        string
 	IntroHTML    template.HTML
 	KeywordsHTML template.HTML
+	MinPlayers   int // fewest players the campaign is built for (Intro.md front matter min_players); 0 if not given
+	MaxPlayers   int // most players it supports (max_players); 0 if not given
 	Scenarios    []Scenario
+}
+
+// PlayersLabel describes how many players the campaign is for, e.g. "1-2 players", "1 player", or "" if the
+// campaign doesn't say.
+func (c *Campaign) PlayersLabel() string {
+	lo, hi := c.MinPlayers, c.MaxPlayers
+	if hi <= 0 {
+		return ""
+	}
+	if lo <= 0 || lo > hi {
+		lo = hi
+	}
+	switch {
+	case lo == hi && hi == 1:
+		return "1 player"
+	case lo == hi:
+		return strconv.Itoa(hi) + " players"
+	}
+	return strconv.Itoa(lo) + "-" + strconv.Itoa(hi) + " players"
 }
 
 // Scenario returns the scenario with the given slug.
@@ -110,6 +132,8 @@ type frontData struct {
 	Readout     []map[string]string `yaml:"readout"`
 	Forces      map[string]string   `yaml:"forces"`
 	BVLimit     int                 `yaml:"bv_limit"`
+	MinPlayers  int                 `yaml:"min_players"`
+	MaxPlayers  int                 `yaml:"max_players"`
 	DefaultNext string              `yaml:"default_next"`
 }
 
@@ -223,7 +247,8 @@ func (l Library) load(name string) (*Campaign, bool) {
 		return nil, false
 	}
 	sort.Slice(c.Scenarios, func(i, j int) bool { return c.Scenarios[i].Slug < c.Scenarios[j].Slug })
-	_, intro := readMarkdown(filepath.Join(dir, "Intro.md"))
+	meta, intro := readMarkdown(filepath.Join(dir, "Intro.md"))
+	c.MinPlayers, c.MaxPlayers = meta.MinPlayers, meta.MaxPlayers
 	_, kw := readMarkdown(filepath.Join(dir, "Keywords.md"))
 	c.IntroHTML = renderMarkdown(intro, false)
 	c.KeywordsHTML = renderMarkdown(kw, true)

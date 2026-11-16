@@ -2,6 +2,6 @@
 <h1 class="bt-title">Campaigns</h1>
 <p class="lede">Custom tabletop campaigns, scenario by scenario.</p>
 <ul class="cards plain">
-{{range .Cards}}<li><a class="card" href="{{.URL}}"><span class="name">{{.Name}}</span><span class="go">Open &rsaquo;</span></a></li>
+{{range .Cards}}<li><a class="card" href="{{.URL}}"><span class="name">{{.Name}}{{if .Sub}}<span class="sub">{{.Sub}}</span>{{end}}</span><span class="go">Open &rsaquo;</span></a></li>
 {{end}}</ul>
 {{end}}

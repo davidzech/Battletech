@@ -10,7 +10,7 @@ A repo of custom tabletop BattleTech campaigns, one per folder under `campaigns/
 
 Every campaign folder (shown for `campaigns/RefusalWar/`) has the same shape:
 
-- `campaigns/RefusalWar/Intro.md` - campaign introduction (currently empty).
+- `campaigns/RefusalWar/Intro.md` - campaign introduction (currently just front matter). Its YAML front matter holds campaign-level fields: `min_players` and `max_players` (how many players the campaign supports; Refusal War is 1 to 2), shown under the campaign's name on the home page's campaign list. Leave `max_players` out to show nothing.
 - `campaigns/RefusalWar/Keywords.md` - registry of every keyword scenarios can grant or require, one bullet per keyword ID.
 - `campaigns/RefusalWar/Scenario_NNN/` - one folder per scenario, zero-padded and numbered sequentially, containing `Setup.md` (fluff, map, forces, special rules) and `Outcome.md` (victory conditions and rewards). `Scenario_000` is the "Trial of Position", a one-off graduation mission whose kill count determines each pilot's starting SP. Later sorties are referred to as "Sortie 001", etc.
 

@@ -5,6 +5,37 @@ import (
 	"testing"
 )
 
+func TestPlayersLabel(t *testing.T) {
+	for _, c := range []struct {
+		lo, hi int
+		want   string
+	}{
+		{1, 2, "1-2 players"},
+		{2, 4, "2-4 players"},
+		{1, 1, "1 player"},
+		{3, 3, "3 players"},
+		{0, 2, "2 players"}, // no minimum given: just the maximum
+		{4, 2, "2 players"}, // nonsense range: trust the maximum
+		{1, 0, ""},          // no maximum given: say nothing
+		{0, 0, ""},
+	} {
+		if got := (&Campaign{MinPlayers: c.lo, MaxPlayers: c.hi}).PlayersLabel(); got != c.want {
+			t.Errorf("PlayersLabel(%d, %d) = %q, want %q", c.lo, c.hi, got, c.want)
+		}
+	}
+}
+
+func TestRefusalWarPlayersOnHomePage(t *testing.T) {
+	c, ok := (Library{Root: "../../campaigns"}).Campaign("refusalwar")
+	if !ok || c.MinPlayers != 1 || c.MaxPlayers != 2 || c.PlayersLabel() != "1-2 players" {
+		t.Fatalf("Refusal War should be for 1-2 players: %+v", c)
+	}
+	srv, _ := newTestServer(t)
+	if home := body(t, srv, "/", nil); !strings.Contains(home, `<span class="sub">1-2 players</span>`) {
+		t.Fatalf("the campaigns list should show the player range: %.1500s", home)
+	}
+}
+
 func TestSplitBriefing(t *testing.T) {
 	body := "\n> First line.\n>\n> \"Second.\"\n\n## Overview\n\nText.\n"
 	briefing, rest := splitBriefing(body)

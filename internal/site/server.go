@@ -140,7 +140,7 @@ func (s *Server) home(w http.ResponseWriter, r *http.Request) {
 	}
 	p := Page{Title: "Campaigns"}
 	for _, c := range cs {
-		p.Cards = append(p.Cards, Card{Name: c.Label, URL: "/" + c.Slug + "/"})
+		p.Cards = append(p.Cards, Card{Name: c.Label, Sub: c.PlayersLabel(), URL: "/" + c.Slug + "/"})
 	}
 	s.render(w, r, http.StatusOK, "home", p)
 }
