@@ -59,7 +59,7 @@
     number.addEventListener('input', function () { set(number.value); });
     r.show = function () {
       slider.value = p.sp[l.key]; number.value = p.sp[l.key];
-      if (note) note.textContent = 'now ' + o.base[l.key] + ' SP' + (p.sp[l.key] ? ' → ' + (o.base[l.key] + p.sp[l.key]) + ' SP' : '');
+      if (note) note.textContent = 'Total: ' + o.base[l.key] + ' SP' + (p.sp[l.key] ? ' → ' + (o.base[l.key] + p.sp[l.key]) + ' SP' : '');
     };
     r.show();
     return r;
