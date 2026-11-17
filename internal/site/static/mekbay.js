@@ -164,7 +164,7 @@
     return card;
   }
   function attachPilotCard(node, p) {
-    if (typeof MechRow.attachTip === 'function') MechRow.attachTip(node, { focusable: false, build: function () { return pilotCard(p); } });
+    if (typeof MechRow.attachTip === 'function') MechRow.attachTip(node, { focusable: false, delay: 1000, build: function () { return pilotCard(p); } });
   }
 
   function statStrip(p) {

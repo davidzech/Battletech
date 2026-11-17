@@ -54,7 +54,7 @@
     tip.hidden = true;
     return tip;
   }
-  // content: { title, cls, text, lines: [{ label, value }] }
+  // content: { title, cls, text, lines: [{ label, value }] }, or { build: function () -> element } for custom content; optional delay (ms) and focusable: false
   function attachTip(pill, content) {
     if (content.focusable !== false) pill.tabIndex = 0; // false for a part of something that is already focusable
     pill.setAttribute('aria-describedby', 'pill-tip');
@@ -83,10 +83,17 @@
       t.style.left = left + 'px';
       t.style.top = top + 'px';
     }
-    function hide() { if (tip) tip.hidden = true; }
-    pill.addEventListener('mouseenter', show);
+    // content.delay (ms) makes a mouse hover wait before the card appears, and leaving (or starting a drag) first cancels it; keyboard focus
+    // shows it at once.
+    var timer = null;
+    function hide() { clearTimeout(timer); timer = null; if (tip) tip.hidden = true; }
+    function hover() {
+      clearTimeout(timer);
+      if (content.delay > 0) timer = setTimeout(function () { timer = null; show(); }, content.delay); else show();
+    }
+    pill.addEventListener('mouseenter', hover);
     pill.addEventListener('mouseleave', hide);
-    pill.addEventListener('focus', show);
+    pill.addEventListener('focus', function () { clearTimeout(timer); show(); });
     pill.addEventListener('blur', hide);
     pill.addEventListener('dragstart', hide);
   }
