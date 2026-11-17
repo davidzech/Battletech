@@ -89,7 +89,6 @@
   // ---- The search: GET /api/units/search over MekBay's unit list. A campaign that names a faction and an era limits it to what that faction fields
   // in that era until the player unticks the box. A result is a hangar-style row: click it (or press Enter or Space on it) to add it to the cart or take it out.
   var availableBox = document.getElementById('purchase-available');
-  var HINT = 'Type a name to search MekBay’s unit list, e.g. “timber wolf”.';
   var searchSeq = 0, searchTimer = null;
 
   function paintResults() {
@@ -122,7 +121,7 @@
   function runSearch() {
     var q = search.value.trim();
     var seq = ++searchSeq;
-    if (!q) { lastResults = null; results.textContent = ''; results.appendChild(el('p', 'muted', HINT)); return; }
+    if (!q) { lastResults = null; results.textContent = ''; return; } // nothing typed: nothing to show (the box's placeholder says what to do)
     var url = '/api/units/search?campaign=' + encodeURIComponent(section.dataset.campaign) + '&q=' + encodeURIComponent(q) + (availableBox && !availableBox.checked ? '&all=1' : '');
     fetch(url, { credentials: 'same-origin' }).then(function (res) {
       if (!res.ok) throw new Error('search failed');
@@ -142,7 +141,6 @@
   search.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); clearTimeout(searchTimer); runSearch(); } });
   clearBtn.addEventListener('click', function () { search.value = ''; clearBtn.hidden = true; clearTimeout(searchTimer); runSearch(); search.focus(); });
   if (availableBox) availableBox.addEventListener('change', runSearch);
-  results.appendChild(el('p', 'muted', HINT));
 
   openBtn.addEventListener('click', function () { errEl.textContent = ''; render(); dialog.showModal(); search.focus(); });
   document.getElementById('purchase-cancel').addEventListener('click', function () { dialog.close(); });
