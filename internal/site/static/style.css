@@ -1341,3 +1341,6 @@ dialog button.deploy-count:disabled, .overview-players button.deploy-count:disab
 .mission-log .button { margin-left: auto; }
 .mission-log .form-error { flex-basis: 100%; margin: 0; }
 .mission-log .form-error:empty { display: none; }
+
+.recruit-note { margin: 0.4rem 0 1rem; font-size: 0.85rem; text-align: right; } /* under the right-aligned Recruit New Pilot button */
+#recruit-cost[hidden] { display: none; }

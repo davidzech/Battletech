@@ -270,6 +270,9 @@ func TestNamedPilotsFlow(t *testing.T) {
 	if err := store.StartRun(ctx, id, "refusalwar", Hangar{URL: goodHangarURL, Instance: goodInstance}); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := store.db.Exec(`UPDATE campaign_runs SET warchest = 5000`); err != nil { // recruiting costs SP
+		t.Fatal(err)
+	}
 
 	// A started campaign asks for its two starting pilots.
 	if c := body(t, srv, "/refusalwar/manage/", cookie); !strings.Contains(c, `id="pilots"`) || strings.Contains(c, "needs 2 named pilots") || strings.Contains(c, `id="pilot-add"`) {
@@ -1413,7 +1416,7 @@ func TestRecruitNewPilot(t *testing.T) {
 	}
 	// A command holds four living pilots: the button is disabled, and the server refuses a fifth.
 	page = body(t, srv, "/refusalwar/manage/", cookie)
-	if !strings.Contains(page, `id="recruit-open" disabled`) || !strings.Contains(page, "already has 4 living pilots") {
+	if !strings.Contains(page, `id="recruit-open" disabled`) || !strings.Contains(page, "Your command is full: 4 of 4 pilots.") {
 		t.Error("with four living pilots the button should be disabled, with a reason")
 	}
 	if got := recruit("name", "Fifth"); got != http.StatusBadRequest {

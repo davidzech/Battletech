@@ -89,6 +89,10 @@ type Campaign struct {
 	StartingMinMechs int
 	// StartingWarchest is the SP the company's warchest starts the campaign with (Intro.md front matter starting_warchest); 0 if not given.
 	StartingWarchest int
+	// MaxNamedPilots is the most living named pilots the force may have at once (Intro.md max_named_pilots; Refusal War: 4); 0 means the default of four. RecruitCost is
+	// the SP it costs from the warchest to recruit a new named pilot later on (Intro.md recruit_cost; Refusal War: 300); 0 is free. The starting pilots are free.
+	MaxNamedPilots int
+	RecruitCost    int
 	// AvailabilityFaction and AvailabilityEra, e.g. "Clan Wolf" and "Clan Invasion", pick the units the purchase search offers by default (see
 	// availability.go); both empty means no such filter.
 	AvailabilityFaction, AvailabilityEra string
@@ -138,6 +142,14 @@ func (c *Campaign) ScenarioByID(id string) (*Scenario, bool) {
 		}
 	}
 	return nil, false
+}
+
+// PilotLimit is the most living named pilots the force may have at once.
+func (c *Campaign) PilotLimit() int {
+	if c.MaxNamedPilots > 0 {
+		return c.MaxNamedPilots
+	}
+	return maxNamedPilots
 }
 
 // lowerAll lowercases and trims a list of scenario IDs.
@@ -235,6 +247,8 @@ type frontData struct {
 	StartingMinMechs int `yaml:"starting_min_mechs"`
 	// StartingWarchest is the SP the warchest starts with (Intro.md).
 	StartingWarchest int `yaml:"starting_warchest"`
+	MaxNamedPilots   int `yaml:"max_named_pilots"`
+	RecruitCost      int `yaml:"recruit_cost"`
 	// AvailabilityFaction and AvailabilityEra say which MekBay faction and era decide what the purchase search offers by default (Intro.md).
 	AvailabilityFaction string `yaml:"availability_faction"`
 	AvailabilityEra     string `yaml:"availability_era"`
@@ -367,6 +381,7 @@ func (l Library) load(name string) (*Campaign, bool) {
 	c.StartingNamedPilots, c.StartingPilotSP, c.StartingBV = meta.StartingNamedPilots, meta.StartingPilotSP, meta.StartingBV
 	c.StartingMinMechs = meta.StartingMinMechs
 	c.StartingWarchest = meta.StartingWarchest
+	c.MaxNamedPilots, c.RecruitCost = meta.MaxNamedPilots, meta.RecruitCost
 	c.AvailabilityFaction, c.AvailabilityEra = meta.AvailabilityFaction, meta.AvailabilityEra
 	c.Faction = meta.Faction
 	if c.Ranks = meta.Ranks; len(c.Ranks) == 0 {

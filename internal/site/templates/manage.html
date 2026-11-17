@@ -36,7 +36,8 @@
 </div></div>
 </li>
 {{end}}{{end}}</ul>
-<p class="recruit"><button type="button" class="button" id="recruit-open"{{if not .CanRecruit}} disabled title="Your command already has {{.MaxPilots}} living pilots."{{end}}>Recruit New Pilot</button>{{if not .CanRecruit}} <span class="muted">Your command already has {{.MaxPilots}} living pilots.</span>{{end}}</p>
+<p class="recruit"><button type="button" class="button" id="recruit-open"{{if not .CanRecruit}} disabled title="{{.RecruitNote}}"{{end}}>Recruit New Pilot</button></p>
+{{if .RecruitNote}}<p class="muted recruit-note" id="recruit-note">{{.RecruitNote}}</p>{{end}}
 {{if .Memorial}}<h2 class="memorial-head">Memorial</h2>
 <ul class="pilot-list memorial">
 {{range .Pilots}}{{if .Fallen}}<li class="pilot kia" data-pilot="{{.ID}}" data-name="{{.Name}}">
@@ -63,7 +64,7 @@
     </div>
   </form>
 </dialog>
-{{end}}<dialog id="recruit-dialog" class="wizard" aria-labelledby="recruit-title" data-sp="{{.Campaign.StartingPilotSP}}">
+{{end}}<dialog id="recruit-dialog" class="wizard" aria-labelledby="recruit-title" data-sp="{{.Campaign.StartingPilotSP}}" data-cost="{{.Campaign.RecruitCost}}" data-warchest="{{.Run.Warchest}}">
   <form id="recruit-form" autocomplete="off" novalidate>
     <h2 id="recruit-title">Recruit a new pilot</h2>
     <p class="muted">{{if .Campaign.StartingPilotSP}}A new pilot starts with {{.Campaign.StartingPilotSP}} SP to allocate. Spend as much as you like now; what is left stays unallocated and can be spent later under Manage SP.{{else}}A new pilot is a standard 4/5 pilot with 1 Edge token and no SP.{{end}}</p>
@@ -78,7 +79,8 @@
     <div id="recruit-rows"></div>
     {{end}}{{if .Ranks}}<label for="recruit-rank" class="recruit-rank-label">Rank</label>
     <select id="recruit-rank">{{range .Ranks}}<option value="{{.}}">{{.}}</option>{{end}}</select>
-    {{end}}<p id="recruit-error" class="form-error" role="alert"></p>
+    {{end}}<p id="recruit-cost" class="repair-cost" hidden></p>
+    <p id="recruit-error" class="form-error" role="alert"></p>
     <div class="form-actions">
       <button type="submit" class="button" id="recruit-go">Recruit pilot</button>
       <button type="button" id="recruit-cancel">Cancel</button>

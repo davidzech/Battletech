@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"embed"
 	"encoding/hex"
+	"fmt"
 	"html/template"
 	"log"
 	"net/http"
@@ -57,7 +58,8 @@ type Page struct {
 	Play               Playthrough // the visitor's playthrough (zero value if no seed)
 	Run                CampaignRun // the playthrough's run of this page's campaign (zero value until it is started)
 	Pilots             []PilotView // the run's named pilots
-	CanRecruit         bool        // the command has room for another living named pilot
+	CanRecruit         bool        // the command has room for another living named pilot, and the warchest can pay for them
+	RecruitNote        string      // the short gray note under Recruit New Pilot: why it is unavailable, or what it costs
 	MaxPilots          int         // most living named pilots a command may have
 	// CachedHangar is the hangar last read from MekBay for this run (nil if none yet), and CachedAt when; the campaign and scenario
 	// pages embed it so they can paint the hangar before the live read finishes (see hangarcache.go).
@@ -171,7 +173,17 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name
 					}
 					var alive int
 					p.Pilots, alive = pilotViews(pilots, p.Campaign.Ranks)
-					p.CanRecruit = alive < maxNamedPilots
+					limit := p.Campaign.PilotLimit()
+					cost := p.Campaign.RecruitCost
+					p.CanRecruit = alive < limit && p.Run.Warchest >= cost
+					switch {
+					case alive >= limit:
+						p.RecruitNote = fmt.Sprintf("Your command is full: %d of %d pilots.", alive, limit)
+					case p.Run.Warchest < cost:
+						p.RecruitNote = fmt.Sprintf("Recruiting costs %s SP (warchest: %s).", withCommas(cost), withCommas(p.Run.Warchest))
+					case cost > 0:
+						p.RecruitNote = fmt.Sprintf("Recruiting costs %s SP.", withCommas(cost))
+					}
 					p.Ranks = p.Campaign.Ranks
 					if name == "campaign" || name == "scenario" || name == "manage" {
 						if h, at, ok, err := s.store.CachedHangar(r.Context(), id, p.Campaign.Slug, p.Run.HangarInstance); err != nil {
@@ -183,7 +195,7 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name
 					for _, v := range p.Pilots {
 						p.Memorial = p.Memorial || v.Fallen
 					}
-					p.MaxPilots = maxNamedPilots
+					p.MaxPilots = limit
 				}
 			}
 		}
