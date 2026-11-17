@@ -1317,8 +1317,9 @@ dialog button.deploy-count[aria-pressed="true"] { color: var(--accent-ink); back
 dialog button.deploy-count:disabled, .overview-players button.deploy-count:disabled { opacity: 0.4; cursor: not-allowed; }
 .overview .form-error:empty { display: none; }
 
-/* The force name on the Manage page's Overview, with its inline rename. */
-.force-name { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.9rem; margin: 0 0 0.8rem; }
-.force-name-value { font: 700 1.4rem var(--display); letter-spacing: 0.05em; text-transform: uppercase; }
+/* The force name is the Overview's heading, with a pencil that turns it into a text box in place. */
+.force-name { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.7rem; }
+.force-name .force-name-edit { display: inline-flex; padding: 0.3rem; color: var(--muted); background: none; border: 0; cursor: pointer; }
+.force-name .force-name-edit:hover, .force-name .force-name-edit:focus-visible { color: var(--accent); outline: none; }
 .force-name input { width: min(24rem, 100%); padding: 0.4rem 0.6rem; font: 700 1.1rem var(--display); letter-spacing: 0.05em; color: var(--text); background: var(--bg); border: 1px solid var(--line); }
 .force-name input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }

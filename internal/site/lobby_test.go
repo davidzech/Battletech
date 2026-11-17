@@ -124,7 +124,7 @@ func TestOverviewDefaultPlayers(t *testing.T) {
 		t.Errorf("two players with both IDs: %d, saved %d", got, run())
 	}
 	page := body(t, srv, "/refusalwar/manage/", cookie)
-	for _, want := range []string{`id="overview"`, `<h2 class="section-title">Overview</h2>`, `data-players="2"`, `data-player-ids="[true,true,false,false]"`, "/static/overview.js"} {
+	for _, want := range []string{`id="overview"`, `id="force-name"`, `data-players="2"`, `data-player-ids="[true,true,false,false]"`, "/static/overview.js"} {
 		if !strings.Contains(page, want) {
 			t.Errorf("the Manage page is missing %q", want)
 		}

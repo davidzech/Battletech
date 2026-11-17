@@ -65,7 +65,7 @@ func TestStartNeedsAForceNameAndItCanBeRenamed(t *testing.T) {
 		t.Errorf("the campaign page should name the force, the header the account: %.1500s", page)
 	}
 	man := body(t, srv, "/refusalwar/manage/", cookie)
-	if !strings.Contains(man, `id="force-name-value">Kell Hounds</b>`) || !strings.Contains(man, `id="force-name-edit"`) || !strings.Contains(man, "Kell Hounds&rsquo;s hangar holds") {
+	if !strings.Contains(man, `id="force-name-value">Kell Hounds</span>`) || !strings.Contains(man, `id="force-name-edit"`) || !strings.Contains(man, "Kell Hounds&rsquo;s hangar holds") {
 		t.Errorf("the Manage page shows the force name and lets you rename it: %.800s", man)
 	}
 	// Renaming a started campaign's force.
