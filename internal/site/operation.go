@@ -79,6 +79,9 @@ type hangarUnitView struct {
 	RearmCost    int            `json:"rearmCost"`
 	// AmmoBreakdown says what a rearm would refill: tons of each ammo type and the shots used out of the shots those tons hold.
 	AmmoBreakdown []ammoLine `json:"ammoBreakdown"`
+	// SellValue is the SP the unit sells for (see sell.go), and SellFull whether that is the full price, which only a fully repaired and rearmed unit gets.
+	SellValue int  `json:"sellValue"`
+	SellFull  bool `json:"sellFull"`
 }
 
 var chassisNames = regexp.MustCompile(`^(.*?)\s*\((.+)\)$`)
@@ -139,6 +142,8 @@ func hangarViews(h HangarForce) []hangarUnitView {
 		if u, ok := unitByName(hu.Unit); ok && u.Type == "Mek" {
 			v.RepairLevels, v.RepairCosts, v.RearmCost = repairOptions(hu, c, u.Tons), repairCosts(u.Tons, u.TechBase), rearmCost(hu.AmmoBins)
 			v.AmmoBreakdown = ammoBreakdown(hu, u)
+			v.SellFull = unitPristine(hu)
+			v.SellValue = sellValue(u.BV, v.SellFull)
 		}
 		views = append(views, v)
 	}
@@ -263,7 +268,7 @@ func (s *Server) deploy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !run.Owned() {
-		http.Error(w, "Your hangar is from before the site kept its own copy. Import it again (Manage force, Danger zone, Change hangar link) first.", http.StatusConflict)
+		http.Error(w, notOwnedMessage, http.StatusConflict)
 		return
 	}
 	ids := r.PostForm["units"]

@@ -119,7 +119,7 @@ func (s *Server) purchaseUnits(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !run.Owned() {
-		http.Error(w, "Your hangar is from before the site kept its own copy. Import it again (Manage force, Danger zone, Change hangar link) first.", http.StatusConflict)
+		http.Error(w, notOwnedMessage, http.StatusConflict)
 		return
 	}
 	ids := r.PostForm["unit"]

@@ -308,7 +308,7 @@ func (s *Server) serviceUnit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !run.Owned() {
-		http.Error(w, "Your hangar is from before the site kept its own copy. Import it again (Manage force, Danger zone, Change hangar link) first.", http.StatusConflict)
+		http.Error(w, notOwnedMessage, http.StatusConflict)
 		return
 	}
 	kind := r.PostFormValue("kind")
@@ -362,6 +362,10 @@ func (s *Server) serviceUnit(w http.ResponseWriter, r *http.Request) {
 		}
 		cost = repairCost(level, cat.Tons, cat.TechBase)
 	case "rearm":
+		if cond, _ := conditionOf(hu, cat.Tons, cat.Engine); cond == CondTruly {
+			http.Error(w, "A truly destroyed unit can only be sold.", http.StatusConflict)
+			return
+		}
 		if hu.AmmoBins == 0 {
 			http.Error(w, "That unit has no spent ammunition.", http.StatusConflict)
 			return

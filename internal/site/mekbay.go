@@ -120,6 +120,8 @@ type MekBay interface {
 	ServiceUnit(ctx context.Context, req ServiceRequest) error
 	// PurchaseUnits adds bought units to the player's hangar force (modify mode only).
 	PurchaseUnits(ctx context.Context, req PurchaseRequest) error
+	// SellUnit removes a sold unit from the player's hangar force.
+	SellUnit(ctx context.Context, req SellRequest) error
 }
 
 // MekBayClient is the real implementation, speaking to MekBay's WebSocket server.

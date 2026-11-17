@@ -283,6 +283,7 @@ type fakeMekBay struct {
 	services   []ServiceRequest
 	purchases  []PurchaseRequest
 	clones     []CloneRequest
+	sales      []SellRequest
 	cloneErr   error
 	serviceErr error
 }
@@ -301,6 +302,13 @@ func (f *fakeMekBay) CloneHangar(_ context.Context, req CloneRequest) (HangarFor
 		return HangarForce{}, f.cloneErr
 	}
 	return f.hangar, f.err
+}
+
+func (f *fakeMekBay) SellUnit(_ context.Context, req SellRequest) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.sales = append(f.sales, req)
+	return f.serviceErr
 }
 
 func (f *fakeMekBay) ServiceUnit(_ context.Context, req ServiceRequest) error {

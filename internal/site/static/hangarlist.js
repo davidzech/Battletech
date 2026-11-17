@@ -2,7 +2,7 @@
 // rows the deploy popup uses (mechrow.js). Both scripts must load first. Like the overview, the page embeds the hangar as it was last read, so the list paints at once and
 // the live read (GET /api/campaign/force) only refreshes it; only a run that has never been read shows "Reading your hangar...". Names,
 // roles and models go in as text, never HTML. Each mech row also has Rearm and Repair buttons (costs come from the server, which charges the
-// warchest and changes the unit in the site's own copy of the hangar; both need a copy the site owns). Confirm (confirm.js) must load first.
+// warchest and changes the unit in the site's own copy of the hangar (Sell pays the warchest); both need a copy the site owns). Confirm (confirm.js) must load first.
 (function () {
   var section = document.getElementById('hangar-units');
   var list = document.getElementById('hangar-units-list');
@@ -57,6 +57,28 @@
         if (r.ok) location.reload();
         else Confirm.ask({ title: 'Could not rearm', message: r.message, confirmLabel: 'OK', cancelLabel: 'Close' });
       });
+    });
+  }
+
+  // Sell: one confirmation. A fully repaired and rearmed unit sells for half its BV, any other for a quarter; the server works the price out again.
+  function sell(u) {
+    var after = warchest + u.sellValue;
+    Confirm.ask({
+      title: 'Sell ' + u.name + '?',
+      message: u.sellFull
+        ? fullName(u) + ' is fully repaired and rearmed, so it sells for half its BV. It leaves your hangar for good, crew and all.'
+        : fullName(u) + ' is not fully repaired and rearmed, so it sells for only a quarter of its BV' + (u.condition === 'truly' ? ' (a truly destroyed unit cannot be repaired, so this is all it is worth)' : ' (repair and rearm it first for half)') + '. It leaves your hangar for good, crew and all.',
+      detail: 'Sells for ' + u.sellValue + ' SP. Warchest ' + commas(warchest) + ' \u2192 ' + commas(after) + ' SP.',
+      confirmLabel: 'Sell for ' + u.sellValue + ' SP', danger: true
+    }).then(function (yes) {
+      if (!yes) return;
+      fetch('/api/hangar/sell', {
+        method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, credentials: 'same-origin',
+        body: 'campaign=' + encodeURIComponent(section.dataset.campaign) + '&unit=' + encodeURIComponent(u.id)
+      }).then(function (res) {
+        if (res.ok) { location.reload(); return; }
+        return res.text().then(function (t) { Confirm.ask({ title: 'Could not sell', message: t.trim() || 'Something went wrong.', confirmLabel: 'OK', cancelLabel: 'Close' }); });
+      }, function () { Confirm.ask({ title: 'Could not sell', message: 'Could not reach the server.', confirmLabel: 'OK', cancelLabel: 'Close' }); });
     });
   }
 
@@ -121,13 +143,18 @@
     return [
       {
         label: 'Rearm', onClick: function () { rearm(u); },
-        disabled: !canModify || !u.ammoExpended,
-        title: !canModify ? NO_UID : !u.ammoExpended ? 'No ammunition has been spent.' : 'Refill spent ammunition for ' + u.rearmCost + ' SP'
+        disabled: !canModify || truly || !u.ammoExpended,
+        title: !canModify ? NO_UID : truly ? 'A truly destroyed unit can only be sold.' : !u.ammoExpended ? 'No ammunition has been spent.' : 'Refill spent ammunition for ' + u.rearmCost + ' SP'
       },
       {
         label: 'Repair', onClick: function () { repair(u); },
         disabled: !canModify || !(u.repairLevels && u.repairLevels.length),
         title: !canModify ? NO_UID : truly ? 'Truly destroyed units cannot be repaired.' : !(u.repairLevels && u.repairLevels.length) ? 'Nothing to repair.' : 'Choose a repair'
+      },
+      {
+        label: 'Sell', onClick: function () { sell(u); },
+        disabled: !canModify,
+        title: !canModify ? NO_UID : 'Sell for ' + u.sellValue + ' SP' + (u.sellFull ? '' : ' (repair and rearm it first to get twice as much)')
       }
     ];
   }
