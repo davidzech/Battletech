@@ -43,12 +43,14 @@
 </li>
 {{end}}</ul></div>
 </details>
-{{end}}{{if .Scenario.Forces}}<details class="fold">
+{{end}}{{/* Hidden for now (the .mul downloads and their route still work):
+{{if .Scenario.Forces}}<details class="fold">
 <summary>Force files</summary>
 <div class="fold-body"><p class="muted">MegaMek unit lists (.mul) for the opposing forces. Load them in <a href="https://mekbay.com" target="_blank" rel="noopener noreferrer">MekBay</a> or MegaMek.</p>
 <p class="downloads">{{range .Scenario.Forces}}<a class="button" href="/{{$.Campaign.Slug}}/{{$.Scenario.Slug}}/forces/{{.File}}" download>Download {{.Label}} (.mul)</a>{{end}}</p></div>
 </details>
-{{end}}<details class="fold">
+{{end}}
+*/}}<details class="fold">
 <summary>Outcome</summary>
 <div class="fold-body"><section class="panel">{{.Scenario.OutcomeHTML}}</section></div>
 </details>
