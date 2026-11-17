@@ -1138,10 +1138,10 @@ dialog button.search-clear:hover:not(:disabled), dialog button.search-clear:focu
 .purchase-results { margin: 0.8rem 0 1rem; }
 .purchase-results:empty { display: none; }
 .purchase-results > p { margin: 0.4rem 0; font-size: 0.9rem; }
-.purchase-found { height: 15rem; overflow-y: auto; padding-bottom: 1px; margin-bottom: 0.4rem; }
+.purchase-found { height: 15rem; overflow-y: auto; padding-bottom: 1px; margin-bottom: 0.4rem; align-content: start; } /* rows keep their own height however few there are */
 .purchase-found .mech-row, .purchase-staged .mech-row { min-height: 4.2rem; }
 .purchase-staged-head { margin: 0 0 0.4rem; font: 700 0.8rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; }
-.purchase-staged { max-height: 14rem; overflow-y: auto; padding-bottom: 1px; margin-bottom: 0.9rem; }
+.purchase-staged { align-content: start; max-height: 14rem; overflow-y: auto; padding-bottom: 1px; margin-bottom: 0.9rem; }
 .purchase-empty { margin: 0; padding: 0.7rem 0.9rem; font-size: 0.9rem; border: 1px dashed var(--line); }
 
 /* A row you can click to choose, tinted like a chosen unit in the deploy popup. */
