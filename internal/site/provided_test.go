@@ -11,7 +11,7 @@ import (
 )
 
 // Scenario 000 hands every cadet one of four standard machines instead of letting them bring their own.
-var scenario000Pool = []string{"BMVulture_Prime", "BMMadCat_Prime", "BMBlackHawk_Prime", "BMRyoken_Prime"}
+var scenario000Pool = []string{"BMVulture_Prime", "BMMadCat_Prime", "BMBlackHawk_Prime", "BMRyoken_Prime", "BMShadowCat_Prime"}
 
 func TestProvidedForce(t *testing.T) {
 	sc := &Scenario{ProvidedUnits: scenario000Pool}
@@ -19,7 +19,7 @@ func TestProvidedForce(t *testing.T) {
 		t.Fatal("provides() is true only for a scenario that lists units")
 	}
 	h := providedForce(sc)
-	if len(h.Units) != 4 {
+	if len(h.Units) != 5 {
 		t.Fatalf("units: %+v", h.Units)
 	}
 	ids := map[string]bool{}
@@ -35,7 +35,7 @@ func TestProvidedForce(t *testing.T) {
 	}
 	// The views say what the popup needs: names, BV, no damage, and a condition of ok.
 	views := hangarViews(h)
-	if views[0].Name != "Mad Dog" || views[1].Name != "Timber Wolf" || views[2].Name != "Nova" || views[3].Name != "Stormcrow" || views[0].Condition != "ok" || views[0].BV != 2351 {
+	if views[0].Name != "Mad Dog" || views[1].Name != "Timber Wolf" || views[2].Name != "Nova" || views[3].Name != "Stormcrow" || views[4].Name != "Shadow Cat" || views[0].Condition != "ok" || views[0].BV != 2351 {
 		t.Errorf("views: %+v", views[:1])
 	}
 }
@@ -46,7 +46,7 @@ func TestScenario000ProvidesItsOwnMechs(t *testing.T) {
 	c, _ := lib.Campaign("refusalwar")
 	sc, ok := c.Scenario("scenario_000")
 	if !ok || strings.Join(sc.ProvidedUnits, ",") != strings.Join(scenario000Pool, ",") {
-		t.Fatalf("Scenario 000 should provide Mad Dog, Timber Wolf, Nova and Stormcrow Primes: %+v", sc.ProvidedUnits)
+		t.Fatalf("Scenario 000 should provide Mad Dog, Timber Wolf, Nova, Stormcrow and Shadow Cat Primes: %+v", sc.ProvidedUnits)
 	}
 	if sc1, _ := c.Scenario("scenario_001"); sc1.provides() {
 		t.Error("Sortie 001 uses the player's hangar")
@@ -87,8 +87,8 @@ func TestProvidedScenarioDeploy(t *testing.T) {
 	if r.StatusCode != http.StatusOK || json.NewDecoder(r.Body).Decode(&view) != nil {
 		t.Fatalf("hangar json: %d", r.StatusCode)
 	}
-	if !view.Provided || len(view.Units) != 4 || view.Units[0].Name != "Mad Dog" {
-		t.Fatalf("the popup should list the four provided mechs: %+v", view)
+	if !view.Provided || len(view.Units) != 5 || view.Units[0].Name != "Mad Dog" {
+		t.Fatalf("the popup should list the five provided mechs: %+v", view)
 	}
 	// Sortie 001 still reads the hangar (and so fails here).
 	if r := get(t, srv, "/api/mekbay/hangar?campaign=refusalwar&scenario=scenario_001", cookie); r.StatusCode != http.StatusBadGateway {
