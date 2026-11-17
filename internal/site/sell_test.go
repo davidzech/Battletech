@@ -14,7 +14,7 @@ func TestSellValue(t *testing.T) {
 		pristine bool
 		want     int
 	}{
-		{1000, true, 500}, {1001, true, 500}, {1001, false, 250}, {1003, false, 250}, {1099, true, 540}, {1099, false, 270}, {7, true, 0}, {1000, false, 250}, {1251, true, 620}, {1251, false, 310}, {1 << 20, true, 524280},
+		{1000, true, 500}, {1000, false, 250}, {1001, true, 500}, {1001, false, 250}, {1003, false, 250}, {7, true, 3}, {7, false, 1}, {1, false, 0},
 	} {
 		if got := sellValue(c.bv, c.pristine); got != c.want {
 			t.Errorf("sellValue(%d, %v) = %d, want %d", c.bv, c.pristine, got, c.want)
@@ -83,20 +83,20 @@ func TestSellUnitEndpoint(t *testing.T) {
 	_, _ = store.db.Exec(`UPDATE campaign_runs SET source_url = ?`, goodHangarURL)
 
 	// A fully repaired and rearmed unit sells for half its BV; the unit leaves the hangar in MekBay.
-	if got := sell("ua"); got != http.StatusOK || funds() != 4500+roundDown10(madCat.BV/2) {
-		t.Fatalf("sell pristine: %d, funds %d (want %d)", got, funds(), 4500+roundDown10(madCat.BV/2))
+	if got := sell("ua"); got != http.StatusOK || funds() != 4500+madCat.BV/2 {
+		t.Fatalf("sell pristine: %d, funds %d (want %d)", got, funds(), 4500+madCat.BV/2)
 	}
 	if len(fake.sales) != 1 || fake.sales[0].UnitID != "ua" || fake.sales[0].OwnerUID != MekBayUID("wolfpack2026", SlotPlayer1) || fake.sales[0].Instance == goodInstance {
 		t.Errorf("MekBay was asked: %+v", fake.sales)
 	}
 	// Worn units sell for a quarter: spent ammunition, and a truly destroyed mech.
 	before := funds()
-	if got := sell("ub"); got != http.StatusOK || funds() != before+roundDown10(dasher.BV/4) {
-		t.Errorf("sell rearm-needing: %d, funds %d (want %d)", got, funds(), before+roundDown10(dasher.BV/4))
+	if got := sell("ub"); got != http.StatusOK || funds() != before+dasher.BV/4 {
+		t.Errorf("sell rearm-needing: %d, funds %d (want %d)", got, funds(), before+dasher.BV/4)
 	}
 	before = funds()
-	if got := sell("uc"); got != http.StatusOK || funds() != before+roundDown10(koshi.BV/4) {
-		t.Errorf("sell truly destroyed: %d, funds %d (want %d)", got, funds(), before+roundDown10(koshi.BV/4))
+	if got := sell("uc"); got != http.StatusOK || funds() != before+koshi.BV/4 {
+		t.Errorf("sell truly destroyed: %d, funds %d (want %d)", got, funds(), before+koshi.BV/4)
 	}
 	// Unknown units are refused, and a failure in MekBay pays nothing.
 	before = funds()

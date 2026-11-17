@@ -14,8 +14,8 @@ import (
 func TestPurchaseCost(t *testing.T) {
 	madCat, _ := unitByName("BMMadCat_H")
 	koshi, _ := unitByName("BMKoshi_E")
-	if got, err := purchaseCost([]string{"BMMadCat_H", "BMKoshi_E"}); err != nil || got != roundUp10(madCat.BV)+roundUp10(koshi.BV) || got == 0 || got%10 != 0 {
-		t.Errorf("cost of two mechs: %d %v (want %d, each rounded up to 10)", got, err, roundUp10(madCat.BV)+roundUp10(koshi.BV))
+	if got, err := purchaseCost([]string{"BMMadCat_H", "BMKoshi_E"}); err != nil || got != madCat.BV+koshi.BV || got == 0 {
+		t.Errorf("cost of two mechs: %d %v (want %d)", got, err, madCat.BV+koshi.BV)
 	}
 	for name, ids := range map[string][]string{
 		"nothing":     nil,
@@ -84,7 +84,7 @@ func TestPurchaseEndpoint(t *testing.T) {
 	_, _ = store.db.Exec(`UPDATE campaign_runs SET source_url = ?`, goodHangarURL)
 
 	// BV is SP: two units cost the sum of their base BV, and both are added to the hangar in MekBay.
-	want := roundUp10(madCat.BV) + roundUp10(koshi.BV)
+	want := madCat.BV + koshi.BV
 	if got := buy("BMMadCat_H", "BMKoshi_E"); got != http.StatusOK || funds() != 4500-want {
 		t.Fatalf("buy: %d, funds %d (want %d)", got, funds(), 4500-want)
 	}

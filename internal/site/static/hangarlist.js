@@ -76,8 +76,6 @@
       { label: u.sellFull ? 'Fully repaired and rearmed' : 'If fully repaired and rearmed', value: '50% · ' + commas(half) + ' SP' }
     ];
     if (!u.sellFull) items.push({ label: why.join(', ') + ': halved again, rounded down', value: '25% · ' + commas(u.sellValue) + ' SP' });
-    var unrounded = u.sellFull ? half : Math.floor(half / 2);
-    if (unrounded !== u.sellValue) items.push({ label: 'Rounded down to the nearest 10 SP', value: commas(u.sellValue) + ' SP' });
     items.push({ label: 'Sells for', value: commas(u.sellValue) + ' SP' });
     Confirm.ask({
       title: 'Sell ' + u.name + '?',

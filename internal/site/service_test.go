@@ -19,11 +19,9 @@ func TestRepairCostsFollowTheSPActivityCostTable(t *testing.T) {
 	}{
 		{RepairArmor, 20, "Inner Sphere", 10}, {RepairStructure, 20, "Inner Sphere", 40},
 		{RepairCrippled, 20, "Inner Sphere", 60}, {RepairDestroyed, 20, "Inner Sphere", 100},
-		{RepairArmor, 20, "Clan", 20}, {RepairStructure, 20, "Clan", 60}, {RepairCrippled, 20, "Clan", 90}, {RepairDestroyed, 20, "Clan", 150},
-		{RepairArmor, 25, "Mixed", 20},        // 12.5 x 1.5 = 18.75, rounded up to 19, then up to 20
-		{RepairArmor, 25, "Inner Sphere", 20}, // 12.5, rounded up to 13, then up to 20
-		{RepairArmor, 30, "Clan", 30},         // 15 x 1.5 = 22.5, rounded up to 23, then up to 30
-		{RepairStructure, 30, "Inner Sphere", 60},
+		{RepairArmor, 20, "Clan", 15}, {RepairStructure, 20, "Clan", 60}, {RepairCrippled, 20, "Clan", 90}, {RepairDestroyed, 20, "Clan", 150},
+		{RepairArmor, 25, "Mixed", 19},        // 12.5 x 1.5 = 18.75, rounded up
+		{RepairArmor, 25, "Inner Sphere", 13}, // 12.5 rounded up
 		{RepairDestroyed, 100, "Clan", 750},
 	}
 	for _, c := range cases {
@@ -210,11 +208,11 @@ func TestServiceUnitEndpoint(t *testing.T) {
 			t.Errorf("%s: %d, funds %d", name, got, funds())
 		}
 	}
-	// Armor and structure are separate choices: the Kit Fox (30t Clan) has lost both, and can have the armor alone repaired (30 x 0.5 x 1.5 = 22.5, rounded up to 23 and then to 30 SP).
+	// Armor and structure are separate choices: the Kit Fox (30t Clan) has lost both, and can have the armor alone repaired (30 x 0.5 x 1.5 = 23 SP).
 	if got := status(form("kind", "repair", "unit", "ud", "level", "crippled")); got != http.StatusConflict || funds() != 4390 {
 		t.Errorf("a level that does not apply: %d, funds %d", got, funds())
 	}
-	if got := status(form("kind", "repair", "unit", "ud", "level", "armor")); got != http.StatusOK || funds() != 4360 {
+	if got := status(form("kind", "repair", "unit", "ud", "level", "armor")); got != http.StatusOK || funds() != 4367 {
 		t.Errorf("armor only: %d, funds %d", got, funds())
 	}
 	if last := fake.services[len(fake.services)-1]; last.Level != "armor" || last.Kind != "repair" || last.UnitID != "ud" || last.Tons != 30 {
