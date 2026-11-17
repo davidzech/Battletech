@@ -149,8 +149,11 @@
     var who = el('span');
     who.appendChild(el('b', 'dpc-name', p.name));
     var sub = el('span', 'dpc-sub');
-    sub.appendChild(document.createTextNode((p.rank ? p.rank + ' \u00b7 ' : '') + 'SP earned '));
-    sub.appendChild(el('b', null, String(p.earned || 0)));
+    if (p.rank) sub.appendChild(el('span', 'dpc-rank', p.rank));
+    var sp = el('span', 'dpc-sp');
+    sp.appendChild(document.createTextNode('SP earned '));
+    sp.appendChild(el('b', null, String(p.earned || 0)));
+    sub.appendChild(sp);
     who.appendChild(sub);
     head.appendChild(who);
     card.appendChild(head);

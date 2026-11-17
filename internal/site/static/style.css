@@ -1199,8 +1199,10 @@ dialog button.deploy-slot-x:hover:not(:disabled), dialog button.deploy-slot-x:fo
 .dpc-head { display: flex; align-items: center; gap: 0.7rem; }
 .dpc-head img { flex: none; width: 3.4rem; height: 3.4rem; object-fit: cover; object-position: top; background: var(--bg); border: 1px solid var(--line); }
 .dpc-name { display: block; font: 700 1.15rem var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
-.dpc-sub { display: block; font-size: 0.8rem; color: var(--muted); }
-.dpc-sub b { color: var(--text); }
+/* The rank is styled exactly like the tray's and the slot's (small, uppercase, letter-spaced); SP earned like the Manage page's pilot stat captions. */
+.dpc-sub { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.1rem 0.9rem; margin-top: 0.1rem; }
+.dpc-rank, .dpc-sp { font: 0.68rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.dpc-sp b { margin-left: 0.2rem; font-size: 0.9rem; color: var(--text); }
 .deploy-pilot-card .stat-boxes { margin: 0; }
 .deploy-pilot-card .edge-skills { margin: 0; }
 .dpc-none { font-size: 0.8rem; color: var(--muted); }
