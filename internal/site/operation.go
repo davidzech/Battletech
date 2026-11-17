@@ -211,7 +211,7 @@ func (s *Server) mekbayRequest(w http.ResponseWriter, r *http.Request) (pt Playt
 		return
 	}
 	if !found || !pt.Configured() {
-		http.Error(w, "Name your company first.", http.StatusBadRequest)
+		http.Error(w, "Name your account first.", http.StatusBadRequest)
 		return
 	}
 	run, started, err := s.store.Run(r.Context(), pt.ID, c.Slug)

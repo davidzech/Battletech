@@ -98,3 +98,24 @@ func (s *Server) setPlayers(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
+
+// setForceName is POST /api/campaign/force-name: rename a started campaign's force (the Manage page's Overview).
+func (s *Server) setForceName(w http.ResponseWriter, r *http.Request) {
+	pt, c, ok := s.pilotRequest(w, r)
+	if !ok {
+		return
+	}
+	name, err := parseForceName(r.PostFormValue("name"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := s.store.SetForceName(r.Context(), pt.ID, c.Slug, name); errors.Is(err, sql.ErrNoRows) {
+		http.Error(w, "Start this campaign first.", http.StatusBadRequest)
+		return
+	} else if err != nil {
+		http.Error(w, "could not save the force name", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}

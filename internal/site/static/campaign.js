@@ -1,4 +1,4 @@
-// Campaign page. An unstarted campaign opens the start wizard: one step per starting named pilot (a name and an
+// Campaign page. An unstarted campaign opens the start wizard: a step naming the force, one asking how many players (when the campaign allows a range), one step per starting named pilot (a name and an
 // allocator for that pilot's starting SP), then a step for the campaign's MekBay hangar link, with a step count and
 // progress bar at the bottom. A started campaign only has a small dialog for changing its hangar link. The server
 // checks every field again; this keeps the player from a doomed request and previews the pilots' levels.
@@ -102,7 +102,8 @@
   var maxPlayers = Math.min(4, Math.max(1, parseInt(wiz.dataset.maxPlayers, 10) || 1));
   var minPlayers = Math.min(maxPlayers, Math.max(1, parseInt(wiz.dataset.minPlayers, 10) || 1));
   var asksPlayers = minPlayers < maxPlayers;
-  var lead = asksPlayers ? 1 : 0; // steps before the pilots
+  var lead = 1 + (asksPlayers ? 1 : 0); // steps before the pilots: the force's name, then the player count when it is asked
+  var forceName = '';
   var players = minPlayers;
   var total = lead + pilotCount + 1;
   // Every player takes their own force into the lobby, owned by their own MekBay account, so starting with N players needs Players 1 to N's user IDs saved in the
@@ -154,6 +155,23 @@
   }
   function statBox(l) { return SPAllocator.statBox(l); }
 
+  // The first step: this campaign's force gets its own name, to suit the campaign (it can be changed later on the Manage page).
+  function renderForceStep() {
+    title.textContent = 'Name your force';
+    body.textContent = '';
+    body.appendChild(el('p', 'muted', 'Every campaign has its own force, named to suit it: a mercenary company, a Clan Star, a house regiment. You can rename it later on the Manage page.'));
+    var label = el('label', null, 'Force name');
+    label.setAttribute('for', 'wiz-force');
+    var input = document.createElement('input');
+    input.type = 'text'; input.id = 'wiz-force'; input.className = 'wide'; input.maxLength = 40; input.autocomplete = 'off'; input.spellcheck = false;
+    input.placeholder = window.PilotNames ? PilotNames.randomForce() : 'Wolf’s Dragoons';
+    input.value = forceName;
+    input.addEventListener('input', function () { forceName = input.value; error.textContent = ''; updateNext(); });
+    body.appendChild(label);
+    body.appendChild(input);
+    input.focus();
+  }
+
   function renderPlayersStep() {
     title.textContent = 'How many players?';
     body.textContent = '';
@@ -165,7 +183,7 @@
         b.type = 'button';
         b.setAttribute('aria-pressed', n === players ? 'true' : 'false');
         b.setAttribute('aria-label', n + (n === 1 ? ' player' : ' players'));
-        if (missingId(n)) { b.disabled = true; b.title = 'Player ' + missingId(n) + ' needs a MekBay user ID: add it under Company details.'; }
+        if (missingId(n)) { b.disabled = true; b.title = 'Player ' + missingId(n) + ' needs a MekBay user ID: add it under Account details.'; }
         b.addEventListener('click', function () {
           players = n;
           [].forEach.call(pick.children, function (c, i) { c.setAttribute('aria-pressed', minPlayers + i === players ? 'true' : 'false'); });
@@ -174,7 +192,7 @@
       })(n);
     }
     body.appendChild(pick);
-    if (missingId(maxPlayers)) body.appendChild(el('p', 'muted', 'A count is offered only when each of those players has a MekBay user ID saved. Add the rest under Company details (the company button, top right).'));
+    if (missingId(maxPlayers)) body.appendChild(el('p', 'muted', 'A count is offered only when each of those players has a MekBay user ID saved. Add the rest under Account details (the company button, top right).'));
   }
 
   function renderPilot(idx) {
@@ -514,7 +532,7 @@
 
   function render() {
     error.textContent = '';
-    if (asksPlayers && step === 0) renderPlayersStep(); else if (step - lead < pilotCount) renderPilot(step - lead); else renderHangar();
+    if (step === 0) renderForceStep(); else if (asksPlayers && step === 1) renderPlayersStep(); else if (step - lead < pilotCount) renderPilot(step - lead); else renderHangar();
     count.textContent = 'Step ' + (step + 1) + ' of ' + total;
     bar.style.width = ((step + 1) / total * 100) + '%';
     progress.setAttribute('aria-valuemax', total);
@@ -539,8 +557,9 @@
   // The problem with the current step, or ''.
   function problem() {
     var gap = missingId(players);
-    if (gap) return 'Player ' + gap + ' needs a MekBay user ID: add it under Company details.';
-    if (asksPlayers && step === 0) return '';
+    if (gap) return 'Player ' + gap + ' needs a MekBay user ID: add it under Account details.';
+    if (step === 0) return forceName.trim() ? '' : 'Name your force.';
+    if (asksPlayers && step === 1) return '';
     if (step >= lead + pilotCount) {
       var bad = hangarProblem(hangar);
       if (bad) return bad;
@@ -561,7 +580,7 @@
   }
 
   function submit() {
-    var parts = ['campaign=' + encodeURIComponent(wiz.dataset.campaign), 'players=' + players, 'hangar=' + encodeURIComponent(canonicalHangar(hangar) || hangar.trim())];
+    var parts = ['campaign=' + encodeURIComponent(wiz.dataset.campaign), 'force_name=' + encodeURIComponent(forceName.trim()), 'players=' + players, 'hangar=' + encodeURIComponent(canonicalHangar(hangar) || hangar.trim())];
     pilots.forEach(function (p, idx) {
       parts.push('pilot' + idx + '_name=' + encodeURIComponent(p.name.trim()));
       if (p.portrait) parts.push('pilot' + idx + '_portrait=' + encodeURIComponent(p.portrait));

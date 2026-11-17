@@ -65,7 +65,7 @@ func TestStartNeedsPlayersAndTheirIDs(t *testing.T) {
 	ctx := context.Background()
 	cookie := post(t, srv, "/api/seed", url.Values{"seed": {"wolfpack2026"}}, nil, "").Cookies()[0]
 	id := playthroughID("wolfpack2026")
-	post(t, srv, "/api/company", url.Values{"company": {"Wolf Pack"}}, cookie, srv.URL)
+	post(t, srv, "/api/account", url.Values{"account": {"Wolf Pack"}}, cookie, srv.URL)
 	start := func(players string) *http.Response {
 		v := startForm(goodHangar, "Alrek", "Katarina")
 		if players == "" {
@@ -85,7 +85,7 @@ func TestStartNeedsPlayersAndTheirIDs(t *testing.T) {
 	if r := start("1"); r.StatusCode != http.StatusBadRequest || started() {
 		t.Errorf("without any player ID: %d", r.StatusCode)
 	}
-	post(t, srv, "/api/company", url.Values{"company": {"Wolf Pack"}, "uid_p1": {uidP1}}, cookie, srv.URL)
+	post(t, srv, "/api/account", url.Values{"account": {"Wolf Pack"}, "uid_p1": {uidP1}}, cookie, srv.URL)
 	if r := start("2"); r.StatusCode != http.StatusBadRequest || started() {
 		t.Errorf("two players with only Player 1's ID: %d", r.StatusCode)
 	}
@@ -119,7 +119,7 @@ func TestOverviewDefaultPlayers(t *testing.T) {
 			t.Errorf("players=%q: %d", bad, got)
 		}
 	}
-	post(t, srv, "/api/company", url.Values{"company": {"Wolf Pack"}, "uid_p1": {uidP1}, "uid_p2": {uidP2}}, cookie, srv.URL)
+	post(t, srv, "/api/account", url.Values{"account": {"Wolf Pack"}, "uid_p1": {uidP1}, "uid_p2": {uidP2}}, cookie, srv.URL)
 	if got := set("2"); got != http.StatusNoContent || run() != 2 {
 		t.Errorf("two players with both IDs: %d, saved %d", got, run())
 	}

@@ -104,9 +104,9 @@ func playerIDsProblem(saved [maxPlayers]bool, n int) string {
 	case 0:
 		return ""
 	case 1:
-		return miss[0] + " needs a MekBay user ID: add it under Company details."
+		return miss[0] + " needs a MekBay user ID: add it under Account details."
 	}
-	return strings.Join(miss, " and ") + " need MekBay user IDs: add them under Company details."
+	return strings.Join(miss, " and ") + " need MekBay user IDs: add them under Account details."
 }
 
 // PlayerIDsJSON tells a page which players have a saved ID, as JSON booleans (never the IDs), for the pickers that offer only counts the IDs cover.

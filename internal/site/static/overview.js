@@ -34,7 +34,7 @@
         b.setAttribute('aria-label', n + (n === 1 ? ' player' : ' players'));
         var gap = missing(n);
         b.disabled = busy || (gap !== 0 && n !== players);
-        if (gap) b.title = 'Player ' + gap + ' needs a MekBay user ID: add it under Company details.';
+        if (gap) b.title = 'Player ' + gap + ' needs a MekBay user ID: add it under Account details.';
         b.addEventListener('click', function () { choose(n); });
         pick.appendChild(b);
       })(n);
@@ -55,6 +55,45 @@
       render();
       return res.text().then(function (t) { error.textContent = t.trim() || 'Could not save the player count.'; });
     }, function () { busy = false; render(); error.textContent = 'Could not reach the server.'; });
+  }
+
+  // The force's name, renamed in place: Rename turns it into a text box (Enter saves, Escape cancels).
+  var nameBox = document.getElementById('force-name');
+  var nameValue = document.getElementById('force-name-value');
+  var nameEdit = document.getElementById('force-name-edit');
+  if (nameBox && nameValue && nameEdit) {
+    nameEdit.addEventListener('click', function () {
+      var current = nameEdit.dataset.name || '';
+      var input = el('input');
+      input.type = 'text'; input.maxLength = 40; input.value = current; input.autocomplete = 'off'; input.spellcheck = false;
+      input.setAttribute('aria-label', 'Force name');
+      var save = el('button', 'mr-action', 'Save'), cancel = el('button', 'mr-action', 'Cancel');
+      save.type = 'button'; cancel.type = 'button';
+      nameValue.hidden = true; nameEdit.hidden = true;
+      nameBox.appendChild(input); nameBox.appendChild(save); nameBox.appendChild(cancel);
+      input.focus(); input.select();
+      function close() { input.remove(); save.remove(); cancel.remove(); nameValue.hidden = false; nameEdit.hidden = false; }
+      function commit() {
+        var name = input.value.trim();
+        if (!name) { error.textContent = 'Name your force.'; return; }
+        if (name === current) { close(); return; }
+        error.textContent = '';
+        save.disabled = true;
+        fetch('/api/campaign/force-name', {
+          method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, credentials: 'same-origin',
+          body: 'campaign=' + encodeURIComponent(box.dataset.campaign) + '&name=' + encodeURIComponent(name)
+        }).then(function (res) {
+          if (res.ok) { nameValue.textContent = name.replace(/\s+/g, ' '); nameEdit.dataset.name = name.replace(/\s+/g, ' '); close(); return; }
+          save.disabled = false;
+          return res.text().then(function (t) { error.textContent = t.trim() || 'Could not rename the force.'; });
+        }, function () { save.disabled = false; error.textContent = 'Could not reach the server.'; });
+      }
+      save.addEventListener('click', commit);
+      cancel.addEventListener('click', function () { error.textContent = ''; close(); });
+      input.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); commit(); } else if (e.key === 'Escape') { e.preventDefault(); error.textContent = ''; close(); }
+      });
+    });
   }
 
   // A campaign that is always played by the same number of players has nothing to choose: show the number.

@@ -104,10 +104,10 @@ func TestPlayerIDChecks(t *testing.T) {
 	if playerIDsProblem(saved, 1) != "" {
 		t.Error("one player needs only Player 1")
 	}
-	if got := playerIDsProblem(saved, 2); got != "Player 2 needs a MekBay user ID: add it under Company details." {
+	if got := playerIDsProblem(saved, 2); got != "Player 2 needs a MekBay user ID: add it under Account details." {
 		t.Errorf("two players: %q", got)
 	}
-	if got := playerIDsProblem([maxPlayers]bool{}, 2); got != "Player 1 and Player 2 need MekBay user IDs: add them under Company details." {
+	if got := playerIDsProblem([maxPlayers]bool{}, 2); got != "Player 1 and Player 2 need MekBay user IDs: add them under Account details." {
 		t.Errorf("none saved: %q", got)
 	}
 	slots := Playthrough{PlayerIDs: saved}.Slots()

@@ -1,5 +1,5 @@
 // Seed popup. Step 1: choose or randomly generate a seed (the server sets the cookie).
-// Step 2 (new companies only): name the company.
+// Step 2 (new accounts only): name the account.
 // Each campaign's hangar link is asked for on the campaign page, when the campaign is started.
 (function () {
   var dialog = document.getElementById('seed-dialog');
@@ -9,7 +9,7 @@
   var setupForm = document.getElementById('setup-form');
   var input = document.getElementById('seed-input');
   var seedError = document.getElementById('seed-error');
-  var companyInput = document.getElementById('company-input');
+  var accountInput = document.getElementById('account-input');
   var setupError = document.getElementById('setup-error');
   var idInputs = [].slice.call(document.querySelectorAll('#setup-form input.mekbay-id')); // the players' MekBay user IDs, Player 1 to 4
 
@@ -72,7 +72,7 @@
     setupForm.hidden = step !== 'setup';
     seedError.textContent = '';
     setupError.textContent = '';
-    if (step === 'seed') { input.focus(); input.select(); } else { companyInput.focus(); }
+    if (step === 'seed') { input.focus(); input.select(); } else { accountInput.focus(); }
   }
 
   function openDialog(step) {
@@ -95,7 +95,7 @@
   }
 
   input.addEventListener('input', function () { sanitize(); seedError.textContent = ''; });
-  companyInput.addEventListener('input', function () { setupError.textContent = ''; });
+  accountInput.addEventListener('input', function () { setupError.textContent = ''; });
   idInputs.forEach(function (i) { i.addEventListener('input', function () { setupError.textContent = ''; }); });
 
   document.getElementById('seed-random').addEventListener('click', function () {
@@ -136,20 +136,20 @@
 
   setupForm.addEventListener('submit', function (e) {
     e.preventDefault();
-    var company = companyInput.value.trim();
-    if (!company) { setupError.textContent = 'Name your company.'; return; }
+    var account = accountInput.value.trim();
+    if (!account) { setupError.textContent = 'Name your account.'; return; }
     // Each ID is optional here: a UUID saves it, a blank field keeps what is saved, and a ticked Forget box forgets it.
-    var body = 'company=' + encodeURIComponent(company);
+    var body = 'account=' + encodeURIComponent(account);
     for (var n = 0; n < idInputs.length; n++) {
       var id = idInputs[n].value.trim().toLowerCase();
       if (id && !UUID.test(id)) { setupError.textContent = "That doesn't look like a MekBay user ID (it should be a UUID)."; idInputs[n].focus(); return; }
       if (id) body += '&' + idInputs[n].name + '=' + encodeURIComponent(id);
     }
     [].forEach.call(setupForm.querySelectorAll('input.clear-id:checked'), function (c) { body += '&' + c.name + '=1'; });
-    post('/api/company', body)
+    post('/api/account', body)
       .then(function (res) {
         if (res.ok) { location.reload(); return; }
-        return res.text().then(function (t) { setupError.textContent = t.trim() || 'Could not save the company.'; });
+        return res.text().then(function (t) { setupError.textContent = t.trim() || 'Could not save the account.'; });
       }, function () { setupError.textContent = 'Could not reach the server.'; });
   });
 

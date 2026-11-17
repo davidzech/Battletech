@@ -15,5 +15,8 @@ var PilotNames = (function () {
     for (var i = 0; i < list.length; i++) if (list[i].file === file) return list[i].group;
     return '';
   }
-  return { random: random, groupOf: groupOf };
+  // A pool of BattleTech-sounding force names for the force-name box's placeholder.
+  var FORCES = ["Wolf's Dragoons", 'Kell Hounds', 'Gray Death Legion', 'Northwind Highlanders', 'Eridani Light Horse', "Snord's Irregulars", 'Black Widow Company', 'Lone Star Lancers', 'Outworlds Rangers', 'Crimson Talons', 'Iron Hand Company', 'Sable Wardens', 'Pyre Guard', 'Stormcrow Cadre'];
+  function randomForce() { return pick(FORCES); }
+  return { random: random, groupOf: groupOf, randomForce: randomForce };
 })();

@@ -1,10 +1,10 @@
 {{define "content"}}<p class="kicker">Campaign</p>
 <h1 class="bt-title">{{.Campaign.Label}}</h1>
 <section class="panel">{{if .Campaign.IntroHTML}}{{.Campaign.IntroHTML}}{{else}}<p class="muted">Campaign briefing coming soon.</p>{{end}}</section>
-{{if not .Seed}}<p class="muted">Choose a seed (top right) to track your company through this campaign.</p>
-{{else if not .Play.Configured}}<p class="muted">Name your company (top right) to start this campaign.</p>
+{{if not .Seed}}<p class="muted">Choose a seed (top right) to track your progress through this campaign.</p>
+{{else if not .Play.Configured}}<p class="muted">Name your account (top right) to start this campaign.</p>
 {{else if .Run.Started}}<section class="mekbay overview" id="force-overview" data-campaign="{{.Campaign.Slug}}" data-pilots="{{.PilotsJSON}}" data-abilities="{{.Abilities}}">
-<h2>Your force</h2>
+<h2>{{.Run.ForceLabel}}</h2>
 <ul class="roster">
 {{range .Pilots}}{{if not .Fallen}}<li class="roster-pilot" data-name="{{.Name}}"><img src="{{.PortraitURL}}" alt="" width="72" height="72"><div class="roster-name"><b>{{.Name}}</b><span>{{if .Rank}}{{.Rank}} &middot; {{end}}{{.Earned}} SP earned</span></div><div class="stat-boxes"><div class="stat-box"><span class="stat-label">Gunnery</span><span class="stat-value">{{.Gunnery}}</span></div><div class="stat-box"><span class="stat-label">Piloting</span><span class="stat-value">{{.Piloting}}</span></div><div class="stat-box"><span class="stat-label">Edge</span><span class="stat-value">{{.EdgeTokens}}</span></div><div class="stat-box"><span class="stat-label">Abilities</span><span class="stat-value">{{.Abilities}}</span></div></div></li>
 {{end}}{{end}}</ul>
@@ -24,7 +24,7 @@
 {{if or .Campaign.StartingMinMechs .Campaign.StartingBV}}<li>Your hangar holds {{if .Campaign.StartingMinMechs}}<b>at least {{.Campaign.StartingMinMechs}} mechs</b>{{end}}{{if and .Campaign.StartingMinMechs .Campaign.StartingBV}}, totalling {{end}}{{if .Campaign.StartingBV}}<b>up to {{.Campaign.StartingBVText}} BV</b>{{end}} (base BV, whatever the pilots&rsquo; skills).</li>
 {{end}}{{if .Campaign.StartingNamedPilots}}<li>You create <b>{{.Campaign.StartingNamedPilots}} named pilots</b>, each allocating <b>{{.Campaign.StartingPilotSP}} SP</b>.</li>
 {{end}}{{if .Campaign.StartingWarchest}}<li>Your warchest starts at <b>{{.Campaign.StartingWarchestText}} SP</b>.</li>
-{{end}}<li>You link a MekBay force holding the mechs {{.Play.CompanyName}} fields; the site copies it and manages the copy.</li>
+{{end}}<li>You name your force, then link a MekBay force holding the mechs it fields; the site copies it and manages the copy.</li>
 </ul>
 <p class="downloads"><button type="button" class="button" id="wizard-open">Start campaign&hellip;</button></p>
 </section>

@@ -310,7 +310,7 @@
         b.type = 'button';
         b.setAttribute('aria-pressed', n === playerCount ? 'true' : 'false');
         b.setAttribute('aria-label', n + (n === 1 ? ' player' : ' players'));
-        if (missingId(n) && n !== playerCount) { b.disabled = true; b.title = 'Player ' + missingId(n) + ' needs a MekBay user ID: add it under Company details.'; }
+        if (missingId(n) && n !== playerCount) { b.disabled = true; b.title = 'Player ' + missingId(n) + ' needs a MekBay user ID: add it under Account details.'; }
         b.addEventListener('click', function () {
           if (n === playerCount) return;
           playerCount = n;
@@ -389,7 +389,7 @@
       count.textContent = 'Step ' + (step + 1) + ' of ' + total;
     }
     var ok = !busy && !over() && !missingId(playerCount);
-    if (missingId(playerCount)) error.textContent = 'Player ' + missingId(playerCount) + ' needs a MekBay user ID: add it under Company details.';
+    if (missingId(playerCount)) error.textContent = 'Player ' + missingId(playerCount) + ' needs a MekBay user ID: add it under Account details.';
     if (!last) next.disabled = !ok || countOf(step) === 0;
     else { var allHave = true; for (var i = 0; i < playerCount; i++) if (countOf(i) === 0) allHave = false; go.disabled = !ok || !allHave; }
   }

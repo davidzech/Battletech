@@ -13,7 +13,7 @@
 <header class="top">
   <a class="brand" href="/"><span class="mark">&#9632;</span> Campaigns</a>
   <nav class="crumbs" aria-label="Breadcrumb">{{range $i, $c := .Crumbs}}{{if $i}}<span class="sep">/</span>{{end}}{{if $c.Menu}}<details class="crumb-menu"><summary>{{$c.Label}}</summary><ul>{{range $c.Menu}}<li><a href="{{.URL}}"{{if .Current}} aria-current="page"{{end}}>{{.Label}}</a></li>{{end}}</ul></details>{{else}}<a href="{{$c.URL}}">{{$c.Label}}</a>{{end}}{{end}}</nav>
-  <button id="seed-btn" type="button" class="chip" aria-haspopup="dialog">{{if not .Seed}}Set seed{{else if not .Play.Configured}}Finish setup{{else}}<span class="company">{{.Play.CompanyName}}</span>{{end}}</button>
+  <button id="seed-btn" type="button" class="chip" aria-haspopup="dialog">{{if not .Seed}}Set seed{{else if not .Play.Configured}}Finish setup{{else}}<span class="account">{{.Play.AccountName}}</span>{{end}}</button>
 </header>
 <main>
 {{template "content" .}}
@@ -31,15 +31,15 @@
     <p id="seed-error" class="form-error" role="alert"></p>
     <div class="form-actions">
       <button type="submit" class="button">Use this seed</button>
-      {{if .Seed}}<button type="button" id="open-setup">Company details</button>{{end}}
+      {{if .Seed}}<button type="button" id="open-setup">Account details</button>{{end}}
       <button type="button" id="seed-cancel">Not now</button>
     </div>
   </form>
   <form id="setup-form" autocomplete="off" novalidate hidden>
-    <h2>Name your company</h2>
-    <p>Every company has a name in the lore, like Wolf&rsquo;s Dragoons or the Kell Hounds. Yours is tracked under this seed, across every campaign it runs.</p>
-    <label for="company-input">Company name</label>
-    <input id="company-input" class="wide" name="company" value="{{.Play.CompanyName}}" maxlength="40" placeholder="Wolf&rsquo;s Dragoons" autocomplete="off" spellcheck="false" required>
+    <h2>Name your account</h2>
+    <p>Your account holds everything tracked under this seed, across every campaign you run. Call it whatever you like; each campaign gets its own force name when you start it.</p>
+    <label for="account-input">Account name</label>
+    <input id="account-input" class="wide" name="account" value="{{.Play.AccountName}}" maxlength="40" placeholder="Your account name" autocomplete="off" spellcheck="false" required>
     <fieldset class="mekbay-ids">
       <legend>Players&rsquo; MekBay user IDs <span class="optional">(needed to start)</span></legend>
       <p class="hint">Each player who plays a campaign needs their own MekBay user ID, so the force they take into a deploy is theirs in MekBay&rsquo;s multiplayer lobby. Starting a campaign with N players needs Players 1 to N saved. An ID works like a password for that account&rsquo;s MekBay forces, so only enter yours if you trust this site; it is never shown again. Your hangar and the OpFor are managed by the site and need none.</p>
@@ -52,7 +52,7 @@
     </fieldset>
     <p id="setup-error" class="form-error" role="alert"></p>
     <div class="form-actions">
-      <button type="submit" class="button">Save company</button>
+      <button type="submit" class="button">Save account</button>
       <button type="button" id="setup-back">Back</button>
       <button type="button" id="setup-cancel">Not now</button>
     </div>

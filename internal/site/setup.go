@@ -67,20 +67,26 @@ func parseHangar(raw string) (Hangar, error) {
 	return Hangar{URL: "https://mekbay.com/?instance=" + instance, Instance: instance}, nil
 }
 
-// companyName allows the kinds of names the lore uses ("Wolf's Dragoons", "1st Somerset Strikers", "Kell Hounds").
-var companyName = regexp.MustCompile(`^[\p{L}\p{N}][\p{L}\p{N} '’.,&:!()\-]*$`)
+// nameStyle allows the kinds of names the lore uses ("Wolf's Dragoons", "1st Somerset Strikers", "Kell Hounds").
+var nameStyle = regexp.MustCompile(`^[\p{L}\p{N}][\p{L}\p{N} '’.,&:!()\-]*$`)
 
-// parseCompanyName validates and tidies a company name: 1 to 40 characters, with runs of spaces collapsed.
-func parseCompanyName(raw string) (string, error) {
+// parseName validates and tidies a name: 1 to 40 characters, with runs of spaces collapsed. what ("account", "force") is only for the message.
+func parseName(raw, what string) (string, error) {
 	name := strings.Join(strings.Fields(raw), " ")
-	if n := utf8.RuneCountInString(name); n < 1 || n > 40 || !companyName.MatchString(name) {
-		return "", errors.New("Name your company with 1 to 40 letters, numbers and spaces (apostrophes, hyphens and a few marks are fine).")
+	if n := utf8.RuneCountInString(name); n < 1 || n > 40 || !nameStyle.MatchString(name) {
+		return "", errors.New("Name your " + what + " with 1 to 40 letters, numbers and spaces (apostrophes, hyphens and a few marks are fine).")
 	}
 	return name, nil
 }
 
-// setCompany saves the company's name and the players' optional MekBay user IDs for the visitor's playthrough.
-func (s *Server) setCompany(w http.ResponseWriter, r *http.Request) {
+// parseAccountName validates the account's name: whatever the player likes to call their account.
+func parseAccountName(raw string) (string, error) { return parseName(raw, "account") }
+
+// parseForceName validates a campaign's force name, e.g. "Wolf's Dragoons": each campaign's force has its own, to suit that campaign's theme.
+func parseForceName(raw string) (string, error) { return parseName(raw, "force") }
+
+// setAccount saves the account's name and the players' optional MekBay user IDs for the visitor's playthrough.
+func (s *Server) setAccount(w http.ResponseWriter, r *http.Request) {
 	if !sameOrigin(r) {
 		http.Error(w, "cross-origin request refused", http.StatusForbidden)
 		return
@@ -95,7 +101,7 @@ func (s *Server) setCompany(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
-	name, err := parseCompanyName(r.PostFormValue("company"))
+	name, err := parseAccountName(r.PostFormValue("account"))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -121,17 +127,17 @@ func (s *Server) setCompany(w http.ResponseWriter, r *http.Request) {
 	}
 	id := playthroughID(seed)
 	if _, err := s.store.EnsurePlaythrough(r.Context(), id); err != nil {
-		http.Error(w, "could not save company", http.StatusInternalServerError)
+		http.Error(w, "could not save account", http.StatusInternalServerError)
 		return
 	}
-	if err := s.store.SetCompanyName(r.Context(), id, name); err != nil {
-		http.Error(w, "could not save company", http.StatusInternalServerError)
+	if err := s.store.SetAccountName(r.Context(), id, name); err != nil {
+		http.Error(w, "could not save account", http.StatusInternalServerError)
 		return
 	}
 	for i := 0; i < maxPlayers; i++ {
 		if uids[i] != "" || clear[i] {
 			if err := s.store.SetPlayerAccount(r.Context(), id, i, uids[i]); err != nil {
-				http.Error(w, "could not save company", http.StatusInternalServerError)
+				http.Error(w, "could not save account", http.StatusInternalServerError)
 				return
 			}
 		}
@@ -169,7 +175,7 @@ func (s *Server) startCampaign(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !found || !pt.Configured() {
-		http.Error(w, "Name your company first.", http.StatusBadRequest)
+		http.Error(w, "Name your account first.", http.StatusBadRequest)
 		return
 	}
 	source, err := parseHangar(r.PostFormValue("hangar"))
@@ -201,6 +207,11 @@ func (s *Server) startCampaign(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	forceName, err := parseForceName(r.PostFormValue("force_name"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	players, err := parseStartingPlayers(r.PostFormValue("players"), c, pt.PlayerIDs)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -225,7 +236,7 @@ func (s *Server) startCampaign(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
-	if err := s.store.StartRunWithPilots(r.Context(), id, c.Slug, hangar, pilots, c.StartingWarchest, players); errors.Is(err, ErrAlreadyStarted) {
+	if err := s.store.StartRunWithPilots(r.Context(), id, c.Slug, hangar, pilots, c.StartingWarchest, players, forceName); errors.Is(err, ErrAlreadyStarted) {
 		http.Error(w, "This campaign has already been started.", http.StatusConflict)
 		return
 	} else if err != nil {

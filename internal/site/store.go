@@ -22,13 +22,13 @@ type Store struct {
 // Playthrough is one company's tracked run through the campaigns, identified by their seed.
 type Playthrough struct {
 	ID          string // hash of the seed, never the seed itself
-	CompanyName string // the company's name in the lore, e.g. "Wolf's Dragoons" ("" until named)
+	AccountName string // the company's name in the lore, e.g. "Wolf's Dragoons" ("" until named)
 	// PlayerIDs says which players (1 to 4) have a saved MekBay user ID. The IDs themselves are secret and never leave the store (see accounts.go).
 	PlayerIDs [maxPlayers]bool
 }
 
 // Configured reports whether the company has been named, which is what setting a seed up amounts to.
-func (p Playthrough) Configured() bool { return p.CompanyName != "" }
+func (p Playthrough) Configured() bool { return p.AccountName != "" }
 
 // CampaignRun is a playthrough's run through one campaign. It exists once the campaign has been started, and has
 // its own MekBay hangar.
@@ -38,7 +38,16 @@ type CampaignRun struct {
 	HangarInstance string // that copy's instance ID: the hangar the site reads and manages (see clone.go)
 	SourceURL      string // the MekBay link the player gave, which the copy was made from; kept so it can be imported again
 	Warchest       int    // the force's finances in SP; starts at the campaign's starting_warchest
+	ForceName      string // the campaign's force name, e.g. "Wolf's Dragoons", chosen when the campaign is started and editable on the Manage page ("" on a run from before it was asked)
 	Players        int    // how many players the company plays this campaign with: the Deploy wizard's default count (0 on a run from before it was asked)
+}
+
+// ForceLabel is the force's name, or a plain "Your force" for a run from before forces were named.
+func (r CampaignRun) ForceLabel() string {
+	if r.ForceName == "" {
+		return "Your force"
+	}
+	return r.ForceName
 }
 
 // WarchestText is the warchest with a thousands separator, e.g. "4,500".
@@ -197,6 +206,9 @@ func (s *Store) init() error {
 	if err := s.ensureColumn("campaign_runs", "players", "INTEGER NOT NULL DEFAULT 0"); err != nil {
 		return err
 	}
+	if err := s.ensureColumn("campaign_runs", "force_name", "TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
 	if err := s.ensureColumn("named_pilots", "portrait", "TEXT NOT NULL DEFAULT ''"); err != nil {
 		return fmt.Errorf("migrate schema: %w", err)
 	}
@@ -317,7 +329,7 @@ func (s *Store) EnsurePlaythrough(ctx context.Context, id string) (created bool,
 func (s *Store) Playthrough(ctx context.Context, id string) (p Playthrough, ok bool, err error) {
 	err = s.db.QueryRowContext(ctx,
 		s.q(`SELECT id, company_name FROM playthroughs WHERE id = ?`), id,
-	).Scan(&p.ID, &p.CompanyName)
+	).Scan(&p.ID, &p.AccountName)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Playthrough{}, false, nil
 	}
@@ -341,8 +353,8 @@ func (s *Store) updatePlaythrough(ctx context.Context, query string, args ...any
 	return nil
 }
 
-// SetCompanyName stores the company's name.
-func (s *Store) SetCompanyName(ctx context.Context, id, name string) error {
+// SetAccountName stores the company's name.
+func (s *Store) SetAccountName(ctx context.Context, id, name string) error {
 	return s.updatePlaythrough(ctx, `UPDATE playthroughs SET company_name = ? WHERE id = ?`, name, id)
 }
 
@@ -382,9 +394,9 @@ func (s *Store) RefundWarchest(ctx context.Context, playthroughID, campaign stri
 // Run loads a playthrough's run through a campaign; ok is false if the campaign hasn't been started.
 func (s *Store) Run(ctx context.Context, playthroughID, campaign string) (r CampaignRun, ok bool, err error) {
 	err = s.db.QueryRowContext(ctx,
-		s.q(`SELECT campaign, hangar_url, hangar_instance, source_url, warchest, players FROM campaign_runs WHERE playthrough_id = ? AND campaign = ?`),
+		s.q(`SELECT campaign, hangar_url, hangar_instance, source_url, warchest, players, force_name FROM campaign_runs WHERE playthrough_id = ? AND campaign = ?`),
 		playthroughID, campaign,
-	).Scan(&r.Campaign, &r.HangarURL, &r.HangarInstance, &r.SourceURL, &r.Warchest, &r.Players)
+	).Scan(&r.Campaign, &r.HangarURL, &r.HangarInstance, &r.SourceURL, &r.Warchest, &r.Players, &r.ForceName)
 	if errors.Is(err, sql.ErrNoRows) {
 		return CampaignRun{}, false, nil
 	}
@@ -399,6 +411,18 @@ func (s *Store) StartRun(ctx context.Context, playthroughID, campaign string, h 
 		     ON CONFLICT (playthrough_id, campaign) DO UPDATE SET hangar_url = excluded.hangar_url, hangar_instance = excluded.hangar_instance, source_url = excluded.source_url`),
 		playthroughID, campaign, h.URL, h.Instance, h.Source)
 	return err
+}
+
+// SetForceName renames a started campaign's force. sql.ErrNoRows if the campaign hasn't been started.
+func (s *Store) SetForceName(ctx context.Context, playthroughID, campaign, name string) error {
+	res, err := s.db.ExecContext(ctx, s.q(`UPDATE campaign_runs SET force_name = ? WHERE playthrough_id = ? AND campaign = ?`), name, playthroughID, campaign)
+	if err != nil {
+		return err
+	}
+	if n, err := res.RowsAffected(); err == nil && n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
 }
 
 // SetRunPlayers changes how many players the company plays a started campaign with, which is the count the Deploy wizard starts at.
@@ -637,7 +661,7 @@ var ErrAlreadyStarted = errors.New("this campaign has already been started")
 
 // StartRunWithPilots starts a campaign and creates its starting named pilots, all or nothing. It refuses
 // (ErrAlreadyStarted) if the campaign was already started, so submitting the wizard twice can't make duplicate pilots.
-func (s *Store) StartRunWithPilots(ctx context.Context, playthroughID, campaign string, h Hangar, pilots []NewPilot, warchest, players int) error {
+func (s *Store) StartRunWithPilots(ctx context.Context, playthroughID, campaign string, h Hangar, pilots []NewPilot, warchest, players int, forceName string) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -653,8 +677,8 @@ func (s *Store) StartRunWithPilots(ctx context.Context, playthroughID, campaign 
 		return ErrAlreadyStarted
 	}
 	if _, err := tx.ExecContext(ctx,
-		s.q(`INSERT INTO campaign_runs (playthrough_id, campaign, hangar_url, hangar_instance, source_url, warchest, players) VALUES (?, ?, ?, ?, ?, ?, ?)`),
-		playthroughID, campaign, h.URL, h.Instance, h.Source, warchest, players); err != nil {
+		s.q(`INSERT INTO campaign_runs (playthrough_id, campaign, hangar_url, hangar_instance, source_url, warchest, players, force_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`),
+		playthroughID, campaign, h.URL, h.Instance, h.Source, warchest, players, forceName); err != nil {
 		return err
 	}
 	for _, p := range pilots {

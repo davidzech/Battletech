@@ -90,7 +90,7 @@ func TestParseHangar(t *testing.T) {
 	}
 }
 
-func TestParseCompanyName(t *testing.T) {
+func TestParseAccountName(t *testing.T) {
 	for in, want := range map[string]string{
 		"Wolf's Dragoons":         "Wolf's Dragoons",
 		"  Kell   Hounds ":        "Kell Hounds",
@@ -100,13 +100,13 @@ func TestParseCompanyName(t *testing.T) {
 		"Gray Death Legion (GDL)": "Gray Death Legion (GDL)",
 		"Écureuils d'Or":          "Écureuils d'Or",
 	} {
-		if got, err := parseCompanyName(in); err != nil || got != want {
-			t.Errorf("parseCompanyName(%q) = %q, %v; want %q", in, got, err, want)
+		if got, err := parseAccountName(in); err != nil || got != want {
+			t.Errorf("parseAccountName(%q) = %q, %v; want %q", in, got, err, want)
 		}
 	}
 	for _, bad := range []string{"", "   ", "-Dragoons", "<script>alert(1)</script>", "Wolf\x00Dragoons", strings.Repeat("a", 41), "Dragoons/../"} {
-		if _, err := parseCompanyName(bad); err == nil {
-			t.Errorf("parseCompanyName(%q) should fail", bad)
+		if _, err := parseAccountName(bad); err == nil {
+			t.Errorf("parseAccountName(%q) should fail", bad)
 		}
 	}
 }
@@ -207,15 +207,15 @@ func TestSeedAndCampaignFlow(t *testing.T) {
 	}
 
 	// Naming the company needs a seed cookie and a sensible name.
-	if r := post(t, srv, "/api/company", url.Values{"uid_p1": {uidP1}, "company": {"Wolf's Dragoons"}}, nil, ""); r.StatusCode != http.StatusBadRequest {
+	if r := post(t, srv, "/api/account", url.Values{"uid_p1": {uidP1}, "account": {"Wolf's Dragoons"}}, nil, ""); r.StatusCode != http.StatusBadRequest {
 		t.Fatalf("company without a seed: got %d", r.StatusCode)
 	}
 	for _, bad := range []string{"", "   ", "<b>", strings.Repeat("a", 41)} {
-		if r := post(t, srv, "/api/company", url.Values{"uid_p1": {uidP1}, "company": {bad}}, cookie, ""); r.StatusCode != http.StatusBadRequest {
+		if r := post(t, srv, "/api/account", url.Values{"uid_p1": {uidP1}, "account": {bad}}, cookie, ""); r.StatusCode != http.StatusBadRequest {
 			t.Fatalf("bad company %q: got %d", bad, r.StatusCode)
 		}
 	}
-	if r := post(t, srv, "/api/company", url.Values{"uid_p1": {uidP1}, "company": {"Wolf's Dragoons"}}, cookie, "https://evil.example"); r.StatusCode != http.StatusForbidden {
+	if r := post(t, srv, "/api/account", url.Values{"uid_p1": {uidP1}, "account": {"Wolf's Dragoons"}}, cookie, "https://evil.example"); r.StatusCode != http.StatusForbidden {
 		t.Fatalf("cross-origin: got %d", r.StatusCode)
 	}
 	if pt, _, _ := store.Playthrough(ctx, id); pt.Configured() {
@@ -228,10 +228,10 @@ func TestSeedAndCampaignFlow(t *testing.T) {
 	}
 
 	// A good name is saved, tidied.
-	if r := post(t, srv, "/api/company", url.Values{"uid_p1": {uidP1}, "company": {"  Wolf's   Dragoons "}}, cookie, srv.URL); r.StatusCode != http.StatusNoContent {
+	if r := post(t, srv, "/api/account", url.Values{"uid_p1": {uidP1}, "account": {"  Wolf's   Dragoons "}}, cookie, srv.URL); r.StatusCode != http.StatusNoContent {
 		t.Fatalf("good company: got %d", r.StatusCode)
 	}
-	if pt, _, _ := store.Playthrough(ctx, id); !pt.Configured() || pt.CompanyName != "Wolf's Dragoons" {
+	if pt, _, _ := store.Playthrough(ctx, id); !pt.Configured() || pt.AccountName != "Wolf's Dragoons" {
 		t.Fatalf("company not saved correctly: %+v", pt)
 	}
 
@@ -245,8 +245,8 @@ func TestSeedAndCampaignFlow(t *testing.T) {
 		t.Fatalf("existing company should report configured: %q", out.String())
 	}
 	page := body(t, srv, "/", cookie)
-	if !strings.Contains(page, `<span class="company">Wolf&#39;s Dragoons</span></button>`) {
-		t.Fatalf("configured page should show the company name on the chip: %.1500s", page)
+	if !strings.Contains(page, `<span class="account">Wolf&#39;s Dragoons</span></button>`) {
+		t.Fatalf("configured page should show the account name on the chip: %.1500s", page)
 	}
 	if strings.Contains(page, "wolf…") {
 		t.Fatal("the header chip should not show the seed")
@@ -326,11 +326,11 @@ func TestPlayersMekBayIDsInTheCompanySettings(t *testing.T) {
 	cookie := post(t, srv, "/api/seed", url.Values{"seed": {"wolfpack2026"}}, nil, "").Cookies()[0]
 	id := playthroughID("wolfpack2026")
 	save := func(kv ...string) int {
-		v := url.Values{"company": {"Wolf's Dragoons"}}
+		v := url.Values{"account": {"Wolf's Dragoons"}}
 		for i := 0; i+1 < len(kv); i += 2 {
 			v.Set(kv[i], kv[i+1])
 		}
-		return post(t, srv, "/api/company", v, cookie, srv.URL).StatusCode
+		return post(t, srv, "/api/account", v, cookie, srv.URL).StatusCode
 	}
 	// The settings dialog has a field for each of the four players, and none for the OpFor or the hangar, which the site manages.
 	page := body(t, srv, "/", cookie)

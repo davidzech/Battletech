@@ -42,13 +42,13 @@ func storeContract(t *testing.T, s *Store) {
 	}
 
 	// The company name.
-	if err := s.SetCompanyName(ctx, id, "Wolf's Dragoons"); err != nil {
+	if err := s.SetAccountName(ctx, id, "Wolf's Dragoons"); err != nil {
 		t.Fatal(err)
 	}
-	if pt, _, _ := s.Playthrough(ctx, id); !pt.Configured() || pt.CompanyName != "Wolf's Dragoons" {
+	if pt, _, _ := s.Playthrough(ctx, id); !pt.Configured() || pt.AccountName != "Wolf's Dragoons" {
 		t.Fatalf("company not saved: %+v", pt)
 	}
-	if err := s.SetCompanyName(ctx, "no-such-playthrough", "X"); !errors.Is(err, sql.ErrNoRows) {
+	if err := s.SetAccountName(ctx, "no-such-playthrough", "X"); !errors.Is(err, sql.ErrNoRows) {
 		t.Fatalf("naming an unknown playthrough should fail with ErrNoRows, got %v", err)
 	}
 
@@ -196,7 +196,7 @@ func migrationContract(t *testing.T, s *Store, withOwner bool) {
 	if err != nil || !ok {
 		t.Fatalf("seed-a lost: ok=%v err=%v", ok, err)
 	}
-	if a.CompanyName != "" || a.Configured() {
+	if a.AccountName != "" || a.Configured() {
 		t.Errorf("companies start blank after migrating: %+v", a)
 	}
 	if _, ok, _ := s.Playthrough(ctx, "seed-b"); !ok {
@@ -211,7 +211,7 @@ func migrationContract(t *testing.T, s *Store, withOwner bool) {
 		t.Errorf("old operations should be dropped: %d rows, %v", ops, err)
 	}
 	// The migrated database works like a new one.
-	if err := s.SetCompanyName(ctx, "seed-a", "Wolf's Dragoons"); err != nil {
+	if err := s.SetAccountName(ctx, "seed-a", "Wolf's Dragoons"); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.StartRun(ctx, "seed-a", "refusalwar", Hangar{URL: goodHangarURL, Instance: goodInstance}); err != nil {

@@ -38,7 +38,7 @@ func (s *Server) pilotRequest(w http.ResponseWriter, r *http.Request) (pt Playth
 		return
 	}
 	if !found || !pt.Configured() {
-		http.Error(w, "Name your company first.", http.StatusBadRequest)
+		http.Error(w, "Name your account first.", http.StatusBadRequest)
 		return
 	}
 	if _, started, err := s.store.Run(r.Context(), pt.ID, c.Slug); err != nil {
