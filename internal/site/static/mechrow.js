@@ -174,10 +174,11 @@
       nameLine.appendChild(link);
     }
     // actions: [{ label, title, disabled, onClick }] adds buttons at the right end of the row (the Hangar's Rearm and Repair).
-    if (u.actions && u.actions.length) {
+    if ((u.actions && u.actions.length) || u.badge) {
       var box = el('span', 'mr-actions');
-      u.actions.forEach(function (a) {
-        var b = el('button', 'mr-action', a.label);
+      if (u.badge) box.appendChild(el('span', 'mr-badge', u.badge));
+      (u.actions || []).forEach(function (a) {
+        var b = el('button', 'mr-action' + (a.icon ? ' mr-action-icon' : ''), a.icon || a.label);
         b.type = 'button';
         if (a.title) b.title = a.title;
         b.disabled = !!a.disabled;
@@ -187,6 +188,19 @@
       });
       row.classList.add('has-actions');
       row.appendChild(box);
+    }
+    // onPick makes the whole row a button, for choosing it from a list: a click or Enter or Space calls it (the (i) link and the action buttons keep their
+    // own meaning), and picked tints it like a chosen unit in the deploy popup. badge is a small label at its right end ("Selected", "x2").
+    if (u.picked) row.classList.add('picked');
+    if (u.onPick) {
+      row.classList.add('has-pick');
+      row.tabIndex = 0;
+      row.setAttribute('role', 'button');
+      row.setAttribute('aria-pressed', u.picked ? 'true' : 'false');
+      row.addEventListener('click', function (e) { if (!e.target.closest('.mr-ext, .mr-actions button')) u.onPick(); });
+      row.addEventListener('keydown', function (e) {
+        if ((e.key === 'Enter' || e.key === ' ') && e.target === row) { e.preventDefault(); u.onPick(); }
+      });
     }
     // rowUrl (a https://mekbay.com/ link) makes the whole row a link opened in a new tab, e.g. the player's hangar with this unit selected.
     // The (i) after the name keeps its own target.

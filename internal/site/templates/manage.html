@@ -138,12 +138,15 @@
 <dialog id="purchase-dialog" class="wizard purchase" aria-labelledby="purchase-title" data-faction="{{.Campaign.AvailabilityFaction}}" data-era="{{.Campaign.AvailabilityEra}}">
   <form id="purchase-form" autocomplete="off">
     <h2 id="purchase-title">Purchase new unit</h2>
-    <p class="muted">Search MekBay&rsquo;s unit list, stage the units you want, then buy them. Each costs its base BV in SP, paid from the warchest, and joins your hangar.</p>
-    <label for="purchase-search">Search units</label>
-    <input type="search" id="purchase-search" placeholder="Search MekBay&rsquo;s units, e.g. Timber Wolf" autocomplete="off" aria-describedby="purchase-results">
-    {{if and .Campaign.AvailabilityFaction .Campaign.AvailabilityEra}}<label class="purchase-filter"><input type="checkbox" id="purchase-available" checked> Only units {{.Campaign.AvailabilityFaction}} fields in the {{.Campaign.AvailabilityEra}} era</label>{{end}}
+    <p class="muted">Search MekBay&rsquo;s unit list and click a unit to add it to your cart, and click it again to take it out. Each costs its base BV in SP, paid from the warchest, and joins your hangar.</p>
+    <div class="search-field">
+      <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input type="search" id="purchase-search" placeholder="Search units, e.g. Timber Wolf" autocomplete="off" aria-label="Search units" aria-describedby="purchase-results">
+      <button type="button" class="search-clear" id="purchase-clear" aria-label="Clear search" hidden>&times;</button>
+    </div>
+    {{if and .Campaign.AvailabilityFaction .Campaign.AvailabilityEra}}<label class="themed-check"><input type="checkbox" id="purchase-available" checked><span>Only units {{.Campaign.AvailabilityFaction}} fields in the {{.Campaign.AvailabilityEra}} era</span></label>{{end}}
     <div class="purchase-results" id="purchase-results" aria-live="polite"></div>
-    <p class="purchase-staged-head">Staged units</p>
+    <p class="purchase-staged-head" id="purchase-staged-head">Your cart</p>
     <div class="mech-list purchase-staged" id="purchase-staged"></div>
     <p id="purchase-cost" class="repair-cost"></p>
     <p id="purchase-error" class="form-error" role="alert"></p>
