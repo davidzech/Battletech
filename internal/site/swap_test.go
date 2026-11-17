@@ -35,23 +35,30 @@ func TestSwapPriceAndOptions(t *testing.T) {
 		t.Fatalf("expected a dearer and a cheaper variant: %+v", opts)
 	}
 	// Half the tonnage (20t: 10 SP) plus half the BV gained; a cheaper variant costs only the half tonnage.
-	if want := 10 + (up.BV-prime.BV)/2; up.Cost != want {
+	if want := roundUp10(10 + (up.BV-prime.BV)/2); up.Cost != want {
 		t.Errorf("up cost = %d, want %d", up.Cost, want)
 	}
 	if down.Cost != 10 {
 		t.Errorf("down cost = %d, want 10 and no refund", down.Cost)
 	}
 	// An odd tonnage rounds the half up.
-	if got := swapPrice(Unit{Tons: 55, BV: 1000}, Unit{BV: 1000}); got != 28 {
-		t.Errorf("55t swap = %d, want 28", got)
+	if got := swapPrice(Unit{Tons: 55, BV: 1000}, Unit{BV: 1000}); got != 30 {
+		t.Errorf("55t swap = %d, want 30 (27.5 rounded up to 28, then to 30)", got)
 	}
 	// Being an omnimech is an advantage over selling and buying: the swap is cheaper than the new BV less half the old one.
-	if up.Cost >= up.BV-prime.BV/2 {
-		t.Errorf("swapping (%d) should beat selling and rebuying (%d)", up.Cost, up.BV-prime.BV/2)
+	if up.Cost >= roundUp10(up.BV)-sellValue(prime.BV, true) {
+		t.Errorf("swapping (%d) should beat selling and rebuying (%d)", up.Cost, roundUp10(up.BV)-sellValue(prime.BV, true))
 	}
-	// And swapping up then selling a clean unit never makes money.
-	if sellValue(up.BV, true)-sellValue(prime.BV, true)-up.Cost >= 0 {
-		t.Error("swap up and sell must lose the half tonnage at least")
+	// And swapping up then selling a clean unit never makes money (checked over every omni variant pair in the catalog).
+	loadOmniVariants()
+	for _, list := range omniVariants {
+		for _, from := range list {
+			for _, o := range swapOptions(from) {
+				if profit := sellValue(o.BV, true) - sellValue(from.BV, true) - o.Cost; profit > 0 {
+					t.Errorf("%s -> %s: swapping up and selling would make %d SP", from.Name, o.Unit, profit)
+				}
+			}
+		}
 	}
 	// A unit that is not an omnimech has no variants to swap to.
 	grizzly, _ := unitByName("BMGrizzly")

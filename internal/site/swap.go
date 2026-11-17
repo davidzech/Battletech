@@ -55,13 +55,14 @@ func loadOmniVariants() {
 	})
 }
 
-// swapPrice is the SP to reconfigure an omnimech from one variant to another: half the tonnage (rounded up) and half the BV gained (rounded down).
+// swapPrice is the SP to reconfigure an omnimech from one variant to another: half the tonnage (rounded up) and half the BV gained (rounded down), rounded up to
+// the next 10.
 func swapPrice(from, to Unit) int {
 	cost := int(math.Ceil(from.Tons / 2))
 	if gain := to.BV - from.BV; gain > 0 {
 		cost += gain / 2
 	}
-	return cost
+	return roundUp10(cost)
 }
 
 // swapOptions lists the other variants of an omnimech, cheapest BV first; none for a unit that isn't an omnimech.

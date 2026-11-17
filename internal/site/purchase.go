@@ -101,7 +101,7 @@ func purchaseCost(ids []string) (int, error) {
 		if !ok || u.Type != "Mek" {
 			return 0, fmt.Errorf("%q is not a mech in the unit list.", id)
 		}
-		total += u.BV
+		total += roundUp10(u.BV)
 	}
 	return total, nil
 }

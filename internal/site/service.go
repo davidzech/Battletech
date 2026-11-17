@@ -79,7 +79,17 @@ func repairOptions(hu HangarUnit, c Condition, tons float64) []string {
 	return out
 }
 
-// repairCost is the SP a repair level costs for a unit of this tonnage and tech base.
+// All prices are in whole tens of SP: what the player pays rounds up to the next 10 (repairs, purchases, reconfiguring; rearming is already 10 a ton) and what the
+// player is paid rounds down (selling), so rounding never favours the player.
+
+// roundUp10 rounds a cost up to the next multiple of 10.
+func roundUp10(n int) int { return (n + 9) / 10 * 10 }
+
+// roundDown10 rounds a payout down to the previous multiple of 10.
+func roundDown10(n int) int { return n / 10 * 10 }
+
+// repairCost is the SP a repair level costs for a unit of this tonnage and tech base: tonnage times the level's multiplier, times 1.5 for Clan or Mixed tech
+// (the book rounds that up), then rounded up to the next 10.
 func repairCost(level string, tons float64, techBase string) int {
 	for _, l := range repairLevels {
 		if l.ID != level {
@@ -89,7 +99,7 @@ func repairCost(level string, tons float64, techBase string) int {
 		if strings.EqualFold(techBase, "Clan") || strings.EqualFold(techBase, "Mixed") {
 			cost *= 1.5
 		}
-		return int(math.Ceil(cost - 1e-9))
+		return roundUp10(int(math.Ceil(cost - 1e-9)))
 	}
 	return 0
 }

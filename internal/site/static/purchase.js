@@ -43,7 +43,7 @@
     Object.keys(u).forEach(function (k) { if (k !== 'gunnery' && k !== 'piloting' && k !== 'pilot') row[k] = u[k]; });
     return row;
   }
-  function total() { return staged.reduce(function (sum, s) { return sum + (Number(s.unit.bv) || 0); }, 0); }
+  function total() { return staged.reduce(function (sum, s) { return sum + Math.ceil((Number(s.unit.bv) || 0) / 10) * 10; }, 0); }
   function countOf(id) { return staged.filter(function (s) { return s.unit.unit === id; }).length; }
 
   // ---- Your cart

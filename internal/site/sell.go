@@ -20,13 +20,13 @@ func unitPristine(hu HangarUnit) bool {
 	return !hu.Damaged && !hu.Destroyed && hu.AmmoUsed == 0 && hu.AmmoBins == 0 && len(hu.Locations) == 0 && len(hu.Crits) == 0
 }
 
-// sellValue is the SP a unit with this base BV sells for: half its BV when pristine, otherwise half of that, rounding down each time.
+// sellValue is the SP a unit with this base BV sells for: half its BV when pristine, otherwise half of that, rounding down each time and then down to the nearest 10.
 func sellValue(bv int, pristine bool) int {
 	v := bv / 2
 	if !pristine {
 		v /= 2
 	}
-	return v
+	return roundDown10(v)
 }
 
 // removeUnitFromForce takes the unit with this ID out of a saved force (the decoded JSON of its `data`); false if it isn't there.
