@@ -1244,3 +1244,11 @@ dialog input.themed-box:focus, dialog .themed-check input:focus { outline: none;
 /* A bridge between a pilot and its card: the card's invisible edge reaches back across the gap to the pilot, so the pointer is never on neither of them. */
 .pill-tip.wide::before { content: ""; position: absolute; left: 0; right: 0; top: -14px; height: 14px; }
 .pill-tip.wide.above::before { top: auto; bottom: -14px; }
+
+/* The condition pills inside the unit hover card on the overview. */
+.unit-tip .tip-pills { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-bottom: 0.4rem; }
+
+/* An element whose hover card is open is highlighted with a yellow border, so the card has an obvious owner. */
+.roster-pilot { transition: border-color 0.12s; }
+.roster-pilot[tabindex]:hover, .roster-pilot.tip-open, .roster-pilot[tabindex]:focus-visible { border-color: var(--accent); outline: none; }
+.deploy-pilot.tip-open, .deploy-slot.filled.tip-open { border-color: var(--accent); }

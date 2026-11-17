@@ -3,16 +3,20 @@
 <section class="panel">{{if .Campaign.IntroHTML}}{{.Campaign.IntroHTML}}{{else}}<p class="muted">Campaign briefing coming soon.</p>{{end}}</section>
 {{if not .Seed}}<p class="muted">Choose a seed (top right) to track your company through this campaign.</p>
 {{else if not .Play.Configured}}<p class="muted">Name your company (top right) to start this campaign.</p>
-{{else if .Run.Started}}<section class="mekbay overview" id="force-overview" data-campaign="{{.Campaign.Slug}}">
+{{else if .Run.Started}}<section class="mekbay overview" id="force-overview" data-campaign="{{.Campaign.Slug}}" data-pilots="{{.PilotsJSON}}" data-abilities="{{.Abilities}}">
 <h2>Your force</h2>
 <ul class="roster">
-{{range .Pilots}}{{if not .Fallen}}<li class="roster-pilot"><img src="{{.PortraitURL}}" alt="" width="72" height="72"><div class="roster-name"><b>{{.Name}}</b><span>{{if .Rank}}{{.Rank}} &middot; {{end}}{{.Earned}} SP earned</span></div><div class="stat-boxes"><div class="stat-box"><span class="stat-label">Gunnery</span><span class="stat-value">{{.Gunnery}}</span></div><div class="stat-box"><span class="stat-label">Piloting</span><span class="stat-value">{{.Piloting}}</span></div><div class="stat-box"><span class="stat-label">Edge</span><span class="stat-value">{{.EdgeTokens}}</span></div><div class="stat-box"><span class="stat-label">Abilities</span><span class="stat-value">{{.Abilities}}</span></div></div></li>
+{{range .Pilots}}{{if not .Fallen}}<li class="roster-pilot" data-name="{{.Name}}"><img src="{{.PortraitURL}}" alt="" width="72" height="72"><div class="roster-name"><b>{{.Name}}</b><span>{{if .Rank}}{{.Rank}} &middot; {{end}}{{.Earned}} SP earned</span></div><div class="stat-boxes"><div class="stat-box"><span class="stat-label">Gunnery</span><span class="stat-value">{{.Gunnery}}</span></div><div class="stat-box"><span class="stat-label">Piloting</span><span class="stat-value">{{.Piloting}}</span></div><div class="stat-box"><span class="stat-label">Edge</span><span class="stat-value">{{.EdgeTokens}}</span></div><div class="stat-box"><span class="stat-label">Abilities</span><span class="stat-value">{{.Abilities}}</span></div></div></li>
 {{end}}{{end}}</ul>
 <div id="force-units" class="force-units" aria-live="polite" data-cached="{{.ForceJSON}}"><p class="muted">Reading your hangar&hellip;</p></div>
 <p class="downloads"><a class="button" href="/{{.Campaign.Slug}}/manage/">Manage force</a></p>
 </section>
+<script src="/static/mechrow.js" defer></script>
 <script src="/static/forcesummary.js" defer></script>
 <script src="/static/force.js" defer></script>
+<script src="/static/abilitycard.js" defer></script>
+<script src="/static/pilotcard.js" defer></script>
+<script src="/static/roster.js" defer></script>
 {{else}}<section class="mekbay" id="campaign-run" data-campaign="{{.Campaign.Slug}}">
 <h2>Start this campaign</h2>
 <p class="muted">How {{.Campaign.Label}} begins:</p>

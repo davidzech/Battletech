@@ -38,7 +38,16 @@
     if (u.model) names.appendChild(el('span', 'tip-model', u.model));
     head.appendChild(names);
     tip.appendChild(head);
-    if (u.condition === 'truly') tip.appendChild(el('span', 'tag bad', 'Truly destroyed'));
+    // The unit's state as the same pills the Hangar rows use (mechrow.js: the worst of armor damage, structure damage, crippled, destroyed or truly destroyed,
+    // and a separate Ammo expended pill); a page without mechrow.js, or a unit with no worked-out condition, keeps the plain tag.
+    var conditions = typeof MechRow !== 'undefined' ? MechRow.CONDITIONS : null;
+    var cond = conditions && !u.unknown && u.condition ? conditions[u.condition] : null;
+    if (cond || u.ammoExpended) {
+      var pills = el('div', 'tip-pills');
+      if (cond) pills.appendChild(el('span', 'mr-chip ' + cond.cls, cond.label));
+      if (u.ammoExpended) pills.appendChild(el('span', 'mr-chip ammo', 'Ammo expended'));
+      tip.appendChild(pills);
+    } else if (u.condition === 'truly') tip.appendChild(el('span', 'tag bad', 'Truly destroyed'));
     else if (u.destroyed) tip.appendChild(el('span', 'tag bad', 'Destroyed'));
     else if (u.damaged) tip.appendChild(el('span', 'tag', 'Damaged'));
     var facts = el('dl', 'tip-facts');

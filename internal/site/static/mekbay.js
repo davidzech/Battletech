@@ -118,66 +118,6 @@
   // Gunnery, Piloting, Edge tokens and Edge abilities. Hovering it shows the styled card with the full names.
   var STATS = [['gunnery', 'GUN', 'Gunnery'], ['piloting', 'PIL', 'Piloting'], ['edgeTokens', 'EDGE', 'Edge tokens'], ['abilities', 'ABIL', 'Edge abilities']];
   function statSummary(p) { return STATS.map(function (s) { return s[2] + ' ' + (p[s[0]] || 0); }).join(', '); }
-  var ARROW = '<svg viewBox="0 0 16 10" width="16" height="10" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 5h13M10 1l4 4-4 4"/></svg>';
-  // One of the Manage page's stat boxes: the level, the next level, SP progress and its bar (same classes, so the same look).
-  function statBox(c) {
-    var box = el('div', 'stat-box');
-    box.appendChild(el('span', 'stat-label', c.label));
-    var main = el('span', 'stat-main'), wrap = el('span', 'stat-valwrap');
-    wrap.appendChild(el('span', 'stat-value', String(c.level)));
-    if (c.hasNext) {
-      var to = el('span', 'stat-to'), arrow = el('span', 'stat-arrow');
-      arrow.innerHTML = ARROW; // a constant above, never data
-      to.appendChild(arrow);
-      to.appendChild(el('b', null, String(c.nextLvl)));
-      wrap.appendChild(to);
-    }
-    main.appendChild(wrap);
-    box.appendChild(main);
-    box.appendChild(el('span', 'stat-next', c.hasNext ? c.sp + '/' + c.nextAt + ' SP' : 'max'));
-    var bar = el('span', 'stat-bar'), fill = el('span');
-    fill.style.width = (c.percent || 0) + '%';
-    bar.appendChild(fill);
-    box.appendChild(bar);
-    return box;
-  }
-  // The hover card for a pilot: portrait, name, rank and SP earned, the four stat boxes and the Edge abilities they have chosen.
-  function pilotCard(p) {
-    var card = el('div', 'deploy-pilot-card');
-    var head = el('div', 'dpc-head');
-    head.appendChild(portrait(p));
-    var who = el('span');
-    who.appendChild(el('b', 'dpc-name', p.name));
-    var sub = el('span', 'dpc-sub');
-    if (p.rank) sub.appendChild(el('span', 'dpc-rank', p.rank));
-    var sp = el('span', 'dpc-sp');
-    sp.appendChild(document.createTextNode('SP earned '));
-    sp.appendChild(el('b', null, String(p.earned || 0)));
-    sub.appendChild(sp);
-    who.appendChild(sub);
-    head.appendChild(who);
-    card.appendChild(head);
-    var boxes = el('div', 'stat-boxes');
-    (p.columns || []).forEach(function (c) { boxes.appendChild(statBox(c)); });
-    card.appendChild(boxes);
-    var skills = el('div', 'edge-skills');
-    skills.appendChild(el('span', 'edge-skills-label', 'Edge abilities'));
-    if ((p.learned || []).length) {
-      p.learned.forEach(function (a) {
-        var chip = el('span', 'skill-chip', a.name);
-        chip.tabIndex = 0;
-        if (typeof AbilityCard !== 'undefined') AbilityCard.attach(chip, a.id); // hovering one shows the ability card, on top of this card
-        skills.appendChild(chip);
-      });
-    }
-    else skills.appendChild(el('span', 'dpc-none', 'None learned yet'));
-    card.appendChild(skills);
-    return card;
-  }
-  function attachPilotCard(node, p) {
-    if (typeof MechRow.attachTip === 'function') MechRow.attachTip(node, { focusable: false, delay: 500, interactive: true, build: function () { return pilotCard(p); } });
-  }
-
   function statStrip(p) {
     var strip = el('span', 'deploy-stats');
     STATS.forEach(function (s) {
@@ -214,7 +154,7 @@
       top.appendChild(text);
       chip.appendChild(top);
       chip.appendChild(statStrip(p));
-      attachPilotCard(chip, p);
+      if (typeof PilotCard !== 'undefined') PilotCard.attach(chip, p);
       chip.addEventListener('click', function () { held = held === p.name ? '' : p.name; render(); });
       makeDraggable(chip, p.name);
       trayList.appendChild(chip);
@@ -252,7 +192,7 @@
       top.appendChild(x);
       box.appendChild(top);
       box.appendChild(statStrip(p));
-      attachPilotCard(box, p);
+      if (typeof PilotCard !== 'undefined') PilotCard.attach(box, p);
       makeDraggable(box, p.name);
     } else {
       box.appendChild(el('span', 'deploy-slot-empty', held ? 'Put ' + held + ' here' : 'Drop a pilot here'));

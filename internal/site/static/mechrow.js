@@ -57,6 +57,7 @@
   function cancelHide() { clearTimeout(hideTimer); hideTimer = null; }
   function hideNow() {
     cancelHide();
+    if (tipOwner) tipOwner.classList.remove('tip-open');
     tipOwner = null;
     tipInteractive = false;
     if (!tip) return;
@@ -101,7 +102,9 @@
         content.lines.forEach(function (l) { dl.appendChild(el('dt', null, l.label)); dl.appendChild(el('dd', null, l.value)); });
         t.appendChild(dl);
       }
+      if (tipOwner && tipOwner !== pill) tipOwner.classList.remove('tip-open');
       tipOwner = pill;
+      pill.classList.add('tip-open'); // the element whose card is open stays highlighted, even while the pointer is on the card
       tipInteractive = !!content.interactive;
       t.hidden = false;
       if (canPopover && !t.matches(':popover-open')) t.showPopover();
@@ -273,5 +276,5 @@
     return row;
   }
 
-  window.MechRow = { build: build, attachTip: attachTip, hideTip: function () { hideNow(); } };
+  window.MechRow = { build: build, attachTip: attachTip, hideTip: function () { hideNow(); }, CONDITIONS: CONDITIONS };
 })();

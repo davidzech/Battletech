@@ -180,3 +180,14 @@ func TestDeployCarriesPilotAssignments(t *testing.T) {
 		t.Errorf("no assignments: %d", r.StatusCode)
 	}
 }
+
+// The campaign overview carries the pilots and the ability catalog for the hover card on each pilot in "Your force".
+func TestOverviewCarriesPilotCards(t *testing.T) {
+	srv, _, cookie := startedCompany(t)
+	page := body(t, srv, "/refusalwar/", cookie)
+	for _, want := range []string{`id="force-overview"`, `data-pilots="`, `data-abilities="`, `data-name="Alrek"`, `data-name="Katarina"`, "edgeTokens", "/static/pilotcard.js", "/static/roster.js", "/static/abilitycard.js"} {
+		if !strings.Contains(page, want) {
+			t.Errorf("the overview is missing %q", want)
+		}
+	}
+}
