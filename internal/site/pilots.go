@@ -430,6 +430,27 @@ func (s *Server) setPilotTotal(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// maxWarchest keeps a typo from setting an absurd amount of funds.
+const maxWarchest = 100000000
+
+// setWarchest overrides the force's funds (Advanced Management).
+func (s *Server) setWarchest(w http.ResponseWriter, r *http.Request) {
+	pt, c, ok := s.pilotRequest(w, r)
+	if !ok {
+		return
+	}
+	funds, err := strconv.Atoi(strings.TrimSpace(r.PostFormValue("funds")))
+	if err != nil || funds < 0 || funds > maxWarchest {
+		http.Error(w, fmt.Sprintf("The funds must be a whole number from 0 to %d.", maxWarchest), http.StatusBadRequest)
+		return
+	}
+	if err := s.store.SetWarchest(r.Context(), pt.ID, c.Slug, funds); err != nil {
+		http.Error(w, "could not save the funds", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // renamePilot changes a pilot's name, to correct a typo or a mix-up.
 func (s *Server) renamePilot(w http.ResponseWriter, r *http.Request) {
 	pt, c, ok := s.pilotRequest(w, r)

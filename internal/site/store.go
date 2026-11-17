@@ -325,6 +325,18 @@ func (s *Store) SetCompanyName(ctx context.Context, id, name string) error {
 	return s.updatePlaythrough(ctx, `UPDATE playthroughs SET company_name = ? WHERE id = ?`, name, id)
 }
 
+// SetWarchest overrides the force's funds (SP), to correct a mistake or a mismatch. ErrNoRows means the campaign isn't started.
+func (s *Store) SetWarchest(ctx context.Context, playthroughID, campaign string, funds int) error {
+	res, err := s.db.ExecContext(ctx, s.q(`UPDATE campaign_runs SET warchest = ? WHERE playthrough_id = ? AND campaign = ?`), funds, playthroughID, campaign)
+	if err != nil {
+		return err
+	}
+	if n, err := res.RowsAffected(); err == nil && n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
 // SetOwnerUID stores the MekBay owner UID that puts a playthrough into modify mode; an empty uid turns it off.
 func (s *Store) SetOwnerUID(ctx context.Context, id, uid string) error {
 	return s.updatePlaythrough(ctx, `UPDATE playthroughs SET owner_uid = ? WHERE id = ?`, uid, id)

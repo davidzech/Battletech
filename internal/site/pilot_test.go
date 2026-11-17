@@ -1431,3 +1431,31 @@ func TestRecruitNewPilot(t *testing.T) {
 		t.Errorf("the Recruit button belongs above the Memorial (%d, %d)", i, j)
 	}
 }
+
+// Advanced Management can set the warchest's funds; bad amounts and other origins are refused.
+func TestSetWarchest(t *testing.T) {
+	srv, store, cookie := startedCompany(t)
+	ctx := context.Background()
+	id := playthroughID("wolfpack2026")
+	form := func(funds string) url.Values { return url.Values{"campaign": {"refusalwar"}, "funds": {funds}} }
+	if got := post(t, srv, "/api/warchest", form("100"), cookie, "https://evil.example").StatusCode; got != http.StatusForbidden {
+		t.Errorf("cross-origin: %d", got)
+	}
+	for _, bad := range []string{"", "-1", "12.5", "abc", "999999999999"} {
+		if got := post(t, srv, "/api/warchest", form(bad), cookie, srv.URL).StatusCode; got != http.StatusBadRequest {
+			t.Errorf("funds %q: %d, want 400", bad, got)
+		}
+	}
+	if got := post(t, srv, "/api/warchest", form("1234"), cookie, srv.URL).StatusCode; got != http.StatusNoContent {
+		t.Fatalf("set funds: %d", got)
+	}
+	if run, _, _ := store.Run(ctx, id, "refusalwar"); run.Warchest != 1234 {
+		t.Errorf("warchest %d, want 1234", run.Warchest)
+	}
+	page := body(t, srv, "/refusalwar/manage/", cookie)
+	for _, want := range []string{`id="warchest-form"`, `value="1234"`, "1,234 SP"} {
+		if !strings.Contains(page, want) {
+			t.Errorf("the Manage page is missing %q", want)
+		}
+	}
+}

@@ -932,6 +932,9 @@ details.more > summary:focus-visible { outline: none; }
 .rec-sp { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.7rem; padding-top: 0.35rem; border-top: 1px solid var(--line); font-size: 0.85rem; color: var(--muted); }
 .rec-sp-text { flex: 1 1 14rem; }
 .rec-sp-text b { color: var(--text); }
+.rec-warchest { display: flex; flex-wrap: wrap; align-items: end; gap: 0.6rem; margin: 0.8rem 0; padding: 0.6rem 0.5rem; background: var(--bg); border: 1px solid var(--line); }
+.rec-warchest label { display: grid; gap: 0.3rem; font: 700 0.75rem var(--display); letter-spacing: 0.08em; text-transform: uppercase; }
+.rec-warchest input { width: 10rem; }
 .rec-total-form { display: flex; flex-wrap: wrap; align-items: end; gap: 0.6rem; }
 .rec-total-form[hidden] { display: none; }
 .rec-total-form label { display: grid; gap: 0.3rem; font: 700 0.75rem var(--display); letter-spacing: 0.08em; text-transform: uppercase; }

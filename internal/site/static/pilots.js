@@ -566,6 +566,20 @@
     records.addEventListener('click', function (e) { if (e.target === records) records.close(); });
     records.addEventListener('close', function () { if (recDirty) location.reload(); });
 
+    // The warchest: set the force's funds directly.
+    var wcForm = document.getElementById('warchest-form');
+    if (wcForm) wcForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var input = document.getElementById('warchest-input'), save = document.getElementById('warchest-save');
+      recError.textContent = '';
+      save.disabled = true;
+      post('/api/warchest', 'funds=' + encodeURIComponent(input.value)).then(function (res) {
+        save.disabled = false;
+        if (res.ok) { recDirty = true; save.textContent = 'Saved'; setTimeout(function () { save.textContent = 'Set funds'; }, 1500); return; }
+        return res.text().then(function (t) { recError.textContent = t.trim() || 'Something went wrong.'; });
+      }, function () { save.disabled = false; recError.textContent = 'Could not reach the server.'; });
+    });
+
     // Posts an action for one pilot. onOk runs when the server accepted it; the button is disabled meanwhile.
     function recAct(url, li, button, extra, onOk) {
       recError.textContent = '';
