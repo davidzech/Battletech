@@ -51,3 +51,7 @@ func accountUID(seed, slot string) string {
 	}
 	return MekBayUID(seed, slot)
 }
+
+// SiteAccountUID is the MekBay user ID the site uses for the visitor's own hangar copy (Player 1's account), for the Manage page's advanced-users note. The visitor
+// already holds the seed it is derived from, so showing it to them reveals nothing new; it is never shown to anyone else or put anywhere else.
+func (p Page) SiteAccountUID() string { return accountUID(p.Seed, SlotPlayer1) }
