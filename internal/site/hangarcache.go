@@ -102,6 +102,12 @@ func (p Page) PilotsJSON() string {
 
 // DeployJSON is the cached hangar for the scenario's deploy popup ("" if there is none yet).
 func (p Page) DeployJSON() string {
+	if p.Scenario != nil && p.Scenario.provides() {
+		// The scenario's own mechs need no read from MekBay, so the popup can show them at once.
+		data := deployData(providedForce(p.Scenario), p.Scenario.BVLimit, p.Run.Owned(), p.MekBayOp != "")
+		data["provided"] = true
+		return cachedJSON(data, time.Now())
+	}
 	if p.CachedHangar == nil || p.Scenario == nil {
 		return ""
 	}

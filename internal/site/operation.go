@@ -232,7 +232,7 @@ func (s *Server) hangarJSON(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	h, err := s.mekbay.ReadHangar(r.Context(), run.HangarInstance)
+	h, err := s.scenarioHangar(r.Context(), run, sc)
 	if err != nil {
 		log.Printf("read hangar for %s: %v", sc.ID, err)
 		http.Error(w, err.Error(), http.StatusBadGateway)
@@ -243,8 +243,11 @@ func (s *Server) hangarJSON(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not load operation", http.StatusInternalServerError)
 		return
 	}
-	s.cacheHangar(r.Context(), pt.ID, c.Slug, run.HangarInstance, h)
+	if !sc.provides() { // the scenario's own mechs are not the hangar, so they are never cached as it
+		s.cacheHangar(r.Context(), pt.ID, c.Slug, run.HangarInstance, h)
+	}
 	out := deployData(h, sc.BVLimit, run.Owned(), hasOp)
+	out["provided"] = sc.provides()
 	if hasOp {
 		out["url"] = OperationURL(op.OperationID)
 	}
@@ -275,7 +278,7 @@ func (s *Server) deploy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ids := r.PostForm["units"]
-	h, err := s.mekbay.ReadHangar(r.Context(), run.HangarInstance)
+	h, err := s.scenarioHangar(r.Context(), run, sc)
 	if err != nil {
 		log.Printf("read hangar for %s: %v", sc.ID, err)
 		http.Error(w, err.Error(), http.StatusBadGateway)

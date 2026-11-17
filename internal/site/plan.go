@@ -103,7 +103,7 @@ func (s *Server) deployPlan(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, msg, http.StatusBadRequest)
 		return
 	}
-	h, err := s.mekbay.ReadHangar(r.Context(), run.HangarInstance)
+	h, err := s.scenarioHangar(r.Context(), run, sc)
 	if err != nil {
 		log.Printf("read hangar for the plan: %v", err)
 		http.Error(w, err.Error(), http.StatusBadGateway)

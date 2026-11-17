@@ -44,6 +44,7 @@
   var minPlayers = Math.min(maxPlayers, Math.max(1, parseInt(dialog.dataset.minPlayers, 10) || 1));
 
   var units = [];         // the hangar's mechs, as the server describes them
+  var provided = false;   // the scenario provides its own mechs in place of the hangar
   var original = {};      // unit ID -> the named pilot the hangar has in it now, if any
   var plans = [];         // per player: { selected: { unitId: true }, crew: { unitId: pilot name } }
   // The count the company chose when it started the campaign is where every deploy begins (the picker can change it for one deploy); a run from before that was
@@ -468,6 +469,8 @@
         if (original[u.id]) plan(0).crew[u.id] = original[u.id];
       });
     }
+    provided = !!data.provided;
+    document.getElementById('deploy-provided').hidden = !provided;
     status.hidden = units.length > 0;
     if (!units.length) status.textContent = 'Your hangar force has no mechs in it yet. Add some in MekBay first.';
     render();

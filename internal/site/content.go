@@ -18,22 +18,25 @@ import (
 
 // Scenario is one Scenario_NNN folder.
 type Scenario struct {
-	Dir          string // absolute path
-	Slug         string // URL segment, e.g. "scenario_000"
-	ID           string // from front matter
-	Number       string // "000"
-	Title        string
-	Map          string
-	Planet       string
-	Images       []string
-	Readout      []ReadoutRow  // planet readout overlaid on the first image
-	Waypoints    []Waypoint    // from the `## Waypoints` section of Setup.md
-	Forces       []ForceFile   // downloadable .mul files from front matter
-	BVLimit      int           // most battle value the player may deploy (front matter bv_limit); 0 means no limit
-	Next         string        // id of the default next scenario
-	BriefingHTML template.HTML // the fluff: a leading blockquote in Setup.md
-	SetupHTML    template.HTML
-	OutcomeHTML  template.HTML
+	Dir       string // absolute path
+	Slug      string // URL segment, e.g. "scenario_000"
+	ID        string // from front matter
+	Number    string // "000"
+	Title     string
+	Map       string
+	Planet    string
+	Images    []string
+	Readout   []ReadoutRow // planet readout overlaid on the first image
+	Waypoints []Waypoint   // from the `## Waypoints` section of Setup.md
+	Forces    []ForceFile  // downloadable .mul files from front matter
+	// ProvidedUnits, when set (front matter provided_units: MekBay unit IDs), replace the player's hangar for this scenario: the players pick from this fixed pool
+	// instead, for story reasons. The units exist only for this scenario and never touch the hangar (see provided.go).
+	ProvidedUnits []string
+	BVLimit       int           // most battle value the player may deploy (front matter bv_limit); 0 means no limit
+	Next          string        // id of the default next scenario
+	BriefingHTML  template.HTML // the fluff: a leading blockquote in Setup.md
+	SetupHTML     template.HTML
+	OutcomeHTML   template.HTML
 }
 
 // ReadoutRow is one line of the technical readout drawn over a scenario's image.
@@ -154,6 +157,7 @@ type frontData struct {
 	Readout    []map[string]string `yaml:"readout"`
 	Forces     map[string]string   `yaml:"forces"`
 	BVLimit    int                 `yaml:"bv_limit"`
+	Provided   []string            `yaml:"provided_units"`
 	MinPlayers int                 `yaml:"min_players"`
 	MaxPlayers int                 `yaml:"max_players"`
 	// StartingNamedPilots is how many named pilots a company must name to begin the campaign (Intro.md).
@@ -256,22 +260,23 @@ func (l Library) load(name string) (*Campaign, bool) {
 		setupBody, waypoints := splitWaypoints(setupBody)
 		outcome, outcomeBody := readMarkdown(filepath.Join(sdir, "Outcome.md"))
 		s := Scenario{
-			Dir:          sdir,
-			Slug:         strings.ToLower(e.Name()),
-			ID:           setup.ID,
-			Number:       m[1],
-			Title:        setup.Title,
-			Map:          setup.Map,
-			Planet:       setup.Planet,
-			Images:       setup.Images,
-			Readout:      readoutRows(setup.Readout),
-			Waypoints:    waypoints,
-			Forces:       forceFiles(setup.Forces),
-			BVLimit:      setup.BVLimit,
-			Next:         outcome.DefaultNext,
-			BriefingHTML: renderBriefing(briefing),
-			SetupHTML:    renderMarkdown(setupBody, false),
-			OutcomeHTML:  renderMarkdown(outcomeBody, true),
+			Dir:           sdir,
+			Slug:          strings.ToLower(e.Name()),
+			ID:            setup.ID,
+			Number:        m[1],
+			Title:         setup.Title,
+			Map:           setup.Map,
+			Planet:        setup.Planet,
+			Images:        setup.Images,
+			Readout:       readoutRows(setup.Readout),
+			Waypoints:     waypoints,
+			Forces:        forceFiles(setup.Forces),
+			BVLimit:       setup.BVLimit,
+			ProvidedUnits: setup.Provided,
+			Next:          outcome.DefaultNext,
+			BriefingHTML:  renderBriefing(briefing),
+			SetupHTML:     renderMarkdown(setupBody, false),
+			OutcomeHTML:   renderMarkdown(outcomeBody, true),
 		}
 		if s.ID == "" {
 			s.ID = s.Slug
