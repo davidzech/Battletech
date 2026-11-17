@@ -575,7 +575,7 @@ dialog .link-field .refresh:disabled { opacity: 0.35; cursor: not-allowed; }
 }
 
 /* Deploy popup: the player's hangar as a pick list with a BV meter. */
-dialog.deploy { width: min(54rem, calc(100vw - 2rem)); }
+dialog.deploy { width: min(68rem, calc(100vw - 2rem)); }
 .deploy-meter { margin: 0.5rem 0 0; font: 700 1.1rem var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
 .deploy-meter.over { color: #ff7a59; }
 .deploy-list { list-style: none; margin: 0.75rem 0; padding: 0; max-height: 50vh; overflow-y: auto; border-top: 1px solid var(--line); }
@@ -607,7 +607,7 @@ dialog .deploy-unit label {
 }
 /* The role runs down the band on one line; a label longer than "Missile Boat" is scaled down in mechrow.js, never wrapped. */
 .mr-role { display: flex; align-items: center; justify-content: center; overflow: hidden; color: var(--accent-ink); background: var(--accent); }
-.mr-role > span { padding: 0.12rem 0; white-space: nowrap; font: 700 0.54rem/1.1 var(--display); letter-spacing: 0.05em; text-align: center; text-transform: uppercase; writing-mode: vertical-rl; transform: rotate(180deg); }
+.mr-role > span { padding: 0.12rem 0; white-space: nowrap; font: 700 calc(var(--role-size, 0.54rem) * var(--role-scale, 1))/1.1 var(--display); letter-spacing: 0.05em; text-align: center; text-transform: uppercase; writing-mode: vertical-rl; transform: rotate(180deg); }
 .mr-icon { align-self: center; justify-self: center; width: 3.1rem; height: auto; max-height: 3.3rem; object-fit: contain; }
 .mr-main { display: grid; align-content: center; gap: 0.05rem; min-width: 0; padding: 0.3rem 0.6rem 0.3rem 0.2rem; }
 .mr-model { min-height: 1.1em; font-size: 0.72rem; line-height: 1.1; color: var(--muted); }
@@ -1222,3 +1222,9 @@ dialog button.deploy-slot-x:hover:not(:disabled), dialog button.deploy-slot-x:fo
 .deploy-unit.has-slot .mr-chip { padding: 0.14rem 0.6rem; font-size: 0.95rem; }
 .deploy-unit.has-slot .mr-chip.cond-armor, .deploy-unit.has-slot .mr-chip.cond-structure, .deploy-unit.has-slot .mr-chip.cond-crippled, .deploy-unit.has-slot .mr-chip.cond-destroyed, .deploy-unit.has-slot .mr-chip.cond-truly, .deploy-unit.has-slot .mr-chip.ammo, .deploy-unit.has-slot .mr-chip.warn, .deploy-unit.has-slot .mr-chip.bad { font-size: 0.74rem; }
 .deploy-unit.has-slot .mr-chip svg { width: 0.95rem; height: 0.95rem; }
+
+/* The role label in the Deploy popup is bigger: a wider band and a larger base size (a long role still scales down by --role-scale). */
+.deploy-unit.has-slot .mech-row { grid-template-columns: 2.3rem 5.6rem minmax(0, 1fr); }
+.deploy-unit.has-slot .mr-role { --role-size: 0.68rem; }
+/* The hover card is a popover (see mechrow.js): drop the browser's popover box and keep the card's own look. */
+.unit-tip[popover] { inset: auto; margin: 0; overflow: visible; color: var(--text); }

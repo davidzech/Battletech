@@ -46,11 +46,15 @@
   }
 
   var tip = null;
+  // Dialogs clip everything inside them to their cut corner, and a tooltip on the page would sit under a modal dialog, so where the browser has popovers the
+  // card is one: it renders in the top layer, above the dialog, unclipped. Without them it falls back to living inside the open dialog.
+  var canPopover = typeof HTMLElement !== 'undefined' && typeof HTMLElement.prototype.showPopover === 'function';
   function ensureTip() {
     if (tip) return tip;
     tip = el('div', 'unit-tip pill-tip');
     tip.id = 'pill-tip';
     tip.setAttribute('role', 'tooltip');
+    if (canPopover) { tip.setAttribute('popover', 'manual'); document.body.appendChild(tip); }
     tip.hidden = true;
     return tip;
   }
@@ -60,7 +64,7 @@
     pill.setAttribute('aria-describedby', 'pill-tip');
     function show() {
       var t = ensureTip();
-      var host = pill.closest('dialog[open]') || document.body;
+      var host = canPopover ? document.body : (pill.closest('dialog[open]') || document.body);
       if (t.parentNode !== host) host.appendChild(t);
       t.textContent = '';
       t.classList.toggle('wide', !!content.build);
@@ -76,6 +80,7 @@
         t.appendChild(dl);
       }
       t.hidden = false;
+      if (canPopover && !t.matches(':popover-open')) t.showPopover();
       var r = pill.getBoundingClientRect(), w = t.offsetWidth, h = t.offsetHeight, gap = 6;
       var left = Math.min(Math.max(8, r.left), window.innerWidth - w - 8);
       var top = r.bottom + gap;
@@ -86,7 +91,13 @@
     // content.delay (ms) makes a mouse hover wait before the card appears, and leaving (or starting a drag) first cancels it; keyboard focus
     // shows it at once.
     var timer = null;
-    function hide() { clearTimeout(timer); timer = null; if (tip) tip.hidden = true; }
+    function hide() {
+      clearTimeout(timer);
+      timer = null;
+      if (!tip) return;
+      tip.hidden = true;
+      if (canPopover && tip.matches(':popover-open')) tip.hidePopover();
+    }
     function hover() {
       clearTimeout(timer);
       if (content.delay > 0) timer = setTimeout(function () { timer = null; show(); }, content.delay); else show();
@@ -123,8 +134,9 @@
     var label = u.unknown ? 'Unknown' : (u.role || 'Mech');
     var roleText = el('span', null, label);
     // The label runs down the band on one line and never wraps. The longest real role ("Missile Boat", 12
-    // characters) fits at the stylesheet's size; anything longer is scaled down in proportion.
-    if (label.length > 12) roleText.style.fontSize = (0.54 * 12 / label.length).toFixed(3) + 'rem';
+    // characters) fits at the stylesheet's size; anything longer is scaled down in proportion (the --role-scale variable the stylesheet multiplies its
+    // size by, so rows that use a bigger base size, like the Deploy popup's, scale the same way).
+    if (label.length > 12) roleText.style.setProperty('--role-scale', (12 / label.length).toFixed(3));
     role.appendChild(roleText);
     row.appendChild(role);
 
