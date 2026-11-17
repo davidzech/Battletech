@@ -281,6 +281,7 @@ type fakeMekBay struct {
 	err    error
 	// services records repair and rearm requests; serviceErr makes them fail.
 	services   []ServiceRequest
+	purchases  []PurchaseRequest
 	serviceErr error
 }
 
@@ -294,6 +295,13 @@ func (f *fakeMekBay) ServiceUnit(_ context.Context, req ServiceRequest) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.services = append(f.services, req)
+	return f.serviceErr
+}
+
+func (f *fakeMekBay) PurchaseUnits(_ context.Context, req PurchaseRequest) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.purchases = append(f.purchases, req)
 	return f.serviceErr
 }
 

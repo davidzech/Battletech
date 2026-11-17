@@ -114,6 +114,8 @@ type MekBay interface {
 	SyncOperation(ctx context.Context, req OperationRequest) (OperationResult, error)
 	// ServiceUnit repairs or rearms one unit of the player's hangar force (modify mode only).
 	ServiceUnit(ctx context.Context, req ServiceRequest) error
+	// PurchaseUnits adds bought units to the player's hangar force (modify mode only).
+	PurchaseUnits(ctx context.Context, req PurchaseRequest) error
 }
 
 // MekBayClient is the real implementation, speaking to MekBay's WebSocket server.

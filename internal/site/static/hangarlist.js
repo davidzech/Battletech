@@ -16,8 +16,7 @@
     return e;
   }
   // The count and total BV as big yellow numbers with labels; the rows underneath carry the per-unit detail, so no icons here.
-  var openLink = document.querySelector('#campaign-run a.button');
-  var hangarLink = openLink ? openLink.getAttribute('href') : '';
+  var hangarLink = section.dataset.hangarUrl || ''; // the player's MekBay hangar, which a row click opens with that unit selected
 
   var canModify = section.dataset.canModify === '1';
   var warchest = parseInt(section.dataset.warchest, 10) || 0;

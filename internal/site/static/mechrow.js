@@ -24,6 +24,67 @@
     truly: { label: 'Truly destroyed', cls: 'cond-truly' }
   };
 
+  // ---- The status pills' hover card: the same floating card as the unit icons and Edge ability chips, instead of a plain browser tooltip. One element
+  // for the page, filled for the pill under the pointer (or focused with the keyboard). Inside an open dialog it lives in that dialog, so it isn't
+  // hidden beneath it.
+  var LOCS = {
+    HD: 'Head', CT: 'Center Torso', LT: 'Left Torso', RT: 'Right Torso', LA: 'Left Arm', RA: 'Right Arm', LL: 'Left Leg', RL: 'Right Leg',
+    FLL: 'Front Left Leg', FRL: 'Front Right Leg', RLL: 'Rear Left Leg', RRL: 'Rear Right Leg'
+  };
+  function locNames(list) { return list.split(', ').map(function (c) { return LOCS[c] || c; }).join(', '); }
+  function sentence(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) + (/[.!?]$/.test(s) ? '' : '.') : ''; }
+  // The server's short note ("Armor damaged: HD, CT") as a sentence a player can read.
+  function conditionText(note) {
+    var m = /^Armor damaged: (.+)$/.exec(note || '');
+    if (m) return 'Armor lost in: ' + locNames(m[1]) + '. Its internal structure is untouched.';
+    m = /^Internal structure damaged: (.+)$/.exec(note || '');
+    if (m) return 'Internal structure lost in: ' + locNames(m[1]) + '.';
+    m = /^(?:Crippled|Truly destroyed): (.+)$/.exec(note || '');
+    if (m) return sentence(m[1]);
+    if (note === 'Destroyed') return 'Destroyed in play. It can still be repaired between sorties.';
+    return note || '';
+  }
+
+  var tip = null;
+  function ensureTip() {
+    if (tip) return tip;
+    tip = el('div', 'unit-tip pill-tip');
+    tip.id = 'pill-tip';
+    tip.setAttribute('role', 'tooltip');
+    tip.hidden = true;
+    return tip;
+  }
+  // content: { title, cls, text, lines: [{ label, value }] }
+  function attachTip(pill, content) {
+    pill.tabIndex = 0;
+    pill.setAttribute('aria-describedby', 'pill-tip');
+    function show() {
+      var t = ensureTip();
+      var host = pill.closest('dialog[open]') || document.body;
+      if (t.parentNode !== host) host.appendChild(t);
+      t.textContent = '';
+      t.appendChild(el('b', 'pill-tip-title ' + (content.cls || ''), content.title));
+      if (content.text) t.appendChild(el('p', 'pill-tip-text', content.text));
+      if (content.lines && content.lines.length) {
+        var dl = el('dl', 'tip-facts');
+        content.lines.forEach(function (l) { dl.appendChild(el('dt', null, l.label)); dl.appendChild(el('dd', null, l.value)); });
+        t.appendChild(dl);
+      }
+      t.hidden = false;
+      var r = pill.getBoundingClientRect(), w = t.offsetWidth, h = t.offsetHeight, gap = 6;
+      var left = Math.min(Math.max(8, r.left), window.innerWidth - w - 8);
+      var top = r.bottom + gap;
+      if (top + h > window.innerHeight - 8 && r.top - gap - h >= 8) top = r.top - gap - h;
+      t.style.left = left + 'px';
+      t.style.top = top + 'px';
+    }
+    function hide() { if (tip) tip.hidden = true; }
+    pill.addEventListener('mouseenter', show);
+    pill.addEventListener('mouseleave', hide);
+    pill.addEventListener('focus', show);
+    pill.addEventListener('blur', hide);
+  }
+
   function el(tag, cls, text) {
     var e = document.createElement(tag);
     if (cls) e.className = cls;
@@ -81,9 +142,17 @@
     var cond = u.condition && !u.unknown && !u.notMech ? CONDITIONS[u.condition] : null;
     if (cond) {
       var cp = chip(cond.cls, cond.label);
-      if (u.conditionNote) cp.title = u.conditionNote;
+      attachTip(cp, { title: cond.label, cls: cond.cls, text: conditionText(u.conditionNote) });
       chips.appendChild(cp);
-      if (u.ammoExpended) chips.appendChild(chip('ammo', 'Ammo expended'));
+      if (u.ammoExpended) {
+        var ap = chip('ammo', 'Ammo expended');
+        var lines = (u.ammoBreakdown || []).map(function (a) {
+          return { label: a.name, value: a.tons + (a.tons === 1 ? ' ton' : ' tons') + ' \u00b7 ' + a.used + (a.capacity ? ' of ' + a.capacity : '') + ' shots used' };
+        });
+        if (u.rearmCost) lines.push({ label: 'Rearm', value: u.rearmCost + ' SP' });
+        attachTip(ap, { title: 'Ammo expended', cls: 'cond-ammo', text: 'Some ammunition has been used. Rearm it between sorties.', lines: lines });
+        chips.appendChild(ap);
+      }
     } else if (u.destroyed) chips.appendChild(chip('bad', 'Destroyed'));
     else if (u.unknown) chips.appendChild(chip('bad', 'Unknown unit'));
     else if (u.notMech) chips.appendChild(chip('warn', 'Not a mech'));
