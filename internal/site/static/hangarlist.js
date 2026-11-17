@@ -63,12 +63,27 @@
   // Sell: one confirmation. A fully repaired and rearmed unit sells for half its BV, any other for a quarter; the server works the price out again.
   function sell(u) {
     var after = warchest + u.sellValue;
+    var half = Math.floor(u.bv / 2);
+    var why = [];
+    if (u.condition === 'truly') why.push('Truly destroyed');
+    else {
+      if (u.condition && u.condition !== 'ok') why.push('Damaged');
+      if (u.ammoExpended) why.push('Ammunition spent');
+      if (!why.length) why.push('Not fully repaired');
+    }
+    var items = [
+      { label: 'Base BV', value: commas(u.bv) },
+      { label: 'Sale price: half of BV', value: commas(half) + ' SP' },
+      u.sellFull
+        ? { label: 'Fully repaired and rearmed', value: 'full price' }
+        : { label: why.join(', ') + ': halved again, rounded down', value: commas(u.sellValue) + ' SP' },
+      { label: 'Sells for', value: commas(u.sellValue) + ' SP' }
+    ];
     Confirm.ask({
       title: 'Sell ' + u.name + '?',
-      message: u.sellFull
-        ? fullName(u) + ' is fully repaired and rearmed, so it sells for half its BV. It leaves your hangar for good, crew and all.'
-        : fullName(u) + ' is not fully repaired and rearmed, so it sells for only a quarter of its BV' + (u.condition === 'truly' ? ' (a truly destroyed unit cannot be repaired, so this is all it is worth)' : ' (repair and rearm it first for half)') + '. It leaves your hangar for good, crew and all.',
-      detail: 'Sells for ' + u.sellValue + ' SP. Warchest ' + commas(warchest) + ' \u2192 ' + commas(after) + ' SP.',
+      message: fullName(u) + ' leaves your hangar for good, crew and all.' + (!u.sellFull && u.condition !== 'truly' ? ' Repair and rearm it first and it sells for ' + commas(half) + ' SP.' : u.condition === 'truly' ? ' A truly destroyed unit can’t be repaired, so this is all it is worth.' : ''),
+      items: items,
+      detail: 'Warchest ' + commas(warchest) + ' → ' + commas(after) + ' SP.',
       confirmLabel: 'Sell for ' + u.sellValue + ' SP', danger: true
     }).then(function (yes) {
       if (!yes) return;
