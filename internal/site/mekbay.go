@@ -45,6 +45,12 @@ type UnitDraft struct {
 }
 
 // HangarUnit is one unit of a player's hangar force as MekBay stores it.
+// CritDamage is one hit or destroyed critical slot: where it is and whether it belongs to the engine.
+type CritDamage struct {
+	Loc    string
+	Engine bool
+}
+
 type HangarUnit struct {
 	ID        string // the unit's own ID inside the force
 	Unit      string // MekBay unit ID, e.g. BMMadCat_H
@@ -57,6 +63,8 @@ type HangarUnit struct {
 	// The raw damage MekBay records, from which conditionOf works out the unit's state (see condition.go).
 	Locations  map[string]LocationLoss // armor and internal structure points lost, by location (HD, CT, LT, RT, LA, RA, LL, RL ...)
 	AmmoUsed   int                     // ammo consumed, summed over its ammo bins
+	AmmoBins   int                     // ammo bins with some consumed (each counts as a ton to rearm)
+	Crits      []CritDamage            // critical slots that are hit or destroyed (ammo use is not damage), to know what a repair would fix
 	EngineHits int                     // destroyed engine slots
 	// TorsoCheckFailed is MekBay's stored result of the torso crippling check (rule check core.torso-crippling).
 	TorsoCheckFailed bool
@@ -96,6 +104,8 @@ type MekBay interface {
 	// ReadHangar reads a saved force (anyone can read one by its instance ID).
 	ReadHangar(ctx context.Context, instance string) (HangarForce, error)
 	SyncOperation(ctx context.Context, req OperationRequest) (OperationResult, error)
+	// ServiceUnit repairs or rearms one unit of the player's hangar force (modify mode only).
+	ServiceUnit(ctx context.Context, req ServiceRequest) error
 }
 
 // MekBayClient is the real implementation, speaking to MekBay's WebSocket server.
@@ -255,6 +265,7 @@ func parseHangarForce(raw json.RawMessage) (HangarForce, error) {
 						} `json:"locations"`
 						Crits []struct {
 							Name      string `json:"name"`
+							Loc       string `json:"loc"`
 							Hits      int    `json:"hits"`
 							Consumed  int    `json:"consumed"`
 							Destroyed any    `json:"destroyed"`
@@ -298,7 +309,13 @@ func parseHangarForce(raw json.RawMessage) (HangarForce, error) {
 				if c.Hits > 0 || c.Consumed > 0 || gone {
 					hu.Damaged = true
 				}
+				if c.Hits > 0 || gone {
+					hu.Crits = append(hu.Crits, CritDamage{Loc: c.Loc, Engine: strings.Contains(strings.ToLower(c.Name), "engine")})
+				}
 				hu.AmmoUsed += c.Consumed
+				if c.Consumed > 0 {
+					hu.AmmoBins++
+				}
 				// Each destroyed slot (or hit) of these components is a critical hit on it, which the crippling rules count.
 				n := c.Hits
 				if gone && n < 1 {

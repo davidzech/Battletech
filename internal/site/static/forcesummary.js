@@ -38,7 +38,8 @@
     if (u.model) names.appendChild(el('span', 'tip-model', u.model));
     head.appendChild(names);
     tip.appendChild(head);
-    if (u.destroyed) tip.appendChild(el('span', 'tag bad', 'Destroyed'));
+    if (u.condition === 'truly') tip.appendChild(el('span', 'tag bad', 'Truly destroyed'));
+    else if (u.destroyed) tip.appendChild(el('span', 'tag bad', 'Destroyed'));
     else if (u.damaged) tip.appendChild(el('span', 'tag', 'Damaged'));
     var facts = el('dl', 'tip-facts');
     function fact(k, v) { facts.appendChild(el('dt', null, k)); facts.appendChild(el('dd', null, v)); }

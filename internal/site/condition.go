@@ -20,6 +20,7 @@ const (
 	CondStructure Condition = "structure" // internal structure lost somewhere
 	CondCrippled  Condition = "crippled"  // meets one of the crippling rules below
 	CondDestroyed Condition = "destroyed" // MekBay's destroyed flag
+	CondTruly     Condition = "truly"     // destroyed for good: a mech whose center torso structure is gone can't be repaired or salvaged
 )
 
 // LocationLoss is what a location has lost: armor and internal structure points.
@@ -74,6 +75,10 @@ var structureKeys = []string{"HD", "CT", "LT", "RT", "LA", "RA", "LL", "RL", "FL
 // conditionOf works out a unit's worst state and a short note saying why (for the pill's tooltip). tons and engine come from the
 // catalog (0 and "" if unknown).
 func conditionOf(hu HangarUnit, tons float64, engine string) (Condition, string) {
+	// Hot Spots: Draconis Reach, Destroyed vs. Truly Destroyed: a mech is truly destroyed only when its center torso internal structure is eliminated.
+	if internalGone(hu, "CT", tons) {
+		return CondTruly, "Truly destroyed: center torso structure eliminated, so it cannot be repaired"
+	}
 	if hu.Destroyed {
 		return CondDestroyed, "Destroyed"
 	}

@@ -104,7 +104,7 @@
     </div>
   </form>
 </dialog>
-<section class="hangar-units" id="hangar-units" data-campaign="{{.Campaign.Slug}}" data-cached="{{.ForceJSON}}">
+<section class="hangar-units" id="hangar-units" data-campaign="{{.Campaign.Slug}}" data-can-modify="{{if .Play.CanModify}}1{{end}}" data-warchest="{{.Run.Warchest}}" data-cached="{{.ForceJSON}}">
 <h2 class="section-title">Hangar</h2>
 <div class="hangar-units-summary" id="hangar-units-summary"></div>
 <p class="muted">{{.Play.CompanyName}}&rsquo;s MekBay hangar holds your mechs, and scenarios deploy from it.</p>
@@ -129,6 +129,21 @@
   </form>
 </dialog>
 </section>
+<dialog id="repair-dialog" class="wizard" aria-labelledby="repair-title">
+  <form id="repair-form" autocomplete="off">
+    <h2 id="repair-title">Repair</h2>
+    <p class="muted" id="repair-sub"></p>
+    <label for="repair-select">Kind of repair</label>
+    <select id="repair-select"></select>
+    <p class="muted repair-note">Only the repairs that would fix something are listed, and you pay for the one you choose. Each also covers the ones above it in the list. Clan and Mixed tech cost half again as much.</p>
+    <p id="repair-cost" class="repair-cost"></p>
+    <p id="repair-error" class="form-error" role="alert"></p>
+    <div class="form-actions">
+      <button type="submit" class="button" id="repair-apply">Repair</button>
+      <button type="button" id="repair-cancel">Cancel</button>
+    </div>
+  </form>
+</dialog>
 <dialog id="records-dialog" class="wizard" aria-labelledby="records-title">
   <h2 id="records-title">Advanced Management</h2>
   <p class="muted">Every named pilot this campaign has had. Use this to correct a misclick or a mismatch: bring a pilot Killed in Action back, delete a record for good, reset a pilot's SP allocation or their Edge abilities, or override their total SP.</p>

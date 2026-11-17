@@ -20,7 +20,8 @@
     armor: { label: 'Armor damage', cls: 'cond-armor' },
     structure: { label: 'Structure damage', cls: 'cond-structure' },
     crippled: { label: 'Crippled', cls: 'cond-crippled' },
-    destroyed: { label: 'Destroyed', cls: 'cond-destroyed' }
+    destroyed: { label: 'Destroyed', cls: 'cond-destroyed' },
+    truly: { label: 'Truly destroyed', cls: 'cond-truly' }
   };
 
   function el(tag, cls, text) {
@@ -103,6 +104,21 @@
       link.innerHTML = EXTERNAL; // a constant defined above, never data
       nameLine.appendChild(link);
     }
+    // actions: [{ label, title, disabled, onClick }] adds buttons at the right end of the row (the Hangar's Rearm and Repair).
+    if (u.actions && u.actions.length) {
+      var box = el('span', 'mr-actions');
+      u.actions.forEach(function (a) {
+        var b = el('button', 'mr-action', a.label);
+        b.type = 'button';
+        if (a.title) b.title = a.title;
+        b.disabled = !!a.disabled;
+        b.setAttribute('aria-label', a.label + ' ' + (u.name + ' ' + (u.model || '')).trim());
+        b.addEventListener('click', function (e) { e.stopPropagation(); if (!b.disabled && a.onClick) a.onClick(); });
+        box.appendChild(b);
+      });
+      row.classList.add('has-actions');
+      row.appendChild(box);
+    }
     // rowUrl (a https://mekbay.com/ link) makes the whole row a link opened in a new tab, e.g. the player's hangar with this unit selected.
     // The (i) after the name keeps its own target.
     if (u.rowUrl && /^https:\/\/mekbay\.com\//.test(u.rowUrl)) {
@@ -111,7 +127,7 @@
       row.setAttribute('role', 'link');
       row.title = 'Open in your hangar on MekBay';
       var go = function () { window.open(u.rowUrl, '_blank', 'noopener,noreferrer'); };
-      row.addEventListener('click', function (e) { if (!e.target.closest('.mr-ext')) go(); });
+      row.addEventListener('click', function (e) { if (!e.target.closest('.mr-ext, .mr-actions')) go(); });
       row.addEventListener('keydown', function (e) {
         if ((e.key === 'Enter' || e.key === ' ') && e.target === row) { e.preventDefault(); go(); }
       });

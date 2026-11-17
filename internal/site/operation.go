@@ -70,6 +70,11 @@ type hangarUnitView struct {
 	Condition     string `json:"condition"`
 	ConditionNote string `json:"conditionNote"`
 	AmmoExpended  bool   `json:"ammoExpended"`
+	// Servicing, from the SP Activity Cost Table (see service.go): RepairLevels are the repairs that would fix something (empty when it needs none or
+	// is truly destroyed), RepairCosts the SP of every level, RearmCost the SP to refill spent ammunition.
+	RepairLevels []string       `json:"repairLevels"`
+	RepairCosts  map[string]int `json:"repairCosts,omitempty"`
+	RearmCost    int            `json:"rearmCost"`
 }
 
 var chassisNames = regexp.MustCompile(`^(.*?)\s*\((.+)\)$`)
@@ -127,6 +132,9 @@ func hangarViews(h HangarForce) []hangarUnitView {
 		}
 		c, note := conditionOf(hu, tons, engine)
 		v.Condition, v.ConditionNote, v.AmmoExpended = string(c), note, hu.AmmoUsed > 0
+		if u, ok := unitByName(hu.Unit); ok && u.Type == "Mek" {
+			v.RepairLevels, v.RepairCosts, v.RearmCost = repairOptions(hu, c, u.Tons), repairCosts(u.Tons, u.TechBase), rearmCost(hu.AmmoBins)
+		}
 		views = append(views, v)
 	}
 	return views

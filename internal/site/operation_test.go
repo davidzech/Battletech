@@ -279,12 +279,22 @@ type fakeMekBay struct {
 	hangar HangarForce
 	reqs   []OperationRequest
 	err    error
+	// services records repair and rearm requests; serviceErr makes them fail.
+	services   []ServiceRequest
+	serviceErr error
 }
 
 func (f *fakeMekBay) ReadHangar(context.Context, string) (HangarForce, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.hangar, f.err
+}
+
+func (f *fakeMekBay) ServiceUnit(_ context.Context, req ServiceRequest) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.services = append(f.services, req)
+	return f.serviceErr
 }
 
 func (f *fakeMekBay) SyncOperation(_ context.Context, req OperationRequest) (OperationResult, error) {

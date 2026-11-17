@@ -22,7 +22,7 @@ func TestConditionsOfTheLiveHangar(t *testing.T) {
 	want := []struct {
 		cond Condition
 		ammo bool
-	}{{CondArmor, false}, {CondStructure, false}, {CondCrippled, true}, {CondDestroyed, false}}
+	}{{CondArmor, false}, {CondStructure, false}, {CondCrippled, true}, {CondTruly, false}}
 	views := hangarViews(h)
 	for i, w := range want {
 		if views[i].Condition != string(w.cond) || views[i].AmmoExpended != w.ammo {
@@ -41,6 +41,8 @@ func TestConditionPrecedenceAndCrippleRules(t *testing.T) {
 	}{
 		{"clean", HangarUnit{}, "Fusion", CondOK},
 		{"destroyed beats everything", HangarUnit{Destroyed: true, EngineHits: 3}, "Fusion", CondDestroyed},
+		{"center torso gone is truly destroyed", HangarUnit{Destroyed: true, Locations: map[string]LocationLoss{"CT": {Internal: 6}}}, "Fusion", CondTruly},
+		{"a destroyed head alone is only destroyed", HangarUnit{Destroyed: true, Locations: map[string]LocationLoss{"HD": {Internal: 3}}}, "Fusion", CondDestroyed},
 		{"two engine hits", HangarUnit{EngineHits: 2}, "XL (Clan)", CondCrippled},
 		{"one engine hit is only structure-level", HangarUnit{EngineHits: 1, Locations: map[string]LocationLoss{"CT": {Internal: 1}}}, "Fusion", CondStructure},
 		{"two arms alone are not crippled", loc(map[string]LocationLoss{"LA": {Internal: 3}, "RA": {Internal: 3}}), "Fusion", CondStructure},

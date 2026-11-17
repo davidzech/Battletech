@@ -337,6 +337,27 @@ func (s *Store) SetWarchest(ctx context.Context, playthroughID, campaign string,
 	return nil
 }
 
+// ErrInsufficientFunds is returned when the warchest can't cover a charge.
+var ErrInsufficientFunds = errors.New("not enough funds in the warchest")
+
+// SpendWarchest takes funds out of the warchest in one statement, so two charges can't overspend it.
+func (s *Store) SpendWarchest(ctx context.Context, playthroughID, campaign string, amount int) error {
+	res, err := s.db.ExecContext(ctx, s.q(`UPDATE campaign_runs SET warchest = warchest - ? WHERE playthrough_id = ? AND campaign = ? AND warchest >= ?`), amount, playthroughID, campaign, amount)
+	if err != nil {
+		return err
+	}
+	if n, err := res.RowsAffected(); err == nil && n == 0 {
+		return ErrInsufficientFunds
+	}
+	return nil
+}
+
+// RefundWarchest puts funds back, when a charge's work failed.
+func (s *Store) RefundWarchest(ctx context.Context, playthroughID, campaign string, amount int) error {
+	_, err := s.db.ExecContext(ctx, s.q(`UPDATE campaign_runs SET warchest = warchest + ? WHERE playthrough_id = ? AND campaign = ?`), amount, playthroughID, campaign)
+	return err
+}
+
 // SetOwnerUID stores the MekBay owner UID that puts a playthrough into modify mode; an empty uid turns it off.
 func (s *Store) SetOwnerUID(ctx context.Context, id, uid string) error {
 	return s.updatePlaythrough(ctx, `UPDATE playthroughs SET owner_uid = ? WHERE id = ?`, uid, id)
