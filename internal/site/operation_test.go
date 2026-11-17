@@ -409,7 +409,7 @@ func TestDeployFlow(t *testing.T) {
 	if i, j := strings.Index(p, "/static/mechrow.js"), strings.Index(p, "/static/mekbay.js"); i < 0 || j < 0 || i > j {
 		t.Fatal("the scenario page should load mechrow.js before mekbay.js")
 	}
-	if !strings.Contains(p, `id="deploy-open"`) || !strings.Contains(p, "Add your MekBay user ID under Company details") || !strings.Contains(p, "up to 10000 BV") {
+	if !strings.Contains(p, `id="deploy-open"`) || !strings.Contains(p, `data-accounts="`) || !strings.Contains(p, `data-min-players="1"`) || !strings.Contains(p, `data-max-players="2"`) || !strings.Contains(p, "up to 10000 BV") {
 		t.Fatalf("read-only page: %.900s", p)
 	}
 	r := get(t, srv, hangar, cookie)

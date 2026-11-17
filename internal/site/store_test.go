@@ -117,6 +117,7 @@ func storeContract(t *testing.T, s *Store) {
 	}
 
 	pilotStore(t, s, id)
+	accountStore(t, s, id)
 	portraitStore(t, s, id)
 	spStore(t, s, id)
 	repairStore(t, s, id)

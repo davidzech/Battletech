@@ -83,7 +83,7 @@ func parseOwnerUID(raw string) (string, error) {
 	return uid, nil
 }
 
-// setCompany saves the company's name and the optional MekBay owner UID for the visitor's playthrough.
+// setCompany saves the company's name and the optional MekBay user IDs (Player 1 to 4 and the OpFor) for the visitor's playthrough.
 func (s *Server) setCompany(w http.ResponseWriter, r *http.Request) {
 	if !sameOrigin(r) {
 		http.Error(w, "cross-origin request refused", http.StatusForbidden)
@@ -104,10 +104,19 @@ func (s *Server) setCompany(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	owner, err := parseOwnerUID(r.PostFormValue("owner"))
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+	// Each MekBay account slot (Player 1 to 4 and the OpFor) is optional: an ID saves it, its "clear" field forgets it, and a blank field keeps whatever is
+	// saved (an ID is never sent back to the page to prefill it). Everything is checked before anything is saved.
+	type change struct{ slot, uid string }
+	var changes []change
+	for _, def := range accountSlotDefs {
+		uid, err := parseOwnerUID(r.PostFormValue(def.Field))
+		if err != nil {
+			http.Error(w, def.Label+": "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		if uid != "" || r.PostFormValue(def.ClearField) == "1" {
+			changes = append(changes, change{def.Key, uid})
+		}
 	}
 	id := playthroughID(seed)
 	if _, err := s.store.EnsurePlaythrough(r.Context(), id); err != nil {
@@ -118,10 +127,9 @@ func (s *Server) setCompany(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not save company", http.StatusInternalServerError)
 		return
 	}
-	// Modify mode is optional: a UID turns it on, "clear_owner" turns it off, and leaving the field blank
-	// keeps whatever is already saved (the UID is never sent back to the page to prefill it).
-	if owner != "" || r.PostFormValue("clear_owner") == "1" {
-		if err := s.store.SetOwnerUID(r.Context(), id, owner); err != nil {
+	// Player 1's ID is what turns modify mode on; leaving every field blank changes nothing.
+	for _, c := range changes {
+		if err := s.store.SetAccount(r.Context(), id, c.slot, c.uid); err != nil {
 			http.Error(w, "could not save company", http.StatusInternalServerError)
 			return
 		}

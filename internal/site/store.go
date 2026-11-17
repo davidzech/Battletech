@@ -21,9 +21,10 @@ type Store struct {
 
 // Playthrough is one company's tracked run through the campaigns, identified by their seed.
 type Playthrough struct {
-	ID          string // hash of the seed, never the seed itself
-	CompanyName string // the company's name in the lore, e.g. "Wolf's Dragoons" ("" until named)
-	OwnerUID    string // optional MekBay account UID that owns the company's hangars; secret, never sent to the browser
+	ID          string          // hash of the seed, never the seed itself
+	CompanyName string          // the company's name in the lore, e.g. "Wolf's Dragoons" ("" until named)
+	OwnerUID    string          // optional MekBay account UID that owns the company's hangars (Player 1's account); secret, never sent to the browser
+	saved       map[string]bool // which other account slots (see accounts.go) have an ID; never the IDs
 }
 
 // Configured reports whether the company has been named, which is what setting a seed up amounts to.
@@ -81,6 +82,12 @@ func (s *Store) schemaStatements() []string {
 	hangar_instance TEXT NOT NULL DEFAULT '',
 	PRIMARY KEY (playthrough_id, campaign)
 )`, s.timestampColumn()),
+		`CREATE TABLE IF NOT EXISTS mekbay_accounts (
+	playthrough_id TEXT NOT NULL REFERENCES playthroughs(id) ON DELETE CASCADE,
+	slot           TEXT NOT NULL,
+	uid            TEXT NOT NULL,
+	PRIMARY KEY (playthrough_id, slot)
+)`,
 		`CREATE TABLE IF NOT EXISTS pilot_abilities (
 	pilot_id TEXT NOT NULL REFERENCES named_pilots(id) ON DELETE CASCADE,
 	ability  TEXT NOT NULL,
@@ -306,7 +313,13 @@ func (s *Store) Playthrough(ctx context.Context, id string) (p Playthrough, ok b
 	if errors.Is(err, sql.ErrNoRows) {
 		return Playthrough{}, false, nil
 	}
-	return p, err == nil, err
+	if err != nil {
+		return p, false, err
+	}
+	if err := s.loadSaved(ctx, &p); err != nil {
+		return p, false, err
+	}
+	return p, true, nil
 }
 
 func (s *Store) updatePlaythrough(ctx context.Context, query string, args ...any) error {

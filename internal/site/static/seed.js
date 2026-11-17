@@ -10,7 +10,7 @@
   var input = document.getElementById('seed-input');
   var seedError = document.getElementById('seed-error');
   var companyInput = document.getElementById('company-input');
-  var ownerInput = document.getElementById('owner-input');
+  var idInputs = [].slice.call(document.querySelectorAll('#setup-form input.mekbay-id')); // Player 1 to 4 and the OpFor
   var setupError = document.getElementById('setup-error');
 
   var hasSeed = dialog.dataset.seed !== '';
@@ -96,7 +96,7 @@
 
   input.addEventListener('input', function () { sanitize(); seedError.textContent = ''; });
   companyInput.addEventListener('input', function () { setupError.textContent = ''; });
-  ownerInput.addEventListener('input', function () { setupError.textContent = ''; });
+  idInputs.forEach(function (i) { i.addEventListener('input', function () { setupError.textContent = ''; }); });
 
   document.getElementById('seed-random').addEventListener('click', function () {
     input.value = randomSeed();
@@ -138,10 +138,15 @@
     e.preventDefault();
     var company = companyInput.value.trim();
     if (!company) { setupError.textContent = 'Name your company.'; return; }
-    var owner = ownerInput.value.trim().toLowerCase();
-    if (owner && !UUID.test(owner)) { setupError.textContent = "That doesn't look like a MekBay user ID (it should be a UUID)."; return; }
-    var clear = setupForm.querySelector('input[name="clear_owner"]:checked');
-    post('/api/company', 'company=' + encodeURIComponent(company) + '&owner=' + encodeURIComponent(owner) + (clear ? '&clear_owner=1' : ''))
+    // Each MekBay user ID is optional: a UUID saves it, a blank field keeps what is saved, and its Forget box forgets it.
+    var body = 'company=' + encodeURIComponent(company);
+    for (var n = 0; n < idInputs.length; n++) {
+      var id = idInputs[n].value.trim().toLowerCase();
+      if (id && !UUID.test(id)) { setupError.textContent = "That doesn't look like a MekBay user ID (it should be a UUID)."; idInputs[n].focus(); return; }
+      if (id) body += '&' + idInputs[n].name + '=' + encodeURIComponent(id);
+    }
+    [].forEach.call(setupForm.querySelectorAll('input.clear-id:checked'), function (c) { body += '&' + c.name + '=1'; });
+    post('/api/company', body)
       .then(function (res) {
         if (res.ok) { location.reload(); return; }
         return res.text().then(function (t) { setupError.textContent = t.trim() || 'Could not save the company.'; });

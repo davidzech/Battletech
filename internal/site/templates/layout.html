@@ -41,10 +41,16 @@
     <p>Every company has a name in the lore, like Wolf&rsquo;s Dragoons or the Kell Hounds. Yours is tracked under this seed, across every campaign it runs.</p>
     <label for="company-input">Company name</label>
     <input id="company-input" class="wide" name="company" value="{{.Play.CompanyName}}" maxlength="40" placeholder="Wolf&rsquo;s Dragoons" autocomplete="off" spellcheck="false" required>
-    <label for="owner-input">MekBay user ID <span class="optional">(optional)</span></label>
-    <input id="owner-input" class="wide" name="owner" type="password" placeholder="{{if .Play.CanModify}}Saved. Leave blank to keep it{{else}}Leave blank for read-only{{end}}" spellcheck="false" autocomplete="off">
-    <p class="hint">{{if .Play.CanModify}}<strong>Modify mode is on.</strong> {{end}}Giving the ID of the MekBay account that owns the hangar lets this site change the hangar for you (repairs and the like). It works like a password for that account's MekBay forces, so only enter it if you trust this site. Without it the site can only read your hangars.</p>
-    {{if .Play.CanModify}}<label class="check"><input type="checkbox" name="clear_owner" value="1"> Turn modify mode off and forget the ID</label>{{end}}
+    <fieldset class="mekbay-ids">
+      <legend>MekBay user IDs <span class="optional">(optional)</span></legend>
+      <p class="hint">{{if .Play.CanModify}}<strong>Modify mode is on.</strong> {{end}}MekBay only lets a force&rsquo;s owner change it, so every player who will hold a force in MekBay has their own MekBay user ID, and so does the automated OpFor. Player 1&rsquo;s is the account that owns the company&rsquo;s hangar: it lets this site change the hangar for you (repairs and the like). Each ID works like a password for that account&rsquo;s MekBay forces, so only enter one if you trust this site. Without Player 1&rsquo;s the site can only read your hangars.</p>
+      {{range .Play.Slots}}<div class="mekbay-id-row">
+        <label for="owner-input-{{.Key}}">{{.Label}}</label>
+        <input id="owner-input-{{.Key}}" class="wide mekbay-id" name="{{.Field}}" type="password" placeholder="{{if .Saved}}Saved. Leave blank to keep it{{else if eq .Key "p1"}}Leave blank for read-only{{else}}Not set{{end}}" spellcheck="false" autocomplete="off">
+        {{if .Saved}}<label class="check themed-check"><input type="checkbox" class="themed-box clear-id" name="{{.ClearField}}" value="1"> Forget</label>{{end}}
+      </div>
+      {{end}}
+    </fieldset>
     <p id="setup-error" class="form-error" role="alert"></p>
     <div class="form-actions">
       <button type="submit" class="button">Save company</button>
