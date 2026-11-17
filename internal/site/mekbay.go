@@ -94,11 +94,13 @@ type OperationRequest struct {
 	// DeployedUnitIDs, when set, are the hangar units going on the mission: they are moved into the "Deployed"
 	// group and every other unit into "Hangar". Nil leaves the hangar's groups alone.
 	DeployedUnitIDs []string
-	OpFor           ForceDraft
-	OpForInstance   string
-	KeepOpFor       bool // OpForInstance already exists: reuse it as is, without resetting its damage
-	OperationName   string
-	OperationID     string
+	// Crew assigns named pilots to hangar units (see crew.go); it is saved together with the Deployed and Hangar groups.
+	Crew          []CrewAssignment
+	OpFor         ForceDraft
+	OpForInstance string
+	KeepOpFor     bool // OpForInstance already exists: reuse it as is, without resetting its damage
+	OperationName string
+	OperationID   string
 }
 
 // OperationResult identifies what was created.
@@ -178,6 +180,9 @@ func (c *MekBayClient) SyncOperation(ctx context.Context, req OperationRequest) 
 		}
 		force := campaign.Data
 		if err := deployGroups(force, deployed, newID); err != nil {
+			return OperationResult{}, err
+		}
+		if err := applyCrew(force, req.Crew); err != nil {
 			return OperationResult{}, err
 		}
 		delete(force, "owned") // set by the server for readers; the app never sends it back

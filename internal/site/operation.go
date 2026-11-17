@@ -277,6 +277,16 @@ func (s *Server) deploy(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, msg, http.StatusBadRequest)
 		return
 	}
+	pilots, err := s.store.Pilots(r.Context(), pt.ID, c.Slug)
+	if err != nil {
+		http.Error(w, "could not load your pilots", http.StatusInternalServerError)
+		return
+	}
+	crew, err := parseCrew(r, h, pilots)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	existing, has, err := s.store.MekBayOperation(r.Context(), pt.ID, c.Slug, sc.ID)
 	if err != nil {
 		http.Error(w, "could not load operation", http.StatusInternalServerError)
@@ -292,6 +302,7 @@ func (s *Server) deploy(w http.ResponseWriter, r *http.Request) {
 		OwnerUID:         pt.OwnerUID,
 		CampaignInstance: run.HangarInstance,
 		DeployedUnitIDs:  ids,
+		Crew:             crew,
 		OpFor:            draft,
 		OpForInstance:    existing.OpForInstance,
 		KeepOpFor:        has && r.PostFormValue("reset_opfor") != "1",

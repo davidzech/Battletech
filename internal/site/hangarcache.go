@@ -51,6 +51,28 @@ func (p Page) ForceJSON() string {
 	return cachedJSON(forceData(*p.CachedHangar), p.CachedAt)
 }
 
+// PilotsJSON is the campaign's living named pilots for the Deploy popup's pilot tray: who they are and the skills they would crew a mech with.
+func (p Page) PilotsJSON() string {
+	type tray struct {
+		Name        string `json:"name"`
+		Rank        string `json:"rank"`
+		PortraitURL string `json:"portraitUrl"`
+		Gunnery     int    `json:"gunnery"`
+		Piloting    int    `json:"piloting"`
+	}
+	out := []tray{}
+	for _, v := range p.Pilots {
+		if !v.Fallen {
+			out = append(out, tray{v.Name, v.Rank, v.PortraitURL, v.Gunnery, v.Piloting})
+		}
+	}
+	b, err := json.Marshal(out)
+	if err != nil {
+		return "[]"
+	}
+	return string(b)
+}
+
 // DeployJSON is the cached hangar for the scenario's deploy popup ("" if there is none yet).
 func (p Page) DeployJSON() string {
 	if p.CachedHangar == nil || p.Scenario == nil {

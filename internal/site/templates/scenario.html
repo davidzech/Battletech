@@ -17,13 +17,18 @@
 <p class="muted">Choose which mechs from your hangar fly this mission{{if .Scenario.BVLimit}}, up to {{.Scenario.BVLimit}} BV{{end}}. The site sorts your MekBay hangar into <em>Deployed</em> and <em>Hangar</em> groups and sets up the OpFor against them.</p>
 <p class="downloads"><button type="button" class="button" id="deploy-open">Deploy force&hellip;</button>{{if .MekBayOp}}<a class="button" href="{{.MekBayOp}}" target="_blank" rel="noopener noreferrer">Open in MekBay</a>{{end}}</p>
 </section>
-<dialog id="deploy-dialog" class="deploy" aria-labelledby="deploy-title" data-campaign="{{.Campaign.Slug}}" data-scenario="{{.Scenario.Slug}}" data-limit="{{.Scenario.BVLimit}}" data-can-modify="{{if .Play.CanModify}}1{{end}}" data-cached="{{.DeployJSON}}">
+<dialog id="deploy-dialog" class="deploy" aria-labelledby="deploy-title" data-campaign="{{.Campaign.Slug}}" data-scenario="{{.Scenario.Slug}}" data-limit="{{.Scenario.BVLimit}}" data-can-modify="{{if .Play.CanModify}}1{{end}}" data-pilots="{{.PilotsJSON}}" data-cached="{{.DeployJSON}}">
 <h2 id="deploy-title">Deploy your force</h2>
 <p class="deploy-meter" id="deploy-meter"></p>
 <p class="muted" id="deploy-status">Loading your hangar&hellip;</p>
+<section class="deploy-pilots" id="deploy-pilots" hidden>
+<p class="deploy-pilots-head">Pilots</p>
+<p class="muted">Drag a pilot onto a mech to assign them, or click a pilot and then a mech. Assignments are saved to your hangar when you deploy.</p>
+<div class="deploy-pilots-list" id="deploy-pilots-list"></div>
+</section>
 <ul class="deploy-list" id="deploy-list"></ul>
 {{if not .Play.CanModify}}<p class="muted">The site can only read your hangar. Add your MekBay user ID under Company details to let it deploy for you.</p>
-{{end}}<label class="check" id="deploy-reset-row" hidden><input type="checkbox" id="deploy-reset"> Reset the OpFor (wipes any damage recorded on it)</label>
+{{end}}<label class="check themed-check" id="deploy-reset-row" hidden><input type="checkbox" id="deploy-reset" class="themed-box"> Reset the OpFor (wipes any damage recorded on it)</label>
 <p id="deploy-error" class="form-error" role="alert"></p>
 <div class="form-actions"><button type="button" class="button alert" id="deploy-go" disabled>Deploy</button><button type="button" id="deploy-cancel">Cancel</button></div>
 </dialog>

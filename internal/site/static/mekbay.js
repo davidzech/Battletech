@@ -1,6 +1,13 @@
 // Scenario page: the deploy popup. It lists the mechs in the player's MekBay hangar, lets them pick the ones going on
-// this mission (within the scenario's BV limit), and asks the server to sort the hangar into Deployed and Hangar groups
-// and set up the OpFor operation. The server checks everything again; this only keeps the player from a doomed request.
+// this mission (within the scenario's BV limit), assign named pilots to mechs, and asks the server to sort the hangar into
+// Deployed and Hangar groups, crew the mechs and set up the OpFor operation. The server checks everything again; this only
+// keeps the player from a doomed request.
+//
+// Pilots: the campaign's living named pilots sit in a tray above the list. Drag one onto a mech's slot to assign them (or click
+// the pilot, then the slot, which also works by keyboard and on touch screens). A pilot drives one mech, so assigning them again
+// moves them; dropping a pilot on the tray, or the x on a slot, takes them off. Nothing is saved until Deploy: the assignments
+// go to the server as assign_unit / assign_pilot pairs, which writes each pilot's name and current skills into the unit's crew
+// in MekBay.
 (function () {
   var dialog = document.getElementById('deploy-dialog');
   var openBtn = document.getElementById('deploy-open');
@@ -13,6 +20,8 @@
   var go = document.getElementById('deploy-go');
   var resetRow = document.getElementById('deploy-reset-row');
   var reset = document.getElementById('deploy-reset');
+  var tray = document.getElementById('deploy-pilots');
+  var trayList = document.getElementById('deploy-pilots-list');
 
   var limit = parseInt(dialog.dataset.limit, 10) || 0;
   var canModify = dialog.dataset.canModify === '1';
@@ -26,6 +35,14 @@
   var cachedData = null;
   try { cachedData = JSON.parse(dialog.dataset.cached || 'null'); } catch (e) { cachedData = null; }
 
+  // The campaign's living named pilots, as { name, rank, portraitUrl, gunnery, piloting }.
+  var pilots = [];
+  try { pilots = JSON.parse(dialog.dataset.pilots || '[]') || []; } catch (e) { pilots = []; }
+  var crew = {};          // unit ID -> name of the named pilot assigned to it in this popup
+  var original = {};      // unit ID -> the named pilot the hangar has in it now, if any
+  var crewTouched = false; // the player has moved a pilot, so a fresh read must not undo it
+  var held = '';          // a pilot picked up by clicking, waiting to be put in a mech
+
   function fmt(n) { return Number(n).toLocaleString('en-US'); }
 
   function el(tag, cls, text) {
@@ -33,6 +50,20 @@
     if (cls) e.className = cls;
     if (text !== undefined) e.textContent = text;
     return e;
+  }
+
+  function pilotNamed(name) {
+    var lower = String(name || '').toLowerCase();
+    for (var i = 0; i < pilots.length; i++) if (pilots[i].name.toLowerCase() === lower) return pilots[i];
+    return null;
+  }
+  function unitOf(name) {
+    for (var id in crew) if (crew[id] && crew[id].toLowerCase() === name.toLowerCase()) return id;
+    return '';
+  }
+  function unitById(id) {
+    for (var i = 0; i < units.length; i++) if (units[i].id === id) return units[i];
+    return null;
   }
 
   function totals() {
@@ -49,12 +80,127 @@
     go.disabled = busy || !canModify || t.count === 0 || over;
   }
 
+  // ---- Assigning pilots
+  function assign(unitId, name) {
+    var p = pilotNamed(name);
+    if (!p) return;
+    for (var id in crew) if (crew[id] && crew[id].toLowerCase() === p.name.toLowerCase()) delete crew[id]; // one pilot, one mech
+    crew[unitId] = p.name;
+    crewTouched = true;
+    held = '';
+    error.textContent = '';
+    render();
+  }
+  function unassign(name) {
+    var id = unitOf(name);
+    if (id) delete crew[id];
+    crewTouched = true;
+    held = '';
+    render();
+  }
+  function dragName(e) {
+    var raw = e.dataTransfer ? e.dataTransfer.getData('text/plain') : '';
+    return raw.indexOf('pilot:') === 0 ? raw.slice(6) : '';
+  }
+  function makeDraggable(node, name) {
+    node.draggable = true;
+    node.addEventListener('dragstart', function (e) {
+      e.dataTransfer.setData('text/plain', 'pilot:' + name);
+      e.dataTransfer.effectAllowed = 'move';
+      node.classList.add('dragging');
+      dialog.classList.add('dragging-pilot');
+    });
+    node.addEventListener('dragend', function () { node.classList.remove('dragging'); dialog.classList.remove('dragging-pilot'); });
+  }
+
+  function skills(p) { return el('span', 'mr-chip pilot', p.gunnery + '/' + p.piloting); }
+
+  function portrait(p) {
+    var img = document.createElement('img');
+    img.className = 'deploy-portrait';
+    img.src = p.portraitUrl; img.alt = ''; img.width = 32; img.height = 32;
+    return img;
+  }
+
+  // The tray: every living named pilot. One already in a mech says which, and can still be picked up to move or remove them.
+  function renderTray() {
+    tray.hidden = !pilots.length;
+    trayList.textContent = '';
+    pilots.forEach(function (p) {
+      var inUnit = unitById(unitOf(p.name));
+      var chip = el('button', 'deploy-pilot' + (held === p.name ? ' held' : '') + (inUnit ? ' assigned' : ''));
+      chip.type = 'button';
+      chip.setAttribute('aria-pressed', held === p.name ? 'true' : 'false');
+      chip.appendChild(portrait(p));
+      var text = el('span', 'deploy-pilot-text');
+      text.appendChild(el('b', null, p.name));
+      text.appendChild(el('small', null, inUnit ? 'in ' + inUnit.name : (p.rank || 'Unassigned')));
+      chip.appendChild(text);
+      chip.appendChild(skills(p));
+      chip.addEventListener('click', function () { held = held === p.name ? '' : p.name; render(); });
+      makeDraggable(chip, p.name);
+      trayList.appendChild(chip);
+    });
+    dialog.classList.toggle('holding-pilot', !!held);
+  }
+  // The tray also takes a pilot back off a mech.
+  tray.addEventListener('dragover', function (e) { if (dragName(e) || (e.dataTransfer && e.dataTransfer.types && e.dataTransfer.types.indexOf('text/plain') >= 0)) { e.preventDefault(); tray.classList.add('over'); } });
+  tray.addEventListener('dragleave', function () { tray.classList.remove('over'); });
+  tray.addEventListener('drop', function (e) {
+    e.preventDefault();
+    tray.classList.remove('over');
+    var name = dragName(e);
+    if (name && unitOf(name)) unassign(name);
+  });
+
+  // A mech's pilot slot: the pilot in it (draggable, with an x), or a dashed place to drop one.
+  function slot(u, unavailable) {
+    var box = el('div', 'deploy-slot' + (unavailable ? ' unavailable' : ''));
+    if (!pilots.length || unavailable) return box;
+    var p = pilotNamed(crew[u.id]);
+    if (p) {
+      box.classList.add('filled');
+      box.appendChild(portrait(p));
+      var text = el('span', 'deploy-pilot-text');
+      text.appendChild(el('b', null, p.name));
+      text.appendChild(el('small', null, p.rank || 'Pilot'));
+      box.appendChild(text);
+      box.appendChild(skills(p));
+      var x = el('button', 'deploy-slot-x', '×');
+      x.type = 'button';
+      x.title = 'Take ' + p.name + ' out of this mech';
+      x.setAttribute('aria-label', 'Take ' + p.name + ' out of ' + u.name);
+      x.addEventListener('click', function (e) { e.stopPropagation(); unassign(p.name); });
+      box.appendChild(x);
+      makeDraggable(box, p.name);
+    } else {
+      box.appendChild(el('span', 'deploy-slot-empty', held ? 'Put ' + held + ' here' : 'Drop a pilot here'));
+    }
+    // A click puts the pilot being held in this mech (this is also how it works by keyboard or on a touch screen).
+    box.tabIndex = 0;
+    box.setAttribute('role', 'button');
+    box.setAttribute('aria-label', 'Pilot for ' + u.name + (p ? ': ' + p.name : ''));
+    function put() { if (held) assign(u.id, held); }
+    box.addEventListener('click', put);
+    box.addEventListener('keydown', function (e) { if ((e.key === 'Enter' || e.key === ' ') && e.target === box) { e.preventDefault(); put(); } });
+    box.addEventListener('dragover', function (e) { e.preventDefault(); box.classList.add('over'); });
+    box.addEventListener('dragleave', function () { box.classList.remove('over'); });
+    box.addEventListener('drop', function (e) {
+      e.preventDefault();
+      box.classList.remove('over');
+      var name = dragName(e);
+      if (name) assign(u.id, name);
+    });
+    return box;
+  }
+
   function row(u) {
     var unavailable = u.destroyed || u.unknown;
     var li = el('li', 'deploy-unit' + (unavailable ? ' unavailable' : '') + (selected[u.id] ? ' picked' : ''));
     var label = el('label');
     var box = document.createElement('input');
     box.type = 'checkbox';
+    box.className = 'themed-box';
     box.checked = !!selected[u.id];
     box.disabled = unavailable;
     box.addEventListener('change', function () {
@@ -65,33 +211,49 @@
       update();
     });
     label.appendChild(box);
-    label.appendChild(MechRow.build(u));
+    // The pilot's skills are shown in the slot, so the row itself leaves out the crew the hangar has now.
+    var view = {};
+    Object.keys(u).forEach(function (k) { if (k !== 'gunnery' && k !== 'piloting' && k !== 'pilot') view[k] = u[k]; });
+    label.appendChild(MechRow.build(pilots.length ? view : u));
     li.appendChild(label);
+    if (pilots.length) {
+      li.classList.add('has-slot');
+      li.appendChild(slot(u, unavailable));
+    }
     return li;
   }
 
   function render() {
     list.textContent = '';
     units.forEach(function (u) { list.appendChild(row(u)); });
+    renderTray();
     update();
   }
 
   // Shows a hangar (cached or live). A choice the player has already made is kept for the units that are still there; before
-  // that, the units already in the Deployed group are ticked.
+  // that, the units already in the Deployed group are ticked and the named pilots already in a mech are shown in it.
   function apply(data) {
-    var before = selected;
+    var before = selected, beforeCrew = crew;
     units = data.units || [];
     if (data.limit) limit = data.limit;
     selected = {};
+    original = {};
+    crew = {};
     units.forEach(function (u) {
       if (u.destroyed || u.unknown) return;
       if (touched ? before[u.id] : u.inDeployed) selected[u.id] = true;
+    });
+    units.forEach(function (u) {
+      var p = u.pilot && pilotNamed(u.pilot);
+      if (p && !(p.name.toLowerCase() in invert(original))) original[u.id] = p.name;
+      if (crewTouched) { if (beforeCrew[u.id]) crew[u.id] = beforeCrew[u.id]; } else if (original[u.id]) crew[u.id] = original[u.id];
     });
     resetRow.hidden = !(data.hasOperation && canModify);
     status.hidden = units.length > 0;
     if (!units.length) status.textContent = 'Your hangar force has no mechs in it yet. Add some in MekBay first.';
     render();
   }
+  function invert(map) { var out = {}; for (var k in map) out[map[k].toLowerCase()] = k; return out; }
 
   // A failed live read keeps a hangar that is already showing, and says so.
   function failed(message) {
@@ -103,6 +265,8 @@
     error.textContent = '';
     reset.checked = false;
     touched = false;
+    crewTouched = false;
+    held = '';
     if (cachedData && cachedData.units) {
       apply(cachedData); // instant
     } else {
@@ -111,7 +275,10 @@
       list.textContent = '';
       units = [];
       selected = {};
+      crew = {};
+      original = {};
       resetRow.hidden = true;
+      renderTray();
       update();
     }
     fetch('/api/mekbay/hangar?' + query, { credentials: 'same-origin', cache: 'no-store' }).then(function (res) {
@@ -135,6 +302,11 @@
     error.textContent = '';
     var body = query;
     units.forEach(function (u) { if (selected[u.id]) body += '&units=' + encodeURIComponent(u.id); });
+    // Every mech that has a named pilot, plus any that had one and no longer does, so skills are brought up to date and removals are saved.
+    units.forEach(function (u) {
+      var want = crew[u.id] || '', was = original[u.id] || '';
+      if (want || want !== was) body += '&assign_unit=' + encodeURIComponent(u.id) + '&assign_pilot=' + encodeURIComponent(want);
+    });
     if (reset.checked) body += '&reset_opfor=1';
     fetch('/api/mekbay/deploy', {
       method: 'POST',
