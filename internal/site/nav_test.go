@@ -12,6 +12,10 @@ func TestManageBackLinkReturnsToTheSortie(t *testing.T) {
 	if !strings.Contains(sortie, `id="manage-link" href="/refusalwar/manage/?back=scenario_001"`) {
 		t.Fatalf("the Deploy section should link to Manage force carrying the sortie: %.600s", sortie)
 	}
+	// A scenario that provides its own mechs has no hangar to manage for it.
+	if strings.Contains(body(t, srv, "/refusalwar/scenario_000/", cookie), `id="manage-link"`) {
+		t.Error("a scenario with provided mechs should not offer Manage force")
+	}
 	man := body(t, srv, "/refusalwar/manage/?back=scenario_001", cookie)
 	if !strings.Contains(man, `<a href="/refusalwar/scenario_001/">&lsaquo; Back to Sortie 001: `) {
 		t.Errorf("Back should return to the sortie: %.400s", man)

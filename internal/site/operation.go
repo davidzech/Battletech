@@ -298,6 +298,10 @@ func (s *Server) deploy(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	if msg := sc.rulesProblem([][]string{ids}, [][]CrewAssignment{crew}); msg != "" {
+		http.Error(w, msg, http.StatusBadRequest)
+		return
+	}
 	existing, has, err := s.store.MekBayOperation(r.Context(), pt.ID, c.Slug, sc.ID)
 	if err != nil {
 		http.Error(w, "could not load operation", http.StatusInternalServerError)

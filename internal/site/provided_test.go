@@ -115,7 +115,7 @@ func TestProvidedScenarioDeploy(t *testing.T) {
 		return post(t, srv, "/api/deploy/plan", v, cookie, srv.URL)
 	}
 	pick := view.Units[1].ID
-	if got := plan("p1_units", pick, "p1_assign_unit", pick, "p1_assign_pilot", "Alrek").StatusCode; got != http.StatusOK {
+	if got := plan("p1_units", pick, "p1_assign_unit", pick, "p1_assign_pilot", "Alrek").StatusCode; got != http.StatusOK { // Scenario 000 needs a named pilot on each mech
 		t.Errorf("planning with a provided mech: %d", got)
 	}
 	if got := plan("p1_units", "ua").StatusCode; got != http.StatusBadRequest {
@@ -123,5 +123,79 @@ func TestProvidedScenarioDeploy(t *testing.T) {
 	}
 	if got := plan("p1_units", pick, "p1_units", pick).StatusCode; got != http.StatusBadRequest {
 		t.Errorf("a provided mech can only be taken once: %d", got)
+	}
+}
+
+// Scenario 000 allows two mechs in all, each with a named pilot, and has no BV limit.
+func TestScenarioRules(t *testing.T) {
+	sc := &Scenario{UnitLimit: 2, PilotsRequired: true}
+	crew := func(units ...string) []CrewAssignment {
+		var out []CrewAssignment
+		for _, u := range units {
+			out = append(out, CrewAssignment{UnitID: u, Name: "Alrek"})
+		}
+		return out
+	}
+	for name, c := range map[string]struct {
+		units [][]string
+		crews [][]CrewAssignment
+		bad   bool
+	}{
+		"two mechs, both crewed":      {[][]string{{"a", "b"}}, [][]CrewAssignment{crew("a", "b")}, false},
+		"one each for two players":    {[][]string{{"a"}, {"b"}}, [][]CrewAssignment{crew("a"), crew("b")}, false},
+		"three mechs is over":         {[][]string{{"a", "b"}, {"c"}}, [][]CrewAssignment{crew("a", "b"), crew("c")}, true},
+		"a mech without a pilot":      {[][]string{{"a", "b"}}, [][]CrewAssignment{crew("a")}, true},
+		"a pilot sent empty":          {[][]string{{"a"}}, [][]CrewAssignment{{{UnitID: "a"}}}, true},
+		"no assignments at all":       {[][]string{{"a"}}, nil, true},
+		"another player's pilot only": {[][]string{{"a"}, {"b"}}, [][]CrewAssignment{crew("b"), crew("b")}, true},
+	} {
+		if msg := sc.rulesProblem(c.units, c.crews); (msg != "") != c.bad {
+			t.Errorf("%s: %q", name, msg)
+		}
+	}
+	// No rules, no problems.
+	if msg := (&Scenario{}).rulesProblem([][]string{{"a", "b", "c"}}, nil); msg != "" {
+		t.Errorf("a scenario without rules: %q", msg)
+	}
+}
+
+func TestScenario000EnforcesItsRules(t *testing.T) {
+	fake := &fakeMekBay{hangar: startingHangar()}
+	srv, _ := newMekBayTestServer(t, fake)
+	cookie := post(t, srv, "/api/seed", url.Values{"seed": {"wolfpack2026"}}, nil, "").Cookies()[0]
+	post(t, srv, "/api/account", url.Values{"account": {"Wolf Pack"}, "uid_p1": {uidP1}}, cookie, srv.URL)
+	if r := post(t, srv, "/api/campaign/start", startForm(goodHangar, "Alrek", "Katarina"), cookie, srv.URL); r.StatusCode != http.StatusNoContent {
+		t.Fatalf("start: %d", r.StatusCode)
+	}
+	pool := providedForce(&Scenario{ProvidedUnits: scenario000Pool})
+	id := func(i int) string { return pool.Units[i].ID }
+	plan := func(kv ...string) int {
+		v := url.Values{"campaign": {"refusalwar"}, "scenario": {"scenario_000"}, "players": {"1"}}
+		for i := 0; i+1 < len(kv); i += 2 {
+			v.Add(kv[i], kv[i+1])
+		}
+		return post(t, srv, "/api/deploy/plan", v, cookie, srv.URL).StatusCode
+	}
+	if got := plan("p1_units", id(0), "p1_units", id(1), "p1_assign_unit", id(0), "p1_assign_pilot", "Alrek", "p1_assign_unit", id(1), "p1_assign_pilot", "Katarina"); got != http.StatusOK {
+		t.Errorf("two crewed mechs: %d", got)
+	}
+	if got := plan("p1_units", id(0), "p1_units", id(1), "p1_units", id(2), "p1_assign_unit", id(0), "p1_assign_pilot", "Alrek"); got != http.StatusBadRequest {
+		t.Errorf("three mechs: %d", got)
+	}
+	if got := plan("p1_units", id(0), "p1_units", id(1), "p1_assign_unit", id(0), "p1_assign_pilot", "Alrek"); got != http.StatusBadRequest {
+		t.Errorf("a mech without a pilot: %d", got)
+	}
+	if got := plan("p1_units", id(0)); got != http.StatusBadRequest {
+		t.Errorf("no pilot at all: %d", got)
+	}
+	page := body(t, srv, "/refusalwar/scenario_000/", cookie)
+	if !strings.Contains(page, `data-unit-limit="2"`) || !strings.Contains(page, `data-pilots-required="1"`) || !strings.Contains(page, `data-limit="0"`) {
+		t.Errorf("the popup is told the rules: %.400s", page)
+	}
+	if !strings.Contains(page, "This mission provides its own mechs. They are only used for this mission, and will be lost upon completion.") {
+		t.Error("the short provided-mechs text")
+	}
+	if p := body(t, srv, "/refusalwar/scenario_001/", cookie); !strings.Contains(p, `data-unit-limit="0"`) || strings.Contains(p, `data-pilots-required="1"`) {
+		t.Error("Sortie 001 has no unit limit or pilot rule")
 	}
 }

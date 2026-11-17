@@ -3,6 +3,8 @@ id: scenario_000
 title: Trial of Position
 planet: Strana Mechty
 map: Circles of Equals
+unit_limit: 2
+pilots_required: true
 provided_units:
   - BMVulture_Prime
   - BMMadCat_Prime
@@ -56,12 +58,12 @@ Layout both parts of the Circles of Equals battlemat.
 
 Each cadet is given a machine from the Trial's pool:
 
-- a [Mad Dog Prime](https://mekbay.com/?gs=cbt&shareUnit=BMVulture_Prime&tab=Sheet),
-- a [Timber Wolf Prime](https://mekbay.com/?gs=cbt&shareUnit=BMMadCat_Prime&tab=Sheet),
-- a [Nova Prime](https://mekbay.com/?gs=cbt&shareUnit=BMBlackHawk_Prime&tab=Sheet), or
-- a [Stormcrow Prime](https://mekbay.com/?gs=cbt&shareUnit=BMRyoken_Prime&tab=Sheet).
+- [Mad Dog Prime](https://mekbay.com/?gs=cbt&shareUnit=BMVulture_Prime&tab=Sheet)
+- [Timber Wolf Prime](https://mekbay.com/?gs=cbt&shareUnit=BMMadCat_Prime&tab=Sheet)
+- [Nova Prime](https://mekbay.com/?gs=cbt&shareUnit=BMBlackHawk_Prime&tab=Sheet)
+- [Stormcrow Prime](https://mekbay.com/?gs=cbt&shareUnit=BMRyoken_Prime&tab=Sheet)
 
-These machines are lent for the Trial only: they are not part of your force, and whatever happens to them does not follow you out of the Circle.
+These machines are lent for the Trial only: they are not part of your force, and whatever happens to them does not follow you out of the Circle. No more than two machines may take the field in all, and each must have a named pilot.
 
 **Deployment:** Each player spawns their mech on the road intersection. Hex positions: TBD
 

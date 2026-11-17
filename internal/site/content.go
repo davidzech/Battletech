@@ -32,11 +32,15 @@ type Scenario struct {
 	// ProvidedUnits, when set (front matter provided_units: MekBay unit IDs), replace the player's hangar for this scenario: the players pick from this fixed pool
 	// instead, for story reasons. The units exist only for this scenario and never touch the hangar (see provided.go).
 	ProvidedUnits []string
-	BVLimit       int           // most battle value the player may deploy (front matter bv_limit); 0 means no limit
-	Next          string        // id of the default next scenario
-	BriefingHTML  template.HTML // the fluff: a leading blockquote in Setup.md
-	SetupHTML     template.HTML
-	OutcomeHTML   template.HTML
+	// UnitLimit is the most mechs the players may take onto the field in all (front matter unit_limit); 0 means no limit. PilotsRequired (pilots_required) makes
+	// every mech taken need a named pilot assigned.
+	UnitLimit      int
+	PilotsRequired bool
+	BVLimit        int           // most battle value the player may deploy (front matter bv_limit); 0 means no limit
+	Next           string        // id of the default next scenario
+	BriefingHTML   template.HTML // the fluff: a leading blockquote in Setup.md
+	SetupHTML      template.HTML
+	OutcomeHTML    template.HTML
 }
 
 // ReadoutRow is one line of the technical readout drawn over a scenario's image.
@@ -158,6 +162,8 @@ type frontData struct {
 	Forces     map[string]string   `yaml:"forces"`
 	BVLimit    int                 `yaml:"bv_limit"`
 	Provided   []string            `yaml:"provided_units"`
+	UnitLimit  int                 `yaml:"unit_limit"`
+	PilotsReq  bool                `yaml:"pilots_required"`
 	MinPlayers int                 `yaml:"min_players"`
 	MaxPlayers int                 `yaml:"max_players"`
 	// StartingNamedPilots is how many named pilots a company must name to begin the campaign (Intro.md).
@@ -260,23 +266,25 @@ func (l Library) load(name string) (*Campaign, bool) {
 		setupBody, waypoints := splitWaypoints(setupBody)
 		outcome, outcomeBody := readMarkdown(filepath.Join(sdir, "Outcome.md"))
 		s := Scenario{
-			Dir:           sdir,
-			Slug:          strings.ToLower(e.Name()),
-			ID:            setup.ID,
-			Number:        m[1],
-			Title:         setup.Title,
-			Map:           setup.Map,
-			Planet:        setup.Planet,
-			Images:        setup.Images,
-			Readout:       readoutRows(setup.Readout),
-			Waypoints:     waypoints,
-			Forces:        forceFiles(setup.Forces),
-			BVLimit:       setup.BVLimit,
-			ProvidedUnits: setup.Provided,
-			Next:          outcome.DefaultNext,
-			BriefingHTML:  renderBriefing(briefing),
-			SetupHTML:     renderMarkdown(setupBody, false),
-			OutcomeHTML:   renderMarkdown(outcomeBody, true),
+			Dir:            sdir,
+			Slug:           strings.ToLower(e.Name()),
+			ID:             setup.ID,
+			Number:         m[1],
+			Title:          setup.Title,
+			Map:            setup.Map,
+			Planet:         setup.Planet,
+			Images:         setup.Images,
+			Readout:        readoutRows(setup.Readout),
+			Waypoints:      waypoints,
+			Forces:         forceFiles(setup.Forces),
+			BVLimit:        setup.BVLimit,
+			ProvidedUnits:  setup.Provided,
+			UnitLimit:      setup.UnitLimit,
+			PilotsRequired: setup.PilotsReq,
+			Next:           outcome.DefaultNext,
+			BriefingHTML:   renderBriefing(briefing),
+			SetupHTML:      renderMarkdown(setupBody, false),
+			OutcomeHTML:    renderMarkdown(outcomeBody, true),
 		}
 		if s.ID == "" {
 			s.ID = s.Slug

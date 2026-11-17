@@ -38,6 +38,8 @@
   var count = document.getElementById('deploy-count');
 
   var limit = parseInt(dialog.dataset.limit, 10) || 0;
+  var unitLimit = parseInt(dialog.dataset.unitLimit, 10) || 0;      // the most mechs in all (a scenario rule), 0 for none
+  var needPilots = dialog.dataset.pilotsRequired === '1';           // every mech taken needs a named pilot (a scenario rule)
   var query = 'campaign=' + encodeURIComponent(dialog.dataset.campaign) + '&scenario=' + encodeURIComponent(dialog.dataset.scenario);
   var MAX = 4; // the most players a company can have MekBay accounts for
   var maxPlayers = Math.min(MAX, Math.max(1, parseInt(dialog.dataset.maxPlayers, 10) || 1));
@@ -118,7 +120,16 @@
     return n;
   }
   function totalBV() { var t = 0; for (var i = 0; i < playerCount; i++) t += bvOf(i); return t; }
-  function over() { return limit > 0 && totalBV() > limit; }
+  function totalCount() { var t = 0; for (var i = 0; i < playerCount; i++) t += countOf(i); return t; }
+  function over() { return (limit > 0 && totalBV() > limit) || (unitLimit > 0 && totalCount() > unitLimit); }
+  // Mechs a player has taken that have no named pilot, when the scenario requires one on each.
+  function unmanned(i) {
+    if (!needPilots) return 0;
+    var n = 0;
+    units.forEach(function (u) { if (plan(i).selected[u.id] && !plan(i).crew[u.id]) n++; });
+    return n;
+  }
+  function anyUnmanned() { for (var i = 0; i < playerCount; i++) if (unmanned(i)) return true; return false; }
 
   // ---- Assigning pilots (to the current player's mechs)
   function assign(unitId, name) {
@@ -271,7 +282,8 @@
     box.type = 'checkbox';
     box.className = 'themed-box';
     box.checked = !!cur().selected[u.id];
-    box.disabled = unavailable;
+    // A scenario's unit limit is reached: the mechs not yet taken can't be.
+    box.disabled = unavailable || (unitLimit > 0 && !cur().selected[u.id] && totalCount() >= unitLimit);
     box.addEventListener('change', function () {
       touched = true;
       if (box.checked) cur().selected[u.id] = true; else { delete cur().selected[u.id]; delete cur().crew[u.id]; } // a mech not being taken has no pilot
@@ -291,15 +303,29 @@
   // ---- Showing a step
   // The meter: on a player step, what this player has taken and the force total against the limit (two figures, set apart); with one player, one figure.
   function setMeter() {
-    var total = totalBV(), limitText = (limit ? ' / ' + fmt(limit) : '') + ' BV' + (limit ? '' : ' (no limit)');
+    var total = totalBV();
+    // The BV part says "(no limit)" only when nothing else limits the force; a scenario with a unit limit counts mechs against it instead.
+    var limitText = (limit ? ' / ' + fmt(limit) : '') + ' BV' + (limit || unitLimit ? '' : ' (no limit)');
+    var mechs = function (n) { return n + (unitLimit ? ' / ' + unitLimit : '') + (unitLimit || n !== 1 ? ' mechs' : ' mech'); };
     meter.textContent = '';
     if (playerCount > 1) {
       meter.appendChild(el('span', null, 'This player: ' + countOf(step) + ' selected · ' + fmt(bvOf(step)) + ' BV'));
-      meter.appendChild(el('span', null, 'Force total: ' + fmt(total) + limitText));
+      meter.appendChild(el('span', null, 'Force total: ' + (unitLimit ? mechs(totalCount()) + ' · ' : '') + fmt(total) + limitText));
     } else {
-      meter.appendChild(el('span', null, countOf(0) + ' selected · ' + fmt(total) + limitText));
+      meter.appendChild(el('span', null, (unitLimit ? mechs(countOf(0)) : countOf(0) + ' selected') + ' · ' + fmt(total) + limitText));
     }
     meter.classList.toggle('over', over());
+    // The scenario's own rules, in words, and what is still missing.
+    var rules = document.getElementById('deploy-rules');
+    var parts = [];
+    if (unitLimit) parts.push('Take up to ' + unitLimit + ' mechs in all');
+    if (needPilots) parts.push('every mech needs a named pilot');
+    rules.hidden = !parts.length;
+    if (parts.length) {
+      var text = parts.join(', ') + '.';
+      if (anyUnmanned()) text += ' Assign a named pilot to each mech you take.';
+      rules.textContent = text.charAt(0).toUpperCase() + text.slice(1);
+    }
   }
 
   function renderPlayers() {
@@ -359,8 +385,10 @@
     });
     var tot = 0;
     data.forEach(function (pl) { tot += pl.bv; });
-    var total = el('p', 'deploy-review-total' + (limit > 0 && tot > limit ? ' over' : ''));
-    total.appendChild(el('span', null, 'Force total: ' + fmt(tot) + (limit ? ' / ' + fmt(limit) : '') + ' BV'));
+    var count = 0;
+    data.forEach(function (pl) { count += pl.units.length; });
+    var total = el('p', 'deploy-review-total' + ((limit > 0 && tot > limit) || (unitLimit > 0 && count > unitLimit) ? ' over' : ''));
+    total.appendChild(el('span', null, 'Force total: ' + (unitLimit ? count + ' / ' + unitLimit + ' mechs · ' : '') + fmt(tot) + (limit ? ' / ' + fmt(limit) : '') + ' BV'));
     review.appendChild(total);
   }
 
@@ -391,8 +419,8 @@
     }
     var ok = !busy && !over() && !missingId(playerCount);
     if (missingId(playerCount)) error.textContent = 'Player ' + missingId(playerCount) + ' needs a MekBay user ID: add it under Account details.';
-    if (!last) next.disabled = !ok || countOf(step) === 0;
-    else { var allHave = true; for (var i = 0; i < playerCount; i++) if (countOf(i) === 0) allHave = false; go.disabled = !ok || !allHave; }
+    if (!last) next.disabled = !ok || countOf(step) === 0 || unmanned(step) > 0;
+    else { var allHave = true; for (var i = 0; i < playerCount; i++) if (countOf(i) === 0) allHave = false; go.disabled = !ok || !allHave || anyUnmanned(); }
   }
 
   function render() {

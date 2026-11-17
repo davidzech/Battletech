@@ -58,6 +58,36 @@ type planResult struct {
 	Lobby []lobbyForceView `json:"lobby"`
 }
 
+// rulesProblem checks a plan against the scenario's own rules, beyond the BV limit: the most mechs in all (unit_limit), and a named pilot on every mech
+// (pilots_required). units[i] and crews[i] are player i+1's mech IDs and pilot assignments. It returns the first problem as a sentence, or "".
+func (sc *Scenario) rulesProblem(units [][]string, crews [][]CrewAssignment) string {
+	total := 0
+	for _, u := range units {
+		total += len(u)
+	}
+	if sc.UnitLimit > 0 && total > sc.UnitLimit {
+		return fmt.Sprintf("This mission allows at most %d mechs in all; you chose %d.", sc.UnitLimit, total)
+	}
+	if sc.PilotsRequired {
+		for i, u := range units {
+			named := map[string]bool{}
+			if i < len(crews) {
+				for _, a := range crews[i] {
+					if a.Name != "" {
+						named[a.UnitID] = true
+					}
+				}
+			}
+			for _, id := range u {
+				if !named[id] {
+					return "Every mech on this mission needs a named pilot: assign one to each."
+				}
+			}
+		}
+	}
+	return ""
+}
+
 // planProblem checks a whole plan against the hangar and returns the first problem as a sentence, or "". units[i] is player i+1's mech IDs.
 func planProblem(h HangarForce, units [][]string, bvLimit int) string {
 	var all []string
@@ -163,6 +193,10 @@ func (s *Server) deployPlan(w http.ResponseWriter, r *http.Request) {
 		crews[i] = crew
 		res.Players = append(res.Players, pp)
 		res.TotalBV += pp.BV
+	}
+	if msg := sc.rulesProblem(units, crews); msg != "" {
+		http.Error(w, msg, http.StatusBadRequest)
+		return
 	}
 	// Build the lobby's plan (who owns each force) now, so a plan the real deploy couldn't carry out is refused here.
 	uids, err := s.store.PlayerUIDs(r.Context(), pt.ID)
