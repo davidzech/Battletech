@@ -6,11 +6,11 @@ map: Circles of Equals
 unit_limit: 2
 pilots_required: true
 provided_units:
-  - BMVulture_Prime
-  - BMMadCat_Prime
   - BMBlackHawk_Prime
   - BMRyoken_Prime
   - BMShadowCat_Prime
+  - BMPouncer_Prime
+  - BMGrendel_Prime
 forces:
   opfor1: OpFor1.mul
   opfor2: OpFor2.mul
@@ -59,11 +59,11 @@ Layout both parts of the Circles of Equals battlemat.
 
 Each cadet is given a machine from the Trial's pool:
 
-- [Mad Dog Prime](https://mekbay.com/?gs=cbt&shareUnit=BMVulture_Prime&tab=Sheet)
-- [Timber Wolf Prime](https://mekbay.com/?gs=cbt&shareUnit=BMMadCat_Prime&tab=Sheet)
 - [Nova Prime](https://mekbay.com/?gs=cbt&shareUnit=BMBlackHawk_Prime&tab=Sheet)
 - [Stormcrow Prime](https://mekbay.com/?gs=cbt&shareUnit=BMRyoken_Prime&tab=Sheet)
 - [Shadow Cat Prime](https://mekbay.com/?gs=cbt&shareUnit=BMShadowCat_Prime&tab=Sheet)
+- [Pouncer Prime](https://mekbay.com/?gs=cbt&shareUnit=BMPouncer_Prime&tab=Sheet)
+- [Mongrel Prime](https://mekbay.com/?gs=cbt&shareUnit=BMGrendel_Prime&tab=Sheet)
 
 These machines are lent for the Trial only: they are not part of your force, and whatever happens to them does not follow you out of the Circle. No more than two machines may take the field in all, and each must have a named pilot.
 
