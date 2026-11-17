@@ -1079,3 +1079,12 @@ dialog button.rec-skills-reset:disabled { opacity: 0.4; cursor: not-allowed; }
 .repair-cost.short, .confirm-detail.short { color: #ff7a59; }
 .confirm-detail { margin: 0 0 1rem; }
 .confirm-detail[hidden] { display: none; }
+
+/* The Danger zone is collapsed behind its heading, so the advanced and destructive actions aren't in the way. */
+.danger-details > summary { display: inline-flex; align-items: center; gap: 0.5rem; list-style: none; cursor: pointer; }
+.danger-details > summary::-webkit-details-marker { display: none; }
+.danger-details > summary h2 { margin: 0.4rem 0; }
+.danger-details > summary::after { content: "\25BE"; font-size: 1.2rem; color: #e5594f; transition: transform 0.15s; }
+.danger-details[open] > summary::after { transform: rotate(180deg); }
+.danger-details > summary:focus-visible { outline: 2px solid #e5594f; outline-offset: 3px; }
+.danger-details[open] > summary { margin-bottom: 0.5rem; }
