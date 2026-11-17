@@ -109,12 +109,14 @@
 <div class="hangar-units-summary" id="hangar-units-summary"></div>
 <p class="muted">{{.Play.CompanyName}}&rsquo;s MekBay hangar holds your mechs, and scenarios deploy from it.</p>
 <div class="mech-list" id="hangar-units-list"><p class="muted">Reading your hangar&hellip;</p></div>
-<p class="downloads" id="campaign-run" data-campaign="{{.Campaign.Slug}}"><a class="button" href="{{.Run.HangarURL}}" target="_blank" rel="noopener noreferrer">Open hangar</a><button type="button" class="button" id="run-open">Change hangar link</button></p>
+<p class="downloads" id="campaign-run" data-campaign="{{.Campaign.Slug}}"><a class="button" href="{{.Run.HangarURL}}" target="_blank" rel="noopener noreferrer">Open hangar</a></p>
 </section>
 <section class="danger-zone" id="danger-zone" data-campaign="{{.Campaign.Slug}}">
 <h2>Danger zone</h2>
 <p class="muted">Advanced Management corrects pilot records: rename, revive or delete a pilot, reset their SP allocation or Edge abilities, or override their total SP.</p>
 <p class="danger-action"><button type="button" class="link-button" id="records-open">Advanced Management&hellip;</button></p>
+<p class="muted">Changing the hangar link points this campaign at a different MekBay force. Your pilots and warchest stay as they are, but every unit comes from the new hangar.</p>
+<p class="danger-action"><button type="button" class="button" id="run-open">Change hangar link&hellip;</button></p>
 <p class="muted">Deleting this campaign removes {{.Play.CompanyName}}&rsquo;s progress in it: its named pilots and the link to its hangar. Your company and anything saved in MekBay are not touched.</p>
 <button type="button" class="button danger" id="delete-open">Delete campaign&hellip;</button>
 <dialog id="delete-dialog" aria-labelledby="delete-title">
