@@ -284,6 +284,7 @@ type fakeMekBay struct {
 	purchases  []PurchaseRequest
 	clones     []CloneRequest
 	sales      []SellRequest
+	swaps      []SwapRequest
 	cloneErr   error
 	serviceErr error
 }
@@ -308,6 +309,13 @@ func (f *fakeMekBay) SellUnit(_ context.Context, req SellRequest) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.sales = append(f.sales, req)
+	return f.serviceErr
+}
+
+func (f *fakeMekBay) SwapUnit(_ context.Context, req SwapRequest) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.swaps = append(f.swaps, req)
 	return f.serviceErr
 }
 

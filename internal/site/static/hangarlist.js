@@ -149,6 +149,56 @@
     });
   }
 
+  // Reconfigure (omnimechs only): a dialog listing the unit's other variants with their prices, like the repair dialog.
+  var swapDlg = document.getElementById('swap-dialog');
+  var swapUnitRow = null;
+  function swapOption() {
+    var to = document.getElementById('swap-select').value;
+    return (swapUnitRow.swapOptions || []).filter(function (o) { return o.unit === to; })[0];
+  }
+  function swapCostText() {
+    var o = swapOption(), cost = o ? o.cost : 0, after = warchest - cost;
+    var text = document.getElementById('swap-cost');
+    text.textContent = 'Cost ' + cost + ' SP. Warchest ' + commas(warchest) + ' → ' + commas(Math.max(after, 0)) + ' SP.' + (after < 0 ? ' Not enough funds.' : '');
+    text.classList.toggle('short', after < 0);
+    document.getElementById('swap-apply').disabled = !o || after < 0;
+  }
+  function swap(u) {
+    if (!swapDlg || typeof swapDlg.showModal !== 'function') return;
+    swapUnitRow = u;
+    document.getElementById('swap-title').textContent = 'Reconfigure ' + u.name;
+    document.getElementById('swap-sub').textContent = fullName(u) + ' — ' + commas(u.bv) + ' BV';
+    var select = document.getElementById('swap-select');
+    select.textContent = '';
+    (u.swapOptions || []).forEach(function (o) {
+      var opt = document.createElement('option');
+      opt.value = o.unit;
+      opt.textContent = (o.model || o.unit) + ' — ' + commas(o.bv) + ' BV — ' + o.cost + ' SP';
+      select.appendChild(opt);
+    });
+    document.getElementById('swap-error').textContent = '';
+    swapCostText();
+    swapDlg.showModal();
+  }
+  if (swapDlg) {
+    document.getElementById('swap-select').addEventListener('change', swapCostText);
+    document.getElementById('swap-cancel').addEventListener('click', function () { swapDlg.close(); });
+    swapDlg.addEventListener('click', function (e) { if (e.target === swapDlg) swapDlg.close(); });
+    document.getElementById('swap-form').addEventListener('submit', function (e) {
+      e.preventDefault();
+      var apply = document.getElementById('swap-apply'), err = document.getElementById('swap-error');
+      err.textContent = '';
+      apply.disabled = true;
+      fetch('/api/hangar/swap', {
+        method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, credentials: 'same-origin',
+        body: 'campaign=' + encodeURIComponent(section.dataset.campaign) + '&unit=' + encodeURIComponent(swapUnitRow.id) + '&to=' + encodeURIComponent(document.getElementById('swap-select').value)
+      }).then(function (res) {
+        if (res.ok) { swapDlg.close(); location.reload(); return; }
+        return res.text().then(function (t) { err.textContent = t.trim() || 'Something went wrong.'; swapCostText(); });
+      }, function () { err.textContent = 'Could not reach the server.'; swapCostText(); });
+    });
+  }
+
   // The buttons at the right of a row. Anything the unit can't do is disabled, with the reason as its tooltip.
   function actionsFor(u) {
     if (u.unknown || u.notMech) return null;
@@ -164,12 +214,17 @@
         disabled: !canModify || !(u.repairLevels && u.repairLevels.length),
         title: !canModify ? NO_UID : truly ? 'Truly destroyed units cannot be repaired.' : !(u.repairLevels && u.repairLevels.length) ? 'Nothing to repair.' : 'Choose a repair'
       },
+      u.swapOptions && u.swapOptions.length ? {
+        label: 'Reconfigure', onClick: function () { swap(u); },
+        disabled: !canModify || !u.sellFull,
+        title: !canModify ? NO_UID : !u.sellFull ? 'An omnimech has to be fully repaired and rearmed before it can be reconfigured.' : 'Swap to another variant of this omnimech'
+      } : null,
       {
         label: 'Sell', onClick: function () { sell(u); },
         disabled: !canModify,
         title: !canModify ? NO_UID : 'Sell for ' + u.sellValue + ' SP' + (u.sellFull ? '' : ' (repair and rearm it first to get twice as much)')
       }
-    ];
+    ].filter(Boolean);
   }
 
   function render(data) {

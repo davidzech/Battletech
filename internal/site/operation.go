@@ -82,6 +82,8 @@ type hangarUnitView struct {
 	// SellValue is the SP the unit sells for (see sell.go), and SellFull whether that is the full price, which only a fully repaired and rearmed unit gets.
 	SellValue int  `json:"sellValue"`
 	SellFull  bool `json:"sellFull"`
+	// SwapOptions are the other variants an omnimech can be reconfigured to, with their prices (see swap.go); empty for any other unit.
+	SwapOptions []swapOption `json:"swapOptions,omitempty"`
 }
 
 var chassisNames = regexp.MustCompile(`^(.*?)\s*\((.+)\)$`)
@@ -144,6 +146,7 @@ func hangarViews(h HangarForce) []hangarUnitView {
 			v.AmmoBreakdown = ammoBreakdown(hu, u)
 			v.SellFull = unitPristine(hu)
 			v.SellValue = sellValue(u.BV, v.SellFull)
+			v.SwapOptions = swapOptions(u)
 		}
 		views = append(views, v)
 	}

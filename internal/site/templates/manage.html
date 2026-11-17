@@ -172,6 +172,21 @@
     </div>
   </form>
 </dialog>
+<dialog id="swap-dialog" class="wizard" aria-labelledby="swap-title">
+  <form id="swap-form" autocomplete="off">
+    <h2 id="swap-title">Reconfigure</h2>
+    <p class="muted" id="swap-sub"></p>
+    <label for="swap-select">Variant</label>
+    <select id="swap-select"></select>
+    <p class="muted repair-note">Reconfiguring an omnimech costs half its tonnage plus half the BV it gains (going to a lower BV costs only the half tonnage, with no refund). That is cheaper than selling it and buying the other variant. It has to be fully repaired and rearmed first.</p>
+    <p id="swap-cost" class="repair-cost"></p>
+    <p id="swap-error" class="form-error" role="alert"></p>
+    <div class="form-actions">
+      <button type="submit" class="button" id="swap-apply">Reconfigure</button>
+      <button type="button" id="swap-cancel">Cancel</button>
+    </div>
+  </form>
+</dialog>
 <dialog id="records-dialog" class="wizard" aria-labelledby="records-title">
   <h2 id="records-title">Advanced Management</h2>
   <p class="muted">Every named pilot this campaign has had. Use this to correct a misclick or a mismatch: bring a pilot Killed in Action back, delete a record for good, reset a pilot's SP allocation or their Edge abilities, or override their total SP.</p>

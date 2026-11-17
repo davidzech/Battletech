@@ -30,6 +30,7 @@ type entry struct {
 	Role    string  `json:"role"`
 	Type    string  `json:"type"`
 	Tech    string  `json:"techBase"`
+	Omni    int     `json:"omni,omitempty"`   // 1 for an omnimech, whose variants can be swapped (see swap.go)
 	Engine  string  `json:"engine,omitempty"` // Fusion, XL (Clan), ...; the crippling rule needs to know Fusion from the rest
 	Icon    string  `json:"icon,omitempty"`   // in data/units.json: the path inside mm-data; written to the index as iconFile(path)
 	// Comp is read from data/units.json (the unit's components) and never written; the index keeps only the ammo among them, as Ammo.

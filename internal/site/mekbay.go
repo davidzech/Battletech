@@ -122,6 +122,8 @@ type MekBay interface {
 	PurchaseUnits(ctx context.Context, req PurchaseRequest) error
 	// SellUnit removes a sold unit from the player's hangar force.
 	SellUnit(ctx context.Context, req SellRequest) error
+	// SwapUnit reconfigures an omnimech of the player's hangar force to another variant.
+	SwapUnit(ctx context.Context, req SwapRequest) error
 }
 
 // MekBayClient is the real implementation, speaking to MekBay's WebSocket server.
