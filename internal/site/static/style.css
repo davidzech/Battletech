@@ -873,6 +873,7 @@ html:not(.js) .wp-toggle, html:not(.js) .wp-stamp { display: none; }
 .unit-tip dt { font: 700 0.7rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); align-self: center; }
 .unit-tip dd { margin: 0; }
 .pill-tip { max-width: 20rem; }
+.pill-tip.wide { max-width: none; width: max-content; padding: 0.7rem 0.8rem; }
 .pill-tip .pill-tip-title { display: block; margin-bottom: 0.25rem; font: 700 0.85rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; }
 .pill-tip .pill-tip-title.cond-armor { color: #e8c547; }
 .pill-tip .pill-tip-title.cond-structure { color: #ff9a4d; }
@@ -1181,3 +1182,31 @@ dialog button.deploy-pilot:hover:not(:disabled), .deploy-pilot:focus-visible { b
 dialog button.deploy-slot-x { margin-left: auto; width: 1.6rem; height: 1.6rem; padding: 0; font: 1.2rem/1 var(--body); letter-spacing: 0; text-transform: none; color: var(--muted); background: none; border: 0; box-shadow: none; cursor: pointer; }
 dialog button.deploy-slot-x:hover:not(:disabled), dialog button.deploy-slot-x:focus-visible { color: var(--accent); background: none; border: 0; outline: none; }
 @media (max-width: 640px) { .deploy-unit.has-slot { grid-template-columns: 1fr; } }
+
+/* A pilot card is two rows: who they are, then their four numbers. */
+.deploy-pilot, .deploy-slot.filled { flex-direction: column; align-items: stretch; gap: 0.4rem; width: 14.5rem; padding: 0.4rem 0.5rem 0.45rem; }
+.deploy-pilot-top { display: flex; align-items: center; gap: 0.55rem; min-width: 0; }
+.deploy-pilot-top .deploy-pilot-text { flex: 1; }
+.deploy-slot.filled { justify-content: center; }
+.deploy-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.25rem; }
+.deploy-stat { display: grid; justify-items: center; padding: 0.15rem 0 0.2rem; background: var(--bg); border: 1px solid var(--line); line-height: 1; }
+.deploy-stat-label { font: 700 0.55rem var(--display); letter-spacing: 0.1em; color: var(--muted); }
+.deploy-stat-value { margin-top: 0.12rem; font: 700 1.15rem/1 var(--display); color: var(--accent); }
+.deploy-unit.has-slot { grid-template-columns: minmax(0, 1fr) 15rem; }
+
+/* The hover card for a pilot in the Deploy popup: the Manage page's pilot card, in small. */
+.deploy-pilot-card { display: grid; gap: 0.55rem; }
+.dpc-head { display: flex; align-items: center; gap: 0.7rem; }
+.dpc-head img { flex: none; width: 3.4rem; height: 3.4rem; object-fit: cover; object-position: top; background: var(--bg); border: 1px solid var(--line); }
+.dpc-name { display: block; font: 700 1.15rem var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
+.dpc-sub { display: block; font-size: 0.8rem; color: var(--muted); }
+.dpc-sub b { color: var(--text); }
+.deploy-pilot-card .stat-boxes { margin: 0; }
+.deploy-pilot-card .edge-skills { margin: 0; }
+.dpc-none { font-size: 0.8rem; color: var(--muted); }
+
+/* Every mech row in the Deploy popup is as tall as a row with a pilot in its slot, empty or not, and the mech row fills that height. */
+.deploy-slot { min-height: 5.85rem; }
+.deploy-unit.has-slot > label { align-items: stretch; }
+.deploy-unit.has-slot > label input.themed-box { align-self: center; }
+.deploy-unit.has-slot > label .mech-row { height: 100%; }

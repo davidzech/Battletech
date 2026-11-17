@@ -51,20 +51,43 @@ func (p Page) ForceJSON() string {
 	return cachedJSON(forceData(*p.CachedHangar), p.CachedAt)
 }
 
-// PilotsJSON is the campaign's living named pilots for the Deploy popup's pilot tray: who they are and the skills they would crew a mech with.
+// PilotsJSON is the campaign's living named pilots for the Deploy popup's pilot tray: who they are, their four numbers, and (for the hover card, which
+// looks like the Manage page's pilot card) each column's level, next level and SP progress, the SP earned and the Edge abilities learned.
 func (p Page) PilotsJSON() string {
+	type column struct {
+		Label   string `json:"label"`
+		Level   int    `json:"level"`
+		SP      int    `json:"sp"`
+		HasNext bool   `json:"hasNext"`
+		NextAt  int    `json:"nextAt"`
+		NextLvl int    `json:"nextLvl"`
+		Percent int    `json:"percent"`
+	}
 	type tray struct {
-		Name        string `json:"name"`
-		Rank        string `json:"rank"`
-		PortraitURL string `json:"portraitUrl"`
-		Gunnery     int    `json:"gunnery"`
-		Piloting    int    `json:"piloting"`
+		Name        string   `json:"name"`
+		Rank        string   `json:"rank"`
+		PortraitURL string   `json:"portraitUrl"`
+		Gunnery     int      `json:"gunnery"`
+		Piloting    int      `json:"piloting"`
+		EdgeTokens  int      `json:"edgeTokens"`
+		Abilities   int      `json:"abilities"` // how many Edge abilities their level lets them hold
+		Earned      int      `json:"earned"`
+		Columns     []column `json:"columns"`
+		Learned     []string `json:"learned"` // the Edge abilities they have chosen
 	}
 	out := []tray{}
 	for _, v := range p.Pilots {
-		if !v.Fallen {
-			out = append(out, tray{v.Name, v.Rank, v.PortraitURL, v.Gunnery, v.Piloting})
+		if v.Fallen {
+			continue
 		}
+		t := tray{Name: v.Name, Rank: v.Rank, PortraitURL: v.PortraitURL, Gunnery: v.Gunnery, Piloting: v.Piloting, EdgeTokens: v.EdgeTokens, Abilities: v.Abilities, Earned: v.Earned, Columns: []column{}, Learned: []string{}}
+		for _, c := range v.Columns {
+			t.Columns = append(t.Columns, column{c.Label, c.Level, c.SP, c.HasNext, c.NextAt, c.NextLvl, c.Percent})
+		}
+		for _, a := range v.EdgeLearned {
+			t.Learned = append(t.Learned, a.Name)
+		}
+		out = append(out, t)
 	}
 	b, err := json.Marshal(out)
 	if err != nil {

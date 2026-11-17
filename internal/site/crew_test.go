@@ -151,7 +151,7 @@ func TestDeployCarriesPilotAssignments(t *testing.T) {
 	}
 	// The scenario page carries the living pilots for the popup's tray.
 	page := body(t, srv, "/refusalwar/scenario_001/", cookie)
-	if !strings.Contains(page, `data-pilots="`) || !strings.Contains(page, "Alrek") || !strings.Contains(page, "Katarina") {
+	if !strings.Contains(page, `data-pilots="`) || !strings.Contains(page, "Alrek") || !strings.Contains(page, "Katarina") || !strings.Contains(page, "edgeTokens") || !strings.Contains(page, "abilities") {
 		t.Error("the deploy popup should carry the named pilots")
 	}
 	if r := deploy(url.Values{"assign_unit": {"ua", "ub"}, "assign_pilot": {"alrek", ""}}); r.StatusCode != http.StatusOK {

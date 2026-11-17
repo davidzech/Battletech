@@ -56,16 +56,21 @@
   }
   // content: { title, cls, text, lines: [{ label, value }] }
   function attachTip(pill, content) {
-    pill.tabIndex = 0;
+    if (content.focusable !== false) pill.tabIndex = 0; // false for a part of something that is already focusable
     pill.setAttribute('aria-describedby', 'pill-tip');
     function show() {
       var t = ensureTip();
       var host = pill.closest('dialog[open]') || document.body;
       if (t.parentNode !== host) host.appendChild(t);
       t.textContent = '';
-      t.appendChild(el('b', 'pill-tip-title ' + (content.cls || ''), content.title));
-      if (content.text) t.appendChild(el('p', 'pill-tip-text', content.text));
-      if (content.lines && content.lines.length) {
+      t.classList.toggle('wide', !!content.build);
+      if (content.build) {
+        t.appendChild(content.build()); // custom content, e.g. a pilot card
+      } else {
+        t.appendChild(el('b', 'pill-tip-title ' + (content.cls || ''), content.title));
+        if (content.text) t.appendChild(el('p', 'pill-tip-text', content.text));
+      }
+      if (!content.build && content.lines && content.lines.length) {
         var dl = el('dl', 'tip-facts');
         content.lines.forEach(function (l) { dl.appendChild(el('dt', null, l.label)); dl.appendChild(el('dd', null, l.value)); });
         t.appendChild(dl);
@@ -83,6 +88,7 @@
     pill.addEventListener('mouseleave', hide);
     pill.addEventListener('focus', show);
     pill.addEventListener('blur', hide);
+    pill.addEventListener('dragstart', hide);
   }
 
   function el(tag, cls, text) {
@@ -218,5 +224,5 @@
     return row;
   }
 
-  window.MechRow = { build: build };
+  window.MechRow = { build: build, attachTip: attachTip };
 })();
