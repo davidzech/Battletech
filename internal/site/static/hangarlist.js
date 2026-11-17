@@ -156,26 +156,69 @@
     var to = document.getElementById('swap-select').value;
     return (swapUnitRow.swapOptions || []).filter(function (o) { return o.unit === to; })[0];
   }
+  // The dialog shows the unit as its full row, then, once another variant is chosen, an arrow with what changes and the variant's own row: a flow from one to the other.
+  function swapRow(box, v) {
+    var row = { name: v.name, model: v.model, role: v.role, icon: v.icon, class: v.class, tons: v.tons, bv: v.bv };
+    if (v.mekbayUrl) row.externalUrl = v.mekbayUrl;
+    box.appendChild(MechRow.build(row));
+  }
   function swapCostText() {
-    var o = swapOption(), cost = o ? o.cost : 0, after = warchest - cost;
+    var o = swapOption(), u = swapUnitRow, cost = o ? o.cost : 0, after = warchest - cost;
+    var sel = document.getElementById('swap-select'), chosen = sel.options[sel.selectedIndex];
+    sel.className = chosen ? chosen.className : ''; // the closed box takes the colour of the chosen option
+    var sub = document.getElementById('swap-sub');
+    sub.textContent = '';
+    sub.appendChild(el('div', 'swap-label', o ? 'From' : 'Current variant'));
+    swapRow(sub, u);
+    if (o) {
+      var dir = o.bv > u.bv ? 'up' : o.bv < u.bv ? 'down' : 'same', diff = o.bv - u.bv;
+      var flow = el('div', 'swap-flow swap-' + dir);
+      flow.appendChild(el('span', 'swap-arrow', '↓'));
+      flow.appendChild(el('span', null, commas(u.bv) + ' → ' + commas(o.bv) + ' BV'));
+      if (diff) flow.appendChild(el('b', null, (diff > 0 ? '+' : '−') + commas(Math.abs(diff)) + ' BV'));
+      flow.appendChild(el('span', 'swap-flow-cost', o.cost + ' SP'));
+      sub.appendChild(flow);
+      sub.appendChild(el('div', 'swap-label', 'To'));
+      swapRow(sub, o);
+    }
+    // The price as a short breakdown: half the tonnage, plus half the BV gained (nothing for a variant worth less).
+    var bd = document.getElementById('swap-breakdown');
+    bd.textContent = '';
+    bd.hidden = !o;
+    if (o) {
+      var rows = [['Half the tonnage (' + u.tons + 't)', Math.ceil(u.tons / 2) + ' SP']];
+      var gained = Math.max(0, o.bv - u.bv);
+      rows.push([gained ? 'Half the BV gained (+' + commas(gained) + ')' : 'No BV gained', Math.floor(gained / 2) + ' SP']);
+      rows.push(['Cost', o.cost + ' SP']);
+      rows.forEach(function (r) { bd.appendChild(el('dt', null, r[0])); bd.appendChild(el('dd', null, r[1])); });
+    }
     var text = document.getElementById('swap-cost');
-    text.textContent = 'Cost ' + cost + ' SP. Warchest ' + commas(warchest) + ' → ' + commas(Math.max(after, 0)) + ' SP.' + (after < 0 ? ' Not enough funds.' : '');
-    text.classList.toggle('short', after < 0);
+    text.textContent = o ? 'Cost ' + cost + ' SP. Warchest ' + commas(warchest) + ' → ' + commas(Math.max(after, 0)) + ' SP.' + (after < 0 ? ' Not enough funds.' : '') : 'Choose another variant to reconfigure to.';
+    text.classList.toggle('short', !!o && after < 0);
     document.getElementById('swap-apply').disabled = !o || after < 0;
   }
   function swap(u) {
     if (!swapDlg || typeof swapDlg.showModal !== 'function') return;
     swapUnitRow = u;
     document.getElementById('swap-title').textContent = 'Reconfigure ' + u.name;
-    document.getElementById('swap-sub').textContent = fullName(u) + ' — ' + commas(u.bv) + ' BV';
     var select = document.getElementById('swap-select');
     select.textContent = '';
+    // The current variant comes first and is chosen to begin with: reconfiguring to it would change nothing, so Reconfigure stays disabled until another is picked.
+    var here = document.createElement('option');
+    here.value = '';
+    here.className = 'swap-same';
+    here.textContent = '● ' + (u.model || 'This variant') + ' — ' + commas(u.bv) + ' BV — current';
+    select.appendChild(here);
     (u.swapOptions || []).forEach(function (o) {
       var opt = document.createElement('option');
       opt.value = o.unit;
-      opt.textContent = (o.model || o.unit) + ' — ' + commas(o.bv) + ' BV — ' + o.cost + ' SP';
+      // Like a stock: green for a variant worth more BV than this one, red for one worth less, so the change reads at a glance.
+      var dir = o.bv > u.bv ? 'up' : o.bv < u.bv ? 'down' : 'same';
+      opt.className = 'swap-' + dir;
+      opt.textContent = (dir === 'up' ? '▲ ' : dir === 'down' ? '▼ ' : '') + (o.model || o.unit) + ' — ' + commas(o.bv) + ' BV — ' + o.cost + ' SP';
       select.appendChild(opt);
     });
+    select.selectedIndex = 0;
     document.getElementById('swap-error').textContent = '';
     swapCostText();
     swapDlg.showModal();

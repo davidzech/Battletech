@@ -1269,7 +1269,8 @@ dialog button.deploy-count[aria-pressed="true"] { color: var(--accent-ink); back
 .deploy-progress-count { flex: none; font: 700 0.8rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
 .deploy-review { display: grid; gap: 1rem; margin: 0.8rem 0; max-height: 52vh; overflow-y: auto; padding-right: 0.3rem; }
 .deploy-review-player > h3 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.3rem 1rem; margin: 0 0 0.45rem; font: 700 1.05rem var(--display); letter-spacing: 0.08em; text-transform: uppercase; }
-.deploy-review-player > h3 > span:not(.deploy-review-list { list-style: none; margin: 0; padding: 0; }
+.deploy-review-player > h3 > span { font-size: 0.8rem; color: var(--muted); }
+.deploy-review-list { list-style: none; margin: 0; padding: 0; }
 .deploy-review-total { display: flex; flex-wrap: wrap; gap: 0.3rem 1.2rem; font: 700 1rem var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
 .deploy-review-total.over { color: #ff7a59; }
 .deploy-note { margin: 0; padding: 0.7rem 0.9rem; font-size: 0.9rem; background: var(--bg); border: 1px solid var(--line); border-left: 3px solid var(--accent); }
@@ -1282,3 +1283,17 @@ dialog button.deploy-count[aria-pressed="true"] { color: var(--accent-ink); back
 
 .deploy-meter { display: flex; flex-wrap: wrap; gap: 0.15rem 1.6rem; }
 .deploy-meter[hidden] { display: none; }
+
+/* The reconfigure dialog: the unit's full row, and a variant list coloured by what it does to the BV, like a stock: green goes up, red goes down. */
+.swap-unit { margin: 0.4rem 0 0.9rem; }
+.swap-label { margin: 0.5rem 0 0.2rem; font: 700 0.7rem var(--display); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+.swap-flow { display: flex; align-items: center; gap: 0.2rem 0.8rem; margin: 0.35rem 0 0; padding: 0.3rem 0.8rem; font: 700 0.85rem var(--display); letter-spacing: 0.06em; text-transform: uppercase; border-left: 3px solid var(--line); }
+.swap-flow .swap-arrow { font-size: 1.3rem; line-height: 1; }
+.swap-flow .swap-flow-cost { margin-left: auto; color: var(--accent); }
+.swap-flow.swap-up { color: #5fc47e; border-left-color: #5fc47e; }
+.swap-flow.swap-down { color: #e5594f; border-left-color: #e5594f; }
+#swap-select option.swap-same { color: var(--muted); }
+.swap-unit .mech-row { cursor: default; }
+#swap-select option { background: var(--panel); color: var(--text); }
+#swap-select option.swap-up, #swap-select.swap-up { color: #5fc47e; }
+#swap-select option.swap-down, #swap-select.swap-down { color: #e5594f; }

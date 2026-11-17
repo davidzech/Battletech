@@ -175,10 +175,10 @@
 <dialog id="swap-dialog" class="wizard" aria-labelledby="swap-title">
   <form id="swap-form" autocomplete="off">
     <h2 id="swap-title">Reconfigure</h2>
-    <p class="muted" id="swap-sub"></p>
     <label for="swap-select">Variant</label>
     <select id="swap-select"></select>
-    <p class="muted repair-note">Reconfiguring an omnimech costs half its tonnage plus half the BV it gains (going to a lower BV costs only the half tonnage, with no refund). That is cheaper than selling it and buying the other variant. It has to be fully repaired and rearmed first.</p>
+    <div id="swap-sub" class="swap-unit"></div>
+    <dl id="swap-breakdown" class="confirm-items" hidden></dl>
     <p id="swap-cost" class="repair-cost"></p>
     <p id="swap-error" class="form-error" role="alert"></p>
     <div class="form-actions">

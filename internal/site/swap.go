@@ -28,6 +28,13 @@ type swapOption struct {
 	Model string `json:"model"` // e.g. "H"
 	BV    int    `json:"bv"`
 	Cost  int    `json:"cost"` // SP to swap the unit to this variant
+	// What the page needs to draw the variant as a mech row, like a hangar unit.
+	Name      string  `json:"name"`
+	Class     string  `json:"class"`
+	Role      string  `json:"role"`
+	Tons      float64 `json:"tons"`
+	Icon      string  `json:"icon"`
+	MekBayURL string  `json:"mekbayUrl"`
 }
 
 var (
@@ -73,7 +80,8 @@ func swapOptions(u Unit) []swapOption {
 	var out []swapOption
 	for _, v := range omniVariants[u.Chassis] {
 		if v.Name != u.Name {
-			out = append(out, swapOption{Unit: v.Name, Model: v.Model, BV: v.BV, Cost: swapPrice(u, v)})
+			name, model := unitNames(v)
+			out = append(out, swapOption{Unit: v.Name, Model: model, BV: v.BV, Cost: swapPrice(u, v), Name: name, Class: v.Class, Role: roleLabel(v), Tons: v.Tons, Icon: iconURL(v), MekBayURL: unitPageURL(v.Name)})
 		}
 	}
 	return out
