@@ -68,7 +68,7 @@
     });
   }
 
-  // ---- A started campaign: change the hangar link.
+  // ---- A started campaign: re-import the hangar (a fresh clean copy of a linked MekBay force).
   var runDialog = document.getElementById('run-dialog');
   var runOpen = document.getElementById('run-open');
   if (runDialog && runOpen && typeof runDialog.showModal === 'function') {
@@ -83,7 +83,7 @@
       if (bad) { runError.textContent = bad; return; }
       post('campaign=' + encodeURIComponent(box.dataset.campaign) + '&hangar=' + encodeURIComponent(canonicalHangar(runInput.value) || runInput.value.trim())).then(function (res) {
         if (res.ok) { location.reload(); return; }
-        return res.text().then(function (t) { runError.textContent = t.trim() || 'Could not save the hangar link.'; });
+        return res.text().then(function (t) { runError.textContent = t.trim() || 'Could not re-import the hangar.'; });
       }, function () { runError.textContent = 'Could not reach the server.'; });
     });
   }

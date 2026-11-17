@@ -460,7 +460,7 @@ func TestStartWizardSubmission(t *testing.T) {
 		t.Fatalf("a started campaign shows its pilots and the change-link dialog: %.3000s", c)
 	}
 
-	// Submitting the wizard again only changes the hangar link: no duplicate pilots.
+	// Submitting the wizard again only re-imports the hangar: no duplicate pilots.
 	other := "https://mekbay.com/?instance=01a12f98-8a21-7d12-b43d-52bb70872376"
 	if r := post(t, srv, "/api/campaign/start", startForm(other, "Alrek", "Katarina"), cookie, srv.URL); r.StatusCode != http.StatusNoContent {
 		t.Fatalf("second submit: %d", r.StatusCode)

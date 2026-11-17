@@ -304,11 +304,11 @@ func TestSeedAndCampaignFlow(t *testing.T) {
 	if strings.Contains(body(t, srv, "/", cookie), `id="hangar-link"`) {
 		t.Error("the home page isn't in a campaign, so it has no hangar link")
 	}
-	if c := body(t, srv, "/refusalwar/manage/", cookie); !strings.Contains(c, "Change hangar link") {
+	if c := body(t, srv, "/refusalwar/manage/", cookie); !strings.Contains(c, "Re-import hangar") {
 		t.Errorf("started campaign page: %.1500s", c)
 	}
 
-	// Starting again changes the hangar link and keeps a single run.
+	// Starting again re-imports the hangar (a fresh copy) and keeps a single run.
 	other := "https://mekbay.com/?instance=01a12f98-8a21-7d12-b43d-52bb70872376"
 	if r := post(t, srv, "/api/campaign/start", url.Values{"campaign": {"refusalwar"}, "hangar": {other}}, cookie, srv.URL); r.StatusCode != http.StatusNoContent {
 		t.Fatalf("change hangar: got %d", r.StatusCode)

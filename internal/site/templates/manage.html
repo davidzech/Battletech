@@ -3,13 +3,13 @@
 <p><a href="/{{.Campaign.Slug}}/">&lsaquo; Back to the campaign</a></p>
 <dialog id="run-dialog" aria-labelledby="run-title">
   <form id="run-form" autocomplete="off" novalidate>
-    <h2 id="run-title">Change hangar link</h2>
+    <h2 id="run-title">Re-import your hangar</h2>
     <p>Paste a MekBay hangar link and the site makes a fresh copy of that force and uses it from now on, so everything is repaired, rearmed and uncrewed again. Repairs, purchases and pilot assignments you made so far are not carried over.</p>
     <label for="run-hangar">MekBay hangar link</label>
     <input id="run-hangar" class="wide" name="hangar" type="url" value="{{.Run.SourceURL}}" placeholder="https://mekbay.com/?instance=&hellip;" spellcheck="false" required>
     <p id="run-error" class="form-error" role="alert"></p>
     <div class="form-actions">
-      <button type="submit" class="button">Save link</button>
+      <button type="submit" class="button">Re-import</button>
       <button type="button" id="run-cancel">Cancel</button>
     </div>
   </form>
@@ -117,9 +117,9 @@
 <div class="fold-body">
 <p class="muted">Advanced Management corrects pilot records: rename, revive or delete a pilot, reset their SP allocation or Edge abilities, or override their total SP.</p>
 <p class="danger-action"><button type="button" class="button" id="records-open">Advanced Management&hellip;</button></p>
-<p class="muted">Changing the hangar link points this campaign at a different MekBay force. Your pilots and warchest stay as they are, but every unit comes from the new hangar.</p>
-<p class="danger-action"><button type="button" class="button" id="run-open">Change hangar link&hellip;</button></p>
-<p class="muted">Deleting this campaign removes {{.Play.CompanyName}}&rsquo;s progress in it: its named pilots and the link to its hangar. Your company and anything saved in MekBay are not touched.</p>
+<p class="muted">Re-importing replaces this campaign&rsquo;s hangar with a fresh, clean copy of a MekBay force (the one you linked, or another). Your pilots and warchest stay as they are, but every unit comes from the new copy: repairs, purchases and pilot assignments made so far are lost.</p>
+<p class="danger-action"><button type="button" class="button" id="run-open">Re-import hangar&hellip;</button></p>
+<p class="muted">Deleting this campaign removes {{.Play.CompanyName}}&rsquo;s progress in it: its named pilots and the site&rsquo;s copy of its hangar. Your company and anything saved in MekBay are not touched.</p>
 <button type="button" class="button danger" id="delete-open">Delete campaign&hellip;</button>
 </div>
 </details>
