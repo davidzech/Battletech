@@ -1,9 +1,9 @@
-// Manage page: "Purchase new unit". A popup with a search box for MekBay's unit list (still a stub: it lists nothing yet), a staging area for the
+// Manage page: "Purchase new unit". A popup with a search box for MekBay's unit list (GET /api/units/search), a staging area for the
 // units chosen so far, shown as the same mech rows as the hangar (mechrow.js), and a Buy button that commits the purchase (POST /api/hangar/purchase).
 // BV is SP: each unit costs its base BV, shown against the warchest. mechrow.js must load first. Names go in as text, never HTML.
 //
-// When the search exists it only has to call Purchase.stage(unit), with unit = { unit: <MekBay unit ID, e.g. BMMadCat_H>, name, model, icon, role,
-// class, tons, bv }; staging the same unit twice buys two of it, and each staged row has a Remove button.
+// A search result's Stage button calls stage(unit), with unit = { unit: <MekBay unit ID, e.g. BMMadCat_H>, name, model, icon, role, class, tons, bv };
+// staging the same unit twice buys two of it, and each staged row has a Remove button.
 (function () {
   var dialog = document.getElementById('purchase-dialog');
   var openBtn = document.getElementById('purchase-open');
@@ -32,14 +32,19 @@
     return e;
   }
   function commas(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+  // A unit view without the pilot fields: skills belong to assigning pilots, not to the unit being bought.
+  function plain(u) {
+    var row = {};
+    Object.keys(u).forEach(function (k) { if (k !== 'gunnery' && k !== 'piloting' && k !== 'pilot') row[k] = u[k]; });
+    return row;
+  }
   function total() { return staged.reduce(function (sum, s) { return sum + (Number(s.unit.bv) || 0); }, 0); }
 
   function render() {
     listEl.textContent = '';
     if (!staged.length) listEl.appendChild(el('p', 'muted', 'Nothing staged yet.'));
     staged.forEach(function (s) {
-      var row = {};
-      Object.keys(s.unit).forEach(function (k) { row[k] = s.unit[k]; });
+      var row = plain(s.unit);
       row.actions = [{ label: 'Remove', onClick: function () { staged = staged.filter(function (x) { return x !== s; }); render(); } }];
       listEl.appendChild(MechRow.build(row));
     });
@@ -61,10 +66,54 @@
     return true;
   }
 
-  // The search is a stub for now: it takes the text but finds nothing.
-  var STUB = 'Unit search is not connected yet. When it is, matching units from MekBay’s list will appear here to stage.';
-  results.textContent = STUB;
-  search.addEventListener('input', function () { results.textContent = STUB; });
+  // ---- The search: GET /api/units/search over MekBay's unit list. A campaign that names a faction and an era limits it to what that faction fields
+  // in that era until the player unticks the box. Results are the same rows as the hangar, each with a Stage button.
+  var availableBox = document.getElementById('purchase-available');
+  var HINT = 'Type a name to search MekBay\u2019s unit list, e.g. \u201ctimber wolf\u201d.';
+  var searchSeq = 0, searchTimer = null;
+
+  function showResults(data, query) {
+    results.textContent = '';
+    var units = (data && data.units) || [];
+    if (!units.length) {
+      var none = 'No mechs match \u201c' + query + '\u201d.';
+      if (data && data.filter && data.filter.active) none += ' Untick the box above to search every unit.';
+      results.appendChild(el('p', 'muted', none));
+      return;
+    }
+    var list = el('div', 'mech-list purchase-found');
+    units.forEach(function (u) {
+      var row = plain(u);
+      if (u.mekbayUrl) row.externalUrl = u.mekbayUrl;
+      row.actions = [{ label: 'Stage', onClick: function () { stage(u); } }];
+      list.appendChild(MechRow.build(row));
+    });
+    results.appendChild(list);
+    if (data.limited) results.appendChild(el('p', 'muted', 'Showing the first ' + units.length + ' of ' + data.total + ' matches. Type more to narrow them down.'));
+  }
+
+  function runSearch() {
+    var q = search.value.trim();
+    var seq = ++searchSeq;
+    if (!q) { results.textContent = ''; results.appendChild(el('p', 'muted', HINT)); return; }
+    var url = '/api/units/search?campaign=' + encodeURIComponent(section.dataset.campaign) + '&q=' + encodeURIComponent(q) + (availableBox && !availableBox.checked ? '&all=1' : '');
+    fetch(url, { credentials: 'same-origin' }).then(function (res) {
+      if (!res.ok) throw new Error('search failed');
+      return res.json();
+    }).then(function (data) {
+      if (seq === searchSeq) showResults(data, q); // a reply for text that has since changed is ignored
+    }, function () {
+      if (seq !== searchSeq) return;
+      results.textContent = '';
+      results.appendChild(el('p', 'form-error', 'Could not search the unit list. Try again.'));
+    });
+  }
+  function queueSearch() { clearTimeout(searchTimer); searchTimer = setTimeout(runSearch, 250); }
+  search.addEventListener('input', queueSearch);
+  // Enter belongs to the search, not to Buy.
+  search.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); clearTimeout(searchTimer); runSearch(); } });
+  if (availableBox) availableBox.addEventListener('change', runSearch);
+  results.appendChild(el('p', 'muted', HINT));
 
   openBtn.addEventListener('click', function () { errEl.textContent = ''; render(); dialog.showModal(); search.focus(); });
   document.getElementById('purchase-cancel').addEventListener('click', function () { dialog.close(); });

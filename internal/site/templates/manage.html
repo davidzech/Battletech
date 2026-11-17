@@ -135,13 +135,14 @@
   </form>
 </dialog>
 </section>
-<dialog id="purchase-dialog" class="wizard purchase" aria-labelledby="purchase-title">
+<dialog id="purchase-dialog" class="wizard purchase" aria-labelledby="purchase-title" data-faction="{{.Campaign.AvailabilityFaction}}" data-era="{{.Campaign.AvailabilityEra}}">
   <form id="purchase-form" autocomplete="off">
     <h2 id="purchase-title">Purchase new unit</h2>
     <p class="muted">Search MekBay&rsquo;s unit list, stage the units you want, then buy them. Each costs its base BV in SP, paid from the warchest, and joins your hangar.</p>
     <label for="purchase-search">Search units</label>
     <input type="search" id="purchase-search" placeholder="Search MekBay&rsquo;s units, e.g. Timber Wolf" autocomplete="off" aria-describedby="purchase-results">
-    <p class="muted purchase-results" id="purchase-results" aria-live="polite"></p>
+    {{if and .Campaign.AvailabilityFaction .Campaign.AvailabilityEra}}<label class="purchase-filter"><input type="checkbox" id="purchase-available" checked> Only units {{.Campaign.AvailabilityFaction}} fields in the {{.Campaign.AvailabilityEra}} era</label>{{end}}
+    <div class="purchase-results" id="purchase-results" aria-live="polite"></div>
     <p class="purchase-staged-head">Staged units</p>
     <div class="mech-list purchase-staged" id="purchase-staged"></div>
     <p id="purchase-cost" class="repair-cost"></p>

@@ -1,7 +1,9 @@
 //go:build ignore
 
 // gen_units.go builds units_index.json, the small slice of data/units.json the site needs at runtime
-// (the full 27 MB catalog is not shipped in the Docker image). Run it after refreshing data/units.json:
+// (the full 27 MB catalog is not shipped in the Docker image), and availability.json, the units each campaign's faction can field in its era
+// (Intro.md front matter availability_faction and availability_era, looked up in data/factions.json and data/eras.json, both MekBay's, by Master
+// Unit List ID). Run it after refreshing data/units.json, factions.json or eras.json, or after a campaign names a new faction or era:
 //
 //	go generate ./internal/site
 package main
@@ -10,8 +12,12 @@ import (
 	"encoding/json"
 	"log"
 	"os"
+	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 )
 
 type entry struct {
@@ -28,7 +34,9 @@ type entry struct {
 	Icon    string  `json:"icon,omitempty"`   // in data/units.json: the path inside mm-data; written to the index as iconFile(path)
 	// Comp is read from data/units.json (the unit's components) and never written; the index keeps only the ammo among them, as Ammo.
 	Comp []compEntry `json:"comp,omitempty"`
-	Ammo []ammoEntry `json:"ammo,omitempty"`
+	// MulID is the unit's Master Unit List ID, read for the availability lookup and never written.
+	MulID int         `json:"mul1id,omitempty"`
+	Ammo  []ammoEntry `json:"ammo,omitempty"`
 }
 
 type compEntry struct {
@@ -77,6 +85,15 @@ func main() {
 			doc.Units[i].Icon = ""
 		}
 	}
+	byMul := map[int]string{}
+	for _, u := range doc.Units {
+		if u.MulID > 0 {
+			byMul[u.MulID] = u.Name
+		}
+	}
+	for i := range doc.Units {
+		doc.Units[i].MulID = 0
+	}
 	sort.Slice(doc.Units, func(i, j int) bool { return doc.Units[i].Name < doc.Units[j].Name })
 	out, err := json.Marshal(doc.Units)
 	if err != nil {
@@ -86,4 +103,87 @@ func main() {
 		log.Fatal(err)
 	}
 	log.Printf("wrote units_index.json: %d units, %d bytes", len(doc.Units), len(out))
+	writeAvailability(byMul)
+}
+
+// writeAvailability writes availability.json: for each "Faction|Era" pair a campaign names, the sorted names of the units available to that
+// faction in that era.
+func writeAvailability(byMul map[int]string) {
+	var factions struct {
+		Factions []struct {
+			Name string           `json:"name"`
+			Eras map[string][]int `json:"eras"`
+		} `json:"factions"`
+	}
+	var eras struct {
+		Eras []struct {
+			ID   int    `json:"id"`
+			Name string `json:"name"`
+		} `json:"eras"`
+	}
+	readJSON("../../data/factions.json", &factions)
+	readJSON("../../data/eras.json", &eras)
+	eraID := map[string]string{}
+	for _, e := range eras.Eras {
+		eraID[e.Name] = strconv.Itoa(e.ID)
+	}
+	out := map[string][]string{}
+	intros, _ := filepath.Glob("../../campaigns/*/Intro.md")
+	for _, p := range intros {
+		raw, err := os.ReadFile(p)
+		if err != nil {
+			log.Fatal(err)
+		}
+		parts := strings.SplitN(string(raw), "---", 3)
+		if len(parts) < 3 {
+			continue
+		}
+		var meta struct {
+			Faction string `yaml:"availability_faction"`
+			Era     string `yaml:"availability_era"`
+		}
+		if err := yaml.Unmarshal([]byte(parts[1]), &meta); err != nil || meta.Faction == "" || meta.Era == "" {
+			continue
+		}
+		id, ok := eraID[meta.Era]
+		if !ok {
+			log.Fatalf("%s: unknown era %q", p, meta.Era)
+		}
+		found := false
+		for _, f := range factions.Factions {
+			if f.Name != meta.Faction {
+				continue
+			}
+			found = true
+			names := []string{}
+			for _, mul := range f.Eras[id] {
+				if n, ok := byMul[mul]; ok {
+					names = append(names, n)
+				}
+			}
+			sort.Strings(names)
+			out[meta.Faction+"|"+meta.Era] = names
+		}
+		if !found {
+			log.Fatalf("%s: unknown faction %q", p, meta.Faction)
+		}
+	}
+	b, err := json.Marshal(out)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := os.WriteFile("availability.json", b, 0o644); err != nil {
+		log.Fatal(err)
+	}
+	log.Printf("wrote availability.json: %d faction and era pairs, %d bytes", len(out), len(b))
+}
+
+func readJSON(path string, into any) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := json.Unmarshal(raw, into); err != nil {
+		log.Fatalf("%s: %v", path, err)
+	}
 }

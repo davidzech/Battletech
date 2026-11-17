@@ -65,6 +65,8 @@ type hangarUnitView struct {
 	InDeployed bool    `json:"inDeployed"`
 	// MekBayURL is the unit's own page on mekbay.com (its sheet, not the player's force), "" when the unit has no MekBay ID.
 	MekBayURL string `json:"mekbayUrl"`
+	// Unit is the MekBay unit ID (e.g. BMMadCat_H); set on unit search results, which the purchase buys by.
+	Unit string `json:"unit,omitempty"`
 	// Condition is the worst state the unit is in (see condition.go): ok, armor, structure, crippled or destroyed, with a note saying why. AmmoExpended
 	// is separate: a unit can be in any condition and need rearming too.
 	Condition     string `json:"condition"`

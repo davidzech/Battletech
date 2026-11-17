@@ -77,6 +77,9 @@ type Campaign struct {
 	StartingMinMechs int
 	// StartingWarchest is the SP the company's warchest starts the campaign with (Intro.md front matter starting_warchest); 0 if not given.
 	StartingWarchest int
+	// AvailabilityFaction and AvailabilityEra, e.g. "Clan Wolf" and "Clan Invasion", pick the units the purchase search offers by default (see
+	// availability.go); both empty means no such filter.
+	AvailabilityFaction, AvailabilityEra string
 	// Faction is the side the player's force fights for (Intro.md front matter faction), which decides the ranks of its named
 	// pilots; see factions.go. Empty or unknown turns ranks off.
 	Faction string
@@ -162,8 +165,11 @@ type frontData struct {
 	// StartingMinMechs is how many mechs the starting hangar must hold at least (Intro.md).
 	StartingMinMechs int `yaml:"starting_min_mechs"`
 	// StartingWarchest is the SP the warchest starts with (Intro.md).
-	StartingWarchest int    `yaml:"starting_warchest"`
-	DefaultNext      string `yaml:"default_next"`
+	StartingWarchest int `yaml:"starting_warchest"`
+	// AvailabilityFaction and AvailabilityEra say which MekBay faction and era decide what the purchase search offers by default (Intro.md).
+	AvailabilityFaction string `yaml:"availability_faction"`
+	AvailabilityEra     string `yaml:"availability_era"`
+	DefaultNext         string `yaml:"default_next"`
 	// Faction and Ranks are described on Campaign (Intro.md).
 	Faction string   `yaml:"faction"`
 	Ranks   []string `yaml:"ranks"`
@@ -284,6 +290,7 @@ func (l Library) load(name string) (*Campaign, bool) {
 	c.StartingNamedPilots, c.StartingPilotSP, c.StartingBV = meta.StartingNamedPilots, meta.StartingPilotSP, meta.StartingBV
 	c.StartingMinMechs = meta.StartingMinMechs
 	c.StartingWarchest = meta.StartingWarchest
+	c.AvailabilityFaction, c.AvailabilityEra = meta.AvailabilityFaction, meta.AvailabilityEra
 	c.Faction = meta.Faction
 	if c.Ranks = meta.Ranks; len(c.Ranks) == 0 {
 		c.Ranks = factionRanks(meta.Faction)
