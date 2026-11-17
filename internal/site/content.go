@@ -3,6 +3,7 @@ package site
 
 import (
 	"bytes"
+	"fmt"
 	"html/template"
 	"os"
 	"path/filepath"
@@ -32,6 +33,10 @@ type Scenario struct {
 	// ProvidedUnits, when set (front matter provided_units: MekBay unit IDs), replace the player's hangar for this scenario: the players pick from this fixed pool
 	// instead, for story reasons. The units exist only for this scenario and never touch the hangar (see provided.go).
 	ProvidedUnits []string
+	// Branches are the scenarios (slugs) this one may lead to once it is completed: the Outcome.md front matter `branches` list, or when that is omitted its
+	// `default_next`, or else the next scenario number. Only a scenario that is the campaign's first, completed, or a branch of a completed one is available.
+	Branches       []string
+	branchesListed bool
 	// UnitLimit is the most mechs the players may take onto the field in all (front matter unit_limit); 0 means no limit. PilotsRequired (pilots_required) makes
 	// every mech taken need a named pilot assigned.
 	UnitLimit      int
@@ -135,6 +140,60 @@ func (c *Campaign) ScenarioByID(id string) (*Scenario, bool) {
 	return nil, false
 }
 
+// lowerAll lowercases and trims a list of scenario IDs.
+func lowerAll(ids []string) []string {
+	var out []string
+	for _, id := range ids {
+		if id = strings.ToLower(strings.TrimSpace(id)); id != "" {
+			out = append(out, id)
+		}
+	}
+	return out
+}
+
+// resolveBranches fills in the branches of every scenario that doesn't list its own: its default_next if it has one, else the scenario with the next number (if
+// there is one). A scenario that lists none ends that path of the campaign.
+func (c *Campaign) resolveBranches() {
+	for i := range c.Scenarios {
+		sc := &c.Scenarios[i]
+		if sc.branchesListed {
+			continue
+		}
+		if next := strings.ToLower(strings.TrimSpace(sc.Next)); next != "" {
+			sc.Branches = []string{next}
+			continue
+		}
+		if n, err := strconv.Atoi(sc.Number); err == nil {
+			slug := fmt.Sprintf("scenario_%0*d", len(sc.Number), n+1)
+			if _, ok := c.Scenario(slug); ok {
+				sc.Branches = []string{slug}
+			}
+		}
+	}
+}
+
+// Available says which scenarios a company can see (and play): the campaign's first, every completed one, and every branch of a completed one. Keys are slugs;
+// completed is the set of completed slugs.
+func (c *Campaign) Available(completed map[string]bool) map[string]bool {
+	out := map[string]bool{}
+	if len(c.Scenarios) > 0 {
+		out[c.Scenarios[0].Slug] = true
+	}
+	for slug := range completed {
+		sc, ok := c.Scenario(slug)
+		if !ok {
+			continue
+		}
+		out[slug] = true
+		for _, b := range sc.Branches {
+			if _, ok := c.Scenario(b); ok {
+				out[b] = true
+			}
+		}
+	}
+	return out
+}
+
 // Library reads campaigns from a content root (the campaigns folder).
 type Library struct{ Root string }
 
@@ -180,6 +239,8 @@ type frontData struct {
 	AvailabilityFaction string `yaml:"availability_faction"`
 	AvailabilityEra     string `yaml:"availability_era"`
 	DefaultNext         string `yaml:"default_next"`
+	// Branches (Outcome.md) lists the scenario IDs this scenario may branch to; omitted, it leads to the next scenario number.
+	Branches []string `yaml:"branches"`
 	// Faction and Ranks are described on Campaign (Intro.md).
 	Faction string   `yaml:"faction"`
 	Ranks   []string `yaml:"ranks"`
@@ -282,6 +343,8 @@ func (l Library) load(name string) (*Campaign, bool) {
 			UnitLimit:      setup.UnitLimit,
 			PilotsRequired: setup.PilotsReq,
 			Next:           outcome.DefaultNext,
+			Branches:       lowerAll(outcome.Branches),
+			branchesListed: outcome.Branches != nil,
 			BriefingHTML:   renderBriefing(briefing),
 			SetupHTML:      renderMarkdown(setupBody, false),
 			OutcomeHTML:    renderMarkdown(outcomeBody, true),
@@ -298,6 +361,7 @@ func (l Library) load(name string) (*Campaign, bool) {
 		return nil, false
 	}
 	sort.Slice(c.Scenarios, func(i, j int) bool { return c.Scenarios[i].Slug < c.Scenarios[j].Slug })
+	c.resolveBranches()
 	meta, intro := readMarkdown(filepath.Join(dir, "Intro.md"))
 	c.MinPlayers, c.MaxPlayers = meta.MinPlayers, meta.MaxPlayers
 	c.StartingNamedPilots, c.StartingPilotSP, c.StartingBV = meta.StartingNamedPilots, meta.StartingPilotSP, meta.StartingBV

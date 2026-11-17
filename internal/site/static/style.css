@@ -1323,3 +1323,21 @@ dialog button.deploy-count:disabled, .overview-players button.deploy-count:disab
 .force-name .force-name-edit:hover, .force-name .force-name-edit:focus-visible { color: var(--accent); outline: none; }
 .force-name input { width: min(24rem, 100%); padding: 0.4rem 0.6rem; font: 700 1.1rem var(--display); letter-spacing: 0.05em; color: var(--text); background: var(--bg); border: 1px solid var(--line); }
 .force-name input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* Campaign progress: completed scenarios are green, available ones keep the gray card, locked ones stay hidden until "Show all Scenarios". */
+.card.completed { border-color: #5fc47e; background: color-mix(in srgb, #5fc47e 9%, var(--panel)); }
+.card.completed:hover { border-color: #7fdc9a; background: color-mix(in srgb, #5fc47e 14%, var(--panel-2)); }
+.card.completed .num, .card.completed .go { color: #5fc47e; }
+.cards.scenarios li.locked { display: none; }
+.cards.scenarios.show-all li.locked { display: list-item; }
+.card.locked { opacity: 0.5; border-style: dashed; }
+.show-all { margin: 0.2rem 0 1.2rem; }
+.mission-log { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 1rem; margin: 1rem 0; padding: 0.6rem 1rem; background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--line); }
+.mission-log.completed { border-left-color: #5fc47e; }
+.mission-log-label { font: 700 0.75rem var(--display); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.mission-log-state { font: 700 1rem var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
+.mission-log.completed .mission-log-state { color: #5fc47e; }
+.mission-log.locked .mission-log-state { color: var(--muted); }
+.mission-log .button { margin-left: auto; }
+.mission-log .form-error { flex-basis: 100%; margin: 0; }
+.mission-log .form-error:empty { display: none; }

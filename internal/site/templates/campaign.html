@@ -52,8 +52,10 @@
 <script src="/static/pilotnames.js" defer></script>
 <script src="/static/campaign.js" defer></script>
 {{end}}<h2>Scenarios</h2>
-<ul class="cards">
-{{range .Cards}}<li><a class="card" href="{{.URL}}"><span class="num">{{.Num}}</span><span class="name">{{.Name}}{{if .Sub}}<span class="sub">{{.Sub}}</span>{{end}}</span><span class="go">Open &rsaquo;</span></a></li>
+<ul class="cards scenarios" id="scenario-cards">
+{{range .Cards}}<li class="{{.State}}"><a class="card {{.State}}" href="{{.URL}}"><span class="num">{{.Num}}</span><span class="name">{{.Name}}{{if .Sub}}<span class="sub">{{.Sub}}</span>{{end}}</span><span class="go">{{if eq .State "completed"}}Completed &#10003;{{else if eq .State "locked"}}Locked{{else}}Open &rsaquo;{{end}}</span></a></li>
 {{end}}</ul>
-<p><a href="/{{.Campaign.Slug}}/keywords/">Campaign keywords &rsaquo;</a></p>
+{{if .HasLocked}}<p class="show-all"><label class="check themed-check"><input type="checkbox" class="themed-box" id="show-all-scenarios"> Show all Scenarios</label></p>
+<script src="/static/scenariolist.js" defer></script>
+{{end}}<p><a href="/{{.Campaign.Slug}}/keywords/">Campaign keywords &rsaquo;</a></p>
 {{end}}

@@ -50,6 +50,8 @@ type Page struct {
 	Scenario           *Scenario
 	Next               *Scenario
 	Cards              []Card
+	HasLocked          bool        // some scenario cards are locked, so the campaign page offers 'Show all scenarios'
+	ScenarioState      string      // on a scenario page: completed, available or locked
 	Images             []string    // URLs of the scenario's images
 	Seed               string      // the visitor's seed ("" if none chosen yet)
 	Play               Playthrough // the visitor's playthrough (zero value if no seed)
@@ -71,7 +73,7 @@ type Page struct {
 }
 
 // Card is one entry in a list of links (campaigns or scenarios).
-type Card struct{ Num, Name, Sub, URL string }
+type Card struct{ Num, Name, Sub, URL, State string } // State: "completed", "available" or "locked" for a scenario card
 
 // Server serves the campaigns found under the content root.
 type Server struct {
@@ -123,6 +125,7 @@ func NewHandler(contentRoot string, store *Store, opts ...Option) http.Handler {
 	mux.HandleFunc("POST /api/warchest", s.setWarchest)
 	mux.HandleFunc("POST /api/campaign/players", s.setPlayers)
 	mux.HandleFunc("POST /api/campaign/force-name", s.setForceName)
+	mux.HandleFunc("POST /api/campaign/scenario-complete", s.setScenarioCompleted)
 	mux.HandleFunc("POST /api/hangar/service", s.serviceUnit)
 	mux.HandleFunc("POST /api/hangar/purchase", s.purchaseUnits)
 	mux.HandleFunc("POST /api/hangar/sell", s.sellUnit)
@@ -222,8 +225,11 @@ func (s *Server) campaign(w http.ResponseWriter, r *http.Request) {
 		Crumbs:   []Crumb{{Label: c.Label, URL: "/" + c.Slug + "/"}},
 		Campaign: c,
 	}
+	completed, available := s.progress(r, c)
 	for _, sc := range c.Scenarios {
-		p.Cards = append(p.Cards, Card{Num: sc.Number, Name: sc.Title, Sub: sc.Planet, URL: "/" + c.Slug + "/" + sc.Slug + "/"})
+		state := scenarioState(sc.Slug, completed, available)
+		p.HasLocked = p.HasLocked || state == "locked"
+		p.Cards = append(p.Cards, Card{Num: sc.Number, Name: sc.Title, Sub: sc.Planet, URL: "/" + c.Slug + "/" + sc.Slug + "/", State: state})
 	}
 	s.render(w, r, http.StatusOK, "campaign", p)
 }
@@ -253,6 +259,7 @@ func (s *Server) scenario(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	next, _ := c.ScenarioByID(sc.Next)
+	completed, available := s.progress(r, c)
 	var images []string
 	for _, img := range sc.Images {
 		images = append(images, "/"+c.Slug+"/"+sc.Slug+"/images/"+path.Base(img))
@@ -266,23 +273,27 @@ func (s *Server) scenario(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	s.render(w, r, http.StatusOK, "scenario", Page{
-		MekBayOp: opLink,
-		Images:   images,
-		Title:    sc.Title + " | " + c.Label,
-		Crumbs:   []Crumb{{Label: c.Label, URL: "/" + c.Slug + "/"}, scenarioCrumb(c, sc)},
-		Campaign: c,
-		Scenario: sc,
-		Next:     next,
+		MekBayOp:      opLink,
+		Images:        images,
+		Title:         sc.Title + " | " + c.Label,
+		Crumbs:        []Crumb{{Label: c.Label, URL: "/" + c.Slug + "/"}, scenarioCrumb(c, sc, available)},
+		Campaign:      c,
+		Scenario:      sc,
+		Next:          next,
+		ScenarioState: scenarioState(sc.Slug, completed, available),
 	})
 }
 
 // scenarioCrumb is the breadcrumb for a scenario page, "001 – Pyre Light", with a menu of
 // every scenario in the campaign.
-func scenarioCrumb(c *Campaign, sc *Scenario) Crumb {
+func scenarioCrumb(c *Campaign, sc *Scenario, available map[string]bool) Crumb {
 	label := func(s *Scenario) string { return s.Number + " – " + s.Title }
 	cr := Crumb{Label: label(sc), URL: "/" + c.Slug + "/" + sc.Slug + "/"}
 	for i := range c.Scenarios {
 		o := &c.Scenarios[i]
+		if !available[o.Slug] && o.Slug != sc.Slug {
+			continue // locked scenarios stay out of the menu
+		}
 		cr.Menu = append(cr.Menu, Crumb{Label: label(o), URL: "/" + c.Slug + "/" + o.Slug + "/", Current: o.Slug == sc.Slug})
 	}
 	return cr

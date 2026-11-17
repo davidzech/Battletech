@@ -7,6 +7,13 @@
 {{range $.Scenario.Readout}}<div><dt>{{.Label}}</dt><dd>{{.Value}}</dd></div>
 {{end}}</dl>
 </div>{{end}}</figure>
+{{end}}{{if .Run.Started}}<section class="mission-log {{.ScenarioState}}" id="mission-log" data-campaign="{{.Campaign.Slug}}" data-scenario="{{.Scenario.Slug}}" data-done="{{if eq .ScenarioState "completed"}}1{{end}}">
+<span class="mission-log-label">Mission log</span>
+<span class="mission-log-state" id="mission-log-state">{{if eq .ScenarioState "completed"}}Completed &#10003;{{else if eq .ScenarioState "locked"}}Not available yet: complete the mission before it first.{{else}}Not completed{{end}}</span>
+{{if ne .ScenarioState "locked"}}<button type="button" class="button" id="mission-log-toggle">{{if eq .ScenarioState "completed"}}Mark not completed{{else}}Mark completed{{end}}</button>{{end}}
+<p class="form-error" id="mission-log-error" role="alert"></p>
+</section>
+<script src="/static/missionlog.js" defer></script>
 {{end}}{{if .Scenario.BriefingHTML}}<section class="briefing" aria-label="Mission briefing">
 <p class="briefing-tag">Incoming transmission</p>
 <div class="briefing-text">{{.Scenario.BriefingHTML}}</div>
