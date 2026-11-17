@@ -46,8 +46,9 @@
   }
 
   var tip = null;
-  // Dialogs clip everything inside them to their cut corner, and a tooltip on the page would sit under a modal dialog, so where the browser has popovers the
-  // card is one: it renders in the top layer, above the dialog, unclipped. Without them it falls back to living inside the open dialog.
+  // Dialogs clip everything inside them to their cut corner, so a card inside one would be cut off, and everything outside a modal dialog is inert, so a card on
+  // the page could never be hovered. A popover solves both: it lives inside the open dialog (so the pointer can reach it) but renders in the top layer, above
+  // the dialog and not clipped by it. Without popovers it simply lives inside the open dialog.
   var canPopover = typeof HTMLElement !== 'undefined' && typeof HTMLElement.prototype.showPopover === 'function';
   var hideTimer = null;   // a pending delayed hide, for a card the pointer may move onto
   var tipOwner = null;    // the element whose card is showing
@@ -67,7 +68,8 @@
     tip = el('div', 'unit-tip pill-tip');
     tip.id = 'pill-tip';
     tip.setAttribute('role', 'tooltip');
-    if (canPopover) { tip.setAttribute('popover', 'manual'); document.body.appendChild(tip); }
+    if (canPopover) tip.setAttribute('popover', 'manual');
+    document.body.appendChild(tip);
     tip.hidden = true;
     // An interactive card stays while the pointer is on it, and goes a moment after the pointer leaves it.
     tip.addEventListener('mouseenter', cancelHide);
@@ -81,9 +83,10 @@
     if (content.focusable !== false) pill.tabIndex = 0; // false for a part of something that is already focusable
     pill.setAttribute('aria-describedby', 'pill-tip');
     function show() {
+      if (!pill.isConnected) return; // the element was replaced while the card was waiting to appear: there is nowhere to put it
       cancelHide();
       var t = ensureTip();
-      var host = canPopover ? document.body : (pill.closest('dialog[open]') || document.body);
+      var host = pill.closest('dialog[open]') || document.body;
       if (t.parentNode !== host) host.appendChild(t);
       t.textContent = '';
       t.classList.toggle('wide', !!content.build);
@@ -105,7 +108,9 @@
       var r = pill.getBoundingClientRect(), w = t.offsetWidth, h = t.offsetHeight, gap = 6;
       var left = Math.min(Math.max(8, r.left), window.innerWidth - w - 8);
       var top = r.bottom + gap;
-      if (top + h > window.innerHeight - 8 && r.top - gap - h >= 8) top = r.top - gap - h;
+      var above = false;
+      if (top + h > window.innerHeight - 8 && r.top - gap - h >= 8) { top = r.top - gap - h; above = true; }
+      t.classList.toggle('above', above); // which side the pointer's bridge to the pill is on
       t.style.left = left + 'px';
       t.style.top = top + 'px';
     }
@@ -268,5 +273,5 @@
     return row;
   }
 
-  window.MechRow = { build: build, attachTip: attachTip };
+  window.MechRow = { build: build, attachTip: attachTip, hideTip: function () { hideNow(); } };
 })();

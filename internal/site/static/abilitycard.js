@@ -84,6 +84,9 @@
     var a = byId(id);
     if (!a) return;
     var t = ensureTip();
+    // Inside the open dialog when the chip is in one (as a popover it is still on top and not clipped), like the pilot card it is shown from.
+    var host = chip.closest('dialog[open]') || document.body;
+    if (t.parentNode !== host) host.appendChild(t);
     fill(tipCard, a);
     t.hidden = false;
     // Shown (and so put in the top layer) after any popover already open, it sits on top of it.

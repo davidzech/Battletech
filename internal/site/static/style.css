@@ -1238,3 +1238,7 @@ dialog button.deploy-slot-x:hover:not(:disabled), dialog button.deploy-slot-x:fo
    the ring inside the box, so the list's overflow can't cut it off. */
 dialog input.themed-box:focus, dialog .themed-check input:focus { outline: none; }
 .themed-check input:focus-visible, input.themed-box:focus-visible, dialog input.themed-box:focus-visible, dialog .themed-check input:focus-visible { outline: 2px solid var(--text); outline-offset: -4px; }
+
+/* A bridge between a pilot and its card: the card's invisible edge reaches back across the gap to the pilot, so the pointer is never on neither of them. */
+.pill-tip.wide::before { content: ""; position: absolute; left: 0; right: 0; top: -14px; height: 14px; }
+.pill-tip.wide.above::before { top: auto; bottom: -14px; }

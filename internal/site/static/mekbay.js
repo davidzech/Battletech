@@ -302,6 +302,7 @@
   }
 
   function render() {
+    if (typeof MechRow.hideTip === 'function') MechRow.hideTip(); // the pilot elements are about to be replaced, so a card open on one would point at nothing
     list.textContent = '';
     units.forEach(function (u) { list.appendChild(row(u)); });
     renderTray();
