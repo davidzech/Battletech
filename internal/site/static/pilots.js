@@ -226,51 +226,9 @@
   var skillLearn = document.getElementById('skill-learn');
   var skillError = document.getElementById('skill-error');
 
-  function abilityById(id) {
-    for (var i = 0; i < abilityCatalog.length; i++) if (abilityCatalog[i].id === id) return abilityCatalog[i];
-    return null;
-  }
-
-  // A rule starts with its trigger, which the book prints in bold: everything up to the first ":" that isn't inside parentheses (Protector's
-  // trigger has a "(TW: 1 hex)" aside in it). Returns [trigger including its colon, the rest]; the trigger is "" if there is no colon.
-  function splitTrigger(text) {
-    var depth = 0;
-    for (var i = 0; i < text.length; i++) {
-      var ch = text.charAt(i);
-      if (ch === '(') depth++;
-      else if (ch === ')') depth = Math.max(0, depth - 1);
-      else if (ch === ':' && depth === 0) return [text.slice(0, i + 1), text.slice(i + 1)];
-    }
-    return ['', text];
-  }
-
-  // Appends text to a parent, with each "(TW: ...)" aside (the Total Warfare version of a rule) in its own dimmed span.
-  function appendRule(parent, text) {
-    text.split(/(\(TW:[^)]*\))/).forEach(function (part, i) {
-      if (!part) return;
-      if (i % 2) parent.appendChild(el('span', 'tw', part)); else parent.appendChild(document.createTextNode(part));
-    });
-  }
-
-  // The ability card under a combo box: the ability's name, a category pill, and its rule with the trigger in bold. null empties it.
-  function fillAbilityCard(card, a) {
-    card.textContent = '';
-    card.className = 'skill-card' + (a ? ' cat-' + a.category.toLowerCase().replace(/[^a-z]+/g, '-') : ' empty');
-    if (!a) { card.appendChild(el('p', 'skill-rule', 'Choose an ability to read what it does.')); return; }
-    var head = el('div', 'skill-card-head');
-    head.appendChild(el('span', 'skill-name', a.name));
-    head.appendChild(el('span', 'skill-cat', a.category));
-    card.appendChild(head);
-    var rule = el('p', 'skill-rule');
-    var parts = splitTrigger(a.text);
-    if (parts[0]) {
-      var trigger = el('b', 'skill-trigger');
-      appendRule(trigger, parts[0]);
-      rule.appendChild(trigger);
-    }
-    appendRule(rule, parts[1]);
-    card.appendChild(rule);
-  }
+  // The ability card (the catalog, filling a card, and the hover card on a chip) is shared with the Deploy popup: abilitycard.js, which loads first.
+  AbilityCard.setCatalog(abilityCatalog);
+  var abilityById = AbilityCard.byId, fillAbilityCard = AbilityCard.fill;
 
   // Each combo box lists the abilities the pilot doesn't have yet, grouped by category; one chosen in another box is greyed out here, and
   // the chosen ability's rule is shown under its box.
@@ -284,36 +242,9 @@
     skillError.textContent = '';
   }
 
-  // ---- Hover card for a learned ability, like the one on the mech icons of the overview: the same ability card as the picker, in a
-  // floating panel anchored under the chip (above it when there is no room below), shown on hover and on keyboard focus.
-  var skillTip = el('div', 'skill-tip');
-  skillTip.id = 'skill-tip';
-  skillTip.setAttribute('role', 'tooltip');
-  skillTip.hidden = true;
-  var skillTipCard = el('div', 'skill-card');
-  skillTip.appendChild(skillTipCard);
-  document.body.appendChild(skillTip);
-
-  function showSkillTip(chip) {
-    var a = abilityById(chip.dataset.ability);
-    if (!a) return;
-    fillAbilityCard(skillTipCard, a);
-    skillTip.hidden = false;
-    var r = chip.getBoundingClientRect(), w = skillTip.offsetWidth, h = skillTip.offsetHeight, gap = 6;
-    var left = Math.min(Math.max(8, r.left), window.innerWidth - w - 8);
-    var top = r.bottom + gap;
-    if (top + h > window.innerHeight - 8 && r.top - gap - h >= 8) top = r.top - gap - h;
-    skillTip.style.left = left + 'px';
-    skillTip.style.top = top + 'px';
-  }
-  function hideSkillTip() { skillTip.hidden = true; }
-  box.querySelectorAll('.skill-chip').forEach(function (chip) {
-    chip.addEventListener('mouseenter', function () { showSkillTip(chip); });
-    chip.addEventListener('mouseleave', hideSkillTip);
-    chip.addEventListener('focus', function () { showSkillTip(chip); });
-    chip.addEventListener('blur', hideSkillTip);
-  });
-  window.addEventListener('scroll', hideSkillTip, true); // a fixed card would drift away from its chip
+  // ---- Hover card for a learned ability, like the one on the mech icons of the overview: the same ability card as the picker, in a floating panel
+  // anchored under the chip (above it when there is no room below), shown on hover and on keyboard focus.
+  box.querySelectorAll('.skill-chip').forEach(function (chip) { AbilityCard.attach(chip, chip.dataset.ability); });
 
   function openSkills(li) {
     skillPilot = li;

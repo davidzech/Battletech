@@ -49,6 +49,19 @@
   // Dialogs clip everything inside them to their cut corner, and a tooltip on the page would sit under a modal dialog, so where the browser has popovers the
   // card is one: it renders in the top layer, above the dialog, unclipped. Without them it falls back to living inside the open dialog.
   var canPopover = typeof HTMLElement !== 'undefined' && typeof HTMLElement.prototype.showPopover === 'function';
+  var hideTimer = null;   // a pending delayed hide, for a card the pointer may move onto
+  var tipOwner = null;    // the element whose card is showing
+  var tipInteractive = false;
+  var GRACE = 250;        // ms the pointer has to travel from the element onto an interactive card before it goes away
+  function cancelHide() { clearTimeout(hideTimer); hideTimer = null; }
+  function hideNow() {
+    cancelHide();
+    tipOwner = null;
+    tipInteractive = false;
+    if (!tip) return;
+    tip.hidden = true;
+    if (canPopover && tip.matches(':popover-open')) tip.hidePopover();
+  }
   function ensureTip() {
     if (tip) return tip;
     tip = el('div', 'unit-tip pill-tip');
@@ -56,13 +69,19 @@
     tip.setAttribute('role', 'tooltip');
     if (canPopover) { tip.setAttribute('popover', 'manual'); document.body.appendChild(tip); }
     tip.hidden = true;
+    // An interactive card stays while the pointer is on it, and goes a moment after the pointer leaves it.
+    tip.addEventListener('mouseenter', cancelHide);
+    tip.addEventListener('mouseleave', function () { if (tipInteractive) { cancelHide(); hideTimer = setTimeout(hideNow, GRACE); } });
+    window.addEventListener('scroll', hideNow, true); // a fixed card would drift away from its element
     return tip;
   }
-  // content: { title, cls, text, lines: [{ label, value }] }, or { build: function () -> element } for custom content; optional delay (ms) and focusable: false
+  // content: { title, cls, text, lines: [{ label, value }] }, or { build: function () -> element } for custom content; optional delay (ms), focusable: false,
+  // and interactive: true to let the pointer move onto the card (and into things inside it, like the ability chips of a pilot card) without it going away.
   function attachTip(pill, content) {
     if (content.focusable !== false) pill.tabIndex = 0; // false for a part of something that is already focusable
     pill.setAttribute('aria-describedby', 'pill-tip');
     function show() {
+      cancelHide();
       var t = ensureTip();
       var host = canPopover ? document.body : (pill.closest('dialog[open]') || document.body);
       if (t.parentNode !== host) host.appendChild(t);
@@ -79,6 +98,8 @@
         content.lines.forEach(function (l) { dl.appendChild(el('dt', null, l.label)); dl.appendChild(el('dd', null, l.value)); });
         t.appendChild(dl);
       }
+      tipOwner = pill;
+      tipInteractive = !!content.interactive;
       t.hidden = false;
       if (canPopover && !t.matches(':popover-open')) t.showPopover();
       var r = pill.getBoundingClientRect(), w = t.offsetWidth, h = t.offsetHeight, gap = 6;
@@ -94,16 +115,20 @@
     function hide() {
       clearTimeout(timer);
       timer = null;
-      if (!tip) return;
-      tip.hidden = true;
-      if (canPopover && tip.matches(':popover-open')) tip.hidePopover();
+      if (tipOwner === pill || !tipOwner) hideNow();
     }
     function hover() {
       clearTimeout(timer);
+      if (tipOwner === pill && tip && !tip.hidden) { cancelHide(); return; } // coming back from the card to the element it belongs to
       if (content.delay > 0) timer = setTimeout(function () { timer = null; show(); }, content.delay); else show();
     }
+    function leave() {
+      clearTimeout(timer);
+      timer = null;
+      if (content.interactive && tipOwner === pill && tip && !tip.hidden) { cancelHide(); hideTimer = setTimeout(hideNow, GRACE); } else hide();
+    }
     pill.addEventListener('mouseenter', hover);
-    pill.addEventListener('mouseleave', hide);
+    pill.addEventListener('mouseleave', leave);
     pill.addEventListener('focus', function () { clearTimeout(timer); show(); });
     pill.addEventListener('blur', hide);
     pill.addEventListener('dragstart', hide);

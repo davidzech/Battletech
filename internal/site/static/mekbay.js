@@ -38,6 +38,7 @@
   // The campaign's living named pilots, as { name, rank, portraitUrl, gunnery, piloting }.
   var pilots = [];
   try { pilots = JSON.parse(dialog.dataset.pilots || '[]') || []; } catch (e) { pilots = []; }
+  if (typeof AbilityCard !== 'undefined') { try { AbilityCard.setCatalog(JSON.parse(dialog.dataset.abilities || '[]')); } catch (e) { /* no catalog: the chips just won't explain themselves */ } }
   var crew = {};          // unit ID -> name of the named pilot assigned to it in this popup
   var original = {};      // unit ID -> the named pilot the hangar has in it now, if any
   var crewTouched = false; // the player has moved a pilot, so a fresh read must not undo it
@@ -158,13 +159,20 @@
     card.appendChild(boxes);
     var skills = el('div', 'edge-skills');
     skills.appendChild(el('span', 'edge-skills-label', 'Edge abilities'));
-    if ((p.learned || []).length) p.learned.forEach(function (n) { skills.appendChild(el('span', 'skill-chip', n)); });
+    if ((p.learned || []).length) {
+      p.learned.forEach(function (a) {
+        var chip = el('span', 'skill-chip', a.name);
+        chip.tabIndex = 0;
+        if (typeof AbilityCard !== 'undefined') AbilityCard.attach(chip, a.id); // hovering one shows the ability card, on top of this card
+        skills.appendChild(chip);
+      });
+    }
     else skills.appendChild(el('span', 'dpc-none', 'None learned yet'));
     card.appendChild(skills);
     return card;
   }
   function attachPilotCard(node, p) {
-    if (typeof MechRow.attachTip === 'function') MechRow.attachTip(node, { focusable: false, delay: 500, build: function () { return pilotCard(p); } });
+    if (typeof MechRow.attachTip === 'function') MechRow.attachTip(node, { focusable: false, delay: 500, interactive: true, build: function () { return pilotCard(p); } });
   }
 
   function statStrip(p) {

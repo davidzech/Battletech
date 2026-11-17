@@ -63,29 +63,33 @@ func (p Page) PilotsJSON() string {
 		NextLvl int    `json:"nextLvl"`
 		Percent int    `json:"percent"`
 	}
+	type learned struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	}
 	type tray struct {
-		Name        string   `json:"name"`
-		Rank        string   `json:"rank"`
-		PortraitURL string   `json:"portraitUrl"`
-		Gunnery     int      `json:"gunnery"`
-		Piloting    int      `json:"piloting"`
-		EdgeTokens  int      `json:"edgeTokens"`
-		Abilities   int      `json:"abilities"` // how many Edge abilities their level lets them hold
-		Earned      int      `json:"earned"`
-		Columns     []column `json:"columns"`
-		Learned     []string `json:"learned"` // the Edge abilities they have chosen
+		Name        string    `json:"name"`
+		Rank        string    `json:"rank"`
+		PortraitURL string    `json:"portraitUrl"`
+		Gunnery     int       `json:"gunnery"`
+		Piloting    int       `json:"piloting"`
+		EdgeTokens  int       `json:"edgeTokens"`
+		Abilities   int       `json:"abilities"` // how many Edge abilities their level lets them hold
+		Earned      int       `json:"earned"`
+		Columns     []column  `json:"columns"`
+		Learned     []learned `json:"learned"` // the Edge abilities they have chosen
 	}
 	out := []tray{}
 	for _, v := range p.Pilots {
 		if v.Fallen {
 			continue
 		}
-		t := tray{Name: v.Name, Rank: v.Rank, PortraitURL: v.PortraitURL, Gunnery: v.Gunnery, Piloting: v.Piloting, EdgeTokens: v.EdgeTokens, Abilities: v.Abilities, Earned: v.Earned, Columns: []column{}, Learned: []string{}}
+		t := tray{Name: v.Name, Rank: v.Rank, PortraitURL: v.PortraitURL, Gunnery: v.Gunnery, Piloting: v.Piloting, EdgeTokens: v.EdgeTokens, Abilities: v.Abilities, Earned: v.Earned, Columns: []column{}, Learned: []learned{}}
 		for _, c := range v.Columns {
 			t.Columns = append(t.Columns, column{c.Label, c.Level, c.SP, c.HasNext, c.NextAt, c.NextLvl, c.Percent})
 		}
 		for _, a := range v.EdgeLearned {
-			t.Learned = append(t.Learned, a.Name)
+			t.Learned = append(t.Learned, learned{a.ID, a.Name})
 		}
 		out = append(out, t)
 	}

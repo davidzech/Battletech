@@ -17,7 +17,7 @@
 <p class="muted">Choose which mechs from your hangar fly this mission{{if .Scenario.BVLimit}}, up to {{.Scenario.BVLimit}} BV{{end}}. The site sorts your MekBay hangar into <em>Deployed</em> and <em>Hangar</em> groups and sets up the OpFor against them.</p>
 <p class="downloads"><button type="button" class="button" id="deploy-open">Deploy force&hellip;</button>{{if .MekBayOp}}<a class="button" href="{{.MekBayOp}}" target="_blank" rel="noopener noreferrer">Open in MekBay</a>{{end}}</p>
 </section>
-<dialog id="deploy-dialog" class="deploy" aria-labelledby="deploy-title" data-campaign="{{.Campaign.Slug}}" data-scenario="{{.Scenario.Slug}}" data-limit="{{.Scenario.BVLimit}}" data-can-modify="{{if .Play.CanModify}}1{{end}}" data-pilots="{{.PilotsJSON}}" data-cached="{{.DeployJSON}}">
+<dialog id="deploy-dialog" class="deploy" aria-labelledby="deploy-title" data-campaign="{{.Campaign.Slug}}" data-scenario="{{.Scenario.Slug}}" data-limit="{{.Scenario.BVLimit}}" data-can-modify="{{if .Play.CanModify}}1{{end}}" data-pilots="{{.PilotsJSON}}" data-abilities="{{.Abilities}}" data-cached="{{.DeployJSON}}">
 <h2 id="deploy-title">Deploy your force</h2>
 <p class="deploy-meter" id="deploy-meter"></p>
 <p class="muted" id="deploy-status">Loading your hangar&hellip;</p>
@@ -33,6 +33,7 @@
 <div class="form-actions"><button type="button" class="button alert" id="deploy-go" disabled>Deploy</button><button type="button" id="deploy-cancel">Cancel</button></div>
 </dialog>
 <script src="/static/mechrow.js" defer></script>
+<script src="/static/abilitycard.js" defer></script>
 <script src="/static/mekbay.js" defer></script>
 {{else if and .Play.Configured .Scenario.Forces}}<section class="mekbay">
 <h2>Deploy your force</h2>

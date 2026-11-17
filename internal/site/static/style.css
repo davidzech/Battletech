@@ -1228,3 +1228,13 @@ dialog button.deploy-slot-x:hover:not(:disabled), dialog button.deploy-slot-x:fo
 .deploy-unit.has-slot .mr-role { --role-size: 0.68rem; }
 /* The hover card is a popover (see mechrow.js): drop the browser's popover box and keep the card's own look. */
 .unit-tip[popover] { inset: auto; margin: 0; overflow: visible; color: var(--text); }
+
+/* The ability card's floating panel is a popover too (abilitycard.js): above the pilot card it is shown from, and unclipped by a dialog. */
+.skill-tip[popover] { inset: auto; margin: 0; padding: 0; border: 0; background: none; overflow: visible; color: inherit; }
+/* An interactive card (the pilot card) takes the pointer; the ability card shown from inside it does not, so the pointer stays on the pilot card. */
+.pill-tip.wide { pointer-events: auto; }
+
+/* A themed checkbox keeps no ring after a mouse click (the dialog's generic input:focus outline used to leave a clipped one behind); keyboard focus draws
+   the ring inside the box, so the list's overflow can't cut it off. */
+dialog input.themed-box:focus, dialog .themed-check input:focus { outline: none; }
+.themed-check input:focus-visible, input.themed-box:focus-visible, dialog input.themed-box:focus-visible, dialog .themed-check input:focus-visible { outline: 2px solid var(--text); outline-offset: -4px; }
