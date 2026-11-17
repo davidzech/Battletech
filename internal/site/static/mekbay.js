@@ -42,8 +42,6 @@
   var MAX = 4; // the most players a company can have MekBay accounts for
   var maxPlayers = Math.min(MAX, Math.max(1, parseInt(dialog.dataset.maxPlayers, 10) || 1));
   var minPlayers = Math.min(maxPlayers, Math.max(1, parseInt(dialog.dataset.minPlayers, 10) || 1));
-  var accounts = { players: [], opfor: false }; // which MekBay user IDs are saved (never the IDs)
-  try { accounts = JSON.parse(dialog.dataset.accounts || '{}') || accounts; } catch (e) { /* none known */ }
 
   var units = [];         // the hangar's mechs, as the server describes them
   var original = {};      // unit ID -> the named pilot the hangar has in it now, if any
@@ -111,7 +109,6 @@
   }
   function totalBV() { var t = 0; for (var i = 0; i < playerCount; i++) t += bvOf(i); return t; }
   function over() { return limit > 0 && totalBV() > limit; }
-  function hasId(i) { return !!(accounts.players && accounts.players[i]); }
 
   // ---- Assigning pilots (to the current player's mechs)
   function assign(unitId, name) {
@@ -317,13 +314,6 @@
     }
   }
 
-  function idPill(i) {
-    var saved = hasId(i);
-    var pill = el('span', 'deploy-id' + (saved ? '' : ' missing'), saved ? 'MekBay ID saved' : 'No MekBay user ID yet');
-    if (!saved) pill.title = 'Add Player ' + (i + 1) + '’s MekBay user ID under Company details before deploying to MekBay.';
-    return pill;
-  }
-
   // A pilot in a review row: the same compact card as a filled slot, not draggable.
   function staticPilot(name) {
     var box = el('div', 'deploy-slot static');
@@ -344,7 +334,6 @@
       var sec = el('section', 'deploy-review-player');
       var h = el('h3', null, 'Player ' + pl.player);
       h.appendChild(el('span', null, pl.units.length + (pl.units.length === 1 ? ' mech' : ' mechs') + ' · ' + fmt(pl.bv) + ' BV'));
-      h.appendChild(idPill(pl.player - 1));
       sec.appendChild(h);
       var ul = el('ul', 'deploy-review-list');
       pl.units.forEach(function (pu) {
@@ -370,24 +359,6 @@
       var us = units.filter(function (u) { return plan(i).selected[u.id]; });
       out.push({ player: i + 1, units: us.map(function (u) { return { id: u.id, name: u.name, model: u.model, bv: u.bv }; }), crew: plan(i).crew, bv: bvOf(i) });
     }
-    return out;
-  }
-
-  // The accounts the real deploy will need, as a note: nothing blocks the plan, but MekBay can only be changed through the owner's ID.
-  function missingNote(names) {
-    if (!names.length) return null;
-    var n = el('div', 'deploy-note');
-    n.appendChild(el('span', null, 'Before this can be deployed to MekBay, add the MekBay user ID of:'));
-    var ul = document.createElement('ul');
-    names.forEach(function (x) { ul.appendChild(el('li', null, x)); });
-    n.appendChild(ul);
-    n.appendChild(el('span', null, 'under Company details (top right).'));
-    return n;
-  }
-  function missingNames() {
-    var out = [];
-    for (var i = 0; i < playerCount; i++) if (!hasId(i)) out.push('Player ' + (i + 1));
-    if (!accounts.opfor) out.push('the OpFor');
     return out;
   }
 
@@ -427,8 +398,6 @@
       note.appendChild(el('b', null, 'Your plan is valid. '));
       note.appendChild(document.createTextNode('Nothing has been sent to MekBay yet: building each player’s force in their own MekBay account, and the OpFor in the OpFor’s, comes next.'));
       var notes = [note];
-      var mn = missingNote(finished.missingAccounts || []);
-      if (mn) notes.push(mn);
       renderSummary((finished.players || []).map(function (pl) {
         var crew = {};
         (pl.crew || []).forEach(function (c) { crew[c.unit] = c.pilot; });
@@ -445,7 +414,7 @@
       stepTitle.hidden = false;
       stepTitle.textContent = 'Review your plan';
       meter.hidden = true; // the review ends with the force total
-      renderSummary(planFromState(), [missingNote(missingNames())].filter(Boolean));
+      renderSummary(planFromState(), []);
       resetRow.hidden = !(cachedData && cachedData.hasOperation);
     } else {
       list.hidden = false;
@@ -453,7 +422,6 @@
         stepTitle.hidden = false;
         stepTitle.textContent = '';
         stepTitle.appendChild(document.createTextNode('Player ' + (step + 1) + ' of ' + playerCount));
-        stepTitle.appendChild(idPill(step));
       }
       units.forEach(function (u) { if (!takenElsewhere(u.id)) list.appendChild(row(u)); });
       setMeter();

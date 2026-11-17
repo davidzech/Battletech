@@ -105,7 +105,7 @@ func (p Page) DeployJSON() string {
 	if p.CachedHangar == nil || p.Scenario == nil {
 		return ""
 	}
-	return cachedJSON(deployData(*p.CachedHangar, p.Scenario.BVLimit, p.Play.CanModify(), p.MekBayOp != ""), p.CachedAt)
+	return cachedJSON(deployData(*p.CachedHangar, p.Scenario.BVLimit, p.Run.Owned(), p.MekBayOp != ""), p.CachedAt)
 }
 
 // cacheHangar saves a hangar that was just read live. A failure only costs the cache, so it is logged and otherwise ignored.

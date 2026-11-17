@@ -17,7 +17,7 @@
 <p class="muted">Choose which mechs from your hangar fly this mission{{if .Scenario.BVLimit}}, up to {{.Scenario.BVLimit}} BV{{end}}. The site sorts your MekBay hangar into <em>Deployed</em> and <em>Hangar</em> groups and sets up the OpFor against them.</p>
 <p class="downloads"><button type="button" class="button" id="deploy-open">Deploy force&hellip;</button>{{if .MekBayOp}}<a class="button" href="{{.MekBayOp}}" target="_blank" rel="noopener noreferrer">Open in MekBay</a>{{end}}</p>
 </section>
-<dialog id="deploy-dialog" class="deploy" aria-labelledby="deploy-title" data-campaign="{{.Campaign.Slug}}" data-scenario="{{.Scenario.Slug}}" data-limit="{{.Scenario.BVLimit}}" data-can-modify="{{if .Play.CanModify}}1{{end}}" data-min-players="{{.Campaign.MinPlayers}}" data-max-players="{{.Campaign.MaxPlayers}}" data-accounts="{{.AccountsJSON}}" data-pilots="{{.PilotsJSON}}" data-abilities="{{.Abilities}}" data-cached="{{.DeployJSON}}">
+<dialog id="deploy-dialog" class="deploy" aria-labelledby="deploy-title" data-campaign="{{.Campaign.Slug}}" data-scenario="{{.Scenario.Slug}}" data-limit="{{.Scenario.BVLimit}}" data-can-modify="{{if .Run.Owned}}1{{end}}" data-min-players="{{.Campaign.MinPlayers}}" data-max-players="{{.Campaign.MaxPlayers}}" data-pilots="{{.PilotsJSON}}" data-abilities="{{.Abilities}}" data-cached="{{.DeployJSON}}">
 <h2 id="deploy-title">Deploy your force</h2>
 <div class="deploy-players" id="deploy-players" hidden>
 <span class="deploy-players-label" id="deploy-players-label">Players</span>

@@ -110,11 +110,20 @@
   var bar = document.getElementById('wiz-bar');
 
   var portraits = JSON.parse(wiz.dataset.portraits || '[]');
+  // The Edge ability catalog and its card are shared with the Manage page's picker (abilitycard.js).
+  var abilityCatalog = JSON.parse(wiz.dataset.abilities || '[]');
+  var CATEGORY_ORDER = ['Attack', 'Indirect Fire', 'Defense', 'Heat', 'Melee', 'Movement'];
+  if (window.AbilityCard) AbilityCard.setCatalog(abilityCatalog);
+  // How many Edge abilities a pilot's allocation entitles them to choose: their Edge abilities level.
+  function abilitySlots(p) {
+    for (var i = 0; i < ladders.length; i++) if (ladders[i].key === 'edge_abilities') return reach(ladders[i], p.sp.edge_abilities).level;
+    return 0;
+  }
   var pilots = [];
   for (var i = 0; i < pilotCount; i++) {
     var sp = {};
     ladders.forEach(function (l) { sp[l.key] = 0; });
-    pilots.push({ name: '', sp: sp, portrait: '' });
+    pilots.push({ name: '', sp: sp, portrait: '', abilities: [] });
   }
   // Every pilot starts with a random portrait nobody else has been given.
   pilots.forEach(function (p) {
@@ -158,7 +167,11 @@
       PortraitPicker.open({
         portraits: portraits, selected: p.portrait,
         taken: pilots.filter(function (o) { return o !== p; }).map(function (o) { return o.portrait; }),
-        onPick: function (file) { p.portrait = file; portraitImg.src = '/portraits/' + file; }
+        onPick: function (file) {
+          p.portrait = file; portraitImg.src = '/portraits/' + file;
+          // The placeholder name follows the portrait's gender (only while the player hasn't typed a name of their own).
+          if (window.PilotNames && !nameInput.value) nameInput.placeholder = PilotNames.random(PilotNames.groupOf(portraits, file));
+        }
       });
     });
 
@@ -166,7 +179,7 @@
     nameLabel.setAttribute('for', 'wiz-name');
     var nameInput = document.createElement('input');
     nameInput.type = 'text'; nameInput.id = 'wiz-name'; nameInput.maxLength = 30; nameInput.autocomplete = 'off';
-    nameInput.placeholder = 'Alrek'; nameInput.spellcheck = false; nameInput.value = p.name;
+    nameInput.placeholder = window.PilotNames ? PilotNames.random(PilotNames.groupOf(portraits, p.portrait)) : 'Alrek'; nameInput.spellcheck = false; nameInput.value = p.name;
     nameInput.addEventListener('input', function () { p.name = nameInput.value; error.textContent = ''; updateNext(); });
     nameBlock.appendChild(nameLabel);
     nameBlock.appendChild(nameInput);
@@ -181,17 +194,70 @@
 
     var remaining = el('p', 'alloc-remaining');
     var rows = ladders.map(function (l) { return allocatorRow(p, l, refresh); });
+    // Edge abilities: one combo box per ability the allocation pays for, which have to be chosen before moving on. Moving SP out of the
+    // Edge abilities column until the level drops removes the choices that no longer fit, the last ones first.
+    var abilityBox = el('div', 'wiz-abilities');
+    var shownSlots = -1;
+    function renderAbilities() {
+      var n = abilitySlots(p);
+      if (p.abilities.length > n) p.abilities.length = n;
+      while (p.abilities.length < n) p.abilities.push('');
+      if (n === shownSlots) return;
+      shownSlots = n;
+      abilityBox.textContent = '';
+      if (!n) return;
+      abilityBox.appendChild(el('h3', 'alloc-head', n === 1 ? 'Choose an Edge ability' : 'Choose ' + n + ' Edge abilities'));
+      abilityBox.appendChild(el('p', 'muted', 'Your Edge abilities level lets this pilot start with ' + (n === 1 ? 'an Edge ability' : n + ' Edge abilities') + '. The choice is permanent. Lowering the Edge abilities SP above removes the choices that no longer fit.'));
+      var selects = [];
+      function sync() {
+        selects.forEach(function (s, i) {
+          [].forEach.call(s.options, function (o) { o.disabled = o.value !== '' && p.abilities.some(function (c, j) { return j !== i && c === o.value; }); });
+          AbilityCard.fill(s.parentNode.querySelector('.skill-card'), AbilityCard.byId(s.value));
+        });
+        updateNext();
+      }
+      for (var k = 0; k < n; k++) (function (k) {
+        var slot = el('div', 'skill-slot');
+        var label = el('label', null, 'Edge ability ' + (n > 1 ? (k + 1) : ''));
+        var select = document.createElement('select');
+        select.id = 'wiz-ability-' + k;
+        label.setAttribute('for', select.id);
+        var blank = el('option', null, 'Choose an ability…');
+        blank.value = '';
+        select.appendChild(blank);
+        var categories = CATEGORY_ORDER.slice();
+        abilityCatalog.forEach(function (a) { if (categories.indexOf(a.category) < 0) categories.push(a.category); });
+        categories.forEach(function (cat) {
+          var inCat = abilityCatalog.filter(function (a) { return a.category === cat; });
+          if (!inCat.length) return;
+          var group = document.createElement('optgroup');
+          group.label = cat;
+          inCat.forEach(function (a) { var o = el('option', null, a.name); o.value = a.id; group.appendChild(o); });
+          select.appendChild(group);
+        });
+        select.value = p.abilities[k] || '';
+        select.addEventListener('change', function () { p.abilities[k] = select.value; error.textContent = ''; sync(); });
+        slot.appendChild(label);
+        slot.appendChild(select);
+        slot.appendChild(el('div', 'skill-card empty'));
+        abilityBox.appendChild(slot);
+        selects.push(select);
+      })(k);
+      sync();
+    }
     function refresh() {
       var left = budget - spentOf(p);
       remaining.textContent = left + ' of ' + budget + ' SP left to allocate';
       remaining.classList.toggle('done', left === 0);
       rows.forEach(function (r) { r.show(); });
       stats.forEach(function (b, i) { b.show(p.sp[ladders[i].key]); });
+      renderAbilities();
       updateNext();
     }
     body.appendChild(el('h3', 'alloc-head', 'Allocate SP'));
     body.appendChild(remaining);
     rows.forEach(function (r) { body.appendChild(r); });
+    body.appendChild(abilityBox);
     refresh();
     nameInput.focus();
   }
@@ -451,6 +517,8 @@
     if (clash) return 'Two of your pilots can’t share a name.';
     var left = budget - spentOf(p);
     if (left !== 0) return 'Allocate all ' + budget + ' SP before moving on (' + left + ' left).';
+    var open = p.abilities.filter(function (a) { return !a; }).length;
+    if (open) return 'Choose ' + (open === 1 ? 'your pilot’s Edge ability' : 'all ' + p.abilities.length + ' Edge abilities') + ' before moving on.';
     return '';
   }
 
@@ -460,6 +528,7 @@
       parts.push('pilot' + idx + '_name=' + encodeURIComponent(p.name.trim()));
       if (p.portrait) parts.push('pilot' + idx + '_portrait=' + encodeURIComponent(p.portrait));
       ladders.forEach(function (l) { parts.push('pilot' + idx + '_' + l.key + '=' + p.sp[l.key]); });
+      p.abilities.forEach(function (a) { parts.push('pilot' + idx + '_ability=' + encodeURIComponent(a)); });
     });
     busy = true;
     updateNext();

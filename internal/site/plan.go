@@ -43,19 +43,17 @@ type planCrew struct {
 }
 
 type planPlayer struct {
-	Player     int        `json:"player"`
-	Units      []planUnit `json:"units"`
-	Crew       []planCrew `json:"crew"`
-	BV         int        `json:"bv"`
-	HasAccount bool       `json:"hasAccount"`
+	Player int        `json:"player"`
+	Units  []planUnit `json:"units"`
+	Crew   []planCrew `json:"crew"`
+	BV     int        `json:"bv"`
 }
 
 type planResult struct {
-	Players         []planPlayer `json:"players"`
-	TotalBV         int          `json:"totalBV"`
-	Limit           int          `json:"limit"`
-	MissingAccounts []string     `json:"missingAccounts"` // the MekBay user IDs the real deploy will need that aren't saved yet
-	Deployed        bool         `json:"deployed"`        // always false for now: nothing was sent to MekBay
+	Players  []planPlayer `json:"players"`
+	TotalBV  int          `json:"totalBV"`
+	Limit    int          `json:"limit"`
+	Deployed bool         `json:"deployed"` // always false for now: nothing was sent to MekBay
 }
 
 // planProblem checks a whole plan against the hangar and returns the first problem as a sentence, or "". units[i] is player i+1's mech IDs.
@@ -121,13 +119,13 @@ func (s *Server) deployPlan(w http.ResponseWriter, r *http.Request) {
 	for _, v := range hangarViews(h) {
 		views[v.ID] = v
 	}
-	res := planResult{Players: []planPlayer{}, Limit: sc.BVLimit, MissingAccounts: []string{}}
+	res := planResult{Players: []planPlayer{}, Limit: sc.BVLimit}
 	pilotUsed := map[string]int{}
 	for i := 0; i < n; i++ {
 		num := i + 1
 		pre := "p" + strconv.Itoa(num) + "_"
 		mine := map[string]bool{}
-		pp := planPlayer{Player: num, Units: []planUnit{}, Crew: []planCrew{}, HasAccount: pt.HasAccount(accountSlotDefs[i].Key)}
+		pp := planPlayer{Player: num, Units: []planUnit{}, Crew: []planCrew{}}
 		for _, id := range units[i] {
 			v := views[id]
 			mine[id] = true
@@ -156,12 +154,6 @@ func (s *Server) deployPlan(w http.ResponseWriter, r *http.Request) {
 		}
 		res.Players = append(res.Players, pp)
 		res.TotalBV += pp.BV
-		if !pp.HasAccount {
-			res.MissingAccounts = append(res.MissingAccounts, accountSlotDefs[i].Label)
-		}
-	}
-	if !pt.HasAccount(SlotOpFor) {
-		res.MissingAccounts = append(res.MissingAccounts, accountSlotDefs[maxPlayers].Label)
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")

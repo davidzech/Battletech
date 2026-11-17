@@ -1,6 +1,7 @@
 package site
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log"
@@ -16,6 +17,9 @@ import (
 type Hangar struct {
 	URL      string // the canonical link, https://mekbay.com/?instance=<id>
 	Instance string // the hangar force's instance ID
+	// Source, on a run's hangar, is the link the player gave. URL and Instance are then the site's own copy of that force (see clone.go), and parseHangar,
+	// which reads what the player pasted, leaves it empty.
+	Source string
 }
 
 var uuidPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
@@ -73,17 +77,7 @@ func parseCompanyName(raw string) (string, error) {
 	return name, nil
 }
 
-// parseOwnerUID validates the optional MekBay account UID (the id MekBay keeps in the owner's browser).
-// An empty value is fine and means "don't change".
-func parseOwnerUID(raw string) (string, error) {
-	uid := strings.ToLower(strings.TrimSpace(raw))
-	if uid != "" && !uuidPattern.MatchString(uid) {
-		return "", errors.New("That doesn't look like a MekBay user ID (it should be a UUID like 01234567-89ab-cdef-0123-456789abcdef).")
-	}
-	return uid, nil
-}
-
-// setCompany saves the company's name and the optional MekBay user IDs (Player 1 to 4 and the OpFor) for the visitor's playthrough.
+// setCompany saves the company's name for the visitor's playthrough.
 func (s *Server) setCompany(w http.ResponseWriter, r *http.Request) {
 	if !sameOrigin(r) {
 		http.Error(w, "cross-origin request refused", http.StatusForbidden)
@@ -104,20 +98,6 @@ func (s *Server) setCompany(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	// Each MekBay account slot (Player 1 to 4 and the OpFor) is optional: an ID saves it, its "clear" field forgets it, and a blank field keeps whatever is
-	// saved (an ID is never sent back to the page to prefill it). Everything is checked before anything is saved.
-	type change struct{ slot, uid string }
-	var changes []change
-	for _, def := range accountSlotDefs {
-		uid, err := parseOwnerUID(r.PostFormValue(def.Field))
-		if err != nil {
-			http.Error(w, def.Label+": "+err.Error(), http.StatusBadRequest)
-			return
-		}
-		if uid != "" || r.PostFormValue(def.ClearField) == "1" {
-			changes = append(changes, change{def.Key, uid})
-		}
-	}
 	id := playthroughID(seed)
 	if _, err := s.store.EnsurePlaythrough(r.Context(), id); err != nil {
 		http.Error(w, "could not save company", http.StatusInternalServerError)
@@ -126,13 +106,6 @@ func (s *Server) setCompany(w http.ResponseWriter, r *http.Request) {
 	if err := s.store.SetCompanyName(r.Context(), id, name); err != nil {
 		http.Error(w, "could not save company", http.StatusInternalServerError)
 		return
-	}
-	// Player 1's ID is what turns modify mode on; leaving every field blank changes nothing.
-	for _, c := range changes {
-		if err := s.store.SetAccount(r.Context(), id, c.slot, c.uid); err != nil {
-			http.Error(w, "could not save company", http.StatusInternalServerError)
-			return
-		}
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -170,7 +143,7 @@ func (s *Server) startCampaign(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Name your company first.", http.StatusBadRequest)
 		return
 	}
-	hangar, err := parseHangar(r.PostFormValue("hangar"))
+	source, err := parseHangar(r.PostFormValue("hangar"))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -181,6 +154,12 @@ func (s *Server) startCampaign(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if started {
+		hangar, _, err := s.cloneHangar(r.Context(), seed, source)
+		if err != nil {
+			log.Printf("clone hangar for %s: %v", c.Slug, err)
+			http.Error(w, err.Error(), http.StatusBadGateway)
+			return
+		}
 		if err := s.store.StartRun(r.Context(), id, c.Slug, hangar); err != nil {
 			http.Error(w, "could not save the hangar link", http.StatusInternalServerError)
 			return
@@ -194,9 +173,8 @@ func (s *Server) startCampaign(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// The hangar must meet the campaign's starting conditions (enough mechs, within the starting BV).
-	var read *HangarForce // what the check read, kept as the new run's first cached copy
 	if c.StartingBV > 0 || c.StartingMinMechs > 0 {
-		h, err := s.mekbay.ReadHangar(r.Context(), hangar.Instance)
+		h, err := s.mekbay.ReadHangar(r.Context(), source.Instance)
 		if err != nil {
 			log.Printf("read hangar to start %s: %v", c.Slug, err)
 			http.Error(w, err.Error(), http.StatusBadGateway)
@@ -206,7 +184,12 @@ func (s *Server) startCampaign(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, strings.Join(check.Problems, " "), http.StatusBadRequest)
 			return
 		}
-		read = &h
+	}
+	hangar, cloned, err := s.cloneHangar(r.Context(), seed, source)
+	if err != nil {
+		log.Printf("clone hangar for %s: %v", c.Slug, err)
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
 	}
 	if err := s.store.StartRunWithPilots(r.Context(), id, c.Slug, hangar, pilots, c.StartingWarchest); errors.Is(err, ErrAlreadyStarted) {
 		http.Error(w, "This campaign has already been started.", http.StatusConflict)
@@ -215,10 +198,19 @@ func (s *Server) startCampaign(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not start the campaign", http.StatusInternalServerError)
 		return
 	}
-	if read != nil {
-		s.cacheHangar(r.Context(), id, c.Slug, hangar.Instance, *read)
-	}
+	s.cacheHangar(r.Context(), id, c.Slug, hangar.Instance, cloned) // the copy is the run's first cached hangar
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// cloneHangar copies the force the player linked into a new, clean force owned by the seed's own MekBay account, and returns the run's hangar: the copy's
+// link and instance, with the player's link kept as its source.
+func (s *Server) cloneHangar(ctx context.Context, seed string, source Hangar) (Hangar, HangarForce, error) {
+	target := newID()
+	got, err := s.mekbay.CloneHangar(ctx, CloneRequest{OwnerUID: accountUID(seed, SlotPlayer1), Source: source.Instance, Target: target})
+	if err != nil {
+		return Hangar{}, HangarForce{}, err
+	}
+	return Hangar{URL: "https://mekbay.com/?instance=" + target, Instance: target, Source: source.URL}, got, nil
 }
 
 // setSeed validates a chosen seed, records its playthrough and stores the seed in a cookie. The

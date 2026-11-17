@@ -393,7 +393,7 @@ func TestStartWizardSubmission(t *testing.T) {
 		t.Error("an unstarted campaign has no change-hangar dialog")
 	}
 	// The starting rules are a short bulleted list, not one dense sentence.
-	for _, want := range []string{`class="start-rules"`, `<li>Your hangar holds <b>at least 4 mechs</b>, totalling <b>up to 6,000 BV</b> (base BV, whatever the pilots&rsquo; skills).</li>`, `<li>You create <b>2 named pilots</b>, each allocating <b>150 SP</b>.</li>`, `<li>You link this campaign&rsquo;s MekBay hangar`} {
+	for _, want := range []string{`class="start-rules"`, `<li>Your hangar holds <b>at least 4 mechs</b>, totalling <b>up to 6,000 BV</b> (base BV, whatever the pilots&rsquo; skills).</li>`, `<li>You create <b>2 named pilots</b>, each allocating <b>150 SP</b>.</li>`, `<li>You link a MekBay force holding the mechs`} {
 		if !strings.Contains(page, want) {
 			t.Errorf("starting rules are missing %s", want)
 		}
@@ -468,8 +468,8 @@ func TestStartWizardSubmission(t *testing.T) {
 	if ps, _ := store.Pilots(ctx, id, "refusalwar"); len(ps) != 2 {
 		t.Fatalf("a second submit must not duplicate pilots: %+v", ps)
 	}
-	if run, _, _ := store.Run(ctx, id, "refusalwar"); run.HangarInstance != "01a12f98-8a21-7d12-b43d-52bb70872376" {
-		t.Fatalf("the second submit should change the hangar: %+v", run)
+	if run, _, _ := store.Run(ctx, id, "refusalwar"); run.SourceURL != other || run.HangarInstance == "" || run.HangarInstance == goodInstance {
+		t.Fatalf("the second submit should copy the new link into a fresh hangar: %+v", run)
 	}
 }
 
@@ -603,7 +603,7 @@ func TestManageAndOverview(t *testing.T) {
 	}
 	// The manage page holds all of them.
 	man := body(t, srv, "/refusalwar/manage/", cookie)
-	for _, want := range []string{`id="run-dialog"`, `id="delete-dialog"`, `id="sp-dialog"`, `class="button pilot-sp"`, `data-hangar-url="` + goodHangarURL, "Purchase new unit"} {
+	for _, want := range []string{`id="run-dialog"`, `id="delete-dialog"`, `id="sp-dialog"`, `class="button pilot-sp"`, "Purchase new unit"} {
 		if !strings.Contains(man, want) {
 			t.Errorf("manage page is missing %q", want)
 		}

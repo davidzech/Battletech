@@ -2,7 +2,7 @@
 // rows the deploy popup uses (mechrow.js). Both scripts must load first. Like the overview, the page embeds the hangar as it was last read, so the list paints at once and
 // the live read (GET /api/campaign/force) only refreshes it; only a run that has never been read shows "Reading your hangar...". Names,
 // roles and models go in as text, never HTML. Each mech row also has Rearm and Repair buttons (costs come from the server, which charges the
-// warchest and changes the unit in MekBay; both need modify mode). Confirm (confirm.js) must load first.
+// warchest and changes the unit in the site's own copy of the hangar; both need a copy the site owns). Confirm (confirm.js) must load first.
 (function () {
   var section = document.getElementById('hangar-units');
   var list = document.getElementById('hangar-units-list');
@@ -20,7 +20,7 @@
 
   var canModify = section.dataset.canModify === '1';
   var warchest = parseInt(section.dataset.warchest, 10) || 0;
-  var NO_UID = 'Add your MekBay user ID in the campaign details so the site can change your hangar.';
+  var NO_UID = 'This hangar is from before the site kept its own copy. Import it again under Manage force, Danger zone, Change hangar link.';
   function commas(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
   function fullName(u) { return (u.name + (u.model ? ' ' + u.model : '')).trim(); }
 

@@ -236,7 +236,7 @@ func (s *Server) hangarJSON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.cacheHangar(r.Context(), pt.ID, c.Slug, run.HangarInstance, h)
-	out := deployData(h, sc.BVLimit, pt.CanModify(), hasOp)
+	out := deployData(h, sc.BVLimit, run.Owned(), hasOp)
 	if hasOp {
 		out["url"] = OperationURL(op.OperationID)
 	}
@@ -262,8 +262,8 @@ func (s *Server) deploy(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if !pt.CanModify() {
-		http.Error(w, "Add your MekBay user ID in the campaign details to let the site deploy for you.", http.StatusForbidden)
+	if !run.Owned() {
+		http.Error(w, "Your hangar is from before the site kept its own copy. Import it again (Manage force, Danger zone, Change hangar link) first.", http.StatusConflict)
 		return
 	}
 	ids := r.PostForm["units"]
@@ -299,7 +299,7 @@ func (s *Server) deploy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	res, err := s.mekbay.SyncOperation(r.Context(), OperationRequest{
-		OwnerUID:         pt.OwnerUID,
+		OwnerUID:         accountUID(currentSeed(r), SlotPlayer1),
 		CampaignInstance: run.HangarInstance,
 		DeployedUnitIDs:  ids,
 		Crew:             crew,

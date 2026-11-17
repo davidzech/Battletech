@@ -1,6 +1,6 @@
 // Seed popup. Step 1: choose or randomly generate a seed (the server sets the cookie).
-// Step 2 (new companies only): name the company and, optionally, give the MekBay user ID that owns its hangars
-// (modify mode). Each campaign's hangar link is asked for on the campaign page, when the campaign is started.
+// Step 2 (new companies only): name the company.
+// Each campaign's hangar link is asked for on the campaign page, when the campaign is started.
 (function () {
   var dialog = document.getElementById('seed-dialog');
   if (!dialog || typeof dialog.showModal !== 'function') return;
@@ -10,7 +10,6 @@
   var input = document.getElementById('seed-input');
   var seedError = document.getElementById('seed-error');
   var companyInput = document.getElementById('company-input');
-  var idInputs = [].slice.call(document.querySelectorAll('#setup-form input.mekbay-id')); // Player 1 to 4 and the OpFor
   var setupError = document.getElementById('setup-error');
 
   var hasSeed = dialog.dataset.seed !== '';
@@ -96,7 +95,6 @@
 
   input.addEventListener('input', function () { sanitize(); seedError.textContent = ''; });
   companyInput.addEventListener('input', function () { setupError.textContent = ''; });
-  idInputs.forEach(function (i) { i.addEventListener('input', function () { setupError.textContent = ''; }); });
 
   document.getElementById('seed-random').addEventListener('click', function () {
     input.value = randomSeed();
@@ -138,14 +136,7 @@
     e.preventDefault();
     var company = companyInput.value.trim();
     if (!company) { setupError.textContent = 'Name your company.'; return; }
-    // Each MekBay user ID is optional: a UUID saves it, a blank field keeps what is saved, and its Forget box forgets it.
     var body = 'company=' + encodeURIComponent(company);
-    for (var n = 0; n < idInputs.length; n++) {
-      var id = idInputs[n].value.trim().toLowerCase();
-      if (id && !UUID.test(id)) { setupError.textContent = "That doesn't look like a MekBay user ID (it should be a UUID)."; idInputs[n].focus(); return; }
-      if (id) body += '&' + idInputs[n].name + '=' + encodeURIComponent(id);
-    }
-    [].forEach.call(setupForm.querySelectorAll('input.clear-id:checked'), function (c) { body += '&' + c.name + '=1'; });
     post('/api/company', body)
       .then(function (res) {
         if (res.ok) { location.reload(); return; }

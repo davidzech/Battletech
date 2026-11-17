@@ -103,20 +103,6 @@ func TestDeployPlanEndpoint(t *testing.T) {
 	if len(fake.reqs) != 0 || len(fake.services) != 0 || len(fake.purchases) != 0 {
 		t.Errorf("a plan must not touch MekBay: %+v", fake.reqs)
 	}
-	// The accounts the real deploy will need are reported, never their IDs.
-	if strings.Join(two.MissingAccounts, ",") != "Player 1,Player 2,OpFor" {
-		t.Errorf("missing accounts: %v", two.MissingAccounts)
-	}
-	post(t, srv, "/api/company", url.Values{"company": {"Wolf Pack"}, "owner": {ownerUID}, "owner_p2": {uidP2}, "owner_opfor": {uidOpFor}}, cookie, srv.URL)
-	two = read(plan("players", "2", "p1_units", "ua", "p2_units", "ub"))
-	if len(two.MissingAccounts) != 0 || !two.Players[0].HasAccount || !two.Players[1].HasAccount {
-		t.Errorf("with the accounts saved: %v", two.MissingAccounts)
-	}
-	one = read(plan("players", "1", "p1_units", "ua"))
-	if len(one.MissingAccounts) != 0 {
-		t.Errorf("one player needs only Player 1 and the OpFor: %v", one.MissingAccounts)
-	}
-
 	bad := map[string][]string{
 		"no players":           {"p1_units", "ua"},
 		"too many players":     {"players", "3", "p1_units", "ua", "p2_units", "ub", "p3_units", "uc"},

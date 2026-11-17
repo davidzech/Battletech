@@ -210,6 +210,8 @@ type NewPilot struct {
 	Name     string
 	Portrait string
 	SP       SPAllocation
+	// Abilities are the Edge abilities the pilot starts with: exactly as many as their Edge abilities level (see edgeAbilitiesLadder).
+	Abilities []string
 }
 
 // ErrPortraitTaken is returned when another living pilot of the campaign already has the portrait.

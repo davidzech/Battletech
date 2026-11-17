@@ -1254,13 +1254,7 @@ dialog input.themed-box:focus, dialog .themed-check input:focus { outline: none;
 .deploy-pilot.tip-open, .deploy-slot.filled.tip-open { border-color: var(--accent); }
 
 /* The Company details dialog's MekBay user ID rows: Player 1 to 4 and the OpFor. */
-fieldset.mekbay-ids { margin: 1rem 0 0; padding: 0; border: 0; }
-fieldset.mekbay-ids legend { padding: 0; font: 700 0.8rem var(--display); letter-spacing: 0.08em; text-transform: uppercase; }
-.mekbay-id-row { display: grid; grid-template-columns: 5.2rem minmax(0, 1fr) 4.6rem; align-items: center; gap: 0.2rem 0.6rem; margin-top: 0.45rem; }
-.mekbay-id-row > label:first-child { margin: 0; font-size: 0.78rem; }
-.mekbay-id-row input.wide { margin-top: 0; }
-.mekbay-id-row .check { margin: 0; font-size: 0.7rem; }
-
+fieldsetfieldset
 /* The Deploy wizard: a player picker on the first step, a title for the player whose turn it is, a progress bar at the bottom, and a review of the plan. */
 .deploy-players { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; margin: 0.6rem 0 0.2rem; }
 .deploy-players[hidden], .deploy-step[hidden], .deploy-review[hidden], .deploy-progress[hidden] { display: none; }
@@ -1271,14 +1265,11 @@ dialog button.deploy-count + button.deploy-count { border-left: 0; }
 dialog button.deploy-count:hover { color: var(--accent); background: var(--bg); border-color: var(--accent); }
 dialog button.deploy-count[aria-pressed="true"] { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
 .deploy-step { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.9rem; margin: 0.5rem 0 0; font: 700 1.3rem var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
-.deploy-id { padding: 0.12rem 0.55rem; font: 700 0.65rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: #0b1a10; background: #5fc47e; border: 1px solid #5fc47e; }
-.deploy-id.missing { color: var(--accent); background: transparent; border-color: currentColor; }
 .deploy-progress { display: flex; align-items: center; gap: 0.9rem; margin: 1rem 0 0.2rem; }
 .deploy-progress-count { flex: none; font: 700 0.8rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
 .deploy-review { display: grid; gap: 1rem; margin: 0.8rem 0; max-height: 52vh; overflow-y: auto; padding-right: 0.3rem; }
 .deploy-review-player > h3 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.3rem 1rem; margin: 0 0 0.45rem; font: 700 1.05rem var(--display); letter-spacing: 0.08em; text-transform: uppercase; }
-.deploy-review-player > h3 > span:not(.deploy-id) { font-size: 0.8rem; color: var(--muted); } /* not the MekBay ID pill, which has its own colors */
-.deploy-review-list { list-style: none; margin: 0; padding: 0; }
+.deploy-review-player > h3 > span:not(.deploy-review-list { list-style: none; margin: 0; padding: 0; }
 .deploy-review-total { display: flex; flex-wrap: wrap; gap: 0.3rem 1.2rem; font: 700 1rem var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
 .deploy-review-total.over { color: #ff7a59; }
 .deploy-note { margin: 0; padding: 0.7rem 0.9rem; font-size: 0.9rem; background: var(--bg); border: 1px solid var(--line); border-left: 3px solid var(--accent); }

@@ -1,18 +1,22 @@
 package site
 
 import (
-	"context"
-	"database/sql"
-	"encoding/json"
-	"errors"
+	"crypto/sha256"
+	"encoding/hex"
+	"strconv"
 )
 
-// MekBay accounts. MekBay only lets a force's owner change it, so every player who will hold a force in MekBay needs their own MekBay user ID, and
-// the automated OpFor needs one too (it owns the OpFor force). A company can hold up to four player IDs (Player 1 to 4) and one for the OpFor.
+// MekBay accounts. MekBay identifiers are implicit: there is no registration, and any UUID a client presents is an account, which owns whatever forces it saves
+// (only its owner may change a force). So the site does not use the player's own MekBay account at all. It synthesizes one from the seed: a hash of the seed, in the
+// shape of a MekBay user ID, is the stable MekBay identity for that seed, a 1:1 projection of seed to site-managed ID. The site keeps and manages the company's
+// hangar under it (see CloneHangar), and the player never sees the MekBay side: they only give a MekBay hangar link, which the site copies.
 //
-// Player 1's ID is the playthrough's `owner_uid` (it owns the company's hangar, and it is what turns modify mode on, as before); the others are rows
-// of `mekbay_accounts`. All of them are secrets, like a password for that account's MekBay forces: stored server-side only, never rendered back to the
-// page (the pages are told only which slots are saved, never the IDs), and never logged.
+// A seed has up to five identities: Player 1 to 4 and the OpFor. Player 1's owns the company's hangar. The others are for the forces each player and the
+// automated OpFor will hold in MekBay when deploying (not built yet).
+//
+// Nothing about these IDs is stored: each is recomputed from the seed (which arrives in the request's cookie) whenever it is needed. They are secrets in the sense
+// that anyone holding one could change that account's forces in MekBay, so they are never rendered into a page, sent to the browser or logged; the hash is salted
+// with a name unique to this purpose, so the playthrough's database key (also a hash of the seed) cannot be used to work one out.
 
 // Account slots.
 const (
@@ -23,103 +27,27 @@ const (
 	SlotOpFor   = "opfor"
 )
 
-// maxPlayers is how many players a company can have MekBay accounts for.
+// maxPlayers is how many players a company can have.
 const maxPlayers = 4
 
-// AccountSlot describes one slot for the Company details dialog: its key, its label, the names of its form fields, and whether an ID is saved.
-type AccountSlot struct {
-	Key        string // p1..p4 or opfor
-	Label      string // "Player 1", ..., "OpFor"
-	Field      string // the form field that sets it ("owner" for Player 1, for compatibility, else "owner_p2" ...)
-	ClearField string // the form field that forgets it
-	Saved      bool
+// playerSlot is the account slot of the nth player (0-based: 0 is Player 1).
+func playerSlot(n int) string { return "p" + strconv.Itoa(n+1) }
+
+// MekBayUID is the MekBay user ID the site uses for a seed's slot: SHA-256 of a purpose-specific prefix, the slot and the seed, laid out as a version 4 UUID (which
+// is what MekBay's own clients use for user IDs). The same seed and slot always give the same ID, and different slots or seeds give different ones.
+func MekBayUID(seed, slot string) string {
+	sum := sha256.Sum256([]byte("battletech-mekbay-account-v1:" + slot + ":" + seed))
+	b := sum[:16]
+	b[6] = b[6]&0x0f | 0x40 // version 4
+	b[8] = b[8]&0x3f | 0x80 // RFC 4122 variant
+	h := hex.EncodeToString(b)
+	return h[0:8] + "-" + h[8:12] + "-" + h[12:16] + "-" + h[16:20] + "-" + h[20:32]
 }
 
-var accountSlotDefs = []AccountSlot{
-	{Key: SlotPlayer1, Label: "Player 1", Field: "owner", ClearField: "clear_owner"},
-	{Key: SlotPlayer2, Label: "Player 2", Field: "owner_p2", ClearField: "clear_owner_p2"},
-	{Key: SlotPlayer3, Label: "Player 3", Field: "owner_p3", ClearField: "clear_owner_p3"},
-	{Key: SlotPlayer4, Label: "Player 4", Field: "owner_p4", ClearField: "clear_owner_p4"},
-	{Key: SlotOpFor, Label: "OpFor", Field: "owner_opfor", ClearField: "clear_owner_opfor"},
-}
-
-// Slots lists every account slot with whether it has an ID saved, for the Company details dialog.
-func (p Playthrough) Slots() []AccountSlot {
-	out := make([]AccountSlot, len(accountSlotDefs))
-	for i, d := range accountSlotDefs {
-		d.Saved = p.HasAccount(d.Key)
-		out[i] = d
+// accountUID is the MekBay user ID for the visitor's seed in a slot; "" if there is no seed.
+func accountUID(seed, slot string) string {
+	if seed == "" {
+		return ""
 	}
-	return out
-}
-
-// HasAccount reports whether a slot has a MekBay user ID saved.
-func (p Playthrough) HasAccount(slot string) bool {
-	if slot == SlotPlayer1 {
-		return p.OwnerUID != ""
-	}
-	return p.saved[slot]
-}
-
-// PlayerAccounts is whether each of Player 1 to 4 has an ID saved, in order.
-func (p Playthrough) PlayerAccounts() [maxPlayers]bool {
-	return [maxPlayers]bool{p.HasAccount(SlotPlayer1), p.HasAccount(SlotPlayer2), p.HasAccount(SlotPlayer3), p.HasAccount(SlotPlayer4)}
-}
-
-// loadSaved fills in which extra slots have an ID (never the IDs).
-func (s *Store) loadSaved(ctx context.Context, p *Playthrough) error {
-	rows, err := s.db.QueryContext(ctx, s.q(`SELECT slot FROM mekbay_accounts WHERE playthrough_id = ?`), p.ID)
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-	p.saved = map[string]bool{}
-	for rows.Next() {
-		var slot string
-		if err := rows.Scan(&slot); err != nil {
-			return err
-		}
-		p.saved[slot] = true
-	}
-	return rows.Err()
-}
-
-// SetAccount saves a slot's MekBay user ID; an empty uid forgets it.
-func (s *Store) SetAccount(ctx context.Context, id, slot, uid string) error {
-	switch slot {
-	case SlotPlayer1:
-		return s.SetOwnerUID(ctx, id, uid)
-	case SlotPlayer2, SlotPlayer3, SlotPlayer4, SlotOpFor:
-	default:
-		return errors.New("unknown account slot")
-	}
-	if uid == "" {
-		_, err := s.db.ExecContext(ctx, s.q(`DELETE FROM mekbay_accounts WHERE playthrough_id = ? AND slot = ?`), id, slot)
-		return err
-	}
-	_, err := s.db.ExecContext(ctx,
-		s.q(`INSERT INTO mekbay_accounts (playthrough_id, slot, uid) VALUES (?, ?, ?) ON CONFLICT (playthrough_id, slot) DO UPDATE SET uid = excluded.uid`), id, slot, uid)
-	return err
-}
-
-// AccountUID is a slot's MekBay user ID, for the server's own use (it is never sent to a page); ok is false if the slot has none.
-func (s *Store) AccountUID(ctx context.Context, id, slot string) (uid string, ok bool, err error) {
-	if slot == SlotPlayer1 {
-		pt, found, err := s.Playthrough(ctx, id)
-		return pt.OwnerUID, found && pt.OwnerUID != "", err
-	}
-	err = s.db.QueryRowContext(ctx, s.q(`SELECT uid FROM mekbay_accounts WHERE playthrough_id = ? AND slot = ?`), id, slot).Scan(&uid)
-	if errors.Is(err, sql.ErrNoRows) {
-		return "", false, nil
-	}
-	return uid, err == nil, err
-}
-
-// AccountsJSON tells the Deploy wizard which MekBay accounts are saved (never the IDs): whether each of Player 1 to 4 has one, and the OpFor.
-func (p Page) AccountsJSON() string {
-	b, err := json.Marshal(map[string]any{"players": p.Play.PlayerAccounts(), "opfor": p.Play.HasAccount(SlotOpFor)})
-	if err != nil {
-		return "{}"
-	}
-	return string(b)
+	return MekBayUID(seed, slot)
 }

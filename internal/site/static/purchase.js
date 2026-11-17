@@ -14,7 +14,7 @@
 
   var canModify = section.dataset.canModify === '1';
   var warchest = parseInt(section.dataset.warchest, 10) || 0;
-  var NO_UID = 'Add your MekBay user ID in the campaign details so the site can change your hangar.';
+  var NO_UID = 'This hangar is from before the site kept its own copy. Import it again under Manage force, Danger zone, Change hangar link.';
   var LIMIT = 10; // the server's limit on units per purchase
 
   var staged = [];  // { key, unit }

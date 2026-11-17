@@ -148,7 +148,7 @@ func TestServiceUnitEndpoint(t *testing.T) {
 	srv, store := newMekBayTestServer(t, fake)
 	ctx := context.Background()
 	cookie := post(t, srv, "/api/seed", url.Values{"seed": {"wolfpack2026"}}, nil, "").Cookies()[0]
-	post(t, srv, "/api/company", url.Values{"company": {"Wolf Pack"}}, cookie, srv.URL) // read-only: no owner UID
+	post(t, srv, "/api/company", url.Values{"company": {"Wolf Pack"}}, cookie, srv.URL)
 	if r := post(t, srv, "/api/campaign/start", startForm(goodHangar, "Alrek", "Katarina"), cookie, srv.URL); r.StatusCode != http.StatusNoContent {
 		t.Fatalf("start: %d", r.StatusCode)
 	}
@@ -175,19 +175,18 @@ func TestServiceUnitEndpoint(t *testing.T) {
 	if got := post(t, srv, "/api/hangar/service", form("kind", "rearm", "unit", "ua"), cookie, "https://evil.example").StatusCode; got != http.StatusForbidden {
 		t.Errorf("cross-origin: %d", got)
 	}
-	if got := status(form("kind", "rearm", "unit", "ua")); got != http.StatusForbidden || funds() != 4500 {
-		t.Errorf("read-only (no MekBay user ID): %d, funds %d", got, funds())
+	// A run from before the site kept its own copy of the hangar has to be imported again first.
+	_, _ = store.db.Exec(`UPDATE campaign_runs SET source_url = ''`)
+	if got := status(form("kind", "rearm", "unit", "ua")); got != http.StatusConflict || funds() != 4500 {
+		t.Errorf("a hangar the site doesn't own: %d, funds %d", got, funds())
 	}
-	// Add the owner UID: modify mode.
-	if r := post(t, srv, "/api/company", url.Values{"company": {"Wolf Pack"}, "owner": {ownerUID}}, cookie, srv.URL); r.StatusCode != http.StatusNoContent {
-		t.Fatalf("owner: %d", r.StatusCode)
-	}
+	_, _ = store.db.Exec(`UPDATE campaign_runs SET source_url = ?`, goodHangarURL)
 
 	// Rearm: 10 SP per spent bin, two bins.
 	if got := status(form("kind", "rearm", "unit", "ua")); got != http.StatusOK || funds() != 4480 {
 		t.Fatalf("rearm: %d, funds %d", got, funds())
 	}
-	if len(fake.services) != 1 || fake.services[0].Kind != "rearm" || fake.services[0].UnitID != "ua" || fake.services[0].OwnerUID != ownerUID {
+	if len(fake.services) != 1 || fake.services[0].Kind != "rearm" || fake.services[0].UnitID != "ua" || fake.services[0].OwnerUID != MekBayUID("wolfpack2026", SlotPlayer1) {
 		t.Errorf("MekBay was asked: %+v", fake.services)
 	}
 	// Repair: the level must match the unit's condition (crippled, 20t Clan: 90 SP).

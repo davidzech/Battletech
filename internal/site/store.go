@@ -21,25 +21,20 @@ type Store struct {
 
 // Playthrough is one company's tracked run through the campaigns, identified by their seed.
 type Playthrough struct {
-	ID          string          // hash of the seed, never the seed itself
-	CompanyName string          // the company's name in the lore, e.g. "Wolf's Dragoons" ("" until named)
-	OwnerUID    string          // optional MekBay account UID that owns the company's hangars (Player 1's account); secret, never sent to the browser
-	saved       map[string]bool // which other account slots (see accounts.go) have an ID; never the IDs
+	ID          string // hash of the seed, never the seed itself
+	CompanyName string // the company's name in the lore, e.g. "Wolf's Dragoons" ("" until named)
 }
 
 // Configured reports whether the company has been named, which is what setting a seed up amounts to.
 func (p Playthrough) Configured() bool { return p.CompanyName != "" }
 
-// CanModify reports whether the playthrough is in modify mode: it holds the hangar owner's UID, so the site
-// is allowed to write to the MekBay hangars (MekBay only accepts changes from the owner's UID).
-func (p Playthrough) CanModify() bool { return p.OwnerUID != "" }
-
 // CampaignRun is a playthrough's run through one campaign. It exists once the campaign has been started, and has
 // its own MekBay hangar.
 type CampaignRun struct {
 	Campaign       string // the campaign's slug, e.g. "refusalwar"
-	HangarURL      string // the MekBay hangar link, reduced to https://mekbay.com/?instance=<id>
-	HangarInstance string // the link's ?instance= id
+	HangarURL      string // the link to the site's own copy of the hangar, https://mekbay.com/?instance=<id>; never shown to the player
+	HangarInstance string // that copy's instance ID: the hangar the site reads and manages (see clone.go)
+	SourceURL      string // the MekBay link the player gave, which the copy was made from; kept so it can be imported again
 	Warchest       int    // the force's finances in SP; starts at the campaign's starting_warchest
 }
 
@@ -48,6 +43,10 @@ func (r CampaignRun) WarchestText() string { return withCommas(r.Warchest) }
 
 // Started reports whether the campaign has been started (a zero CampaignRun means it hasn't).
 func (r CampaignRun) Started() bool { return r.HangarInstance != "" }
+
+// Owned reports whether the run's hangar is the site's own copy. A run started before the site made copies points at the player's own force, which the site
+// cannot change, so it has to be imported again before anything can be repaired, rearmed, bought or assigned.
+func (r CampaignRun) Owned() bool { return r.SourceURL != "" }
 
 // timestampColumn is the created_at / started_at column type, which differs between the two databases.
 func (s *Store) timestampColumn() string {
@@ -82,12 +81,6 @@ func (s *Store) schemaStatements() []string {
 	hangar_instance TEXT NOT NULL DEFAULT '',
 	PRIMARY KEY (playthrough_id, campaign)
 )`, s.timestampColumn()),
-		`CREATE TABLE IF NOT EXISTS mekbay_accounts (
-	playthrough_id TEXT NOT NULL REFERENCES playthroughs(id) ON DELETE CASCADE,
-	slot           TEXT NOT NULL,
-	uid            TEXT NOT NULL,
-	PRIMARY KEY (playthrough_id, slot)
-)`,
 		`CREATE TABLE IF NOT EXISTS pilot_abilities (
 	pilot_id TEXT NOT NULL REFERENCES named_pilots(id) ON DELETE CASCADE,
 	ability  TEXT NOT NULL,
@@ -187,6 +180,9 @@ func (s *Store) init() error {
 	// Columns added after a table first shipped. CREATE TABLE IF NOT EXISTS leaves an existing table as it was, so they
 	// are added here (neither database has ADD COLUMN IF NOT EXISTS in common).
 	if err := s.ensureColumn("campaign_runs", "warchest", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
+	if err := s.ensureColumn("campaign_runs", "source_url", "TEXT NOT NULL DEFAULT ''"); err != nil {
 		return err
 	}
 	if err := s.ensureColumn("named_pilots", "portrait", "TEXT NOT NULL DEFAULT ''"); err != nil {
@@ -308,18 +304,12 @@ func (s *Store) EnsurePlaythrough(ctx context.Context, id string) (created bool,
 // Playthrough loads a playthrough; ok is false if the ID is unknown.
 func (s *Store) Playthrough(ctx context.Context, id string) (p Playthrough, ok bool, err error) {
 	err = s.db.QueryRowContext(ctx,
-		s.q(`SELECT id, company_name, owner_uid FROM playthroughs WHERE id = ?`), id,
-	).Scan(&p.ID, &p.CompanyName, &p.OwnerUID)
+		s.q(`SELECT id, company_name FROM playthroughs WHERE id = ?`), id,
+	).Scan(&p.ID, &p.CompanyName)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Playthrough{}, false, nil
 	}
-	if err != nil {
-		return p, false, err
-	}
-	if err := s.loadSaved(ctx, &p); err != nil {
-		return p, false, err
-	}
-	return p, true, nil
+	return p, err == nil, err
 }
 
 func (s *Store) updatePlaythrough(ctx context.Context, query string, args ...any) error {
@@ -371,17 +361,12 @@ func (s *Store) RefundWarchest(ctx context.Context, playthroughID, campaign stri
 	return err
 }
 
-// SetOwnerUID stores the MekBay owner UID that puts a playthrough into modify mode; an empty uid turns it off.
-func (s *Store) SetOwnerUID(ctx context.Context, id, uid string) error {
-	return s.updatePlaythrough(ctx, `UPDATE playthroughs SET owner_uid = ? WHERE id = ?`, uid, id)
-}
-
 // Run loads a playthrough's run through a campaign; ok is false if the campaign hasn't been started.
 func (s *Store) Run(ctx context.Context, playthroughID, campaign string) (r CampaignRun, ok bool, err error) {
 	err = s.db.QueryRowContext(ctx,
-		s.q(`SELECT campaign, hangar_url, hangar_instance, warchest FROM campaign_runs WHERE playthrough_id = ? AND campaign = ?`),
+		s.q(`SELECT campaign, hangar_url, hangar_instance, source_url, warchest FROM campaign_runs WHERE playthrough_id = ? AND campaign = ?`),
 		playthroughID, campaign,
-	).Scan(&r.Campaign, &r.HangarURL, &r.HangarInstance, &r.Warchest)
+	).Scan(&r.Campaign, &r.HangarURL, &r.HangarInstance, &r.SourceURL, &r.Warchest)
 	if errors.Is(err, sql.ErrNoRows) {
 		return CampaignRun{}, false, nil
 	}
@@ -392,9 +377,9 @@ func (s *Store) Run(ctx context.Context, playthroughID, campaign string) (r Camp
 // keeps when it was started.
 func (s *Store) StartRun(ctx context.Context, playthroughID, campaign string, h Hangar) error {
 	_, err := s.db.ExecContext(ctx,
-		s.q(`INSERT INTO campaign_runs (playthrough_id, campaign, hangar_url, hangar_instance) VALUES (?, ?, ?, ?)
-		     ON CONFLICT (playthrough_id, campaign) DO UPDATE SET hangar_url = excluded.hangar_url, hangar_instance = excluded.hangar_instance`),
-		playthroughID, campaign, h.URL, h.Instance)
+		s.q(`INSERT INTO campaign_runs (playthrough_id, campaign, hangar_url, hangar_instance, source_url) VALUES (?, ?, ?, ?, ?)
+		     ON CONFLICT (playthrough_id, campaign) DO UPDATE SET hangar_url = excluded.hangar_url, hangar_instance = excluded.hangar_instance, source_url = excluded.source_url`),
+		playthroughID, campaign, h.URL, h.Instance, h.Source)
 	return err
 }
 
@@ -637,15 +622,21 @@ func (s *Store) StartRunWithPilots(ctx context.Context, playthroughID, campaign 
 		return ErrAlreadyStarted
 	}
 	if _, err := tx.ExecContext(ctx,
-		s.q(`INSERT INTO campaign_runs (playthrough_id, campaign, hangar_url, hangar_instance, warchest) VALUES (?, ?, ?, ?, ?)`),
-		playthroughID, campaign, h.URL, h.Instance, warchest); err != nil {
+		s.q(`INSERT INTO campaign_runs (playthrough_id, campaign, hangar_url, hangar_instance, source_url, warchest) VALUES (?, ?, ?, ?, ?, ?)`),
+		playthroughID, campaign, h.URL, h.Instance, h.Source, warchest); err != nil {
 		return err
 	}
 	for _, p := range pilots {
+		id := newID()
 		if _, err := tx.ExecContext(ctx,
 			s.q(`INSERT INTO named_pilots (id, playthrough_id, campaign, name, portrait, sp_gunnery, sp_piloting, sp_edge_tokens, sp_edge_abilities, sp_total) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`),
-			newID(), playthroughID, campaign, p.Name, p.Portrait, p.SP.Gunnery, p.SP.Piloting, p.SP.EdgeTokens, p.SP.EdgeAbilities, p.SP.Total()); err != nil {
+			id, playthroughID, campaign, p.Name, p.Portrait, p.SP.Gunnery, p.SP.Piloting, p.SP.EdgeTokens, p.SP.EdgeAbilities, p.SP.Total()); err != nil {
 			return err
+		}
+		for i, a := range p.Abilities {
+			if _, err := tx.ExecContext(ctx, s.q(`INSERT INTO pilot_abilities (pilot_id, ability, seq) VALUES (?, ?, ?)`), id, a, i+1); err != nil {
+				return err
+			}
 		}
 	}
 	return tx.Commit()

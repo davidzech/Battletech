@@ -288,18 +288,17 @@ func TestSeedAndCampaignFlow(t *testing.T) {
 		t.Fatalf("good start: got %d", r.StatusCode)
 	}
 	run, ok, _ := store.Run(ctx, id, "refusalwar")
-	if !ok || !run.Started() || run.HangarInstance != goodInstance || run.HangarURL != goodHangarURL || run.Campaign != "refusalwar" {
+	if !ok || !run.Started() || run.SourceURL != goodHangarURL || run.HangarInstance == goodInstance || run.HangarURL != "https://mekbay.com/?instance="+run.HangarInstance || run.Campaign != "refusalwar" {
 		t.Fatalf("campaign not started correctly: %+v (started=%v)", run, ok)
 	}
 	if _, ok, _ := store.Run(ctx, id, "another-campaign"); ok {
 		t.Fatal("starting one campaign must not start another")
 	}
 
-	// That campaign's pages link straight to its hangar; other pages don't.
-	link := `id="hangar-link" href="` + goodHangarURL + `" target="_blank" rel="noopener noreferrer"`
+	// The site owns the hangar, so no page links to it.
 	for _, path := range []string{"/refusalwar/", "/refusalwar/scenario_000/"} {
-		if !strings.Contains(body(t, srv, path, cookie), link) {
-			t.Errorf("%s should link to the hangar", path)
+		if strings.Contains(body(t, srv, path, cookie), `id="hangar-link"`) {
+			t.Errorf("%s should not link to a hangar", path)
 		}
 	}
 	if strings.Contains(body(t, srv, "/", cookie), `id="hangar-link"`) {
@@ -316,75 +315,18 @@ func TestSeedAndCampaignFlow(t *testing.T) {
 	}
 	var runs int
 	_ = store.db.QueryRow(`SELECT COUNT(*) FROM campaign_runs`).Scan(&runs)
-	if run, _, _ := store.Run(ctx, id, "refusalwar"); runs != 1 || run.HangarInstance != "01a12f98-8a21-7d12-b43d-52bb70872376" || run.HangarURL != "https://mekbay.com/?instance=01a12f98-8a21-7d12-b43d-52bb70872376" {
+	if run, _, _ := store.Run(ctx, id, "refusalwar"); runs != 1 || run.SourceURL != other || run.HangarInstance == "" || run.HangarInstance == goodInstance {
 		t.Fatalf("changing the hangar should update the one run: %d runs, %+v", runs, run)
 	}
 }
 
-func TestParseOwnerUID(t *testing.T) {
-	const uid = "e66a3544-8fcf-4dab-955a-f4ea2db0b610"
-	if got, err := parseOwnerUID("  " + strings.ToUpper(uid) + " "); err != nil || got != uid {
-		t.Errorf("parseOwnerUID = %q, %v", got, err)
-	}
-	if got, err := parseOwnerUID(""); err != nil || got != "" {
-		t.Errorf("blank should be allowed, got %q, %v", got, err)
-	}
-	for _, bad := range []string{"nope", uid + "x", "https://mekbay.com/?instance=" + goodInstance} {
-		if _, err := parseOwnerUID(bad); err == nil {
-			t.Errorf("parseOwnerUID(%q) should fail", bad)
-		}
-	}
-}
-
-func TestModifyModeIsOptionalAndPrivate(t *testing.T) {
-	const uid = "e66a3544-8fcf-4dab-955a-f4ea2db0b610"
-	srv, store := newTestServer(t)
-	ctx := context.Background()
+func TestCompanyFormHasNoMekBayIDs(t *testing.T) {
+	srv, _ := newTestServer(t)
 	res := post(t, srv, "/api/seed", url.Values{"seed": {"wolfpack2026"}}, nil, "")
 	cookie := res.Cookies()[0]
-	id := playthroughID("wolfpack2026")
-	setup := func(extra url.Values) int {
-		v := url.Values{"company": {"Wolf's Dragoons"}}
-		for k, vs := range extra {
-			v[k] = vs
-		}
-		return post(t, srv, "/api/company", v, cookie, srv.URL).StatusCode
-	}
-
-	// Without a UID the campaign is read-only.
-	if c := setup(nil); c != http.StatusNoContent {
-		t.Fatalf("setup without owner: %d", c)
-	}
-	if pt, _, _ := store.Playthrough(ctx, id); pt.CanModify() {
-		t.Fatal("no UID should mean read-only")
-	}
-	// A malformed UID is refused.
-	if c := setup(url.Values{"owner": {"not-a-uid"}}); c != http.StatusBadRequest {
-		t.Fatalf("bad owner: %d", c)
-	}
-	// A valid UID turns modify mode on, and the page never echoes it back.
-	if c := setup(url.Values{"owner": {uid}}); c != http.StatusNoContent {
-		t.Fatalf("good owner: %d", c)
-	}
-	if pt, _, _ := store.Playthrough(ctx, id); !pt.CanModify() || pt.OwnerUID != uid {
-		t.Fatalf("modify mode not saved: %+v", pt)
-	}
 	page := body(t, srv, "/", cookie)
-	if strings.Contains(page, uid) || !strings.Contains(page, "Modify mode is on.") {
-		t.Fatal("page should say modify mode is on without revealing the UID")
-	}
-	// Saving again with the field blank keeps it; the checkbox clears it.
-	if c := setup(nil); c != http.StatusNoContent {
-		t.Fatalf("resave: %d", c)
-	}
-	if pt, _, _ := store.Playthrough(ctx, id); pt.OwnerUID != uid {
-		t.Fatal("a blank owner field should keep the saved UID")
-	}
-	if c := setup(url.Values{"clear_owner": {"1"}}); c != http.StatusNoContent {
-		t.Fatalf("clear: %d", c)
-	}
-	if pt, _, _ := store.Playthrough(ctx, id); pt.CanModify() {
-		t.Fatal("clear_owner should turn modify mode off")
+	if strings.Contains(page, "MekBay user ID") || strings.Contains(page, "owner_p2") || strings.Contains(page, "Modify mode") {
+		t.Fatal("the site manages its own MekBay accounts, so the company dialog must not ask for any")
 	}
 }
 

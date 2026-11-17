@@ -4,9 +4,9 @@
 <dialog id="run-dialog" aria-labelledby="run-title">
   <form id="run-form" autocomplete="off" novalidate>
     <h2 id="run-title">Change hangar link</h2>
-    <p>Paste the link to this campaign&rsquo;s MekBay hangar, the force holding all of your mechs.</p>
+    <p>Paste a MekBay hangar link and the site makes a fresh copy of that force and uses it from now on, so everything is repaired, rearmed and uncrewed again. Repairs, purchases and pilot assignments you made so far are not carried over.</p>
     <label for="run-hangar">MekBay hangar link</label>
-    <input id="run-hangar" class="wide" name="hangar" type="url" value="{{.Run.HangarURL}}" placeholder="https://mekbay.com/?instance=&hellip;" spellcheck="false" required>
+    <input id="run-hangar" class="wide" name="hangar" type="url" value="{{.Run.SourceURL}}" placeholder="https://mekbay.com/?instance=&hellip;" spellcheck="false" required>
     <p id="run-error" class="form-error" role="alert"></p>
     <div class="form-actions">
       <button type="submit" class="button">Save link</button>
@@ -66,7 +66,7 @@
     <div class="pilot-top">
       <div class="pilot-id">
         <button type="button" class="portrait-btn" id="recruit-portrait" title="Choose a portrait" aria-label="Choose a portrait"><img id="recruit-portrait-img" alt="" width="96" height="96"><span class="portrait-edit">Change</span></button>
-        <div class="pilot-name"><label for="recruit-name">Name</label><input id="recruit-name" type="text" maxlength="30" placeholder="Alrek" spellcheck="false" autocomplete="off"></div>
+        <div class="pilot-name"><label for="recruit-name">Name</label><input id="recruit-name" type="text" maxlength="30" spellcheck="false" autocomplete="off"></div>
       </div>
       <div class="stat-boxes" id="recruit-boxes"></div>
     </div>
@@ -104,7 +104,7 @@
     </div>
   </form>
 </dialog>
-<section class="hangar-units" id="hangar-units" data-campaign="{{.Campaign.Slug}}" data-hangar-url="{{.Run.HangarURL}}" data-can-modify="{{if .Play.CanModify}}1{{end}}" data-warchest="{{.Run.Warchest}}" data-cached="{{.ForceJSON}}">
+<section class="hangar-units" id="hangar-units" data-campaign="{{.Campaign.Slug}}" data-can-modify="{{if .Run.Owned}}1{{end}}" data-warchest="{{.Run.Warchest}}" data-cached="{{.ForceJSON}}">
 <h2 class="section-title">Hangar</h2>
 <div class="hangar-units-summary" id="hangar-units-summary"></div>
 <p class="muted">{{.Play.CompanyName}}&rsquo;s MekBay hangar holds your mechs, and scenarios deploy from it.</p>
@@ -197,6 +197,7 @@
 <script src="/static/purchase.js" defer></script>
 <script src="/static/portraitpicker.js" defer></script>
 <script src="/static/allocator.js" defer></script>
+<script src="/static/pilotnames.js" defer></script>
 <script src="/static/campaign.js" defer></script>
 <script src="/static/abilitycard.js" defer></script>
 <script src="/static/pilots.js" defer></script>

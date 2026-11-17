@@ -60,7 +60,7 @@ func TestPurchaseEndpoint(t *testing.T) {
 	srv, store := newMekBayTestServer(t, fake)
 	ctx := context.Background()
 	cookie := post(t, srv, "/api/seed", url.Values{"seed": {"wolfpack2026"}}, nil, "").Cookies()[0]
-	post(t, srv, "/api/company", url.Values{"company": {"Wolf Pack"}}, cookie, srv.URL) // read-only: no owner UID
+	post(t, srv, "/api/company", url.Values{"company": {"Wolf Pack"}}, cookie, srv.URL)
 	if r := post(t, srv, "/api/campaign/start", startForm(goodHangar, "Alrek", "Katarina"), cookie, srv.URL); r.StatusCode != http.StatusNoContent {
 		t.Fatalf("start: %d", r.StatusCode)
 	}
@@ -76,19 +76,19 @@ func TestPurchaseEndpoint(t *testing.T) {
 	if got := post(t, srv, "/api/hangar/purchase", url.Values{"campaign": {"refusalwar"}, "unit": {"BMMadCat_H"}}, cookie, "https://evil.example").StatusCode; got != http.StatusForbidden {
 		t.Errorf("cross-origin: %d", got)
 	}
-	if got := buy("BMMadCat_H"); got != http.StatusForbidden || funds() != 4500 {
-		t.Errorf("read-only (no MekBay user ID): %d, funds %d", got, funds())
+	// A run from before the site kept its own copy of the hangar has to be imported again first.
+	_, _ = store.db.Exec(`UPDATE campaign_runs SET source_url = ''`)
+	if got := buy("BMMadCat_H"); got != http.StatusConflict || funds() != 4500 {
+		t.Errorf("a hangar the site doesn't own: %d, funds %d", got, funds())
 	}
-	if r := post(t, srv, "/api/company", url.Values{"company": {"Wolf Pack"}, "owner": {ownerUID}}, cookie, srv.URL); r.StatusCode != http.StatusNoContent {
-		t.Fatalf("owner: %d", r.StatusCode)
-	}
+	_, _ = store.db.Exec(`UPDATE campaign_runs SET source_url = ?`, goodHangarURL)
 
 	// BV is SP: two units cost the sum of their base BV, and both are added to the hangar in MekBay.
 	want := madCat.BV + koshi.BV
 	if got := buy("BMMadCat_H", "BMKoshi_E"); got != http.StatusOK || funds() != 4500-want {
 		t.Fatalf("buy: %d, funds %d (want %d)", got, funds(), 4500-want)
 	}
-	if len(fake.purchases) != 1 || strings.Join(fake.purchases[0].Units, ",") != "BMMadCat_H,BMKoshi_E" || fake.purchases[0].OwnerUID != ownerUID || fake.purchases[0].Instance != goodInstance {
+	if len(fake.purchases) != 1 || strings.Join(fake.purchases[0].Units, ",") != "BMMadCat_H,BMKoshi_E" || fake.purchases[0].OwnerUID != MekBayUID("wolfpack2026", SlotPlayer1) || fake.purchases[0].Instance == goodInstance || fake.purchases[0].Instance == "" {
 		t.Errorf("MekBay was asked: %+v", fake.purchases)
 	}
 	// Refused: nothing chosen, an unknown unit, and too little in the warchest. Nothing is charged.

@@ -131,7 +131,7 @@ func TestDeployCarriesPilotAssignments(t *testing.T) {
 	srv, store := newMekBayTestServer(t, fake)
 	ctx := context.Background()
 	cookie := post(t, srv, "/api/seed", url.Values{"seed": {"wolfpack2026"}}, nil, "").Cookies()[0]
-	post(t, srv, "/api/company", url.Values{"company": {"Wolf Pack"}, "owner": {ownerUID}}, cookie, srv.URL)
+	post(t, srv, "/api/company", url.Values{"company": {"Wolf Pack"}}, cookie, srv.URL)
 	if r := post(t, srv, "/api/campaign/start", startForm(goodHangar, "Alrek", "Katarina"), cookie, srv.URL); r.StatusCode != http.StatusNoContent {
 		t.Fatalf("start: %d", r.StatusCode)
 	}

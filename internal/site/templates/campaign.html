@@ -24,11 +24,11 @@
 {{if or .Campaign.StartingMinMechs .Campaign.StartingBV}}<li>Your hangar holds {{if .Campaign.StartingMinMechs}}<b>at least {{.Campaign.StartingMinMechs}} mechs</b>{{end}}{{if and .Campaign.StartingMinMechs .Campaign.StartingBV}}, totalling {{end}}{{if .Campaign.StartingBV}}<b>up to {{.Campaign.StartingBVText}} BV</b>{{end}} (base BV, whatever the pilots&rsquo; skills).</li>
 {{end}}{{if .Campaign.StartingNamedPilots}}<li>You create <b>{{.Campaign.StartingNamedPilots}} named pilots</b>, each allocating <b>{{.Campaign.StartingPilotSP}} SP</b>.</li>
 {{end}}{{if .Campaign.StartingWarchest}}<li>Your warchest starts at <b>{{.Campaign.StartingWarchestText}} SP</b>.</li>
-{{end}}<li>You link this campaign&rsquo;s MekBay hangar, the force {{.Play.CompanyName}} fields in it.</li>
+{{end}}<li>You link a MekBay force holding the mechs {{.Play.CompanyName}} fields; the site copies it and manages the copy.</li>
 </ul>
 <p class="downloads"><button type="button" class="button" id="wizard-open">Start campaign&hellip;</button></p>
 </section>
-<dialog id="start-wizard" class="wizard" aria-labelledby="wiz-title" data-campaign="{{.Campaign.Slug}}" data-pilots="{{.Campaign.StartingNamedPilots}}" data-sp="{{.Campaign.StartingPilotSP}}" data-ladders="{{.Ladders}}" data-portraits="{{.Portraits}}">
+<dialog id="start-wizard" class="wizard" aria-labelledby="wiz-title" data-campaign="{{.Campaign.Slug}}" data-pilots="{{.Campaign.StartingNamedPilots}}" data-sp="{{.Campaign.StartingPilotSP}}" data-ladders="{{.Ladders}}" data-portraits="{{.Portraits}}" data-abilities="{{.Abilities}}">
   <form id="wiz-form" autocomplete="off" novalidate>
     <h2 id="wiz-title"></h2>
     <div id="wiz-body"></div>
@@ -47,7 +47,9 @@
 </dialog>
 <script src="/static/portraitpicker.js" defer></script>
 <script src="/static/allocator.js" defer></script>
+<script src="/static/abilitycard.js" defer></script>
 <script src="/static/mechrow.js" defer></script>
+<script src="/static/pilotnames.js" defer></script>
 <script src="/static/campaign.js" defer></script>
 {{end}}<h2>Scenarios</h2>
 <ul class="cards">

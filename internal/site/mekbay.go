@@ -113,6 +113,8 @@ type OperationResult struct {
 type MekBay interface {
 	// ReadHangar reads a saved force (anyone can read one by its instance ID).
 	ReadHangar(ctx context.Context, instance string) (HangarForce, error)
+	// CloneHangar copies the player's force into a clean force the site owns (see clone.go).
+	CloneHangar(ctx context.Context, req CloneRequest) (HangarForce, error)
 	SyncOperation(ctx context.Context, req OperationRequest) (OperationResult, error)
 	// ServiceUnit repairs or rearms one unit of the player's hangar force (modify mode only).
 	ServiceUnit(ctx context.Context, req ServiceRequest) error

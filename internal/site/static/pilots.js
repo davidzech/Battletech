@@ -353,15 +353,19 @@
       box.querySelectorAll('li.pilot:not(.kia)').forEach(function (li) { if (li.dataset.portrait) taken.push(li.dataset.portrait); });
       return taken;
     }
-    function showPortrait(file) { rPortrait = file; rImg.src = '/portraits/' + file; }
+    // The placeholder name follows the portrait's gender, until the player types a name of their own.
+    function showPortrait(file) {
+      rPortrait = file; rImg.src = '/portraits/' + file;
+      if (window.PilotNames && !rName.value) rName.placeholder = PilotNames.random(PilotNames.groupOf(portraitList, file));
+    }
 
     var openBtn = document.getElementById('recruit-open');
     if (openBtn) openBtn.addEventListener('click', function () {
       var taken = takenPortraits();
       var free = portraitList.filter(function (p) { return taken.indexOf(p.file) < 0; });
       var pick = free.length ? free : portraitList;
-      showPortrait(pick.length ? pick[Math.floor(Math.random() * pick.length)].file : '');
       rName.value = '';
+      showPortrait(pick.length ? pick[Math.floor(Math.random() * pick.length)].file : '');
       rError.textContent = '';
       ladders.forEach(function (l) { rSP[l.key] = 0; });
       rRefresh();
