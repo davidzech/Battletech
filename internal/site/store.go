@@ -90,12 +90,6 @@ func (s *Store) schemaStatements() []string {
 	uid            TEXT NOT NULL,
 	PRIMARY KEY (playthrough_id, slot)
 )`,
-		`CREATE TABLE IF NOT EXISTS pilot_abilities (
-	pilot_id TEXT NOT NULL REFERENCES named_pilots(id) ON DELETE CASCADE,
-	ability  TEXT NOT NULL,
-	seq      INTEGER NOT NULL,
-	PRIMARY KEY (pilot_id, ability)
-)`,
 		`CREATE TABLE IF NOT EXISTS hangar_cache (
 	playthrough_id TEXT NOT NULL REFERENCES playthroughs(id) ON DELETE CASCADE,
 	campaign       TEXT NOT NULL,
@@ -127,6 +121,12 @@ func (s *Store) schemaStatements() []string {
 	sp_edge_abilities INTEGER NOT NULL DEFAULT 0 CHECK (sp_edge_abilities >= 0),
 	sp_total         INTEGER NOT NULL DEFAULT 0 CHECK (sp_total >= 0)
 )`, s.timestampColumn()),
+		`CREATE TABLE IF NOT EXISTS pilot_abilities (
+	pilot_id TEXT NOT NULL REFERENCES named_pilots(id) ON DELETE CASCADE,
+	ability  TEXT NOT NULL,
+	seq      INTEGER NOT NULL,
+	PRIMARY KEY (pilot_id, ability)
+)`,
 		`CREATE INDEX IF NOT EXISTS named_pilots_by_run ON named_pilots (playthrough_id, campaign)`,
 	}
 }
