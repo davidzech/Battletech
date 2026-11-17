@@ -1137,12 +1137,12 @@ input.themed-box:disabled { opacity: 0.4; cursor: not-allowed; }
 .themed-check input:focus-visible, input.themed-box:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .themed-check input:checked + span { color: var(--text); }
 
-.purchase-results { margin: 0.8rem 0 1rem; }
+.purchase-results { margin: 0.8rem 0 0; }
 .purchase-results:empty { display: none; }
 .purchase-results > p { margin: 0.4rem 0; font-size: 0.9rem; }
 .purchase-found { height: 15rem; overflow-y: auto; padding-bottom: 1px; margin-bottom: 0.4rem; align-content: start; } /* rows keep their own height however few there are */
 .purchase-found .mech-row, .purchase-staged .mech-row { min-height: 4.2rem; }
-.purchase-staged-head { margin: 0 0 0.4rem; font: 700 0.8rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; }
+.purchase-staged-head { margin: 1.4rem 0 0.4rem; font: 700 0.8rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; }
 .purchase-staged { align-content: start; max-height: 14rem; overflow-y: auto; padding-bottom: 1px; margin-bottom: 0.9rem; }
 .purchase-empty { margin: 0; padding: 0.7rem 0.9rem; font-size: 0.9rem; border: 1px dashed var(--line); }
 
@@ -1252,3 +1252,92 @@ dialog input.themed-box:focus, dialog .themed-check input:focus { outline: none;
 .roster-pilot { transition: border-color 0.12s; }
 .roster-pilot[tabindex]:hover, .roster-pilot.tip-open, .roster-pilot[tabindex]:focus-visible { border-color: var(--accent); outline: none; }
 .deploy-pilot.tip-open, .deploy-slot.filled.tip-open { border-color: var(--accent); }
+
+/* The Company details dialog's MekBay user ID rows: Player 1 to 4 and the OpFor. */
+fieldsetfieldset
+/* The Deploy wizard: a player picker on the first step, a title for the player whose turn it is, a progress bar at the bottom, and a review of the plan. */
+.deploy-players { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; margin: 0.6rem 0 0.2rem; }
+.deploy-players[hidden], .deploy-step[hidden], .deploy-review[hidden], .deploy-progress[hidden] { display: none; }
+.deploy-players-label, .deploy-step-label { font: 700 0.8rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.deploy-players-pick { display: inline-flex; }
+dialog button.deploy-count { min-width: 2.6rem; padding: 0.35rem 0.8rem; font: 700 0.95rem var(--display); letter-spacing: 0.05em; color: var(--text); background: var(--bg); border: 1px solid var(--line); cursor: pointer; }
+dialog button.deploy-count + button.deploy-count { border-left: 0; }
+dialog button.deploy-count:hover { color: var(--accent); background: var(--bg); border-color: var(--accent); }
+dialog button.deploy-count[aria-pressed="true"] { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
+.deploy-step { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.9rem; margin: 0.5rem 0 0; font: 700 1.3rem var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
+.deploy-progress { display: flex; align-items: center; gap: 0.9rem; margin: 1rem 0 0.2rem; }
+.deploy-progress-count { flex: none; font: 700 0.8rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.deploy-review { display: grid; gap: 1rem; margin: 0.8rem 0; max-height: 52vh; overflow-y: auto; padding-right: 0.3rem; }
+.deploy-review-player > h3 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.3rem 1rem; margin: 0 0 0.45rem; font: 700 1.05rem var(--display); letter-spacing: 0.08em; text-transform: uppercase; }
+.deploy-review-player > h3 > span { font-size: 0.8rem; color: var(--muted); }
+.deploy-review-list { list-style: none; margin: 0; padding: 0; }
+.deploy-review-total { display: flex; flex-wrap: wrap; gap: 0.3rem 1.2rem; font: 700 1rem var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
+.deploy-review-total.over { color: #ff7a59; }
+.deploy-note { margin: 0; padding: 0.7rem 0.9rem; font-size: 0.9rem; background: var(--bg); border: 1px solid var(--line); border-left: 3px solid var(--accent); }
+.deploy-note.good { border-left-color: #5fc47e; }
+.deploy-note ul { margin: 0.3rem 0 0; padding-left: 1.2rem; }
+/* A pilot slot on a mech that isn't being taken yet, and the static slot in the review. */
+.deploy-slot.disabled { cursor: not-allowed; opacity: 0.55; }
+.deploy-slot.static { cursor: default; }
+.deploy-unit.review > .mech-row { height: 100%; }
+
+.deploy-meter { display: flex; flex-wrap: wrap; gap: 0.15rem 1.6rem; }
+.deploy-meter[hidden] { display: none; }
+
+/* The reconfigure dialog: the unit's full row, and a variant list coloured by what it does to the BV, like a stock: green goes up, red goes down. */
+.swap-unit { margin: 0.4rem 0 0.9rem; }
+.swap-label { margin: 0.5rem 0 0.2rem; font: 700 0.7rem var(--display); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+.swap-flow { display: flex; align-items: center; gap: 0.2rem 0.8rem; margin: 0.35rem 0 0; padding: 0.3rem 0.8rem; font: 700 0.85rem var(--display); letter-spacing: 0.06em; text-transform: uppercase; border-left: 3px solid var(--line); }
+.swap-flow .swap-arrow { font-size: 1.3rem; line-height: 1; }
+.swap-flow .swap-flow-cost { margin-left: auto; color: var(--accent); }
+.swap-flow.swap-up { color: #5fc47e; border-left-color: #5fc47e; }
+.swap-flow.swap-down { color: #e5594f; border-left-color: #e5594f; }
+#swap-select option.swap-same { color: var(--muted); }
+.swap-unit .mech-row { cursor: default; }
+#swap-select option { background: var(--panel); color: var(--text); }
+#swap-select option.swap-up, #swap-select.swap-up { color: #5fc47e; }
+#swap-select option.swap-down, #swap-select.swap-down { color: #e5594f; }
+
+/* The company settings' MekBay user IDs, one row per player. */
+.mekbay-ids { margin: 1rem 0 0; padding: 0; border: 0; min-width: 0; }
+.mekbay-ids legend { padding: 0; font: 700 0.8rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; }
+.mekbay-ids .optional { font-weight: 400; color: var(--muted); letter-spacing: 0.04em; text-transform: none; }
+.mekbay-ids .hint { margin: 0.3rem 0 0.5rem; font-size: 0.85rem; color: var(--muted); }
+.mekbay-id-row { display: grid; grid-template-columns: 5.2rem minmax(0, 1fr) 4.6rem; align-items: center; gap: 0.5rem; margin-top: 0.4rem; }
+.mekbay-id-row > label:first-child { font: 700 0.75rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; }
+.mekbay-id-row input.mekbay-id { margin: 0; }
+
+/* The Manage page's Overview: the default player count, the same segmented picker as the Deploy wizard's. */
+.overview-players { align-content: center; }
+.overview-players-pick { display: inline-flex; margin-top: 0.3rem; }
+.overview-players button.deploy-count { min-width: 2.6rem; padding: 0.35rem 0.8rem; font: 700 0.95rem var(--display); letter-spacing: 0.05em; color: var(--text); background: var(--bg); border: 1px solid var(--line); cursor: pointer; }
+.overview-players button.deploy-count + button.deploy-count { border-left: 0; }
+.overview-players button.deploy-count:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
+.overview-players button.deploy-count[aria-pressed="true"] { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
+dialog button.deploy-count:disabled, .overview-players button.deploy-count:disabled { opacity: 0.4; cursor: not-allowed; }
+.overview .form-error:empty { display: none; }
+
+/* The force name is the Overview's heading, with a pencil that turns it into a text box in place. */
+.force-name { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.7rem; }
+.force-name .force-name-edit { display: inline-flex; padding: 0.3rem; color: var(--muted); background: none; border: 0; cursor: pointer; }
+.force-name .force-name-edit:hover, .force-name .force-name-edit:focus-visible { color: var(--accent); outline: none; }
+.force-name input { width: min(24rem, 100%); padding: 0.4rem 0.6rem; font: 700 1.1rem var(--display); letter-spacing: 0.05em; color: var(--text); background: var(--bg); border: 1px solid var(--line); }
+.force-name input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* Campaign progress: completed scenarios are green, available ones keep the gray card, locked ones stay hidden until "Show all Scenarios". */
+.card.completed { border-color: #5fc47e; background: color-mix(in srgb, #5fc47e 9%, var(--panel)); }
+.card.completed:hover { border-color: #7fdc9a; background: color-mix(in srgb, #5fc47e 14%, var(--panel-2)); }
+.card.completed .num, .card.completed .go { color: #5fc47e; }
+.cards.scenarios li.locked { display: none; }
+.cards.scenarios.show-all li.locked { display: list-item; }
+.card.locked { opacity: 0.5; border-style: dashed; }
+.show-all { margin: 0.2rem 0 1.2rem; }
+.mission-log { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 1rem; margin: 1rem 0; padding: 0.6rem 1rem; background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--line); }
+.mission-log.completed { border-left-color: #5fc47e; }
+.mission-log-label { font: 700 0.75rem var(--display); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.mission-log-state { font: 700 1rem var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
+.mission-log.completed .mission-log-state { color: #5fc47e; }
+.mission-log.locked .mission-log-state { color: var(--muted); }
+.mission-log .button { margin-left: auto; }
+.mission-log .form-error { flex-basis: 100%; margin: 0; }
+.mission-log .form-error:empty { display: none; }

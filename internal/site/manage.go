@@ -1,7 +1,9 @@
 package site
 
 import (
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 )
@@ -26,11 +28,18 @@ func (s *Server) manage(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, back, http.StatusSeeOther)
 		return
 	}
-	s.render(w, r, http.StatusOK, "manage", Page{
+	// The scenario page's link here carries ?back=<scenario>, so Back returns to that sortie. Only a scenario of this campaign is honoured: the value is looked up,
+	// never echoed into the page as a URL.
+	p := Page{
 		Title:    "Manage force | " + c.Label,
 		Crumbs:   []Crumb{{Label: c.Label, URL: back}, {Label: "Manage", URL: back + "manage/"}},
 		Campaign: c,
-	})
+	}
+	if sc, ok := c.Scenario(r.URL.Query().Get("back")); ok {
+		p.BackURL = back + sc.Slug + "/"
+		p.BackLabel = "Back to Sortie " + sc.Number + ": " + sc.Title
+	}
+	s.render(w, r, http.StatusOK, "manage", p)
 }
 
 // forceJSON describes the units in a started campaign's hangar for the campaign overview, read anonymously from MekBay (see
@@ -65,4 +74,48 @@ func (s *Server) forceJSON(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	_ = json.NewEncoder(w).Encode(forceData(h))
+}
+
+// setPlayers is POST /api/campaign/players: change how many players the company plays a started campaign with (the Manage page's Overview). The count is only the
+// Deploy wizard's default, which can still be changed for each deploy, but it is held to the same rules as at the start: within the campaign's range, with a MekBay
+// user ID saved for each of those players.
+func (s *Server) setPlayers(w http.ResponseWriter, r *http.Request) {
+	pt, c, ok := s.pilotRequest(w, r)
+	if !ok {
+		return
+	}
+	n, err := parseStartingPlayers(r.PostFormValue("players"), c, pt.PlayerIDs)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := s.store.SetRunPlayers(r.Context(), pt.ID, c.Slug, n); errors.Is(err, sql.ErrNoRows) {
+		http.Error(w, "Start this campaign first.", http.StatusBadRequest)
+		return
+	} else if err != nil {
+		http.Error(w, "could not save the player count", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// setForceName is POST /api/campaign/force-name: rename a started campaign's force (the Manage page's Overview).
+func (s *Server) setForceName(w http.ResponseWriter, r *http.Request) {
+	pt, c, ok := s.pilotRequest(w, r)
+	if !ok {
+		return
+	}
+	name, err := parseForceName(r.PostFormValue("name"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := s.store.SetForceName(r.Context(), pt.ID, c.Slug, name); errors.Is(err, sql.ErrNoRows) {
+		http.Error(w, "Start this campaign first.", http.StatusBadRequest)
+		return
+	} else if err != nil {
+		http.Error(w, "could not save the force name", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

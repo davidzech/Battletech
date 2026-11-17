@@ -1,4 +1,4 @@
-// Campaign page. An unstarted campaign opens the start wizard: one step per starting named pilot (a name and an
+// Campaign page. An unstarted campaign opens the start wizard: a step naming the force, one asking how many players (when the campaign allows a range), one step per starting named pilot (a name and an
 // allocator for that pilot's starting SP), then a step for the campaign's MekBay hangar link, with a step count and
 // progress bar at the bottom. A started campaign only has a small dialog for changing its hangar link. The server
 // checks every field again; this keeps the player from a doomed request and previews the pilots' levels.
@@ -68,7 +68,7 @@
     });
   }
 
-  // ---- A started campaign: change the hangar link.
+  // ---- A started campaign: re-import the hangar (a fresh clean copy of a linked MekBay force).
   var runDialog = document.getElementById('run-dialog');
   var runOpen = document.getElementById('run-open');
   if (runDialog && runOpen && typeof runDialog.showModal === 'function') {
@@ -83,7 +83,7 @@
       if (bad) { runError.textContent = bad; return; }
       post('campaign=' + encodeURIComponent(box.dataset.campaign) + '&hangar=' + encodeURIComponent(canonicalHangar(runInput.value) || runInput.value.trim())).then(function (res) {
         if (res.ok) { location.reload(); return; }
-        return res.text().then(function (t) { runError.textContent = t.trim() || 'Could not save the hangar link.'; });
+        return res.text().then(function (t) { runError.textContent = t.trim() || 'Could not re-import the hangar.'; });
       }, function () { runError.textContent = 'Could not reach the server.'; });
     });
   }
@@ -97,7 +97,20 @@
   var budget = parseInt(wiz.dataset.sp, 10) || 0;
   var STEP = 10; // the sliders and the number boxes' arrows both move this many SP at a time
   var pilotCount = parseInt(wiz.dataset.pilots, 10) || 0;
-  var total = pilotCount + 1; // a step per pilot, then the hangar link
+  // When the campaign allows a range of players, the first step asks how many will play (the Deploy wizard's picker); that is only the default count each Deploy
+  // starts with. Then a step per pilot, then the hangar link.
+  var maxPlayers = Math.min(4, Math.max(1, parseInt(wiz.dataset.maxPlayers, 10) || 1));
+  var minPlayers = Math.min(maxPlayers, Math.max(1, parseInt(wiz.dataset.minPlayers, 10) || 1));
+  var asksPlayers = minPlayers < maxPlayers;
+  var lead = 1 + (asksPlayers ? 1 : 0); // steps before the pilots: the force's name, then the player count when it is asked
+  var forceName = '';
+  var players = minPlayers;
+  var total = lead + pilotCount + 1;
+  // Every player takes their own force into the lobby, owned by their own MekBay account, so starting with N players needs Players 1 to N's user IDs saved in the
+  // company settings. The page only knows which are saved (booleans), never the IDs.
+  var playerIds = [];
+  try { playerIds = JSON.parse(wiz.dataset.playerIds || '[]'); } catch (e) { playerIds = []; }
+  function missingId(n) { for (var i = 0; i < n; i++) if (!playerIds[i]) return i + 1; return 0; }
 
   var title = document.getElementById('wiz-title');
   var body = document.getElementById('wiz-body');
@@ -110,11 +123,20 @@
   var bar = document.getElementById('wiz-bar');
 
   var portraits = JSON.parse(wiz.dataset.portraits || '[]');
+  // The Edge ability catalog and its card are shared with the Manage page's picker (abilitycard.js).
+  var abilityCatalog = JSON.parse(wiz.dataset.abilities || '[]');
+  var CATEGORY_ORDER = ['Attack', 'Indirect Fire', 'Defense', 'Heat', 'Melee', 'Movement'];
+  if (window.AbilityCard) AbilityCard.setCatalog(abilityCatalog);
+  // How many Edge abilities a pilot's allocation entitles them to choose: their Edge abilities level.
+  function abilitySlots(p) {
+    for (var i = 0; i < ladders.length; i++) if (ladders[i].key === 'edge_abilities') return reach(ladders[i], p.sp.edge_abilities).level;
+    return 0;
+  }
   var pilots = [];
   for (var i = 0; i < pilotCount; i++) {
     var sp = {};
     ladders.forEach(function (l) { sp[l.key] = 0; });
-    pilots.push({ name: '', sp: sp, portrait: '' });
+    pilots.push({ name: '', sp: sp, portrait: '', abilities: [] });
   }
   // Every pilot starts with a random portrait nobody else has been given.
   pilots.forEach(function (p) {
@@ -132,6 +154,46 @@
     return SPAllocator.row(p, l, { ladders: ladders, budget: budget, step: STEP, refresh: refresh, onEdit: function () { error.textContent = ''; } });
   }
   function statBox(l) { return SPAllocator.statBox(l); }
+
+  // The first step: this campaign's force gets its own name, to suit the campaign (it can be changed later on the Manage page).
+  function renderForceStep() {
+    title.textContent = 'Name your force';
+    body.textContent = '';
+    body.appendChild(el('p', 'muted', 'Every campaign has its own force, named to suit it: a mercenary company, a Clan Star, a house regiment. You can rename it later on the Manage page.'));
+    var label = el('label', null, 'Force name');
+    label.setAttribute('for', 'wiz-force');
+    var input = document.createElement('input');
+    input.type = 'text'; input.id = 'wiz-force'; input.className = 'wide'; input.maxLength = 40; input.autocomplete = 'off'; input.spellcheck = false;
+    input.placeholder = window.PilotNames ? PilotNames.randomForce() : 'Wolf’s Dragoons';
+    input.value = forceName;
+    input.addEventListener('input', function () { forceName = input.value; error.textContent = ''; updateNext(); });
+    body.appendChild(label);
+    body.appendChild(input);
+    input.focus();
+  }
+
+  function renderPlayersStep() {
+    title.textContent = 'How many players?';
+    body.textContent = '';
+    body.appendChild(el('p', 'muted', 'This campaign can be played by ' + minPlayers + ' to ' + maxPlayers + ' players sharing one company. The number you choose is what every Deploy starts with; you can still change it for a single deploy.'));
+    var pick = el('div', 'deploy-players-pick');
+    for (var n = minPlayers; n <= maxPlayers; n++) {
+      (function (n) {
+        var b = el('button', 'deploy-count', String(n));
+        b.type = 'button';
+        b.setAttribute('aria-pressed', n === players ? 'true' : 'false');
+        b.setAttribute('aria-label', n + (n === 1 ? ' player' : ' players'));
+        if (missingId(n)) { b.disabled = true; b.title = 'Player ' + missingId(n) + ' needs a MekBay user ID: add it under Account details.'; }
+        b.addEventListener('click', function () {
+          players = n;
+          [].forEach.call(pick.children, function (c, i) { c.setAttribute('aria-pressed', minPlayers + i === players ? 'true' : 'false'); });
+        });
+        pick.appendChild(b);
+      })(n);
+    }
+    body.appendChild(pick);
+    if (missingId(maxPlayers)) body.appendChild(el('p', 'muted', 'A count is offered only when each of those players has a MekBay user ID saved. Add the rest under Account details (the company button, top right).'));
+  }
 
   function renderPilot(idx) {
     var p = pilots[idx];
@@ -158,7 +220,11 @@
       PortraitPicker.open({
         portraits: portraits, selected: p.portrait,
         taken: pilots.filter(function (o) { return o !== p; }).map(function (o) { return o.portrait; }),
-        onPick: function (file) { p.portrait = file; portraitImg.src = '/portraits/' + file; }
+        onPick: function (file) {
+          p.portrait = file; portraitImg.src = '/portraits/' + file;
+          // The placeholder name follows the portrait's gender (only while the player hasn't typed a name of their own).
+          if (window.PilotNames && !nameInput.value) nameInput.placeholder = PilotNames.random(PilotNames.groupOf(portraits, file));
+        }
       });
     });
 
@@ -166,7 +232,7 @@
     nameLabel.setAttribute('for', 'wiz-name');
     var nameInput = document.createElement('input');
     nameInput.type = 'text'; nameInput.id = 'wiz-name'; nameInput.maxLength = 30; nameInput.autocomplete = 'off';
-    nameInput.placeholder = 'Alrek'; nameInput.spellcheck = false; nameInput.value = p.name;
+    nameInput.placeholder = window.PilotNames ? PilotNames.random(PilotNames.groupOf(portraits, p.portrait)) : 'Alrek'; nameInput.spellcheck = false; nameInput.value = p.name;
     nameInput.addEventListener('input', function () { p.name = nameInput.value; error.textContent = ''; updateNext(); });
     nameBlock.appendChild(nameLabel);
     nameBlock.appendChild(nameInput);
@@ -181,17 +247,70 @@
 
     var remaining = el('p', 'alloc-remaining');
     var rows = ladders.map(function (l) { return allocatorRow(p, l, refresh); });
+    // Edge abilities: one combo box per ability the allocation pays for, which have to be chosen before moving on. Moving SP out of the
+    // Edge abilities column until the level drops removes the choices that no longer fit, the last ones first.
+    var abilityBox = el('div', 'wiz-abilities');
+    var shownSlots = -1;
+    function renderAbilities() {
+      var n = abilitySlots(p);
+      if (p.abilities.length > n) p.abilities.length = n;
+      while (p.abilities.length < n) p.abilities.push('');
+      if (n === shownSlots) return;
+      shownSlots = n;
+      abilityBox.textContent = '';
+      if (!n) return;
+      abilityBox.appendChild(el('h3', 'alloc-head', n === 1 ? 'Choose an Edge ability' : 'Choose ' + n + ' Edge abilities'));
+      abilityBox.appendChild(el('p', 'muted', 'Your Edge abilities level lets this pilot start with ' + (n === 1 ? 'an Edge ability' : n + ' Edge abilities') + '. The choice is permanent. Lowering the Edge abilities SP above removes the choices that no longer fit.'));
+      var selects = [];
+      function sync() {
+        selects.forEach(function (s, i) {
+          [].forEach.call(s.options, function (o) { o.disabled = o.value !== '' && p.abilities.some(function (c, j) { return j !== i && c === o.value; }); });
+          AbilityCard.fill(s.parentNode.querySelector('.skill-card'), AbilityCard.byId(s.value));
+        });
+        updateNext();
+      }
+      for (var k = 0; k < n; k++) (function (k) {
+        var slot = el('div', 'skill-slot');
+        var label = el('label', null, 'Edge ability ' + (n > 1 ? (k + 1) : ''));
+        var select = document.createElement('select');
+        select.id = 'wiz-ability-' + k;
+        label.setAttribute('for', select.id);
+        var blank = el('option', null, 'Choose an ability…');
+        blank.value = '';
+        select.appendChild(blank);
+        var categories = CATEGORY_ORDER.slice();
+        abilityCatalog.forEach(function (a) { if (categories.indexOf(a.category) < 0) categories.push(a.category); });
+        categories.forEach(function (cat) {
+          var inCat = abilityCatalog.filter(function (a) { return a.category === cat; });
+          if (!inCat.length) return;
+          var group = document.createElement('optgroup');
+          group.label = cat;
+          inCat.forEach(function (a) { var o = el('option', null, a.name); o.value = a.id; group.appendChild(o); });
+          select.appendChild(group);
+        });
+        select.value = p.abilities[k] || '';
+        select.addEventListener('change', function () { p.abilities[k] = select.value; error.textContent = ''; sync(); });
+        slot.appendChild(label);
+        slot.appendChild(select);
+        slot.appendChild(el('div', 'skill-card empty'));
+        abilityBox.appendChild(slot);
+        selects.push(select);
+      })(k);
+      sync();
+    }
     function refresh() {
       var left = budget - spentOf(p);
       remaining.textContent = left + ' of ' + budget + ' SP left to allocate';
       remaining.classList.toggle('done', left === 0);
       rows.forEach(function (r) { r.show(); });
       stats.forEach(function (b, i) { b.show(p.sp[ladders[i].key]); });
+      renderAbilities();
       updateNext();
     }
     body.appendChild(el('h3', 'alloc-head', 'Allocate SP'));
     body.appendChild(remaining);
     rows.forEach(function (r) { body.appendChild(r); });
+    body.appendChild(abilityBox);
     refresh();
     nameInput.focus();
   }
@@ -413,7 +532,7 @@
 
   function render() {
     error.textContent = '';
-    if (step < pilotCount) renderPilot(step); else renderHangar();
+    if (step === 0) renderForceStep(); else if (asksPlayers && step === 1) renderPlayersStep(); else if (step - lead < pilotCount) renderPilot(step - lead); else renderHangar();
     count.textContent = 'Step ' + (step + 1) + ' of ' + total;
     bar.style.width = ((step + 1) / total * 100) + '%';
     progress.setAttribute('aria-valuemax', total);
@@ -430,14 +549,18 @@
     next.disabled = busy || missing !== '';
     // Once the hangar has been read, the status box right above already spells out what is wrong, so the hint stays
     // quiet there (the reason is still the button's tooltip).
-    var spelledOut = step >= pilotCount && check.link === hangar.trim() && (check.state === 'done' || check.state === 'error');
+    var spelledOut = step >= lead + pilotCount && check.link === hangar.trim() && (check.state === 'done' || check.state === 'error');
     hint.textContent = busy || spelledOut ? '' : missing;
     if (missing) next.title = missing; else next.removeAttribute('title');
   }
 
   // The problem with the current step, or ''.
   function problem() {
-    if (step >= pilotCount) {
+    var gap = missingId(players);
+    if (gap) return 'Player ' + gap + ' needs a MekBay user ID: add it under Account details.';
+    if (step === 0) return forceName.trim() ? '' : 'Name your force.';
+    if (asksPlayers && step === 1) return '';
+    if (step >= lead + pilotCount) {
       var bad = hangarProblem(hangar);
       if (bad) return bad;
       if (check.link !== hangar.trim() || check.state === 'checking' || check.state === 'idle') return 'Checking your hangar\u2026';
@@ -445,21 +568,24 @@
       if (!check.result.ok) return check.result.problems[0];
       return '';
     }
-    var p = pilots[step], name = p.name.trim();
+    var p = pilots[step - lead], name = p.name.trim();
     if (!name) return 'Name your pilot.';
-    var clash = pilots.some(function (o, j) { return j !== step && o.name.trim().toLowerCase() === name.toLowerCase(); });
+    var clash = pilots.some(function (o, j) { return j !== step - lead && o.name.trim().toLowerCase() === name.toLowerCase(); });
     if (clash) return 'Two of your pilots can’t share a name.';
     var left = budget - spentOf(p);
     if (left !== 0) return 'Allocate all ' + budget + ' SP before moving on (' + left + ' left).';
+    var open = p.abilities.filter(function (a) { return !a; }).length;
+    if (open) return 'Choose ' + (open === 1 ? 'your pilot’s Edge ability' : 'all ' + p.abilities.length + ' Edge abilities') + ' before moving on.';
     return '';
   }
 
   function submit() {
-    var parts = ['campaign=' + encodeURIComponent(wiz.dataset.campaign), 'hangar=' + encodeURIComponent(canonicalHangar(hangar) || hangar.trim())];
+    var parts = ['campaign=' + encodeURIComponent(wiz.dataset.campaign), 'force_name=' + encodeURIComponent(forceName.trim()), 'players=' + players, 'hangar=' + encodeURIComponent(canonicalHangar(hangar) || hangar.trim())];
     pilots.forEach(function (p, idx) {
       parts.push('pilot' + idx + '_name=' + encodeURIComponent(p.name.trim()));
       if (p.portrait) parts.push('pilot' + idx + '_portrait=' + encodeURIComponent(p.portrait));
       ladders.forEach(function (l) { parts.push('pilot' + idx + '_' + l.key + '=' + p.sp[l.key]); });
+      p.abilities.forEach(function (a) { parts.push('pilot' + idx + '_ability=' + encodeURIComponent(a)); });
     });
     busy = true;
     updateNext();
@@ -482,7 +608,7 @@
   wizOpen.addEventListener('click', function () { step = 0; wiz.showModal(); render(); });
   function comingBack() {
     var failing = check.state === 'error' || (check.state === 'done' && !check.result.ok && !check.refreshing);
-    if (wiz.hasAttribute('open') && step >= pilotCount && failing) forceCheck();
+    if (wiz.hasAttribute('open') && step >= lead + pilotCount && failing) forceCheck();
   }
   window.addEventListener('focus', comingBack);
   document.addEventListener('visibilitychange', function () { if (!document.hidden) comingBack(); });

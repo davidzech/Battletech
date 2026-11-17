@@ -36,6 +36,7 @@ type Unit struct {
 	Role     string    `json:"role"`        // Master Unit List role
 	Type     string    `json:"type"`        // Mek, Tank, ProtoMek...
 	TechBase string    `json:"techBase"`    // Clan, Inner Sphere, Mixed
+	Omni     int       `json:"omni"`        // 1 for an omnimech: its variants can be swapped (see swap.go)
 	Engine   string    `json:"engine"`      // Fusion, XL (Clan), Light, ICE...
 	Ammo     []AmmoBin `json:"ammo"`        // the unit's ammunition, for the rearm breakdown
 	Icon     string    `json:"icon"`        // file name in icons/ (mechs only; "" for anything else)

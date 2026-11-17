@@ -1,13 +1,16 @@
-// Scenario page: the deploy popup. It lists the mechs in the player's MekBay hangar, lets them pick the ones going on
-// this mission (within the scenario's BV limit), assign named pilots to mechs, and asks the server to sort the hangar into
-// Deployed and Hangar groups, crew the mechs and set up the OpFor operation. The server checks everything again; this only
-// keeps the player from a doomed request.
+// Scenario page: the Deploy wizard. The company's mechs (its MekBay hangar) and named pilots are one shared pool, and the players divide it: each takes the mechs
+// and pilots they want from what the players before them left, and the last step reviews the whole plan.
 //
-// Pilots: the campaign's living named pilots sit in a tray above the list. Drag one onto a mech's slot to assign them (or click
-// the pilot, then the slot, which also works by keyboard and on touch screens). A pilot drives one mech, so assigning them again
-// moves them; dropping a pilot on the tray, or the x on a slot, takes them off. Nothing is saved until Deploy: the assignments
-// go to the server as assign_unit / assign_pilot pairs, which writes each pilot's name and current skills into the unit's crew
-// in MekBay.
+//   1 player:  one step (pick mechs, assign pilots, Deploy).
+//   2-4:       a "Players" picker on the first step (within the campaign's min_players and max_players), then one step per player, then a review, with a
+//              progress bar and "Step n of m" at the bottom.
+//
+// A player's mechs are the ones they tick; the Pilots tray above the list holds the named pilots nobody else has taken. Drag a pilot onto a ticked mech's slot to
+// assign them (or click the pilot, then the slot, which also works by keyboard and on touch screens). A pilot drives one mech, so assigning them again moves them;
+// dropping a pilot on the tray, or the x on a slot, takes them off. A mech another player took is not offered, and neither is a pilot they took.
+//
+// Deploy sends the whole plan to POST /api/deploy/plan, which checks it on the server (the same rules, over every player's mechs together) and describes it back.
+// It does NOT build anything in MekBay yet: that, each player's force in their own MekBay account and the OpFor in the OpFor's, is the next step.
 (function () {
   var dialog = document.getElementById('deploy-dialog');
   var openBtn = document.getElementById('deploy-open');
@@ -18,34 +21,59 @@
   var status = document.getElementById('deploy-status');
   var error = document.getElementById('deploy-error');
   var go = document.getElementById('deploy-go');
+  var next = document.getElementById('deploy-next');
+  var back = document.getElementById('deploy-back');
+  var cancel = document.getElementById('deploy-cancel');
   var resetRow = document.getElementById('deploy-reset-row');
   var reset = document.getElementById('deploy-reset');
   var tray = document.getElementById('deploy-pilots');
   var trayList = document.getElementById('deploy-pilots-list');
+  var playersBox = document.getElementById('deploy-players');
+  var playersPick = document.getElementById('deploy-players-pick');
+  var stepTitle = document.getElementById('deploy-step');
+  var review = document.getElementById('deploy-review');
+  var progress = document.getElementById('deploy-progress');
+  var progressTrack = document.getElementById('deploy-progress-track');
+  var bar = document.getElementById('deploy-bar');
+  var count = document.getElementById('deploy-count');
 
   var limit = parseInt(dialog.dataset.limit, 10) || 0;
-  var canModify = dialog.dataset.canModify === '1';
+  var unitLimit = parseInt(dialog.dataset.unitLimit, 10) || 0;      // the most mechs in all (a scenario rule), 0 for none
+  var needPilots = dialog.dataset.pilotsRequired === '1';           // every mech taken needs a named pilot (a scenario rule)
   var query = 'campaign=' + encodeURIComponent(dialog.dataset.campaign) + '&scenario=' + encodeURIComponent(dialog.dataset.scenario);
-  var units = [];
-  var selected = {};
-  var touched = false; // the player has ticked or unticked a unit, so a fresh read must not undo their choice
+  var MAX = 4; // the most players a company can have MekBay accounts for
+  var maxPlayers = Math.min(MAX, Math.max(1, parseInt(dialog.dataset.maxPlayers, 10) || 1));
+  var minPlayers = Math.min(maxPlayers, Math.max(1, parseInt(dialog.dataset.minPlayers, 10) || 1));
+
+  var units = [];         // the hangar's mechs, as the server describes them
+  var provided = false;   // the scenario provides its own mechs in place of the hangar
+  var original = {};      // unit ID -> the named pilot the hangar has in it now, if any
+  var plans = [];         // per player: { selected: { unitId: true }, crew: { unitId: pilot name } }
+  // The count the company chose when it started the campaign is where every deploy begins (the picker can change it for one deploy); a run from before that was
+  // asked, or a count outside the range, starts at the minimum.
+  var defaultPlayers = Math.min(maxPlayers, Math.max(minPlayers, parseInt(dialog.dataset.defaultPlayers, 10) || minPlayers));
+  // Every player takes their own force into the lobby, owned by their own MekBay account, so a count is offered only when Players 1 to N have a user ID saved (the
+  // page is told which are saved, never the IDs). A saved default whose IDs have since been forgotten steps down to what the IDs cover.
+  var playerIds = [];
+  try { playerIds = JSON.parse(dialog.dataset.playerIds || '[]'); } catch (e) { playerIds = []; }
+  function missingId(n) { for (var i = 0; i < n; i++) if (!playerIds[i]) return i + 1; return 0; }
+  while (defaultPlayers > minPlayers && missingId(defaultPlayers)) defaultPlayers--;
+  var playerCount = defaultPlayers;
+  var step = 0;
+  var finished = null;    // the server's answer once the plan has been checked
+  var touched = false;    // the player has changed something, so a fresh read of the hangar must not undo it
   var busy = false;
-  // The hangar as the server last read it from MekBay, embedded in the page: shown at once when the popup opens, then replaced
-  // by the live read.
+  var held = '';          // a pilot picked up by clicking, waiting to be put in a mech
+  // The hangar as the server last read it from MekBay, embedded in the page: shown at once when the popup opens, then replaced by the live read.
   var cachedData = null;
   try { cachedData = JSON.parse(dialog.dataset.cached || 'null'); } catch (e) { cachedData = null; }
 
-  // The campaign's living named pilots, as { name, rank, portraitUrl, gunnery, piloting }.
+  // The campaign's living named pilots, as Page.PilotsJSON sends them.
   var pilots = [];
   try { pilots = JSON.parse(dialog.dataset.pilots || '[]') || []; } catch (e) { pilots = []; }
   if (typeof AbilityCard !== 'undefined') { try { AbilityCard.setCatalog(JSON.parse(dialog.dataset.abilities || '[]')); } catch (e) { /* no catalog: the chips just won't explain themselves */ } }
-  var crew = {};          // unit ID -> name of the named pilot assigned to it in this popup
-  var original = {};      // unit ID -> the named pilot the hangar has in it now, if any
-  var crewTouched = false; // the player has moved a pilot, so a fresh read must not undo it
-  var held = '';          // a pilot picked up by clicking, waiting to be put in a mech
 
   function fmt(n) { return Number(n).toLocaleString('en-US'); }
-
   function el(tag, cls, text) {
     var e = document.createElement(tag);
     if (cls) e.className = cls;
@@ -53,49 +81,71 @@
     return e;
   }
 
+  // ---- The plan
+  function plan(i) { if (!plans[i]) plans[i] = { selected: {}, crew: {} }; return plans[i]; }
+  function cur() { return plan(step); }
+  function stepCount() { return playerCount > 1 ? playerCount + 1 : 1; }
+  function isReview() { return playerCount > 1 && step === playerCount; }
+  function unitById(id) { for (var i = 0; i < units.length; i++) if (units[i].id === id) return units[i]; return null; }
   function pilotNamed(name) {
     var lower = String(name || '').toLowerCase();
     for (var i = 0; i < pilots.length; i++) if (pilots[i].name.toLowerCase() === lower) return pilots[i];
     return null;
   }
+  function same(a, b) { return String(a).toLowerCase() === String(b).toLowerCase(); }
+  function takenElsewhere(id) {
+    for (var j = 0; j < playerCount; j++) if (j !== step && plan(j).selected[id]) return true;
+    return false;
+  }
+  function pilotElsewhere(name) {
+    for (var j = 0; j < playerCount; j++) {
+      if (j === step) continue;
+      for (var id in plan(j).crew) if (plan(j).crew[id] && same(plan(j).crew[id], name)) return true;
+    }
+    return false;
+  }
   function unitOf(name) {
-    for (var id in crew) if (crew[id] && crew[id].toLowerCase() === name.toLowerCase()) return id;
+    var crew = cur().crew;
+    for (var id in crew) if (crew[id] && same(crew[id], name)) return id;
     return '';
   }
-  function unitById(id) {
-    for (var i = 0; i < units.length; i++) if (units[i].id === id) return units[i];
-    return null;
+  function bvOf(i) {
+    var bv = 0;
+    units.forEach(function (u) { if (plan(i).selected[u.id]) bv += u.bv; });
+    return bv;
   }
-
-  function totals() {
-    var count = 0, bv = 0;
-    units.forEach(function (u) { if (selected[u.id]) { count++; bv += u.bv; } });
-    return { count: count, bv: bv };
+  function countOf(i) {
+    var n = 0;
+    units.forEach(function (u) { if (plan(i).selected[u.id]) n++; });
+    return n;
   }
-
-  function update() {
-    var t = totals();
-    var over = limit > 0 && t.bv > limit;
-    meter.textContent = t.count + ' selected · ' + fmt(t.bv) + (limit ? ' / ' + fmt(limit) : '') + ' BV' + (limit ? '' : ' (no limit)');
-    meter.classList.toggle('over', over);
-    go.disabled = busy || !canModify || t.count === 0 || over;
+  function totalBV() { var t = 0; for (var i = 0; i < playerCount; i++) t += bvOf(i); return t; }
+  function totalCount() { var t = 0; for (var i = 0; i < playerCount; i++) t += countOf(i); return t; }
+  function over() { return (limit > 0 && totalBV() > limit) || (unitLimit > 0 && totalCount() > unitLimit); }
+  // Mechs a player has taken that have no named pilot, when the scenario requires one on each.
+  function unmanned(i) {
+    if (!needPilots) return 0;
+    var n = 0;
+    units.forEach(function (u) { if (plan(i).selected[u.id] && !plan(i).crew[u.id]) n++; });
+    return n;
   }
+  function anyUnmanned() { for (var i = 0; i < playerCount; i++) if (unmanned(i)) return true; return false; }
 
-  // ---- Assigning pilots
+  // ---- Assigning pilots (to the current player's mechs)
   function assign(unitId, name) {
     var p = pilotNamed(name);
-    if (!p) return;
-    for (var id in crew) if (crew[id] && crew[id].toLowerCase() === p.name.toLowerCase()) delete crew[id]; // one pilot, one mech
-    crew[unitId] = p.name;
-    crewTouched = true;
+    if (!p || !cur().selected[unitId] || pilotElsewhere(p.name)) return;
+    for (var id in cur().crew) if (cur().crew[id] && same(cur().crew[id], p.name)) delete cur().crew[id]; // one pilot, one mech
+    cur().crew[unitId] = p.name;
+    touched = true;
     held = '';
     error.textContent = '';
     render();
   }
   function unassign(name) {
     var id = unitOf(name);
-    if (id) delete crew[id];
-    crewTouched = true;
+    if (id) delete cur().crew[id];
+    touched = true;
     held = '';
     render();
   }
@@ -115,7 +165,7 @@
   }
 
   // A pilot's four numbers in a compact strip of mini stat boxes (a tiny label over a bold number, like the pilot cards on the Manage page):
-  // Gunnery, Piloting, Edge tokens and Edge abilities. Hovering it shows the styled card with the full names.
+  // Gunnery, Piloting, Edge tokens and Edge abilities. Hovering the pilot shows the full card (pilotcard.js).
   var STATS = [['gunnery', 'GUN', 'Gunnery'], ['piloting', 'PIL', 'Piloting'], ['edgeTokens', 'EDGE', 'Edge tokens'], ['abilities', 'ABIL', 'Edge abilities']];
   function statSummary(p) { return STATS.map(function (s) { return s[2] + ' ' + (p[s[0]] || 0); }).join(', '); }
   function statStrip(p) {
@@ -128,31 +178,34 @@
     });
     return strip;
   }
-
   function portrait(p) {
     var img = document.createElement('img');
     img.className = 'deploy-portrait';
     img.src = p.portraitUrl; img.alt = ''; img.width = 32; img.height = 32;
     return img;
   }
+  function pilotTop(p, sub) {
+    var top = el('span', 'deploy-pilot-top');
+    top.appendChild(portrait(p));
+    var text = el('span', 'deploy-pilot-text');
+    text.appendChild(el('b', null, p.name));
+    text.appendChild(el('small', null, sub));
+    top.appendChild(text);
+    return top;
+  }
 
-  // The tray: every living named pilot. One already in a mech says which, and can still be picked up to move or remove them.
+  // The tray: the named pilots no other player has taken. One already in this player's mech says which, and can be picked up to move or remove them.
   function renderTray() {
-    tray.hidden = !pilots.length;
+    var mine = pilots.filter(function (p) { return !pilotElsewhere(p.name); });
+    tray.hidden = !pilots.length || isReview() || !!finished;
     trayList.textContent = '';
-    pilots.forEach(function (p) {
+    mine.forEach(function (p) {
       var inUnit = unitById(unitOf(p.name));
       var chip = el('button', 'deploy-pilot' + (held === p.name ? ' held' : '') + (inUnit ? ' assigned' : ''));
       chip.type = 'button';
       chip.setAttribute('aria-pressed', held === p.name ? 'true' : 'false');
       chip.setAttribute('aria-label', p.name + ', ' + statSummary(p) + (inUnit ? ', in ' + inUnit.name : ''));
-      var top = el('span', 'deploy-pilot-top');
-      top.appendChild(portrait(p));
-      var text = el('span', 'deploy-pilot-text');
-      text.appendChild(el('b', null, p.name));
-      text.appendChild(el('small', null, inUnit ? 'in ' + inUnit.name : (p.rank || 'Unassigned')));
-      top.appendChild(text);
-      chip.appendChild(top);
+      chip.appendChild(pilotTop(p, inUnit ? 'in ' + inUnit.name : (p.rank || 'Unassigned')));
       chip.appendChild(statStrip(p));
       if (typeof PilotCard !== 'undefined') PilotCard.attach(chip, p);
       chip.addEventListener('click', function () { held = held === p.name ? '' : p.name; render(); });
@@ -171,19 +224,19 @@
     if (name && unitOf(name)) unassign(name);
   });
 
-  // A mech's pilot slot: the pilot in it (draggable, with an x), or a dashed place to drop one.
+  // A mech's pilot slot: the pilot in it (draggable, with an x), a dashed place to drop one, or, for a mech this player isn't taking, a disabled hint.
   function slot(u, unavailable) {
     var box = el('div', 'deploy-slot' + (unavailable ? ' unavailable' : ''));
     if (!pilots.length || unavailable) return box;
-    var p = pilotNamed(crew[u.id]);
+    if (!cur().selected[u.id]) {
+      box.classList.add('disabled');
+      box.appendChild(el('span', 'deploy-slot-empty', 'Take this mech first'));
+      return box;
+    }
+    var p = pilotNamed(cur().crew[u.id]);
     if (p) {
       box.classList.add('filled');
-      var top = el('span', 'deploy-pilot-top');
-      top.appendChild(portrait(p));
-      var text = el('span', 'deploy-pilot-text');
-      text.appendChild(el('b', null, p.name));
-      text.appendChild(el('small', null, p.rank || 'Pilot'));
-      top.appendChild(text);
+      var top = pilotTop(p, p.rank || 'Pilot');
       var x = el('button', 'deploy-slot-x', '×');
       x.type = 'button';
       x.title = 'Take ' + p.name + ' out of this mech';
@@ -215,27 +268,30 @@
     return box;
   }
 
+  function viewOf(u) {
+    var view = {};
+    Object.keys(u).forEach(function (k) { if (k !== 'gunnery' && k !== 'piloting' && k !== 'pilot') view[k] = u[k]; });
+    return view;
+  }
+
   function row(u) {
     var unavailable = u.destroyed || u.unknown;
-    var li = el('li', 'deploy-unit' + (unavailable ? ' unavailable' : '') + (selected[u.id] ? ' picked' : ''));
+    var li = el('li', 'deploy-unit' + (unavailable ? ' unavailable' : '') + (cur().selected[u.id] ? ' picked' : ''));
     var label = el('label');
     var box = document.createElement('input');
     box.type = 'checkbox';
     box.className = 'themed-box';
-    box.checked = !!selected[u.id];
-    box.disabled = unavailable;
+    box.checked = !!cur().selected[u.id];
+    // A scenario's unit limit is reached: the mechs not yet taken can't be.
+    box.disabled = unavailable || (unitLimit > 0 && !cur().selected[u.id] && totalCount() >= unitLimit);
     box.addEventListener('change', function () {
       touched = true;
-      if (box.checked) selected[u.id] = true; else delete selected[u.id];
-      li.classList.toggle('picked', box.checked);
+      if (box.checked) cur().selected[u.id] = true; else { delete cur().selected[u.id]; delete cur().crew[u.id]; } // a mech not being taken has no pilot
       error.textContent = '';
-      update();
+      render();
     });
     label.appendChild(box);
-    // The pilot's skills are shown in the slot, so the row itself leaves out the crew the hangar has now.
-    var view = {};
-    Object.keys(u).forEach(function (k) { if (k !== 'gunnery' && k !== 'piloting' && k !== 'pilot') view[k] = u[k]; });
-    label.appendChild(MechRow.build(pilots.length ? view : u));
+    label.appendChild(MechRow.build(pilots.length ? viewOf(u) : u)); // the pilot's skills are shown in the slot
     li.appendChild(label);
     if (pilots.length) {
       li.classList.add('has-slot');
@@ -244,38 +300,209 @@
     return li;
   }
 
-  function render() {
-    if (typeof MechRow.hideTip === 'function') MechRow.hideTip(); // the pilot elements are about to be replaced, so a card open on one would point at nothing
-    list.textContent = '';
-    units.forEach(function (u) { list.appendChild(row(u)); });
-    renderTray();
-    update();
+  // ---- Showing a step
+  // The meter: on a player step, what this player has taken and the force total against the limit (two figures, set apart); with one player, one figure.
+  function setMeter() {
+    var total = totalBV();
+    // The BV part says "(no limit)" only when nothing else limits the force; a scenario with a unit limit counts mechs against it instead.
+    var limitText = (limit ? ' / ' + fmt(limit) : '') + ' BV' + (limit || unitLimit ? '' : ' (no limit)');
+    var mechs = function (n) { return n + (unitLimit ? ' / ' + unitLimit : '') + (unitLimit || n !== 1 ? ' mechs' : ' mech'); };
+    meter.textContent = '';
+    if (playerCount > 1) {
+      meter.appendChild(el('span', null, 'This player: ' + countOf(step) + ' selected · ' + fmt(bvOf(step)) + ' BV'));
+      meter.appendChild(el('span', null, 'Force total: ' + (unitLimit ? mechs(totalCount()) + ' · ' : '') + fmt(total) + limitText));
+    } else {
+      meter.appendChild(el('span', null, (unitLimit ? mechs(countOf(0)) : countOf(0) + ' selected') + ' · ' + fmt(total) + limitText));
+    }
+    meter.classList.toggle('over', over());
+    // The scenario's own rules, in words, and what is still missing.
+    var rules = document.getElementById('deploy-rules');
+    var parts = [];
+    if (unitLimit) parts.push('Take up to ' + unitLimit + ' mechs in all');
+    if (needPilots) parts.push('every mech needs a named pilot');
+    rules.hidden = !parts.length;
+    if (parts.length) {
+      var text = parts.join(', ') + '.';
+      if (anyUnmanned()) text += ' Assign a named pilot to each mech you take.';
+      rules.textContent = text.charAt(0).toUpperCase() + text.slice(1);
+    }
   }
 
-  // Shows a hangar (cached or live). A choice the player has already made is kept for the units that are still there; before
-  // that, the units already in the Deployed group are ticked and the named pilots already in a mech are shown in it.
+  function renderPlayers() {
+    playersBox.hidden = !(step === 0 && !finished && minPlayers < maxPlayers);
+    playersPick.textContent = '';
+    for (var n = minPlayers; n <= maxPlayers; n++) {
+      (function (n) {
+        var b = el('button', 'deploy-count', String(n));
+        b.type = 'button';
+        b.setAttribute('aria-pressed', n === playerCount ? 'true' : 'false');
+        b.setAttribute('aria-label', n + (n === 1 ? ' player' : ' players'));
+        if (missingId(n) && n !== playerCount) { b.disabled = true; b.title = 'Player ' + missingId(n) + ' needs a MekBay user ID: add it under Account details.'; }
+        b.addEventListener('click', function () {
+          if (n === playerCount) return;
+          playerCount = n;
+          plans.length = Math.min(plans.length, n); // players who are no longer playing give their choices back
+          touched = true;
+          held = '';
+          render();
+        });
+        playersPick.appendChild(b);
+      })(n);
+    }
+  }
+
+  // A pilot in a review row: the same compact card as a filled slot, not draggable.
+  function staticPilot(name) {
+    var box = el('div', 'deploy-slot static');
+    var p = pilotNamed(name);
+    if (!p) { box.appendChild(el('span', 'deploy-slot-empty', 'No named pilot')); return box; }
+    box.classList.add('filled');
+    box.appendChild(pilotTop(p, p.rank || 'Pilot'));
+    box.appendChild(statStrip(p));
+    if (typeof PilotCard !== 'undefined') PilotCard.attach(box, p);
+    return box;
+  }
+
+  // The plan as the review and the result show it. data = [{ player, units: [{ id, ... }], crew: { unitId: pilot name }, bv, hasAccount }].
+  function renderSummary(data, notes) {
+    review.textContent = '';
+    notes.forEach(function (n) { review.appendChild(n); });
+    data.forEach(function (pl) {
+      var sec = el('section', 'deploy-review-player');
+      var h = el('h3', null, 'Player ' + pl.player);
+      h.appendChild(el('span', null, pl.units.length + (pl.units.length === 1 ? ' mech' : ' mechs') + ' · ' + fmt(pl.bv) + ' BV'));
+      sec.appendChild(h);
+      var ul = el('ul', 'deploy-review-list');
+      pl.units.forEach(function (pu) {
+        var u = unitById(pu.id);
+        var li = el('li', 'deploy-unit review' + (pilots.length ? ' has-slot' : ''));
+        li.appendChild(MechRow.build(viewOf(u || { name: pu.name, model: pu.model, bv: pu.bv, icon: '', role: '', tons: 0 })));
+        if (pilots.length) li.appendChild(staticPilot(pl.crew[pu.id] || ''));
+        ul.appendChild(li);
+      });
+      sec.appendChild(ul);
+      review.appendChild(sec);
+    });
+    var tot = 0;
+    data.forEach(function (pl) { tot += pl.bv; });
+    var count = 0;
+    data.forEach(function (pl) { count += pl.units.length; });
+    var total = el('p', 'deploy-review-total' + ((limit > 0 && tot > limit) || (unitLimit > 0 && count > unitLimit) ? ' over' : ''));
+    total.appendChild(el('span', null, 'Force total: ' + (unitLimit ? count + ' / ' + unitLimit + ' mechs · ' : '') + fmt(tot) + (limit ? ' / ' + fmt(limit) : '') + ' BV'));
+    review.appendChild(total);
+  }
+
+  function planFromState() {
+    var out = [];
+    for (var i = 0; i < playerCount; i++) {
+      var us = units.filter(function (u) { return plan(i).selected[u.id]; });
+      out.push({ player: i + 1, units: us.map(function (u) { return { id: u.id, name: u.name, model: u.model, bv: u.bv }; }), crew: plan(i).crew, bv: bvOf(i) });
+    }
+    return out;
+  }
+
+  function renderFooter() {
+    var multi = playerCount > 1;
+    var last = !multi || isReview();
+    back.hidden = !multi || step === 0 || !!finished;
+    next.hidden = last || !!finished;
+    go.hidden = !last || !!finished;
+    cancel.textContent = finished ? 'Close' : 'Cancel';
+    progress.hidden = !multi || !!finished;
+    if (!multi) count.textContent = '';
+    if (multi) {
+      var total = stepCount();
+      bar.style.width = Math.round(((step + 1) / total) * 100) + '%';
+      progressTrack.setAttribute('aria-valuemax', total);
+      progressTrack.setAttribute('aria-valuenow', step + 1);
+      count.textContent = 'Step ' + (step + 1) + ' of ' + total;
+    }
+    var ok = !busy && !over() && !missingId(playerCount);
+    if (missingId(playerCount)) error.textContent = 'Player ' + missingId(playerCount) + ' needs a MekBay user ID: add it under Account details.';
+    if (!last) next.disabled = !ok || countOf(step) === 0 || unmanned(step) > 0;
+    else { var allHave = true; for (var i = 0; i < playerCount; i++) if (countOf(i) === 0) allHave = false; go.disabled = !ok || !allHave || anyUnmanned(); }
+  }
+
+  function render() {
+    if (typeof MechRow.hideTip === 'function') MechRow.hideTip(); // the pilot elements are about to be replaced, so a card open on one would point at nothing
+    renderPlayers();
+    list.textContent = '';
+    review.hidden = true;
+    stepTitle.hidden = true;
+    if (finished) {
+      meter.hidden = true;
+      list.hidden = true;
+      resetRow.hidden = true;
+      review.hidden = false;
+      var note = el('div', 'deploy-note good');
+      note.appendChild(el('b', null, 'Your plan is valid. '));
+      note.appendChild(document.createTextNode('Nothing has been sent to MekBay yet: building each player’s force in their own MekBay account, and the OpFor in the OpFor’s, comes next.'));
+      var notes = [note];
+      renderSummary((finished.players || []).map(function (pl) {
+        var crew = {};
+        (pl.crew || []).forEach(function (c) { crew[c.unit] = c.pilot; });
+        return { player: pl.player, units: pl.units, crew: crew, bv: pl.bv };
+      }), notes);
+      renderTray();
+      renderFooter();
+      return;
+    }
+    meter.hidden = false;
+    if (isReview()) {
+      list.hidden = true;
+      review.hidden = false;
+      stepTitle.hidden = false;
+      stepTitle.textContent = 'Review your plan';
+      meter.hidden = true; // the review ends with the force total
+      renderSummary(planFromState(), []);
+      resetRow.hidden = !(cachedData && cachedData.hasOperation);
+    } else {
+      list.hidden = false;
+      if (playerCount > 1) {
+        stepTitle.hidden = false;
+        stepTitle.textContent = '';
+        stepTitle.appendChild(document.createTextNode('Player ' + (step + 1) + ' of ' + playerCount));
+      }
+      units.forEach(function (u) { if (!takenElsewhere(u.id)) list.appendChild(row(u)); });
+      setMeter();
+      resetRow.hidden = !(playerCount === 1 && cachedData && cachedData.hasOperation);
+    }
+    renderTray();
+    renderFooter();
+  }
+
+  // Shows a hangar (cached or live). A choice the player has already made is kept for the units that are still there; before that, the units already in the
+  // Deployed group are Player 1's, with the named pilots already in them.
   function apply(data) {
-    var before = selected, beforeCrew = crew;
     units = data.units || [];
     if (data.limit) limit = data.limit;
-    selected = {};
     original = {};
-    crew = {};
-    units.forEach(function (u) {
-      if (u.destroyed || u.unknown) return;
-      if (touched ? before[u.id] : u.inDeployed) selected[u.id] = true;
-    });
+    var seen = {};
     units.forEach(function (u) {
       var p = u.pilot && pilotNamed(u.pilot);
-      if (p && !(p.name.toLowerCase() in invert(original))) original[u.id] = p.name;
-      if (crewTouched) { if (beforeCrew[u.id]) crew[u.id] = beforeCrew[u.id]; } else if (original[u.id]) crew[u.id] = original[u.id];
+      if (p && !seen[p.name.toLowerCase()]) { original[u.id] = p.name; seen[p.name.toLowerCase()] = true; }
     });
-    resetRow.hidden = !(data.hasOperation && canModify);
+    var present = {};
+    units.forEach(function (u) { if (!u.destroyed && !u.unknown) present[u.id] = true; });
+    if (touched) {
+      plans.forEach(function (pl) {
+        Object.keys(pl.selected).forEach(function (id) { if (!present[id]) { delete pl.selected[id]; delete pl.crew[id]; } });
+        Object.keys(pl.crew).forEach(function (id) { if (!pl.selected[id]) delete pl.crew[id]; });
+      });
+    } else {
+      plans = [];
+      units.forEach(function (u) {
+        if (!present[u.id] || !u.inDeployed) return;
+        plan(0).selected[u.id] = true;
+        if (original[u.id]) plan(0).crew[u.id] = original[u.id];
+      });
+    }
+    provided = !!data.provided;
+    document.getElementById('deploy-provided').hidden = !provided;
     status.hidden = units.length > 0;
     if (!units.length) status.textContent = 'Your hangar force has no mechs in it yet. Add some in MekBay first.';
     render();
   }
-  function invert(map) { var out = {}; for (var k in map) out[map[k].toLowerCase()] = k; return out; }
 
   // A failed live read keeps a hangar that is already showing, and says so.
   function failed(message) {
@@ -287,21 +514,20 @@
     error.textContent = '';
     reset.checked = false;
     touched = false;
-    crewTouched = false;
+    finished = null;
+    busy = false;
     held = '';
+    step = 0;
+    playerCount = defaultPlayers;
+    plans = [];
     if (cachedData && cachedData.units) {
       apply(cachedData); // instant
     } else {
       status.hidden = false;
       status.textContent = 'Loading your hangar…';
-      list.textContent = '';
       units = [];
-      selected = {};
-      crew = {};
       original = {};
-      resetRow.hidden = true;
-      renderTray();
-      update();
+      render();
     }
     fetch('/api/mekbay/hangar?' + query, { credentials: 'same-origin', cache: 'no-store' }).then(function (res) {
       if (!res.ok) return res.text().then(function (t) { failed(t.trim() || 'Could not read your hangar.'); });
@@ -316,30 +542,41 @@
     dialog.showModal();
     load();
   });
-  document.getElementById('deploy-cancel').addEventListener('click', function () { dialog.close(); });
+  cancel.addEventListener('click', function () { dialog.close(); });
+  next.addEventListener('click', function () { if (!next.disabled && step < stepCount() - 1) { step++; held = ''; error.textContent = ''; render(); } });
+  back.addEventListener('click', function () { if (step > 0) { step--; held = ''; error.textContent = ''; render(); } });
 
+  // Deploy: the whole plan goes to the server to be checked. Every mech that has a named pilot is sent with them (so skills are current), and any mech that had
+  // one and no longer does is sent with an empty pilot.
   go.addEventListener('click', function () {
+    if (go.disabled) return;
     busy = true;
-    update();
+    renderFooter();
     error.textContent = '';
-    var body = query;
-    units.forEach(function (u) { if (selected[u.id]) body += '&units=' + encodeURIComponent(u.id); });
-    // Every mech that has a named pilot, plus any that had one and no longer does, so skills are brought up to date and removals are saved.
-    units.forEach(function (u) {
-      var want = crew[u.id] || '', was = original[u.id] || '';
-      if (want || want !== was) body += '&assign_unit=' + encodeURIComponent(u.id) + '&assign_pilot=' + encodeURIComponent(want);
-    });
+    var body = query + '&players=' + playerCount;
+    for (var i = 0; i < playerCount; i++) {
+      var pre = '&p' + (i + 1) + '_';
+      units.forEach(function (u) {
+        if (!plan(i).selected[u.id]) return;
+        body += pre + 'units=' + encodeURIComponent(u.id);
+      });
+      units.forEach(function (u) {
+        if (!plan(i).selected[u.id]) return;
+        var want = plan(i).crew[u.id] || '', was = original[u.id] || '';
+        if (want || want !== was) body += pre + 'assign_unit=' + encodeURIComponent(u.id) + pre + 'assign_pilot=' + encodeURIComponent(want);
+      });
+    }
     if (reset.checked) body += '&reset_opfor=1';
-    fetch('/api/mekbay/deploy', {
+    fetch('/api/deploy/plan', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: body,
       credentials: 'same-origin'
     }).then(function (res) {
-      if (res.ok) { location.reload(); return; }
       busy = false;
-      update();
-      return res.text().then(function (t) { error.textContent = t.trim() || 'Could not deploy.'; });
-    }, function () { busy = false; update(); error.textContent = 'Could not reach the server.'; });
+      if (res.ok) return res.json().then(function (data) { finished = data; render(); });
+      renderFooter();
+      return res.text().then(function (t) { error.textContent = t.trim() || 'Could not check the plan.'; });
+    }, function () { busy = false; renderFooter(); error.textContent = 'Could not reach the server.'; });
   });
 })();

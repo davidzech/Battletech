@@ -2,7 +2,7 @@
 // rows the deploy popup uses (mechrow.js). Both scripts must load first. Like the overview, the page embeds the hangar as it was last read, so the list paints at once and
 // the live read (GET /api/campaign/force) only refreshes it; only a run that has never been read shows "Reading your hangar...". Names,
 // roles and models go in as text, never HTML. Each mech row also has Rearm and Repair buttons (costs come from the server, which charges the
-// warchest and changes the unit in MekBay; both need modify mode). Confirm (confirm.js) must load first.
+// warchest and changes the unit in the site's own copy of the hangar (Sell pays the warchest); both need a copy the site owns). Confirm (confirm.js) must load first.
 (function () {
   var section = document.getElementById('hangar-units');
   var list = document.getElementById('hangar-units-list');
@@ -20,7 +20,7 @@
 
   var canModify = section.dataset.canModify === '1';
   var warchest = parseInt(section.dataset.warchest, 10) || 0;
-  var NO_UID = 'Add your MekBay user ID in the campaign details so the site can change your hangar.';
+  var NO_UID = 'This hangar is from before the site kept its own copy. Import it again under Manage force, Danger zone, Re-import hangar.';
   function commas(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
   function fullName(u) { return (u.name + (u.model ? ' ' + u.model : '')).trim(); }
 
@@ -57,6 +57,41 @@
         if (r.ok) location.reload();
         else Confirm.ask({ title: 'Could not rearm', message: r.message, confirmLabel: 'OK', cancelLabel: 'Close' });
       });
+    });
+  }
+
+  // Sell: one confirmation. A fully repaired and rearmed unit sells for half its BV, any other for a quarter; the server works the price out again.
+  function sell(u) {
+    var after = warchest + u.sellValue;
+    var half = Math.floor(u.bv / 2);
+    var why = [];
+    if (u.condition === 'truly') why.push('Truly destroyed');
+    else {
+      if (u.condition && u.condition !== 'ok') why.push('Damaged');
+      if (u.ammoExpended) why.push('Ammunition spent');
+      if (!why.length) why.push('Not fully repaired');
+    }
+    var items = [
+      { label: 'Base BV', value: commas(u.bv) + ' BV · 100%' },
+      { label: u.sellFull ? 'Fully repaired and rearmed' : 'If fully repaired and rearmed', value: '50% · ' + commas(half) + ' SP' }
+    ];
+    if (!u.sellFull) items.push({ label: why.join(', ') + ': halved again, rounded down', value: '25% · ' + commas(u.sellValue) + ' SP' });
+    items.push({ label: 'Sells for', value: commas(u.sellValue) + ' SP' });
+    Confirm.ask({
+      title: 'Sell ' + u.name + '?',
+      message: fullName(u) + ' leaves your hangar for good, crew and all.' + (!u.sellFull && u.condition !== 'truly' ? ' Repair and rearm it first and it sells for ' + commas(half) + ' SP.' : u.condition === 'truly' ? ' A truly destroyed unit can’t be repaired, so this is all it is worth.' : ''),
+      items: items,
+      detail: 'Warchest ' + commas(warchest) + ' → ' + commas(after) + ' SP.',
+      confirmLabel: 'Sell for ' + u.sellValue + ' SP', danger: true
+    }).then(function (yes) {
+      if (!yes) return;
+      fetch('/api/hangar/sell', {
+        method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, credentials: 'same-origin',
+        body: 'campaign=' + encodeURIComponent(section.dataset.campaign) + '&unit=' + encodeURIComponent(u.id)
+      }).then(function (res) {
+        if (res.ok) { location.reload(); return; }
+        return res.text().then(function (t) { Confirm.ask({ title: 'Could not sell', message: t.trim() || 'Something went wrong.', confirmLabel: 'OK', cancelLabel: 'Close' }); });
+      }, function () { Confirm.ask({ title: 'Could not sell', message: 'Could not reach the server.', confirmLabel: 'OK', cancelLabel: 'Close' }); });
     });
   }
 
@@ -114,6 +149,101 @@
     });
   }
 
+  // Reconfigure (omnimechs only): a dialog listing the unit's other variants with their prices, like the repair dialog.
+  var swapDlg = document.getElementById('swap-dialog');
+  var swapUnitRow = null;
+  function swapOption() {
+    var to = document.getElementById('swap-select').value;
+    return (swapUnitRow.swapOptions || []).filter(function (o) { return o.unit === to; })[0];
+  }
+  // The dialog shows the unit as its full row, then, once another variant is chosen, an arrow with what changes and the variant's own row: a flow from one to the other.
+  function swapRow(box, v) {
+    var row = { name: v.name, model: v.model, role: v.role, icon: v.icon, class: v.class, tons: v.tons, bv: v.bv };
+    if (v.mekbayUrl) row.externalUrl = v.mekbayUrl;
+    box.appendChild(MechRow.build(row));
+  }
+  function swapCostText() {
+    var o = swapOption(), u = swapUnitRow, cost = o ? o.cost : 0, after = warchest - cost;
+    var sel = document.getElementById('swap-select'), chosen = sel.options[sel.selectedIndex];
+    sel.className = chosen ? chosen.className : ''; // the closed box takes the colour of the chosen option
+    var sub = document.getElementById('swap-sub');
+    sub.textContent = '';
+    sub.appendChild(el('div', 'swap-label', o ? 'From' : 'Current variant'));
+    swapRow(sub, u);
+    if (o) {
+      var dir = o.bv > u.bv ? 'up' : o.bv < u.bv ? 'down' : 'same', diff = o.bv - u.bv;
+      var flow = el('div', 'swap-flow swap-' + dir);
+      flow.appendChild(el('span', 'swap-arrow', '↓'));
+      flow.appendChild(el('span', null, commas(u.bv) + ' → ' + commas(o.bv) + ' BV'));
+      if (diff) flow.appendChild(el('b', null, (diff > 0 ? '+' : '−') + commas(Math.abs(diff)) + ' BV'));
+      flow.appendChild(el('span', 'swap-flow-cost', o.cost + ' SP'));
+      sub.appendChild(flow);
+      sub.appendChild(el('div', 'swap-label', 'To'));
+      swapRow(sub, o);
+    }
+    // The price as a short breakdown: half the tonnage, plus half the BV gained (nothing for a variant worth less).
+    var bd = document.getElementById('swap-breakdown');
+    bd.textContent = '';
+    bd.hidden = !o;
+    if (o) {
+      var gained = Math.max(0, o.bv - u.bv);
+      var rows = [
+        ['50% of tonnage', u.tons + 't · ' + Math.ceil(u.tons / 2) + ' SP'],
+        ['50% of BV gained', (gained ? '+' + commas(gained) + ' BV' : 'no BV gained') + ' · ' + Math.floor(gained / 2) + ' SP']
+      ];
+      rows.push(['Cost', o.cost + ' SP']);
+      rows.forEach(function (r) { bd.appendChild(el('dt', null, r[0])); bd.appendChild(el('dd', null, r[1])); });
+    }
+    var text = document.getElementById('swap-cost');
+    text.textContent = o ? 'Cost ' + cost + ' SP. Warchest ' + commas(warchest) + ' → ' + commas(Math.max(after, 0)) + ' SP.' + (after < 0 ? ' Not enough funds.' : '') : 'Choose another variant to reconfigure to.';
+    text.classList.toggle('short', !!o && after < 0);
+    document.getElementById('swap-apply').disabled = !o || after < 0;
+  }
+  function swap(u) {
+    if (!swapDlg || typeof swapDlg.showModal !== 'function') return;
+    swapUnitRow = u;
+    document.getElementById('swap-title').textContent = 'Reconfigure ' + u.name;
+    var select = document.getElementById('swap-select');
+    select.textContent = '';
+    // The current variant comes first and is chosen to begin with: reconfiguring to it would change nothing, so Reconfigure stays disabled until another is picked.
+    var here = document.createElement('option');
+    here.value = '';
+    here.className = 'swap-same';
+    here.textContent = '● ' + (u.model || 'This variant') + ' — ' + commas(u.bv) + ' BV — current';
+    select.appendChild(here);
+    (u.swapOptions || []).forEach(function (o) {
+      var opt = document.createElement('option');
+      opt.value = o.unit;
+      // Like a stock: green for a variant worth more BV than this one, red for one worth less, so the change reads at a glance.
+      var dir = o.bv > u.bv ? 'up' : o.bv < u.bv ? 'down' : 'same';
+      opt.className = 'swap-' + dir;
+      opt.textContent = (dir === 'up' ? '▲ ' : dir === 'down' ? '▼ ' : '') + (o.model || o.unit) + ' — ' + commas(o.bv) + ' BV — ' + o.cost + ' SP';
+      select.appendChild(opt);
+    });
+    select.selectedIndex = 0;
+    document.getElementById('swap-error').textContent = '';
+    swapCostText();
+    swapDlg.showModal();
+  }
+  if (swapDlg) {
+    document.getElementById('swap-select').addEventListener('change', swapCostText);
+    document.getElementById('swap-cancel').addEventListener('click', function () { swapDlg.close(); });
+    swapDlg.addEventListener('click', function (e) { if (e.target === swapDlg) swapDlg.close(); });
+    document.getElementById('swap-form').addEventListener('submit', function (e) {
+      e.preventDefault();
+      var apply = document.getElementById('swap-apply'), err = document.getElementById('swap-error');
+      err.textContent = '';
+      apply.disabled = true;
+      fetch('/api/hangar/swap', {
+        method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, credentials: 'same-origin',
+        body: 'campaign=' + encodeURIComponent(section.dataset.campaign) + '&unit=' + encodeURIComponent(swapUnitRow.id) + '&to=' + encodeURIComponent(document.getElementById('swap-select').value)
+      }).then(function (res) {
+        if (res.ok) { swapDlg.close(); location.reload(); return; }
+        return res.text().then(function (t) { err.textContent = t.trim() || 'Something went wrong.'; swapCostText(); });
+      }, function () { err.textContent = 'Could not reach the server.'; swapCostText(); });
+    });
+  }
+
   // The buttons at the right of a row. Anything the unit can't do is disabled, with the reason as its tooltip.
   function actionsFor(u) {
     if (u.unknown || u.notMech) return null;
@@ -121,15 +251,25 @@
     return [
       {
         label: 'Rearm', onClick: function () { rearm(u); },
-        disabled: !canModify || !u.ammoExpended,
-        title: !canModify ? NO_UID : !u.ammoExpended ? 'No ammunition has been spent.' : 'Refill spent ammunition for ' + u.rearmCost + ' SP'
+        disabled: !canModify || truly || !u.ammoExpended,
+        title: !canModify ? NO_UID : truly ? 'A truly destroyed unit can only be sold.' : !u.ammoExpended ? 'No ammunition has been spent.' : 'Refill spent ammunition for ' + u.rearmCost + ' SP'
       },
       {
         label: 'Repair', onClick: function () { repair(u); },
         disabled: !canModify || !(u.repairLevels && u.repairLevels.length),
         title: !canModify ? NO_UID : truly ? 'Truly destroyed units cannot be repaired.' : !(u.repairLevels && u.repairLevels.length) ? 'Nothing to repair.' : 'Choose a repair'
+      },
+      u.swapOptions && u.swapOptions.length ? {
+        label: 'Reconfigure', onClick: function () { swap(u); },
+        disabled: !canModify || !u.sellFull,
+        title: !canModify ? NO_UID : !u.sellFull ? 'An omnimech has to be fully repaired and rearmed before it can be reconfigured.' : 'Swap to another variant of this omnimech'
+      } : null,
+      {
+        label: 'Sell', onClick: function () { sell(u); },
+        disabled: !canModify,
+        title: !canModify ? NO_UID : 'Sell for ' + u.sellValue + ' SP' + (u.sellFull ? '' : ' (repair and rearm it first to get twice as much)')
       }
-    ];
+    ].filter(Boolean);
   }
 
   function render(data) {

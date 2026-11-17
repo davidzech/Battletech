@@ -113,13 +113,13 @@ func (s *Server) purchaseUnits(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if !pt.CanModify() {
-		http.Error(w, "Add your MekBay user ID in the campaign details to let the site change your hangar.", http.StatusForbidden)
-		return
-	}
 	run, started, err := s.store.Run(r.Context(), pt.ID, c.Slug)
 	if err != nil || !started {
 		http.Error(w, "Start this campaign first.", http.StatusBadRequest)
+		return
+	}
+	if !run.Owned() {
+		http.Error(w, notOwnedMessage, http.StatusConflict)
 		return
 	}
 	ids := r.PostForm["unit"]
@@ -135,7 +135,7 @@ func (s *Server) purchaseUnits(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not charge the warchest", http.StatusInternalServerError)
 		return
 	}
-	if err := s.mekbay.PurchaseUnits(r.Context(), PurchaseRequest{OwnerUID: pt.OwnerUID, Instance: run.HangarInstance, Units: ids}); err != nil {
+	if err := s.mekbay.PurchaseUnits(r.Context(), PurchaseRequest{OwnerUID: accountUID(currentSeed(r), SlotHangar), Instance: run.HangarInstance, Units: ids}); err != nil {
 		log.Printf("buy units in MekBay: %v", err) // never log the owner UID
 		if rerr := s.store.RefundWarchest(r.Context(), pt.ID, c.Slug, cost); rerr != nil {
 			log.Printf("could not refund %d SP: %v", cost, rerr)

@@ -90,7 +90,7 @@ func (s *Server) hangarCheck(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !found || !pt.Configured() {
-		http.Error(w, "Name your company first.", http.StatusBadRequest)
+		http.Error(w, "Name your account first.", http.StatusBadRequest)
 		return
 	}
 	link, err := parseHangar(r.FormValue("hangar"))

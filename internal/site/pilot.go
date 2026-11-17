@@ -210,6 +210,8 @@ type NewPilot struct {
 	Name     string
 	Portrait string
 	SP       SPAllocation
+	// Abilities are the Edge abilities the pilot starts with: exactly as many as their Edge abilities level (see edgeAbilitiesLadder).
+	Abilities []string
 }
 
 // ErrPortraitTaken is returned when another living pilot of the campaign already has the portrait.
@@ -218,9 +220,9 @@ var ErrPortraitTaken = errors.New("another pilot already has that portrait")
 // ErrPilotLimit is returned when a command already has the most named pilots it may have.
 var ErrPilotLimit = errors.New("you can have at most four named pilots at a time")
 
-// parsePilotName validates a named pilot's name: 1 to 30 characters, in the same style as a company name.
+// parsePilotName validates a named pilot's name: 1 to 30 characters, in the same style as an account or force name.
 func parsePilotName(raw string) (string, error) {
-	name, err := parseCompanyName(raw)
+	name, err := parseName(raw, "pilot")
 	if err != nil || utf8.RuneCountInString(name) > 30 {
 		return "", errors.New("Give your pilot a name of 1 to 30 letters, numbers and spaces (apostrophes, hyphens and a few marks are fine).")
 	}

@@ -38,7 +38,7 @@ func (s *Server) pilotRequest(w http.ResponseWriter, r *http.Request) (pt Playth
 		return
 	}
 	if !found || !pt.Configured() {
-		http.Error(w, "Name your company first.", http.StatusBadRequest)
+		http.Error(w, "Name your account first.", http.StatusBadRequest)
 		return
 	}
 	if _, started, err := s.store.Run(r.Context(), pt.ID, c.Slug); err != nil {
@@ -216,7 +216,22 @@ func parseStartingPilots(r *http.Request, c *Campaign) ([]NewPilot, error) {
 		if portrait != "" {
 			takenPortraits[portrait] = true
 		}
-		out = append(out, NewPilot{Name: name, Portrait: portrait, SP: a})
+		// A starting pilot who already reaches an Edge abilities level has to choose that many abilities now, all different.
+		abilities := r.PostForm[prefix+"ability"]
+		if want := edgeAbilitiesLadder.at(a.EdgeAbilities).Level; len(abilities) != want {
+			return nil, fmt.Errorf("%s must choose %d Edge abilities (%d chosen).", name, want, len(abilities))
+		}
+		chosen := map[string]bool{}
+		for _, id := range abilities {
+			if _, ok := edgeAbilityByID(id); !ok {
+				return nil, fmt.Errorf("%s: unknown Edge ability.", name)
+			}
+			if chosen[id] {
+				return nil, fmt.Errorf("%s chose the same Edge ability twice.", name)
+			}
+			chosen[id] = true
+		}
+		out = append(out, NewPilot{Name: name, Portrait: portrait, SP: a, Abilities: abilities})
 	}
 	// A pilot sent without a portrait (not something the wizard does) is given a random free one.
 	for i := range out {

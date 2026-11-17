@@ -282,6 +282,10 @@ type fakeMekBay struct {
 	// services records repair and rearm requests; serviceErr makes them fail.
 	services   []ServiceRequest
 	purchases  []PurchaseRequest
+	clones     []CloneRequest
+	sales      []SellRequest
+	swaps      []SwapRequest
+	cloneErr   error
 	serviceErr error
 }
 
@@ -289,6 +293,30 @@ func (f *fakeMekBay) ReadHangar(context.Context, string) (HangarForce, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.hangar, f.err
+}
+
+func (f *fakeMekBay) CloneHangar(_ context.Context, req CloneRequest) (HangarForce, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.clones = append(f.clones, req)
+	if f.cloneErr != nil {
+		return HangarForce{}, f.cloneErr
+	}
+	return f.hangar, f.err
+}
+
+func (f *fakeMekBay) SellUnit(_ context.Context, req SellRequest) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.sales = append(f.sales, req)
+	return f.serviceErr
+}
+
+func (f *fakeMekBay) SwapUnit(_ context.Context, req SwapRequest) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.swaps = append(f.swaps, req)
+	return f.serviceErr
 }
 
 func (f *fakeMekBay) ServiceUnit(_ context.Context, req ServiceRequest) error {
@@ -382,7 +410,7 @@ func TestDeployFlow(t *testing.T) {
 	if r := get(t, srv, hangar, cookie); r.StatusCode != http.StatusBadRequest {
 		t.Fatalf("hangar before naming the company: %d", r.StatusCode)
 	}
-	if r := post(t, srv, "/api/company", url.Values{"company": {"Wolf's Dragoons"}}, cookie, srv.URL); r.StatusCode != http.StatusNoContent {
+	if r := post(t, srv, "/api/account", url.Values{"uid_p1": {uidP1}, "account": {"Wolf's Dragoons"}}, cookie, srv.URL); r.StatusCode != http.StatusNoContent {
 		t.Fatalf("company: %d", r.StatusCode)
 	}
 	if r := get(t, srv, hangar, cookie); r.StatusCode != http.StatusBadRequest {
@@ -395,7 +423,7 @@ func TestDeployFlow(t *testing.T) {
 		t.Fatalf("an unstarted campaign should point to its start button, not offer deploying: %.900s", p)
 	}
 
-	// A started campaign without an owner UID: the player can look and pick, but the site can't deploy for them.
+	// A run from before the site kept its own copy of the hangar: the player can look and pick, but the site can't deploy for them.
 	if err := store.StartRun(ctx, id, "refusalwar", Hangar{URL: goodHangarURL, Instance: goodInstance}); err != nil {
 		t.Fatal(err)
 	}
@@ -409,7 +437,7 @@ func TestDeployFlow(t *testing.T) {
 	if i, j := strings.Index(p, "/static/mechrow.js"), strings.Index(p, "/static/mekbay.js"); i < 0 || j < 0 || i > j {
 		t.Fatal("the scenario page should load mechrow.js before mekbay.js")
 	}
-	if !strings.Contains(p, `id="deploy-open"`) || !strings.Contains(p, "Add your MekBay user ID under Company details") || !strings.Contains(p, "up to 10000 BV") {
+	if !strings.Contains(p, `id="deploy-open"`) || !strings.Contains(p, `data-min-players="1"`) || !strings.Contains(p, `data-max-players="2"`) || !strings.Contains(p, "up to 10000 BV") {
 		t.Fatalf("read-only page: %.900s", p)
 	}
 	r := get(t, srv, hangar, cookie)
@@ -426,16 +454,16 @@ func TestDeployFlow(t *testing.T) {
 	if view.Limit != 10000 || view.CanModify || view.HasOperation || len(view.Units) != 8 || view.Units[0].Name != "Mad Dog" || view.Units[0].BV != 2351 {
 		t.Fatalf("hangar view = %+v", view)
 	}
-	if r := post(t, srv, "/api/mekbay/deploy", deploy(mine), cookie, srv.URL); r.StatusCode != http.StatusForbidden {
-		t.Fatalf("read-only deploy: %d", r.StatusCode)
+	if r := post(t, srv, "/api/mekbay/deploy", deploy(mine), cookie, srv.URL); r.StatusCode != http.StatusConflict {
+		t.Fatalf("deploy without an owned hangar: %d", r.StatusCode)
 	}
 
 	// Modify mode: the page says so, and the server checks the choice before touching MekBay.
-	if r := post(t, srv, "/api/company", url.Values{"company": {"Wolf's Dragoons"}, "owner": {ownerUID}}, cookie, srv.URL); r.StatusCode != http.StatusNoContent {
-		t.Fatalf("company with owner: %d", r.StatusCode)
+	if err := store.StartRun(ctx, id, "refusalwar", Hangar{URL: goodHangarURL, Instance: goodInstance, Source: goodHangarURL}); err != nil {
+		t.Fatal(err)
 	}
-	if p := body(t, srv, page, cookie); strings.Contains(p, "Add your MekBay user ID under Company details") || strings.Contains(p, ownerUID) {
-		t.Fatal("modify mode should drop the read-only note, and never show the UID")
+	if p := body(t, srv, page, cookie); strings.Contains(p, MekBayUID("wolfpack2026", SlotHangar)) {
+		t.Fatal("the page must never show the site's MekBay account ID")
 	}
 	for name, c := range map[string]struct {
 		form   url.Values
@@ -471,7 +499,7 @@ func TestDeployFlow(t *testing.T) {
 		t.Fatalf("expected one MekBay call, got %d", len(fake.reqs))
 	}
 	req := fake.reqs[0]
-	if req.OwnerUID != ownerUID || req.CampaignInstance != goodInstance || req.OperationName != "Refusal War - Scenario 001" ||
+	if req.OwnerUID != MekBayUID("wolfpack2026", SlotHangar) || req.CampaignInstance != goodInstance || req.OperationName != "Refusal War - Scenario 001" ||
 		!reflect.DeepEqual(req.DeployedUnitIDs, mine) || req.OpForInstance != "" || req.KeepOpFor {
 		t.Errorf("request = %+v", req)
 	}

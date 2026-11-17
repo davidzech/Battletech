@@ -61,7 +61,7 @@ func TestHangarCachePullThrough(t *testing.T) {
 	srv, store := newMekBayTestServer(t, fake)
 	ctx := context.Background()
 	cookie := post(t, srv, "/api/seed", url.Values{"seed": {"wolfpack2026"}}, nil, "").Cookies()[0]
-	if r := post(t, srv, "/api/company", url.Values{"company": {"Wolf's Dragoons"}}, cookie, srv.URL); r.StatusCode != http.StatusNoContent {
+	if r := post(t, srv, "/api/account", url.Values{"uid_p1": {uidP1}, "account": {"Wolf's Dragoons"}}, cookie, srv.URL); r.StatusCode != http.StatusNoContent {
 		t.Fatalf("company: %d", r.StatusCode)
 	}
 	id := playthroughID("wolfpack2026")
@@ -82,7 +82,7 @@ func TestHangarCachePullThrough(t *testing.T) {
 	// overview shows the units with no loading state.
 	over := body(t, srv, "/refusalwar/", cookie)
 	attr := cachedAttr(over)
-	if attr == "" || attr == "MISSING" || !strings.Contains(attr, "Mist Lynx") || !strings.Contains(attr, "&#34;bv&#34;:5645") || !strings.Contains(attr, "cachedAt") {
+	if attr == "" || attr == "MISSING" || !strings.Contains(attr, "Mist Lynx") || !strings.Contains(attr, "&#34;bv&#34;:8299") || !strings.Contains(attr, "cachedAt") {
 		t.Fatalf("the first overview should carry the cached hangar: %.300s", attr)
 	}
 	// It is valid JSON for the overview script once unescaped, with the same shape the live endpoint answers with.
@@ -92,7 +92,7 @@ func TestHangarCachePullThrough(t *testing.T) {
 		BV    int
 	}
 	unescaped := strings.NewReplacer("&#34;", `"`, "&amp;", "&", "&lt;", "<", "&gt;", ">", "&#39;", "'").Replace(attr)
-	if err := json.Unmarshal([]byte(unescaped), &cached); err != nil || len(cached.Units) != 4 || cached.BV != 5645 {
+	if err := json.Unmarshal([]byte(unescaped), &cached); err != nil || len(cached.Units) != 5 || cached.BV != 8299 {
 		t.Fatalf("cached payload: %+v %v", cached, err)
 	}
 
@@ -127,7 +127,7 @@ func TestHangarCachePullThrough(t *testing.T) {
 		t.Fatalf("deploy popup read: %d", r.StatusCode)
 	}
 	sattr := cachedAttr(body(t, srv, "/refusalwar/scenario_001/", cookie))
-	if !strings.Contains(sattr, "Mist Lynx") || !strings.Contains(sattr, "&#34;limit&#34;:10000") || !strings.Contains(sattr, "&#34;hasOperation&#34;:false") || !strings.Contains(sattr, "&#34;canModify&#34;:false") {
+	if !strings.Contains(sattr, "Mist Lynx") || !strings.Contains(sattr, "&#34;limit&#34;:10000") || !strings.Contains(sattr, "&#34;hasOperation&#34;:false") || !strings.Contains(sattr, "&#34;canModify&#34;:true") {
 		t.Errorf("the scenario page should carry the cached hangar for the popup: %.300s", sattr)
 	}
 

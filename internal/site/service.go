@@ -302,13 +302,13 @@ func (s *Server) serviceUnit(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if !pt.CanModify() {
-		http.Error(w, "Add your MekBay user ID in the campaign details to let the site change your hangar.", http.StatusForbidden)
-		return
-	}
 	run, started, err := s.store.Run(r.Context(), pt.ID, c.Slug)
 	if err != nil || !started {
 		http.Error(w, "Start this campaign first.", http.StatusBadRequest)
+		return
+	}
+	if !run.Owned() {
+		http.Error(w, notOwnedMessage, http.StatusConflict)
 		return
 	}
 	kind := r.PostFormValue("kind")
@@ -362,6 +362,10 @@ func (s *Server) serviceUnit(w http.ResponseWriter, r *http.Request) {
 		}
 		cost = repairCost(level, cat.Tons, cat.TechBase)
 	case "rearm":
+		if cond, _ := conditionOf(hu, cat.Tons, cat.Engine); cond == CondTruly {
+			http.Error(w, "A truly destroyed unit can only be sold.", http.StatusConflict)
+			return
+		}
 		if hu.AmmoBins == 0 {
 			http.Error(w, "That unit has no spent ammunition.", http.StatusConflict)
 			return
@@ -375,7 +379,7 @@ func (s *Server) serviceUnit(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not charge the warchest", http.StatusInternalServerError)
 		return
 	}
-	if err := s.mekbay.ServiceUnit(r.Context(), ServiceRequest{OwnerUID: pt.OwnerUID, Instance: run.HangarInstance, UnitID: hu.ID, Kind: kind, Level: level, Tons: cat.Tons}); err != nil {
+	if err := s.mekbay.ServiceUnit(r.Context(), ServiceRequest{OwnerUID: accountUID(currentSeed(r), SlotHangar), Instance: run.HangarInstance, UnitID: hu.ID, Kind: kind, Level: level, Tons: cat.Tons}); err != nil {
 		log.Printf("%s a unit in MekBay: %v", kind, err) // never log the owner UID
 		if rerr := s.store.RefundWarchest(r.Context(), pt.ID, c.Slug, cost); rerr != nil {
 			log.Printf("could not refund %d SP: %v", cost, rerr)

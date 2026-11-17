@@ -90,7 +90,7 @@ func TestParseHangar(t *testing.T) {
 	}
 }
 
-func TestParseCompanyName(t *testing.T) {
+func TestParseAccountName(t *testing.T) {
 	for in, want := range map[string]string{
 		"Wolf's Dragoons":         "Wolf's Dragoons",
 		"  Kell   Hounds ":        "Kell Hounds",
@@ -100,13 +100,13 @@ func TestParseCompanyName(t *testing.T) {
 		"Gray Death Legion (GDL)": "Gray Death Legion (GDL)",
 		"Écureuils d'Or":          "Écureuils d'Or",
 	} {
-		if got, err := parseCompanyName(in); err != nil || got != want {
-			t.Errorf("parseCompanyName(%q) = %q, %v; want %q", in, got, err, want)
+		if got, err := parseAccountName(in); err != nil || got != want {
+			t.Errorf("parseAccountName(%q) = %q, %v; want %q", in, got, err, want)
 		}
 	}
 	for _, bad := range []string{"", "   ", "-Dragoons", "<script>alert(1)</script>", "Wolf\x00Dragoons", strings.Repeat("a", 41), "Dragoons/../"} {
-		if _, err := parseCompanyName(bad); err == nil {
-			t.Errorf("parseCompanyName(%q) should fail", bad)
+		if _, err := parseAccountName(bad); err == nil {
+			t.Errorf("parseAccountName(%q) should fail", bad)
 		}
 	}
 }
@@ -207,15 +207,15 @@ func TestSeedAndCampaignFlow(t *testing.T) {
 	}
 
 	// Naming the company needs a seed cookie and a sensible name.
-	if r := post(t, srv, "/api/company", url.Values{"company": {"Wolf's Dragoons"}}, nil, ""); r.StatusCode != http.StatusBadRequest {
+	if r := post(t, srv, "/api/account", url.Values{"uid_p1": {uidP1}, "account": {"Wolf's Dragoons"}}, nil, ""); r.StatusCode != http.StatusBadRequest {
 		t.Fatalf("company without a seed: got %d", r.StatusCode)
 	}
 	for _, bad := range []string{"", "   ", "<b>", strings.Repeat("a", 41)} {
-		if r := post(t, srv, "/api/company", url.Values{"company": {bad}}, cookie, ""); r.StatusCode != http.StatusBadRequest {
+		if r := post(t, srv, "/api/account", url.Values{"uid_p1": {uidP1}, "account": {bad}}, cookie, ""); r.StatusCode != http.StatusBadRequest {
 			t.Fatalf("bad company %q: got %d", bad, r.StatusCode)
 		}
 	}
-	if r := post(t, srv, "/api/company", url.Values{"company": {"Wolf's Dragoons"}}, cookie, "https://evil.example"); r.StatusCode != http.StatusForbidden {
+	if r := post(t, srv, "/api/account", url.Values{"uid_p1": {uidP1}, "account": {"Wolf's Dragoons"}}, cookie, "https://evil.example"); r.StatusCode != http.StatusForbidden {
 		t.Fatalf("cross-origin: got %d", r.StatusCode)
 	}
 	if pt, _, _ := store.Playthrough(ctx, id); pt.Configured() {
@@ -228,10 +228,10 @@ func TestSeedAndCampaignFlow(t *testing.T) {
 	}
 
 	// A good name is saved, tidied.
-	if r := post(t, srv, "/api/company", url.Values{"company": {"  Wolf's   Dragoons "}}, cookie, srv.URL); r.StatusCode != http.StatusNoContent {
+	if r := post(t, srv, "/api/account", url.Values{"uid_p1": {uidP1}, "account": {"  Wolf's   Dragoons "}}, cookie, srv.URL); r.StatusCode != http.StatusNoContent {
 		t.Fatalf("good company: got %d", r.StatusCode)
 	}
-	if pt, _, _ := store.Playthrough(ctx, id); !pt.Configured() || pt.CompanyName != "Wolf's Dragoons" {
+	if pt, _, _ := store.Playthrough(ctx, id); !pt.Configured() || pt.AccountName != "Wolf's Dragoons" {
 		t.Fatalf("company not saved correctly: %+v", pt)
 	}
 
@@ -245,8 +245,8 @@ func TestSeedAndCampaignFlow(t *testing.T) {
 		t.Fatalf("existing company should report configured: %q", out.String())
 	}
 	page := body(t, srv, "/", cookie)
-	if !strings.Contains(page, `<span class="company">Wolf&#39;s Dragoons</span></button>`) {
-		t.Fatalf("configured page should show the company name on the chip: %.1500s", page)
+	if !strings.Contains(page, `<span class="account">Wolf&#39;s Dragoons</span></button>`) {
+		t.Fatalf("configured page should show the account name on the chip: %.1500s", page)
 	}
 	if strings.Contains(page, "wolf…") {
 		t.Fatal("the header chip should not show the seed")
@@ -288,103 +288,99 @@ func TestSeedAndCampaignFlow(t *testing.T) {
 		t.Fatalf("good start: got %d", r.StatusCode)
 	}
 	run, ok, _ := store.Run(ctx, id, "refusalwar")
-	if !ok || !run.Started() || run.HangarInstance != goodInstance || run.HangarURL != goodHangarURL || run.Campaign != "refusalwar" {
+	if !ok || !run.Started() || run.SourceURL != goodHangarURL || run.HangarInstance == goodInstance || run.HangarURL != "https://mekbay.com/?instance="+run.HangarInstance || run.Campaign != "refusalwar" {
 		t.Fatalf("campaign not started correctly: %+v (started=%v)", run, ok)
 	}
 	if _, ok, _ := store.Run(ctx, id, "another-campaign"); ok {
 		t.Fatal("starting one campaign must not start another")
 	}
 
-	// That campaign's pages link straight to its hangar; other pages don't.
-	link := `id="hangar-link" href="` + goodHangarURL + `" target="_blank" rel="noopener noreferrer"`
+	// The site owns the hangar, so no page links to it.
 	for _, path := range []string{"/refusalwar/", "/refusalwar/scenario_000/"} {
-		if !strings.Contains(body(t, srv, path, cookie), link) {
-			t.Errorf("%s should link to the hangar", path)
+		if strings.Contains(body(t, srv, path, cookie), `id="hangar-link"`) {
+			t.Errorf("%s should not link to a hangar", path)
 		}
 	}
 	if strings.Contains(body(t, srv, "/", cookie), `id="hangar-link"`) {
 		t.Error("the home page isn't in a campaign, so it has no hangar link")
 	}
-	if c := body(t, srv, "/refusalwar/manage/", cookie); !strings.Contains(c, "Change hangar link") {
+	if c := body(t, srv, "/refusalwar/manage/", cookie); !strings.Contains(c, "Re-import hangar") {
 		t.Errorf("started campaign page: %.1500s", c)
 	}
 
-	// Starting again changes the hangar link and keeps a single run.
+	// Starting again re-imports the hangar (a fresh copy) and keeps a single run.
 	other := "https://mekbay.com/?instance=01a12f98-8a21-7d12-b43d-52bb70872376"
 	if r := post(t, srv, "/api/campaign/start", url.Values{"campaign": {"refusalwar"}, "hangar": {other}}, cookie, srv.URL); r.StatusCode != http.StatusNoContent {
 		t.Fatalf("change hangar: got %d", r.StatusCode)
 	}
 	var runs int
 	_ = store.db.QueryRow(`SELECT COUNT(*) FROM campaign_runs`).Scan(&runs)
-	if run, _, _ := store.Run(ctx, id, "refusalwar"); runs != 1 || run.HangarInstance != "01a12f98-8a21-7d12-b43d-52bb70872376" || run.HangarURL != "https://mekbay.com/?instance=01a12f98-8a21-7d12-b43d-52bb70872376" {
+	if run, _, _ := store.Run(ctx, id, "refusalwar"); runs != 1 || run.SourceURL != other || run.HangarInstance == "" || run.HangarInstance == goodInstance {
 		t.Fatalf("changing the hangar should update the one run: %d runs, %+v", runs, run)
 	}
 }
 
-func TestParseOwnerUID(t *testing.T) {
-	const uid = "e66a3544-8fcf-4dab-955a-f4ea2db0b610"
-	if got, err := parseOwnerUID("  " + strings.ToUpper(uid) + " "); err != nil || got != uid {
-		t.Errorf("parseOwnerUID = %q, %v", got, err)
-	}
-	if got, err := parseOwnerUID(""); err != nil || got != "" {
-		t.Errorf("blank should be allowed, got %q, %v", got, err)
-	}
-	for _, bad := range []string{"nope", uid + "x", "https://mekbay.com/?instance=" + goodInstance} {
-		if _, err := parseOwnerUID(bad); err == nil {
-			t.Errorf("parseOwnerUID(%q) should fail", bad)
-		}
-	}
-}
-
-func TestModifyModeIsOptionalAndPrivate(t *testing.T) {
-	const uid = "e66a3544-8fcf-4dab-955a-f4ea2db0b610"
+func TestPlayersMekBayIDsInTheCompanySettings(t *testing.T) {
 	srv, store := newTestServer(t)
 	ctx := context.Background()
-	res := post(t, srv, "/api/seed", url.Values{"seed": {"wolfpack2026"}}, nil, "")
-	cookie := res.Cookies()[0]
+	cookie := post(t, srv, "/api/seed", url.Values{"seed": {"wolfpack2026"}}, nil, "").Cookies()[0]
 	id := playthroughID("wolfpack2026")
-	setup := func(extra url.Values) int {
-		v := url.Values{"company": {"Wolf's Dragoons"}}
-		for k, vs := range extra {
-			v[k] = vs
+	save := func(kv ...string) int {
+		v := url.Values{"account": {"Wolf's Dragoons"}}
+		for i := 0; i+1 < len(kv); i += 2 {
+			v.Set(kv[i], kv[i+1])
 		}
-		return post(t, srv, "/api/company", v, cookie, srv.URL).StatusCode
+		return post(t, srv, "/api/account", v, cookie, srv.URL).StatusCode
 	}
-
-	// Without a UID the campaign is read-only.
-	if c := setup(nil); c != http.StatusNoContent {
-		t.Fatalf("setup without owner: %d", c)
-	}
-	if pt, _, _ := store.Playthrough(ctx, id); pt.CanModify() {
-		t.Fatal("no UID should mean read-only")
-	}
-	// A malformed UID is refused.
-	if c := setup(url.Values{"owner": {"not-a-uid"}}); c != http.StatusBadRequest {
-		t.Fatalf("bad owner: %d", c)
-	}
-	// A valid UID turns modify mode on, and the page never echoes it back.
-	if c := setup(url.Values{"owner": {uid}}); c != http.StatusNoContent {
-		t.Fatalf("good owner: %d", c)
-	}
-	if pt, _, _ := store.Playthrough(ctx, id); !pt.CanModify() || pt.OwnerUID != uid {
-		t.Fatalf("modify mode not saved: %+v", pt)
-	}
+	// The settings dialog has a field for each of the four players, and none for the OpFor or the hangar, which the site manages.
 	page := body(t, srv, "/", cookie)
-	if strings.Contains(page, uid) || !strings.Contains(page, "Modify mode is on.") {
-		t.Fatal("page should say modify mode is on without revealing the UID")
+	for _, want := range []string{`name="uid_p1"`, `name="uid_p2"`, `name="uid_p3"`, `name="uid_p4"`} {
+		if !strings.Contains(page, want) {
+			t.Errorf("the company form is missing %s", want)
+		}
 	}
-	// Saving again with the field blank keeps it; the checkbox clears it.
-	if c := setup(nil); c != http.StatusNoContent {
-		t.Fatalf("resave: %d", c)
+	if strings.Contains(page, "uid_p5") || strings.Contains(page, "opfor") {
+		t.Error("only the four players have IDs to enter")
 	}
-	if pt, _, _ := store.Playthrough(ctx, id); pt.OwnerUID != uid {
-		t.Fatal("a blank owner field should keep the saved UID")
+	if c := save(); c != http.StatusNoContent {
+		t.Fatalf("a name alone: %d", c)
 	}
-	if c := setup(url.Values{"clear_owner": {"1"}}); c != http.StatusNoContent {
-		t.Fatalf("clear: %d", c)
+	if pt, _, _ := store.Playthrough(ctx, id); pt.PlayerIDs != [maxPlayers]bool{} {
+		t.Fatal("no IDs until some are given")
 	}
-	if pt, _, _ := store.Playthrough(ctx, id); pt.CanModify() {
-		t.Fatal("clear_owner should turn modify mode off")
+	if c := save("uid_p1", "not-a-uid"); c != http.StatusBadRequest {
+		t.Errorf("a malformed ID: %d", c)
+	}
+	if c := save("uid_p1", uidP1, "uid_p2", uidP1); c != http.StatusBadRequest {
+		t.Errorf("two players can't share an ID: %d", c)
+	}
+	if pt, _, _ := store.Playthrough(ctx, id); pt.PlayerIDs != [maxPlayers]bool{} {
+		t.Fatal("a refused request saves nothing, not even the valid half")
+	}
+	if c := save("uid_p1", uidP1, "uid_p2", "  "+strings.ToUpper(uidP2)+" "); c != http.StatusNoContent {
+		t.Fatalf("two IDs: %d", c)
+	}
+	uids, _ := store.PlayerUIDs(ctx, id)
+	if uids != [maxPlayers]string{uidP1, uidP2, "", ""} {
+		t.Fatalf("saved: %+v", uids)
+	}
+	// The page says they are saved but never shows them.
+	page = body(t, srv, "/", cookie)
+	if strings.Contains(page, uidP1) || strings.Contains(page, uidP2) || !strings.Contains(page, "Saved. Leave blank to keep it") || !strings.Contains(page, `name="clear_uid_p1"`) {
+		t.Error("saved IDs are reported, never echoed")
+	}
+	// A blank field keeps what is saved; the Forget box forgets only that player's.
+	if c := save(); c != http.StatusNoContent {
+		t.Fatal(c)
+	}
+	if uids, _ = store.PlayerUIDs(ctx, id); uids[0] != uidP1 || uids[1] != uidP2 {
+		t.Fatalf("a blank field must keep the saved IDs: %+v", uids)
+	}
+	if c := save("clear_uid_p2", "1"); c != http.StatusNoContent {
+		t.Fatal(c)
+	}
+	if uids, _ = store.PlayerUIDs(ctx, id); uids[0] != uidP1 || uids[1] != "" {
+		t.Fatalf("forget: %+v", uids)
 	}
 }
 

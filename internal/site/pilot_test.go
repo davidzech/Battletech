@@ -125,8 +125,8 @@ func TestParsePilotName(t *testing.T) {
 
 func TestRefusalWarStartsWithTwoNamedPilots(t *testing.T) {
 	c, ok := (Library{Root: "../../campaigns"}).Campaign("refusalwar")
-	if !ok || c.StartingNamedPilots != 2 || c.StartingPilotSP != 150 || c.StartingBV != 6000 || c.StartingMinMechs != 4 {
-		t.Fatalf("Refusal War starts with two named pilots (150 SP each) and a 6000 BV force: %+v", c)
+	if !ok || c.StartingNamedPilots != 2 || c.StartingPilotSP != 150 || c.StartingBV != 10000 || c.StartingMinMechs != 5 {
+		t.Fatalf("Refusal War starts with two named pilots (150 SP each) and a 10000 BV force: %+v", c)
 	}
 }
 
@@ -192,7 +192,7 @@ func pilotStore(t *testing.T, s *Store, id string) {
 	// Starting a campaign creates its run and pilots together, and only once.
 	start := []NewPilot{{Name: "Alrek", SP: SPAllocation{Gunnery: 90, EdgeTokens: 60}}, {Name: "Katarina", SP: SPAllocation{Piloting: 100, EdgeTokens: 50}}}
 	hangar := Hangar{URL: goodHangarURL, Instance: goodInstance}
-	if err := s.StartRunWithPilots(ctx, id, "wizard", hangar, start, 4500); err != nil {
+	if err := s.StartRunWithPilots(ctx, id, "wizard", hangar, start, 4500, 1, "Test Force"); err != nil {
 		t.Fatal(err)
 	}
 	if r, ok, _ := s.Run(ctx, id, "wizard"); !ok || r.HangarInstance != goodInstance || r.Warchest != 4500 || r.WarchestText() != "4,500" {
@@ -201,13 +201,13 @@ func pilotStore(t *testing.T, s *Store, id string) {
 	if ps, _ := s.Pilots(ctx, id, "wizard"); len(ps) != 2 || ps[0].Name != "Alrek" || ps[0].SP != start[0].SP || ps[1].SP != start[1].SP || ps[1].Piloting() != 4 {
 		t.Fatalf("starting pilots = %+v", ps)
 	}
-	if err := s.StartRunWithPilots(ctx, id, "wizard", hangar, start, 4500); !errors.Is(err, ErrAlreadyStarted) {
+	if err := s.StartRunWithPilots(ctx, id, "wizard", hangar, start, 4500, 1, "Test Force"); !errors.Is(err, ErrAlreadyStarted) {
 		t.Fatalf("starting twice should be refused, got %v", err)
 	}
 	if ps, _ := s.Pilots(ctx, id, "wizard"); len(ps) != 2 {
 		t.Fatalf("a refused start must not add pilots: %+v", ps)
 	}
-	if err := s.StartRunWithPilots(ctx, "no-such-playthrough", "wizard", hangar, start, 4500); err == nil {
+	if err := s.StartRunWithPilots(ctx, "no-such-playthrough", "wizard", hangar, start, 4500, 1, "Test Force"); err == nil {
 		t.Fatal("a run needs a playthrough")
 	}
 }
@@ -215,7 +215,7 @@ func pilotStore(t *testing.T, s *Store, id string) {
 // startForm is what the start wizard posts: the hangar link plus, for each name, a pilot who allocates all 150 of
 // their starting SP (90 to Gunnery, 60 to Edge tokens).
 func startForm(hangar string, names ...string) url.Values {
-	v := url.Values{"campaign": {"refusalwar"}, "hangar": {hangar}}
+	v := url.Values{"campaign": {"refusalwar"}, "hangar": {hangar}, "players": {"1"}, "force_name": {"Wolf's Dragoons"}}
 	for i, n := range names {
 		p := "pilot" + strconv.Itoa(i) + "_"
 		v.Set(p+"name", n)
@@ -230,7 +230,7 @@ func startedCompany(t *testing.T) (*httptest.Server, *Store, *http.Cookie) {
 	t.Helper()
 	srv, store := newTestServer(t)
 	cookie := post(t, srv, "/api/seed", url.Values{"seed": {"wolfpack2026"}}, nil, "").Cookies()[0]
-	if r := post(t, srv, "/api/company", url.Values{"company": {"Wolf's Dragoons"}}, cookie, srv.URL); r.StatusCode != http.StatusNoContent {
+	if r := post(t, srv, "/api/account", url.Values{"uid_p1": {uidP1}, "account": {"Wolf's Dragoons"}}, cookie, srv.URL); r.StatusCode != http.StatusNoContent {
 		t.Fatalf("company: %d", r.StatusCode)
 	}
 	if r := post(t, srv, "/api/campaign/start", startForm(goodHangar, "Alrek", "Katarina"), cookie, srv.URL); r.StatusCode != http.StatusNoContent {
@@ -258,7 +258,7 @@ func TestNamedPilotsFlow(t *testing.T) {
 	if r := post(t, srv, "/api/pilots", pilots("name", "Alrek"), cookie, srv.URL); r.StatusCode != http.StatusBadRequest {
 		t.Fatalf("no company: %d", r.StatusCode)
 	}
-	post(t, srv, "/api/company", url.Values{"company": {"Wolf's Dragoons"}}, cookie, srv.URL)
+	post(t, srv, "/api/account", url.Values{"uid_p1": {uidP1}, "account": {"Wolf's Dragoons"}}, cookie, srv.URL)
 	if r := post(t, srv, "/api/pilots", pilots("name", "Alrek"), cookie, srv.URL); r.StatusCode != http.StatusBadRequest {
 		t.Fatalf("campaign not started: %d", r.StatusCode)
 	}
@@ -379,7 +379,7 @@ func TestStartWizardSubmission(t *testing.T) {
 	srv, store := newTestServer(t)
 	ctx := context.Background()
 	cookie := post(t, srv, "/api/seed", url.Values{"seed": {"wolfpack2026"}}, nil, "").Cookies()[0]
-	post(t, srv, "/api/company", url.Values{"company": {"Wolf's Dragoons"}}, cookie, srv.URL)
+	post(t, srv, "/api/account", url.Values{"uid_p1": {uidP1}, "account": {"Wolf's Dragoons"}}, cookie, srv.URL)
 	id := playthroughID("wolfpack2026")
 
 	// The wizard page carries what the script needs: the pilot count, the SP budget and the ladders.
@@ -393,7 +393,7 @@ func TestStartWizardSubmission(t *testing.T) {
 		t.Error("an unstarted campaign has no change-hangar dialog")
 	}
 	// The starting rules are a short bulleted list, not one dense sentence.
-	for _, want := range []string{`class="start-rules"`, `<li>Your hangar holds <b>at least 4 mechs</b>, totalling <b>up to 6,000 BV</b> (base BV, whatever the pilots&rsquo; skills).</li>`, `<li>You create <b>2 named pilots</b>, each allocating <b>150 SP</b>.</li>`, `<li>You link this campaign&rsquo;s MekBay hangar`} {
+	for _, want := range []string{`class="start-rules"`, `<li>Your hangar holds <b>at least 5 mechs</b>, totalling <b>up to 10,000 BV</b> (base BV, whatever the pilots&rsquo; skills).</li>`, `<li>You create <b>2 named pilots</b>, each allocating <b>150 SP</b>.</li>`, `<li>You name your force, then link a MekBay force holding the mechs it fields`} {
 		if !strings.Contains(page, want) {
 			t.Errorf("starting rules are missing %s", want)
 		}
@@ -460,7 +460,7 @@ func TestStartWizardSubmission(t *testing.T) {
 		t.Fatalf("a started campaign shows its pilots and the change-link dialog: %.3000s", c)
 	}
 
-	// Submitting the wizard again only changes the hangar link: no duplicate pilots.
+	// Submitting the wizard again only re-imports the hangar: no duplicate pilots.
 	other := "https://mekbay.com/?instance=01a12f98-8a21-7d12-b43d-52bb70872376"
 	if r := post(t, srv, "/api/campaign/start", startForm(other, "Alrek", "Katarina"), cookie, srv.URL); r.StatusCode != http.StatusNoContent {
 		t.Fatalf("second submit: %d", r.StatusCode)
@@ -468,8 +468,8 @@ func TestStartWizardSubmission(t *testing.T) {
 	if ps, _ := store.Pilots(ctx, id, "refusalwar"); len(ps) != 2 {
 		t.Fatalf("a second submit must not duplicate pilots: %+v", ps)
 	}
-	if run, _, _ := store.Run(ctx, id, "refusalwar"); run.HangarInstance != "01a12f98-8a21-7d12-b43d-52bb70872376" {
-		t.Fatalf("the second submit should change the hangar: %+v", run)
+	if run, _, _ := store.Run(ctx, id, "refusalwar"); run.SourceURL != other || run.HangarInstance == "" || run.HangarInstance == goodInstance {
+		t.Fatalf("the second submit should copy the new link into a fresh hangar: %+v", run)
 	}
 }
 
@@ -603,7 +603,7 @@ func TestManageAndOverview(t *testing.T) {
 	}
 	// The manage page holds all of them.
 	man := body(t, srv, "/refusalwar/manage/", cookie)
-	for _, want := range []string{`id="run-dialog"`, `id="delete-dialog"`, `id="sp-dialog"`, `class="button pilot-sp"`, `data-hangar-url="` + goodHangarURL, "Purchase new unit"} {
+	for _, want := range []string{`id="run-dialog"`, `id="delete-dialog"`, `id="sp-dialog"`, `class="button pilot-sp"`, "Purchase new unit"} {
 		if !strings.Contains(man, want) {
 			t.Errorf("manage page is missing %q", want)
 		}

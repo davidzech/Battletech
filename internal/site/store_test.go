@@ -37,36 +37,19 @@ func storeContract(t *testing.T, s *Store) {
 	if created, err := s.EnsurePlaythrough(ctx, id); err != nil || created {
 		t.Fatalf("second ensure: created=%v err=%v", created, err)
 	}
-	if pt, ok, _ := s.Playthrough(ctx, id); !ok || pt.Configured() || pt.CanModify() {
-		t.Fatalf("new playthrough should exist, unnamed and read-only: %+v", pt)
+	if pt, ok, _ := s.Playthrough(ctx, id); !ok || pt.Configured() {
+		t.Fatalf("new playthrough should exist and be unnamed: %+v", pt)
 	}
 
 	// The company name.
-	if err := s.SetCompanyName(ctx, id, "Wolf's Dragoons"); err != nil {
+	if err := s.SetAccountName(ctx, id, "Wolf's Dragoons"); err != nil {
 		t.Fatal(err)
 	}
-	if pt, _, _ := s.Playthrough(ctx, id); !pt.Configured() || pt.CompanyName != "Wolf's Dragoons" {
+	if pt, _, _ := s.Playthrough(ctx, id); !pt.Configured() || pt.AccountName != "Wolf's Dragoons" {
 		t.Fatalf("company not saved: %+v", pt)
 	}
-	if err := s.SetCompanyName(ctx, "no-such-playthrough", "X"); !errors.Is(err, sql.ErrNoRows) {
+	if err := s.SetAccountName(ctx, "no-such-playthrough", "X"); !errors.Is(err, sql.ErrNoRows) {
 		t.Fatalf("naming an unknown playthrough should fail with ErrNoRows, got %v", err)
-	}
-
-	// Modify mode.
-	if err := s.SetOwnerUID(ctx, id, "e66a3544-8fcf-4dab-955a-f4ea2db0b610"); err != nil {
-		t.Fatal(err)
-	}
-	if pt, _, _ := s.Playthrough(ctx, id); !pt.CanModify() {
-		t.Fatal("owner UID not saved")
-	}
-	if err := s.SetOwnerUID(ctx, id, ""); err != nil {
-		t.Fatal(err)
-	}
-	if pt, _, _ := s.Playthrough(ctx, id); pt.CanModify() {
-		t.Fatal("empty UID should turn modify mode off")
-	}
-	if err := s.SetOwnerUID(ctx, "no-such-playthrough", "x"); !errors.Is(err, sql.ErrNoRows) {
-		t.Fatalf("unknown playthrough should fail with ErrNoRows, got %v", err)
 	}
 
 	// Campaign runs: each campaign has its own started state and hangar.
@@ -213,17 +196,11 @@ func migrationContract(t *testing.T, s *Store, withOwner bool) {
 	if err != nil || !ok {
 		t.Fatalf("seed-a lost: ok=%v err=%v", ok, err)
 	}
-	if a.CompanyName != "" || a.Configured() {
+	if a.AccountName != "" || a.Configured() {
 		t.Errorf("companies start blank after migrating: %+v", a)
 	}
-	if withOwner && a.OwnerUID != "e66a3544-8fcf-4dab-955a-f4ea2db0b610" {
-		t.Errorf("the owner UID should survive: %+v", a)
-	}
-	if !withOwner && a.CanModify() {
-		t.Errorf("a database from before modify mode has no owner UID: %+v", a)
-	}
-	if b, ok, _ := s.Playthrough(ctx, "seed-b"); !ok || b.CanModify() {
-		t.Errorf("seed-b = %+v, ok=%v", b, ok)
+	if _, ok, _ := s.Playthrough(ctx, "seed-b"); !ok {
+		t.Error("seed-b should survive")
 	}
 	var created string
 	if err := s.db.QueryRow(s.q(`SELECT CAST(created_at AS TEXT) FROM playthroughs WHERE id = ?`), "seed-a").Scan(&created); err != nil || !strings.HasPrefix(created, "2026-10-12 08:00:00") {
@@ -234,7 +211,7 @@ func migrationContract(t *testing.T, s *Store, withOwner bool) {
 		t.Errorf("old operations should be dropped: %d rows, %v", ops, err)
 	}
 	// The migrated database works like a new one.
-	if err := s.SetCompanyName(ctx, "seed-a", "Wolf's Dragoons"); err != nil {
+	if err := s.SetAccountName(ctx, "seed-a", "Wolf's Dragoons"); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.StartRun(ctx, "seed-a", "refusalwar", Hangar{URL: goodHangarURL, Instance: goodInstance}); err != nil {

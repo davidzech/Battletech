@@ -1,23 +1,27 @@
 {{define "content"}}<p class="kicker">{{.Campaign.Label}}</p>
 <h1 class="bt-title">Manage force</h1>
-<p><a href="/{{.Campaign.Slug}}/">&lsaquo; Back to the campaign</a></p>
+<p><a href="{{if .BackURL}}{{.BackURL}}{{else}}/{{.Campaign.Slug}}/{{end}}">&lsaquo; {{if .BackLabel}}{{.BackLabel}}{{else}}Back to the campaign{{end}}</a></p>
 <dialog id="run-dialog" aria-labelledby="run-title">
   <form id="run-form" autocomplete="off" novalidate>
-    <h2 id="run-title">Change hangar link</h2>
-    <p>Paste the link to this campaign&rsquo;s MekBay hangar, the force holding all of your mechs.</p>
+    <h2 id="run-title">Re-import your hangar</h2>
+    <p>Paste a MekBay hangar link and the site makes a fresh copy of that force and uses it from now on, so everything is repaired, rearmed and uncrewed again. Repairs, purchases and pilot assignments you made so far are not carried over.</p>
     <label for="run-hangar">MekBay hangar link</label>
-    <input id="run-hangar" class="wide" name="hangar" type="url" value="{{.Run.HangarURL}}" placeholder="https://mekbay.com/?instance=&hellip;" spellcheck="false" required>
+    <input id="run-hangar" class="wide" name="hangar" type="url" value="{{.Run.SourceURL}}" placeholder="https://mekbay.com/?instance=&hellip;" spellcheck="false" required>
     <p id="run-error" class="form-error" role="alert"></p>
     <div class="form-actions">
-      <button type="submit" class="button">Save link</button>
+      <button type="submit" class="button">Re-import</button>
       <button type="button" id="run-cancel">Cancel</button>
     </div>
   </form>
 </dialog>
-<section class="warchest" id="warchest">
-<h2 class="section-title">Warchest</h2>
-<div class="hangar-stats"><div class="hangar-stat"><span class="hangar-stat-label">Funds</span><span class="hangar-stat-value">{{.Run.WarchestText}} SP</span></div></div>
-<p class="muted">Finances beyond this balance are TBD.</p>
+<section class="warchest overview" id="overview" data-campaign="{{.Campaign.Slug}}" data-min-players="{{.Campaign.MinPlayers}}" data-max-players="{{.Campaign.MaxPlayers}}" data-player-ids="{{.PlayerIDsJSON}}" data-players="{{.Run.Players}}">
+<h2 class="section-title force-name" id="force-name"><span class="force-name-value" id="force-name-value">{{.Run.ForceLabel}}</span><button type="button" class="force-name-edit" id="force-name-edit" data-name="{{.Run.ForceName}}" title="Rename force" aria-label="Rename force"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button></h2>
+<div class="hangar-stats">
+<div class="hangar-stat"><span class="hangar-stat-label">Funds</span><span class="hangar-stat-value">{{.Run.WarchestText}} SP</span></div>
+<div class="hangar-stat overview-players" id="overview-players"><span class="hangar-stat-label">Default players</span><span class="overview-players-pick" id="overview-players-pick"></span></div>
+</div>
+<p class="muted" id="overview-note">The number of players is where every Deploy starts; you can still change it for a single deploy.</p>
+<p class="form-error" id="overview-error" role="alert"></p>
 </section>
 <section class="pilots" id="pilots" data-campaign="{{.Campaign.Slug}}" data-portraits="{{.Portraits}}" data-ladders="{{.Ladders}}" data-abilities="{{.Abilities}}">
 <h2 class="section-title">Named pilots</h2>
@@ -66,7 +70,7 @@
     <div class="pilot-top">
       <div class="pilot-id">
         <button type="button" class="portrait-btn" id="recruit-portrait" title="Choose a portrait" aria-label="Choose a portrait"><img id="recruit-portrait-img" alt="" width="96" height="96"><span class="portrait-edit">Change</span></button>
-        <div class="pilot-name"><label for="recruit-name">Name</label><input id="recruit-name" type="text" maxlength="30" placeholder="Alrek" spellcheck="false" autocomplete="off"></div>
+        <div class="pilot-name"><label for="recruit-name">Name</label><input id="recruit-name" type="text" maxlength="30" spellcheck="false" autocomplete="off"></div>
       </div>
       <div class="stat-boxes" id="recruit-boxes"></div>
     </div>
@@ -104,10 +108,10 @@
     </div>
   </form>
 </dialog>
-<section class="hangar-units" id="hangar-units" data-campaign="{{.Campaign.Slug}}" data-hangar-url="{{.Run.HangarURL}}" data-can-modify="{{if .Play.CanModify}}1{{end}}" data-warchest="{{.Run.Warchest}}" data-cached="{{.ForceJSON}}">
+<section class="hangar-units" id="hangar-units" data-campaign="{{.Campaign.Slug}}" data-can-modify="{{if .Run.Owned}}1{{end}}" data-warchest="{{.Run.Warchest}}" data-cached="{{.ForceJSON}}">
 <h2 class="section-title">Hangar</h2>
 <div class="hangar-units-summary" id="hangar-units-summary"></div>
-<p class="muted">{{.Play.CompanyName}}&rsquo;s MekBay hangar holds your mechs, and scenarios deploy from it.</p>
+<p class="muted">{{.Run.ForceLabel}}&rsquo;s hangar holds your mechs, and scenarios deploy from it.</p>
 <div class="mech-list" id="hangar-units-list"><p class="muted">Reading your hangar&hellip;</p></div>
 <p class="downloads" id="campaign-run" data-campaign="{{.Campaign.Slug}}"><button type="button" class="button" id="purchase-open">Purchase new unit</button></p>
 </section>
@@ -117,9 +121,10 @@
 <div class="fold-body">
 <p class="muted">Advanced Management corrects pilot records: rename, revive or delete a pilot, reset their SP allocation or Edge abilities, or override their total SP.</p>
 <p class="danger-action"><button type="button" class="button" id="records-open">Advanced Management&hellip;</button></p>
-<p class="muted">Changing the hangar link points this campaign at a different MekBay force. Your pilots and warchest stay as they are, but every unit comes from the new hangar.</p>
-<p class="danger-action"><button type="button" class="button" id="run-open">Change hangar link&hellip;</button></p>
-<p class="muted">Deleting this campaign removes {{.Play.CompanyName}}&rsquo;s progress in it: its named pilots and the link to its hangar. Your company and anything saved in MekBay are not touched.</p>
+<p class="muted">Re-importing replaces this campaign&rsquo;s hangar with a fresh, clean copy of a MekBay force (the one you linked, or another). Your pilots and warchest stay as they are, but every unit comes from the new copy: repairs, purchases and pilot assignments made so far are lost.</p>
+<p class="danger-action"><button type="button" class="button" id="run-open">Re-import hangar&hellip;</button></p>
+<p class="muted hangar-copy">For advanced users: the site&rsquo;s own copy of your hangar is MekBay force <code>{{.Run.HangarInstance}}</code> (<a href="{{.Run.HangarURL}}" target="_blank" rel="noopener noreferrer">open in MekBay</a>). It is owned by the account <code>{{.SiteAccountUID}}</code>, which the site derives from your seed, so MekBay will show it read-only; to change it, change your own force and re-import.</p>
+<p class="muted">Deleting this campaign removes {{.Run.ForceLabel}}&rsquo;s progress in it: its named pilots and the site&rsquo;s copy of its hangar. Your company and anything saved in MekBay are not touched.</p>
 <button type="button" class="button danger" id="delete-open">Delete campaign&hellip;</button>
 </div>
 </details>
@@ -171,6 +176,21 @@
     </div>
   </form>
 </dialog>
+<dialog id="swap-dialog" class="wizard" aria-labelledby="swap-title">
+  <form id="swap-form" autocomplete="off">
+    <h2 id="swap-title">Reconfigure</h2>
+    <label for="swap-select">Variant</label>
+    <select id="swap-select"></select>
+    <div id="swap-sub" class="swap-unit"></div>
+    <dl id="swap-breakdown" class="confirm-items" hidden></dl>
+    <p id="swap-cost" class="repair-cost"></p>
+    <p id="swap-error" class="form-error" role="alert"></p>
+    <div class="form-actions">
+      <button type="submit" class="button" id="swap-apply">Reconfigure</button>
+      <button type="button" id="swap-cancel">Cancel</button>
+    </div>
+  </form>
+</dialog>
 <dialog id="records-dialog" class="wizard" aria-labelledby="records-title">
   <h2 id="records-title">Advanced Management</h2>
   <p class="muted">Every named pilot this campaign has had. Use this to correct a misclick or a mismatch: bring a pilot Killed in Action back, delete a record for good, reset a pilot's SP allocation or their Edge abilities, or override their total SP.</p>
@@ -197,6 +217,8 @@
 <script src="/static/purchase.js" defer></script>
 <script src="/static/portraitpicker.js" defer></script>
 <script src="/static/allocator.js" defer></script>
+<script src="/static/pilotnames.js" defer></script>
+<script src="/static/overview.js" defer></script>
 <script src="/static/campaign.js" defer></script>
 <script src="/static/abilitycard.js" defer></script>
 <script src="/static/pilots.js" defer></script>

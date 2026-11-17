@@ -79,6 +79,11 @@ type hangarUnitView struct {
 	RearmCost    int            `json:"rearmCost"`
 	// AmmoBreakdown says what a rearm would refill: tons of each ammo type and the shots used out of the shots those tons hold.
 	AmmoBreakdown []ammoLine `json:"ammoBreakdown"`
+	// SellValue is the SP the unit sells for (see sell.go), and SellFull whether that is the full price, which only a fully repaired and rearmed unit gets.
+	SellValue int  `json:"sellValue"`
+	SellFull  bool `json:"sellFull"`
+	// SwapOptions are the other variants an omnimech can be reconfigured to, with their prices (see swap.go); empty for any other unit.
+	SwapOptions []swapOption `json:"swapOptions,omitempty"`
 }
 
 var chassisNames = regexp.MustCompile(`^(.*?)\s*\((.+)\)$`)
@@ -139,6 +144,9 @@ func hangarViews(h HangarForce) []hangarUnitView {
 		if u, ok := unitByName(hu.Unit); ok && u.Type == "Mek" {
 			v.RepairLevels, v.RepairCosts, v.RearmCost = repairOptions(hu, c, u.Tons), repairCosts(u.Tons, u.TechBase), rearmCost(hu.AmmoBins)
 			v.AmmoBreakdown = ammoBreakdown(hu, u)
+			v.SellFull = unitPristine(hu)
+			v.SellValue = sellValue(u.BV, v.SellFull)
+			v.SwapOptions = swapOptions(u)
 		}
 		views = append(views, v)
 	}
@@ -203,7 +211,7 @@ func (s *Server) mekbayRequest(w http.ResponseWriter, r *http.Request) (pt Playt
 		return
 	}
 	if !found || !pt.Configured() {
-		http.Error(w, "Name your company first.", http.StatusBadRequest)
+		http.Error(w, "Name your account first.", http.StatusBadRequest)
 		return
 	}
 	run, started, err := s.store.Run(r.Context(), pt.ID, c.Slug)
@@ -224,7 +232,7 @@ func (s *Server) hangarJSON(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	h, err := s.mekbay.ReadHangar(r.Context(), run.HangarInstance)
+	h, err := s.scenarioHangar(r.Context(), run, sc)
 	if err != nil {
 		log.Printf("read hangar for %s: %v", sc.ID, err)
 		http.Error(w, err.Error(), http.StatusBadGateway)
@@ -235,8 +243,11 @@ func (s *Server) hangarJSON(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not load operation", http.StatusInternalServerError)
 		return
 	}
-	s.cacheHangar(r.Context(), pt.ID, c.Slug, run.HangarInstance, h)
-	out := deployData(h, sc.BVLimit, pt.CanModify(), hasOp)
+	if !sc.provides() { // the scenario's own mechs are not the hangar, so they are never cached as it
+		s.cacheHangar(r.Context(), pt.ID, c.Slug, run.HangarInstance, h)
+	}
+	out := deployData(h, sc.BVLimit, run.Owned(), hasOp)
+	out["provided"] = sc.provides()
 	if hasOp {
 		out["url"] = OperationURL(op.OperationID)
 	}
@@ -262,12 +273,12 @@ func (s *Server) deploy(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if !pt.CanModify() {
-		http.Error(w, "Add your MekBay user ID in the campaign details to let the site deploy for you.", http.StatusForbidden)
+	if !run.Owned() {
+		http.Error(w, notOwnedMessage, http.StatusConflict)
 		return
 	}
 	ids := r.PostForm["units"]
-	h, err := s.mekbay.ReadHangar(r.Context(), run.HangarInstance)
+	h, err := s.scenarioHangar(r.Context(), run, sc)
 	if err != nil {
 		log.Printf("read hangar for %s: %v", sc.ID, err)
 		http.Error(w, err.Error(), http.StatusBadGateway)
@@ -287,6 +298,10 @@ func (s *Server) deploy(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	if msg := sc.rulesProblem([][]string{ids}, [][]CrewAssignment{crew}); msg != "" {
+		http.Error(w, msg, http.StatusBadRequest)
+		return
+	}
 	existing, has, err := s.store.MekBayOperation(r.Context(), pt.ID, c.Slug, sc.ID)
 	if err != nil {
 		http.Error(w, "could not load operation", http.StatusInternalServerError)
@@ -299,7 +314,7 @@ func (s *Server) deploy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	res, err := s.mekbay.SyncOperation(r.Context(), OperationRequest{
-		OwnerUID:         pt.OwnerUID,
+		OwnerUID:         accountUID(currentSeed(r), SlotHangar),
 		CampaignInstance: run.HangarInstance,
 		DeployedUnitIDs:  ids,
 		Crew:             crew,
