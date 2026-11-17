@@ -56,6 +56,10 @@ func TestSellUnitEndpoint(t *testing.T) {
 	if r := post(t, srv, "/api/campaign/start", startForm(goodHangar, "Alrek", "Katarina"), cookie, srv.URL); r.StatusCode != http.StatusNoContent {
 		t.Fatalf("start: %d", r.StatusCode)
 	}
+	// These tests are about prices, not the campaign's starting funds: give them a round balance.
+	if _, err := store.db.Exec(`UPDATE campaign_runs SET warchest = 4500`); err != nil {
+		t.Fatal(err)
+	}
 	id := playthroughID("wolfpack2026")
 	// ua is untouched, ub has spent ammo, uc is truly destroyed (center torso gone), ud is unknown to the catalog.
 	h := hangarOf("BMMadCat_H", "BMDasher_Prime", "BMKoshi_E")

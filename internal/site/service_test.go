@@ -152,6 +152,10 @@ func TestServiceUnitEndpoint(t *testing.T) {
 	if r := post(t, srv, "/api/campaign/start", startForm(goodHangar, "Alrek", "Katarina"), cookie, srv.URL); r.StatusCode != http.StatusNoContent {
 		t.Fatalf("start: %d", r.StatusCode)
 	}
+	// These tests are about prices, not the campaign's starting funds: give them a round balance.
+	if _, err := store.db.Exec(`UPDATE campaign_runs SET warchest = 4500`); err != nil {
+		t.Fatal(err)
+	}
 	id := playthroughID("wolfpack2026")
 	// Dasher (20t Clan) is crippled with spent ammo; Koshi is truly destroyed; the Grizzly is undamaged.
 	h := hangarOf("BMDasher_Prime", "BMKoshi_E", "BMGrizzly", "BMUller_J")

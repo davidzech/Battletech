@@ -82,7 +82,7 @@ func TestHangarCachePullThrough(t *testing.T) {
 	// overview shows the units with no loading state.
 	over := body(t, srv, "/refusalwar/", cookie)
 	attr := cachedAttr(over)
-	if attr == "" || attr == "MISSING" || !strings.Contains(attr, "Mist Lynx") || !strings.Contains(attr, "&#34;bv&#34;:5645") || !strings.Contains(attr, "cachedAt") {
+	if attr == "" || attr == "MISSING" || !strings.Contains(attr, "Mist Lynx") || !strings.Contains(attr, "&#34;bv&#34;:8299") || !strings.Contains(attr, "cachedAt") {
 		t.Fatalf("the first overview should carry the cached hangar: %.300s", attr)
 	}
 	// It is valid JSON for the overview script once unescaped, with the same shape the live endpoint answers with.
@@ -92,7 +92,7 @@ func TestHangarCachePullThrough(t *testing.T) {
 		BV    int
 	}
 	unescaped := strings.NewReplacer("&#34;", `"`, "&amp;", "&", "&lt;", "<", "&gt;", ">", "&#39;", "'").Replace(attr)
-	if err := json.Unmarshal([]byte(unescaped), &cached); err != nil || len(cached.Units) != 4 || cached.BV != 5645 {
+	if err := json.Unmarshal([]byte(unescaped), &cached); err != nil || len(cached.Units) != 5 || cached.BV != 8299 {
 		t.Fatalf("cached payload: %+v %v", cached, err)
 	}
 
