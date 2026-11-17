@@ -60,7 +60,7 @@ func TestPurchaseEndpoint(t *testing.T) {
 	srv, store := newMekBayTestServer(t, fake)
 	ctx := context.Background()
 	cookie := post(t, srv, "/api/seed", url.Values{"seed": {"wolfpack2026"}}, nil, "").Cookies()[0]
-	post(t, srv, "/api/company", url.Values{"company": {"Wolf Pack"}}, cookie, srv.URL)
+	post(t, srv, "/api/company", url.Values{"uid_p1": {uidP1}, "company": {"Wolf Pack"}}, cookie, srv.URL)
 	if r := post(t, srv, "/api/campaign/start", startForm(goodHangar, "Alrek", "Katarina"), cookie, srv.URL); r.StatusCode != http.StatusNoContent {
 		t.Fatalf("start: %d", r.StatusCode)
 	}
@@ -88,7 +88,7 @@ func TestPurchaseEndpoint(t *testing.T) {
 	if got := buy("BMMadCat_H", "BMKoshi_E"); got != http.StatusOK || funds() != 4500-want {
 		t.Fatalf("buy: %d, funds %d (want %d)", got, funds(), 4500-want)
 	}
-	if len(fake.purchases) != 1 || strings.Join(fake.purchases[0].Units, ",") != "BMMadCat_H,BMKoshi_E" || fake.purchases[0].OwnerUID != MekBayUID("wolfpack2026", SlotPlayer1) || fake.purchases[0].Instance == goodInstance || fake.purchases[0].Instance == "" {
+	if len(fake.purchases) != 1 || strings.Join(fake.purchases[0].Units, ",") != "BMMadCat_H,BMKoshi_E" || fake.purchases[0].OwnerUID != MekBayUID("wolfpack2026", SlotHangar) || fake.purchases[0].Instance == goodInstance || fake.purchases[0].Instance == "" {
 		t.Errorf("MekBay was asked: %+v", fake.purchases)
 	}
 	// Refused: nothing chosen, an unknown unit, and too little in the warchest. Nothing is charged.

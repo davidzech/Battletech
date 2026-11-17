@@ -52,7 +52,7 @@ func TestSellUnitEndpoint(t *testing.T) {
 	srv, store := newMekBayTestServer(t, fake)
 	ctx := context.Background()
 	cookie := post(t, srv, "/api/seed", url.Values{"seed": {"wolfpack2026"}}, nil, "").Cookies()[0]
-	post(t, srv, "/api/company", url.Values{"company": {"Wolf Pack"}}, cookie, srv.URL)
+	post(t, srv, "/api/company", url.Values{"uid_p1": {uidP1}, "company": {"Wolf Pack"}}, cookie, srv.URL)
 	if r := post(t, srv, "/api/campaign/start", startForm(goodHangar, "Alrek", "Katarina"), cookie, srv.URL); r.StatusCode != http.StatusNoContent {
 		t.Fatalf("start: %d", r.StatusCode)
 	}
@@ -86,7 +86,7 @@ func TestSellUnitEndpoint(t *testing.T) {
 	if got := sell("ua"); got != http.StatusOK || funds() != 4500+madCat.BV/2 {
 		t.Fatalf("sell pristine: %d, funds %d (want %d)", got, funds(), 4500+madCat.BV/2)
 	}
-	if len(fake.sales) != 1 || fake.sales[0].UnitID != "ua" || fake.sales[0].OwnerUID != MekBayUID("wolfpack2026", SlotPlayer1) || fake.sales[0].Instance == goodInstance {
+	if len(fake.sales) != 1 || fake.sales[0].UnitID != "ua" || fake.sales[0].OwnerUID != MekBayUID("wolfpack2026", SlotHangar) || fake.sales[0].Instance == goodInstance {
 		t.Errorf("MekBay was asked: %+v", fake.sales)
 	}
 	// Worn units sell for a quarter: spent ammunition, and a truly destroyed mech.

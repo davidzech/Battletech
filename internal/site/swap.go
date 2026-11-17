@@ -209,7 +209,7 @@ func (s *Server) swapUnit(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not charge the warchest", http.StatusInternalServerError)
 		return
 	}
-	if err := s.mekbay.SwapUnit(r.Context(), SwapRequest{OwnerUID: accountUID(currentSeed(r), SlotPlayer1), Instance: run.HangarInstance, UnitID: hu.ID, To: to}); err != nil {
+	if err := s.mekbay.SwapUnit(r.Context(), SwapRequest{OwnerUID: accountUID(currentSeed(r), SlotHangar), Instance: run.HangarInstance, UnitID: hu.ID, To: to}); err != nil {
 		log.Printf("swap a unit in MekBay: %v", err) // never log the owner UID
 		if rerr := s.store.RefundWarchest(r.Context(), pt.ID, c.Slug, cost); rerr != nil {
 			log.Printf("could not refund %d SP: %v", cost, rerr)

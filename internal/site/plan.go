@@ -54,6 +54,8 @@ type planResult struct {
 	TotalBV  int          `json:"totalBV"`
 	Limit    int          `json:"limit"`
 	Deployed bool         `json:"deployed"` // always false for now: nothing was sent to MekBay
+	// Lobby says who will own each force of the multiplayer lobby operation (a player's own MekBay account, or the site's for the OpFor), never the accounts themselves.
+	Lobby []lobbyForceView `json:"lobby"`
 }
 
 // planProblem checks a whole plan against the hangar and returns the first problem as a sentence, or "". units[i] is player i+1's mech IDs.
@@ -96,6 +98,11 @@ func (s *Server) deployPlan(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, msg, http.StatusBadRequest)
 		return
 	}
+	// Every player takes their own force into the lobby, owned by their own MekBay account, so each needs a user ID saved.
+	if msg := playerIDsProblem(pt.PlayerIDs, n); msg != "" {
+		http.Error(w, msg, http.StatusBadRequest)
+		return
+	}
 	h, err := s.mekbay.ReadHangar(r.Context(), run.HangarInstance)
 	if err != nil {
 		log.Printf("read hangar for the plan: %v", err)
@@ -119,8 +126,9 @@ func (s *Server) deployPlan(w http.ResponseWriter, r *http.Request) {
 	for _, v := range hangarViews(h) {
 		views[v.ID] = v
 	}
-	res := planResult{Players: []planPlayer{}, Limit: sc.BVLimit}
+	res := planResult{Players: []planPlayer{}, Limit: sc.BVLimit, Lobby: []lobbyForceView{}}
 	pilotUsed := map[string]int{}
+	crews := make([][]CrewAssignment, n)
 	for i := 0; i < n; i++ {
 		num := i + 1
 		pre := "p" + strconv.Itoa(num) + "_"
@@ -152,9 +160,22 @@ func (s *Server) deployPlan(w http.ResponseWriter, r *http.Request) {
 			pilotUsed[strings.ToLower(a.Name)] = num
 			pp.Crew = append(pp.Crew, planCrew{Unit: a.UnitID, UnitName: views[a.UnitID].Name, Pilot: a.Name, Gunnery: a.Gunnery, Piloting: a.Piloting})
 		}
+		crews[i] = crew
 		res.Players = append(res.Players, pp)
 		res.TotalBV += pp.BV
 	}
+	// Build the lobby's plan (who owns each force) now, so a plan the real deploy couldn't carry out is refused here.
+	uids, err := s.store.PlayerUIDs(r.Context(), pt.ID)
+	if err != nil {
+		http.Error(w, "could not load your MekBay user IDs", http.StatusInternalServerError)
+		return
+	}
+	lobby, err := buildLobbyPlan(currentSeed(r), uids, units, crews)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	res.Lobby = lobby.View()
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	_ = json.NewEncoder(w).Encode(res)

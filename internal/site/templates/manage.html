@@ -1,6 +1,6 @@
 {{define "content"}}<p class="kicker">{{.Campaign.Label}}</p>
 <h1 class="bt-title">Manage force</h1>
-<p><a href="/{{.Campaign.Slug}}/">&lsaquo; Back to the campaign</a></p>
+<p><a href="{{if .BackURL}}{{.BackURL}}{{else}}/{{.Campaign.Slug}}/{{end}}">&lsaquo; {{if .BackLabel}}{{.BackLabel}}{{else}}Back to the campaign{{end}}</a></p>
 <dialog id="run-dialog" aria-labelledby="run-title">
   <form id="run-form" autocomplete="off" novalidate>
     <h2 id="run-title">Re-import your hangar</h2>
@@ -14,10 +14,14 @@
     </div>
   </form>
 </dialog>
-<section class="warchest" id="warchest">
-<h2 class="section-title">Warchest</h2>
-<div class="hangar-stats"><div class="hangar-stat"><span class="hangar-stat-label">Funds</span><span class="hangar-stat-value">{{.Run.WarchestText}} SP</span></div></div>
-<p class="muted">Finances beyond this balance are TBD.</p>
+<section class="warchest overview" id="overview" data-campaign="{{.Campaign.Slug}}" data-min-players="{{.Campaign.MinPlayers}}" data-max-players="{{.Campaign.MaxPlayers}}" data-player-ids="{{.PlayerIDsJSON}}" data-players="{{.Run.Players}}">
+<h2 class="section-title">Overview</h2>
+<div class="hangar-stats">
+<div class="hangar-stat"><span class="hangar-stat-label">Funds</span><span class="hangar-stat-value">{{.Run.WarchestText}} SP</span></div>
+<div class="hangar-stat overview-players" id="overview-players"><span class="hangar-stat-label">Default players</span><span class="overview-players-pick" id="overview-players-pick"></span></div>
+</div>
+<p class="muted" id="overview-note">The number of players is where every Deploy starts; you can still change it for a single deploy.</p>
+<p class="form-error" id="overview-error" role="alert"></p>
 </section>
 <section class="pilots" id="pilots" data-campaign="{{.Campaign.Slug}}" data-portraits="{{.Portraits}}" data-ladders="{{.Ladders}}" data-abilities="{{.Abilities}}">
 <h2 class="section-title">Named pilots</h2>
@@ -214,6 +218,7 @@
 <script src="/static/portraitpicker.js" defer></script>
 <script src="/static/allocator.js" defer></script>
 <script src="/static/pilotnames.js" defer></script>
+<script src="/static/overview.js" defer></script>
 <script src="/static/campaign.js" defer></script>
 <script src="/static/abilitycard.js" defer></script>
 <script src="/static/pilots.js" defer></script>

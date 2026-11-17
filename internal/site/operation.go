@@ -307,7 +307,7 @@ func (s *Server) deploy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	res, err := s.mekbay.SyncOperation(r.Context(), OperationRequest{
-		OwnerUID:         accountUID(currentSeed(r), SlotPlayer1),
+		OwnerUID:         accountUID(currentSeed(r), SlotHangar),
 		CampaignInstance: run.HangarInstance,
 		DeployedUnitIDs:  ids,
 		Crew:             crew,

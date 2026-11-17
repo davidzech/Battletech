@@ -42,19 +42,21 @@ type Crumb struct {
 
 // Page is the data every template receives.
 type Page struct {
-	Title      string
-	Crumbs     []Crumb
-	Campaign   *Campaign
-	Scenario   *Scenario
-	Next       *Scenario
-	Cards      []Card
-	Images     []string    // URLs of the scenario's images
-	Seed       string      // the visitor's seed ("" if none chosen yet)
-	Play       Playthrough // the visitor's playthrough (zero value if no seed)
-	Run        CampaignRun // the playthrough's run of this page's campaign (zero value until it is started)
-	Pilots     []PilotView // the run's named pilots
-	CanRecruit bool        // the command has room for another living named pilot
-	MaxPilots  int         // most living named pilots a command may have
+	Title string
+	// BackURL and BackLabel, when set, replace the Manage page's "Back to the campaign" link (it returns to the sortie the player came from).
+	BackURL, BackLabel string
+	Crumbs             []Crumb
+	Campaign           *Campaign
+	Scenario           *Scenario
+	Next               *Scenario
+	Cards              []Card
+	Images             []string    // URLs of the scenario's images
+	Seed               string      // the visitor's seed ("" if none chosen yet)
+	Play               Playthrough // the visitor's playthrough (zero value if no seed)
+	Run                CampaignRun // the playthrough's run of this page's campaign (zero value until it is started)
+	Pilots             []PilotView // the run's named pilots
+	CanRecruit         bool        // the command has room for another living named pilot
+	MaxPilots          int         // most living named pilots a command may have
 	// CachedHangar is the hangar last read from MekBay for this run (nil if none yet), and CachedAt when; the campaign and scenario
 	// pages embed it so they can paint the hangar before the live read finishes (see hangarcache.go).
 	CachedHangar *HangarForce
@@ -119,6 +121,7 @@ func NewHandler(contentRoot string, store *Store, opts ...Option) http.Handler {
 	mux.HandleFunc("POST /api/pilots/abilities/reset", s.resetEdgeAbilities)
 	mux.HandleFunc("POST /api/pilots/total", s.setPilotTotal)
 	mux.HandleFunc("POST /api/warchest", s.setWarchest)
+	mux.HandleFunc("POST /api/campaign/players", s.setPlayers)
 	mux.HandleFunc("POST /api/hangar/service", s.serviceUnit)
 	mux.HandleFunc("POST /api/hangar/purchase", s.purchaseUnits)
 	mux.HandleFunc("POST /api/hangar/sell", s.sellUnit)

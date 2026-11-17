@@ -120,7 +120,7 @@ func (s *Server) sellUnit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	value := sellValue(cat.BV, unitPristine(hu))
-	if err := s.mekbay.SellUnit(r.Context(), SellRequest{OwnerUID: accountUID(currentSeed(r), SlotPlayer1), Instance: run.HangarInstance, UnitID: hu.ID}); err != nil {
+	if err := s.mekbay.SellUnit(r.Context(), SellRequest{OwnerUID: accountUID(currentSeed(r), SlotHangar), Instance: run.HangarInstance, UnitID: hu.ID}); err != nil {
 		log.Printf("sell a unit in MekBay: %v", err) // never log the owner UID
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return

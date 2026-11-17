@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 )
@@ -77,7 +79,7 @@ func parseCompanyName(raw string) (string, error) {
 	return name, nil
 }
 
-// setCompany saves the company's name for the visitor's playthrough.
+// setCompany saves the company's name and the players' optional MekBay user IDs for the visitor's playthrough.
 func (s *Server) setCompany(w http.ResponseWriter, r *http.Request) {
 	if !sameOrigin(r) {
 		http.Error(w, "cross-origin request refused", http.StatusForbidden)
@@ -98,6 +100,25 @@ func (s *Server) setCompany(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	// Each player's MekBay user ID is optional here: a UUID saves it, a blank field keeps what is saved, and a ticked Forget box forgets it. Every field is checked
+	// before any is saved, and two players can't share an ID (each holds their own force in the lobby).
+	var uids [maxPlayers]string
+	var clear [maxPlayers]bool
+	for i := 0; i < maxPlayers; i++ {
+		uid, err := parsePlayerUID(r.PostFormValue(fmt.Sprintf("uid_p%d", i+1)))
+		if err != nil {
+			http.Error(w, playerLabel(i)+": "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		uids[i] = uid
+		clear[i] = r.PostFormValue(fmt.Sprintf("clear_uid_p%d", i+1)) != ""
+		for j := 0; j < i; j++ {
+			if uid != "" && uid == uids[j] {
+				http.Error(w, playerLabel(j)+" and "+playerLabel(i)+" can't share a MekBay user ID.", http.StatusBadRequest)
+				return
+			}
+		}
+	}
 	id := playthroughID(seed)
 	if _, err := s.store.EnsurePlaythrough(r.Context(), id); err != nil {
 		http.Error(w, "could not save company", http.StatusInternalServerError)
@@ -106,6 +127,14 @@ func (s *Server) setCompany(w http.ResponseWriter, r *http.Request) {
 	if err := s.store.SetCompanyName(r.Context(), id, name); err != nil {
 		http.Error(w, "could not save company", http.StatusInternalServerError)
 		return
+	}
+	for i := 0; i < maxPlayers; i++ {
+		if uids[i] != "" || clear[i] {
+			if err := s.store.SetPlayerAccount(r.Context(), id, i, uids[i]); err != nil {
+				http.Error(w, "could not save company", http.StatusInternalServerError)
+				return
+			}
+		}
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -172,6 +201,11 @@ func (s *Server) startCampaign(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	players, err := parseStartingPlayers(r.PostFormValue("players"), c, pt.PlayerIDs)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	// The hangar must meet the campaign's starting conditions (enough mechs, within the starting BV).
 	if c.StartingBV > 0 || c.StartingMinMechs > 0 {
 		h, err := s.mekbay.ReadHangar(r.Context(), source.Instance)
@@ -191,7 +225,7 @@ func (s *Server) startCampaign(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
-	if err := s.store.StartRunWithPilots(r.Context(), id, c.Slug, hangar, pilots, c.StartingWarchest); errors.Is(err, ErrAlreadyStarted) {
+	if err := s.store.StartRunWithPilots(r.Context(), id, c.Slug, hangar, pilots, c.StartingWarchest, players); errors.Is(err, ErrAlreadyStarted) {
 		http.Error(w, "This campaign has already been started.", http.StatusConflict)
 		return
 	} else if err != nil {
@@ -202,11 +236,30 @@ func (s *Server) startCampaign(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// parseStartingPlayers reads how many players the company plays the campaign with: a whole number within the campaign's range (a campaign that allows only one
+// count needs none sent), and every one of those players must have a MekBay user ID saved. The count is only the Deploy wizard's default, which can be changed
+// for each deploy.
+func parseStartingPlayers(raw string, c *Campaign, saved [maxPlayers]bool) (int, error) {
+	lo, hi := playerRange(c)
+	n := lo
+	if lo != hi {
+		var err error
+		if n, err = strconv.Atoi(strings.TrimSpace(raw)); err != nil || n < lo || n > hi {
+			return 0, fmt.Errorf("Choose how many players, from %d to %d.", lo, hi)
+		}
+	}
+	// Every player takes their own force into the lobby, owned by their own MekBay account, so each needs a user ID saved first.
+	if msg := playerIDsProblem(saved, n); msg != "" {
+		return 0, errors.New(msg)
+	}
+	return n, nil
+}
+
 // cloneHangar copies the force the player linked into a new, clean force owned by the seed's own MekBay account, and returns the run's hangar: the copy's
 // link and instance, with the player's link kept as its source.
 func (s *Server) cloneHangar(ctx context.Context, seed string, source Hangar) (Hangar, HangarForce, error) {
 	target := newID()
-	got, err := s.mekbay.CloneHangar(ctx, CloneRequest{OwnerUID: accountUID(seed, SlotPlayer1), Source: source.Instance, Target: target})
+	got, err := s.mekbay.CloneHangar(ctx, CloneRequest{OwnerUID: accountUID(seed, SlotHangar), Source: source.Instance, Target: target})
 	if err != nil {
 		return Hangar{}, HangarForce{}, err
 	}

@@ -379,7 +379,7 @@ func (s *Server) serviceUnit(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not charge the warchest", http.StatusInternalServerError)
 		return
 	}
-	if err := s.mekbay.ServiceUnit(r.Context(), ServiceRequest{OwnerUID: accountUID(currentSeed(r), SlotPlayer1), Instance: run.HangarInstance, UnitID: hu.ID, Kind: kind, Level: level, Tons: cat.Tons}); err != nil {
+	if err := s.mekbay.ServiceUnit(r.Context(), ServiceRequest{OwnerUID: accountUID(currentSeed(r), SlotHangar), Instance: run.HangarInstance, UnitID: hu.ID, Kind: kind, Level: level, Tons: cat.Tons}); err != nil {
 		log.Printf("%s a unit in MekBay: %v", kind, err) // never log the owner UID
 		if rerr := s.store.RefundWarchest(r.Context(), pt.ID, c.Slug, cost); rerr != nil {
 			log.Printf("could not refund %d SP: %v", cost, rerr)

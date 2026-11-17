@@ -97,7 +97,19 @@
   var budget = parseInt(wiz.dataset.sp, 10) || 0;
   var STEP = 10; // the sliders and the number boxes' arrows both move this many SP at a time
   var pilotCount = parseInt(wiz.dataset.pilots, 10) || 0;
-  var total = pilotCount + 1; // a step per pilot, then the hangar link
+  // When the campaign allows a range of players, the first step asks how many will play (the Deploy wizard's picker); that is only the default count each Deploy
+  // starts with. Then a step per pilot, then the hangar link.
+  var maxPlayers = Math.min(4, Math.max(1, parseInt(wiz.dataset.maxPlayers, 10) || 1));
+  var minPlayers = Math.min(maxPlayers, Math.max(1, parseInt(wiz.dataset.minPlayers, 10) || 1));
+  var asksPlayers = minPlayers < maxPlayers;
+  var lead = asksPlayers ? 1 : 0; // steps before the pilots
+  var players = minPlayers;
+  var total = lead + pilotCount + 1;
+  // Every player takes their own force into the lobby, owned by their own MekBay account, so starting with N players needs Players 1 to N's user IDs saved in the
+  // company settings. The page only knows which are saved (booleans), never the IDs.
+  var playerIds = [];
+  try { playerIds = JSON.parse(wiz.dataset.playerIds || '[]'); } catch (e) { playerIds = []; }
+  function missingId(n) { for (var i = 0; i < n; i++) if (!playerIds[i]) return i + 1; return 0; }
 
   var title = document.getElementById('wiz-title');
   var body = document.getElementById('wiz-body');
@@ -141,6 +153,29 @@
     return SPAllocator.row(p, l, { ladders: ladders, budget: budget, step: STEP, refresh: refresh, onEdit: function () { error.textContent = ''; } });
   }
   function statBox(l) { return SPAllocator.statBox(l); }
+
+  function renderPlayersStep() {
+    title.textContent = 'How many players?';
+    body.textContent = '';
+    body.appendChild(el('p', 'muted', 'This campaign can be played by ' + minPlayers + ' to ' + maxPlayers + ' players sharing one company. The number you choose is what every Deploy starts with; you can still change it for a single deploy.'));
+    var pick = el('div', 'deploy-players-pick');
+    for (var n = minPlayers; n <= maxPlayers; n++) {
+      (function (n) {
+        var b = el('button', 'deploy-count', String(n));
+        b.type = 'button';
+        b.setAttribute('aria-pressed', n === players ? 'true' : 'false');
+        b.setAttribute('aria-label', n + (n === 1 ? ' player' : ' players'));
+        if (missingId(n)) { b.disabled = true; b.title = 'Player ' + missingId(n) + ' needs a MekBay user ID: add it under Company details.'; }
+        b.addEventListener('click', function () {
+          players = n;
+          [].forEach.call(pick.children, function (c, i) { c.setAttribute('aria-pressed', minPlayers + i === players ? 'true' : 'false'); });
+        });
+        pick.appendChild(b);
+      })(n);
+    }
+    body.appendChild(pick);
+    if (missingId(maxPlayers)) body.appendChild(el('p', 'muted', 'A count is offered only when each of those players has a MekBay user ID saved. Add the rest under Company details (the company button, top right).'));
+  }
 
   function renderPilot(idx) {
     var p = pilots[idx];
@@ -479,7 +514,7 @@
 
   function render() {
     error.textContent = '';
-    if (step < pilotCount) renderPilot(step); else renderHangar();
+    if (asksPlayers && step === 0) renderPlayersStep(); else if (step - lead < pilotCount) renderPilot(step - lead); else renderHangar();
     count.textContent = 'Step ' + (step + 1) + ' of ' + total;
     bar.style.width = ((step + 1) / total * 100) + '%';
     progress.setAttribute('aria-valuemax', total);
@@ -496,14 +531,17 @@
     next.disabled = busy || missing !== '';
     // Once the hangar has been read, the status box right above already spells out what is wrong, so the hint stays
     // quiet there (the reason is still the button's tooltip).
-    var spelledOut = step >= pilotCount && check.link === hangar.trim() && (check.state === 'done' || check.state === 'error');
+    var spelledOut = step >= lead + pilotCount && check.link === hangar.trim() && (check.state === 'done' || check.state === 'error');
     hint.textContent = busy || spelledOut ? '' : missing;
     if (missing) next.title = missing; else next.removeAttribute('title');
   }
 
   // The problem with the current step, or ''.
   function problem() {
-    if (step >= pilotCount) {
+    var gap = missingId(players);
+    if (gap) return 'Player ' + gap + ' needs a MekBay user ID: add it under Company details.';
+    if (asksPlayers && step === 0) return '';
+    if (step >= lead + pilotCount) {
       var bad = hangarProblem(hangar);
       if (bad) return bad;
       if (check.link !== hangar.trim() || check.state === 'checking' || check.state === 'idle') return 'Checking your hangar\u2026';
@@ -511,9 +549,9 @@
       if (!check.result.ok) return check.result.problems[0];
       return '';
     }
-    var p = pilots[step], name = p.name.trim();
+    var p = pilots[step - lead], name = p.name.trim();
     if (!name) return 'Name your pilot.';
-    var clash = pilots.some(function (o, j) { return j !== step && o.name.trim().toLowerCase() === name.toLowerCase(); });
+    var clash = pilots.some(function (o, j) { return j !== step - lead && o.name.trim().toLowerCase() === name.toLowerCase(); });
     if (clash) return 'Two of your pilots can’t share a name.';
     var left = budget - spentOf(p);
     if (left !== 0) return 'Allocate all ' + budget + ' SP before moving on (' + left + ' left).';
@@ -523,7 +561,7 @@
   }
 
   function submit() {
-    var parts = ['campaign=' + encodeURIComponent(wiz.dataset.campaign), 'hangar=' + encodeURIComponent(canonicalHangar(hangar) || hangar.trim())];
+    var parts = ['campaign=' + encodeURIComponent(wiz.dataset.campaign), 'players=' + players, 'hangar=' + encodeURIComponent(canonicalHangar(hangar) || hangar.trim())];
     pilots.forEach(function (p, idx) {
       parts.push('pilot' + idx + '_name=' + encodeURIComponent(p.name.trim()));
       if (p.portrait) parts.push('pilot' + idx + '_portrait=' + encodeURIComponent(p.portrait));
@@ -551,7 +589,7 @@
   wizOpen.addEventListener('click', function () { step = 0; wiz.showModal(); render(); });
   function comingBack() {
     var failing = check.state === 'error' || (check.state === 'done' && !check.result.ok && !check.refreshing);
-    if (wiz.hasAttribute('open') && step >= pilotCount && failing) forceCheck();
+    if (wiz.hasAttribute('open') && step >= lead + pilotCount && failing) forceCheck();
   }
   window.addEventListener('focus', comingBack);
   document.addEventListener('visibilitychange', function () { if (!document.hidden) comingBack(); });

@@ -83,7 +83,7 @@ func TestSwapUnitEndpoint(t *testing.T) {
 	srv, store := newMekBayTestServer(t, fake)
 	ctx := context.Background()
 	cookie := post(t, srv, "/api/seed", url.Values{"seed": {"wolfpack2026"}}, nil, "").Cookies()[0]
-	post(t, srv, "/api/company", url.Values{"company": {"Wolf Pack"}}, cookie, srv.URL)
+	post(t, srv, "/api/company", url.Values{"uid_p1": {uidP1}, "company": {"Wolf Pack"}}, cookie, srv.URL)
 	if r := post(t, srv, "/api/campaign/start", startForm(goodHangar, "Alrek", "Katarina"), cookie, srv.URL); r.StatusCode != http.StatusNoContent {
 		t.Fatalf("start: %d", r.StatusCode)
 	}
@@ -132,7 +132,7 @@ func TestSwapUnitEndpoint(t *testing.T) {
 	if got := swap("ua", up.Unit); got != http.StatusOK || funds() != 4500-up.Cost {
 		t.Fatalf("swap: %d, funds %d (want %d)", got, funds(), 4500-up.Cost)
 	}
-	if len(fake.swaps) != 1 || fake.swaps[0].UnitID != "ua" || fake.swaps[0].To != up.Unit || fake.swaps[0].OwnerUID != MekBayUID("wolfpack2026", SlotPlayer1) {
+	if len(fake.swaps) != 1 || fake.swaps[0].UnitID != "ua" || fake.swaps[0].To != up.Unit || fake.swaps[0].OwnerUID != MekBayUID("wolfpack2026", SlotHangar) {
 		t.Errorf("MekBay was asked: %+v", fake.swaps)
 	}
 	// A failure in MekBay refunds, and too little in the warchest refuses.

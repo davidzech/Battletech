@@ -11,6 +11,7 @@
   var seedError = document.getElementById('seed-error');
   var companyInput = document.getElementById('company-input');
   var setupError = document.getElementById('setup-error');
+  var idInputs = [].slice.call(document.querySelectorAll('#setup-form input.mekbay-id')); // the players' MekBay user IDs, Player 1 to 4
 
   var hasSeed = dialog.dataset.seed !== '';
   var configured = dialog.dataset.configured === '1';
@@ -95,6 +96,7 @@
 
   input.addEventListener('input', function () { sanitize(); seedError.textContent = ''; });
   companyInput.addEventListener('input', function () { setupError.textContent = ''; });
+  idInputs.forEach(function (i) { i.addEventListener('input', function () { setupError.textContent = ''; }); });
 
   document.getElementById('seed-random').addEventListener('click', function () {
     input.value = randomSeed();
@@ -136,7 +138,14 @@
     e.preventDefault();
     var company = companyInput.value.trim();
     if (!company) { setupError.textContent = 'Name your company.'; return; }
+    // Each ID is optional here: a UUID saves it, a blank field keeps what is saved, and a ticked Forget box forgets it.
     var body = 'company=' + encodeURIComponent(company);
+    for (var n = 0; n < idInputs.length; n++) {
+      var id = idInputs[n].value.trim().toLowerCase();
+      if (id && !UUID.test(id)) { setupError.textContent = "That doesn't look like a MekBay user ID (it should be a UUID)."; idInputs[n].focus(); return; }
+      if (id) body += '&' + idInputs[n].name + '=' + encodeURIComponent(id);
+    }
+    [].forEach.call(setupForm.querySelectorAll('input.clear-id:checked'), function (c) { body += '&' + c.name + '=1'; });
     post('/api/company', body)
       .then(function (res) {
         if (res.ok) { location.reload(); return; }

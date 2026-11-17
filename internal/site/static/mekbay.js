@@ -46,7 +46,16 @@
   var units = [];         // the hangar's mechs, as the server describes them
   var original = {};      // unit ID -> the named pilot the hangar has in it now, if any
   var plans = [];         // per player: { selected: { unitId: true }, crew: { unitId: pilot name } }
-  var playerCount = minPlayers;
+  // The count the company chose when it started the campaign is where every deploy begins (the picker can change it for one deploy); a run from before that was
+  // asked, or a count outside the range, starts at the minimum.
+  var defaultPlayers = Math.min(maxPlayers, Math.max(minPlayers, parseInt(dialog.dataset.defaultPlayers, 10) || minPlayers));
+  // Every player takes their own force into the lobby, owned by their own MekBay account, so a count is offered only when Players 1 to N have a user ID saved (the
+  // page is told which are saved, never the IDs). A saved default whose IDs have since been forgotten steps down to what the IDs cover.
+  var playerIds = [];
+  try { playerIds = JSON.parse(dialog.dataset.playerIds || '[]'); } catch (e) { playerIds = []; }
+  function missingId(n) { for (var i = 0; i < n; i++) if (!playerIds[i]) return i + 1; return 0; }
+  while (defaultPlayers > minPlayers && missingId(defaultPlayers)) defaultPlayers--;
+  var playerCount = defaultPlayers;
   var step = 0;
   var finished = null;    // the server's answer once the plan has been checked
   var touched = false;    // the player has changed something, so a fresh read of the hangar must not undo it
@@ -301,6 +310,7 @@
         b.type = 'button';
         b.setAttribute('aria-pressed', n === playerCount ? 'true' : 'false');
         b.setAttribute('aria-label', n + (n === 1 ? ' player' : ' players'));
+        if (missingId(n) && n !== playerCount) { b.disabled = true; b.title = 'Player ' + missingId(n) + ' needs a MekBay user ID: add it under Company details.'; }
         b.addEventListener('click', function () {
           if (n === playerCount) return;
           playerCount = n;
@@ -378,7 +388,8 @@
       progressTrack.setAttribute('aria-valuenow', step + 1);
       count.textContent = 'Step ' + (step + 1) + ' of ' + total;
     }
-    var ok = !busy && !over();
+    var ok = !busy && !over() && !missingId(playerCount);
+    if (missingId(playerCount)) error.textContent = 'Player ' + missingId(playerCount) + ' needs a MekBay user ID: add it under Company details.';
     if (!last) next.disabled = !ok || countOf(step) === 0;
     else { var allHave = true; for (var i = 0; i < playerCount; i++) if (countOf(i) === 0) allHave = false; go.disabled = !ok || !allHave; }
   }
@@ -476,7 +487,7 @@
     busy = false;
     held = '';
     step = 0;
-    playerCount = minPlayers;
+    playerCount = defaultPlayers;
     plans = [];
     if (cachedData && cachedData.units) {
       apply(cachedData); // instant

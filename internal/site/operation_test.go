@@ -410,7 +410,7 @@ func TestDeployFlow(t *testing.T) {
 	if r := get(t, srv, hangar, cookie); r.StatusCode != http.StatusBadRequest {
 		t.Fatalf("hangar before naming the company: %d", r.StatusCode)
 	}
-	if r := post(t, srv, "/api/company", url.Values{"company": {"Wolf's Dragoons"}}, cookie, srv.URL); r.StatusCode != http.StatusNoContent {
+	if r := post(t, srv, "/api/company", url.Values{"uid_p1": {uidP1}, "company": {"Wolf's Dragoons"}}, cookie, srv.URL); r.StatusCode != http.StatusNoContent {
 		t.Fatalf("company: %d", r.StatusCode)
 	}
 	if r := get(t, srv, hangar, cookie); r.StatusCode != http.StatusBadRequest {
@@ -462,7 +462,7 @@ func TestDeployFlow(t *testing.T) {
 	if err := store.StartRun(ctx, id, "refusalwar", Hangar{URL: goodHangarURL, Instance: goodInstance, Source: goodHangarURL}); err != nil {
 		t.Fatal(err)
 	}
-	if p := body(t, srv, page, cookie); strings.Contains(p, MekBayUID("wolfpack2026", SlotPlayer1)) {
+	if p := body(t, srv, page, cookie); strings.Contains(p, MekBayUID("wolfpack2026", SlotHangar)) {
 		t.Fatal("the page must never show the site's MekBay account ID")
 	}
 	for name, c := range map[string]struct {
@@ -499,7 +499,7 @@ func TestDeployFlow(t *testing.T) {
 		t.Fatalf("expected one MekBay call, got %d", len(fake.reqs))
 	}
 	req := fake.reqs[0]
-	if req.OwnerUID != MekBayUID("wolfpack2026", SlotPlayer1) || req.CampaignInstance != goodInstance || req.OperationName != "Refusal War - Scenario 001" ||
+	if req.OwnerUID != MekBayUID("wolfpack2026", SlotHangar) || req.CampaignInstance != goodInstance || req.OperationName != "Refusal War - Scenario 001" ||
 		!reflect.DeepEqual(req.DeployedUnitIDs, mine) || req.OpForInstance != "" || req.KeepOpFor {
 		t.Errorf("request = %+v", req)
 	}
