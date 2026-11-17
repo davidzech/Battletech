@@ -72,13 +72,11 @@
       if (!why.length) why.push('Not fully repaired');
     }
     var items = [
-      { label: 'Base BV', value: commas(u.bv) },
-      { label: 'Sale price: half of BV', value: commas(half) + ' SP' },
-      u.sellFull
-        ? { label: 'Fully repaired and rearmed', value: 'full price' }
-        : { label: why.join(', ') + ': halved again, rounded down', value: commas(u.sellValue) + ' SP' },
-      { label: 'Sells for', value: commas(u.sellValue) + ' SP' }
+      { label: 'Base BV', value: commas(u.bv) + ' BV · 100%' },
+      { label: u.sellFull ? 'Fully repaired and rearmed' : 'If fully repaired and rearmed', value: '50% · ' + commas(half) + ' SP' }
     ];
+    if (!u.sellFull) items.push({ label: why.join(', ') + ': halved again, rounded down', value: '25% · ' + commas(u.sellValue) + ' SP' });
+    items.push({ label: 'Sells for', value: commas(u.sellValue) + ' SP' });
     Confirm.ask({
       title: 'Sell ' + u.name + '?',
       message: fullName(u) + ' leaves your hangar for good, crew and all.' + (!u.sellFull && u.condition !== 'truly' ? ' Repair and rearm it first and it sells for ' + commas(half) + ' SP.' : u.condition === 'truly' ? ' A truly destroyed unit can’t be repaired, so this is all it is worth.' : ''),
