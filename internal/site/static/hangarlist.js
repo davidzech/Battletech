@@ -186,9 +186,11 @@
     bd.textContent = '';
     bd.hidden = !o;
     if (o) {
-      var rows = [['Half the tonnage (' + u.tons + 't)', Math.ceil(u.tons / 2) + ' SP']];
       var gained = Math.max(0, o.bv - u.bv);
-      rows.push([gained ? 'Half the BV gained (+' + commas(gained) + ')' : 'No BV gained', Math.floor(gained / 2) + ' SP']);
+      var rows = [
+        ['50% of tonnage', u.tons + 't · ' + Math.ceil(u.tons / 2) + ' SP'],
+        ['50% of BV gained', (gained ? '+' + commas(gained) + ' BV' : 'no BV gained') + ' · ' + Math.floor(gained / 2) + ' SP']
+      ];
       rows.push(['Cost', o.cost + ' SP']);
       rows.forEach(function (r) { bd.appendChild(el('dt', null, r[0])); bd.appendChild(el('dd', null, r[1])); });
     }
