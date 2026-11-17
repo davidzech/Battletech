@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -13,7 +12,9 @@ import (
 const (
 	goodInstance = "01a12f9e-188f-7158-ad67-3fc9700ec733"
 	goodSel      = "01a12f9d-a79b-717d-8c84-d5da73d2f9a5"
-	goodHangar   = "https://mekbay.com/?instance=" + goodInstance + "&sel=" + goodSel
+	// goodHangar is a link as a player pastes it, with a unit selection; the site keeps only goodHangarURL.
+	goodHangar    = "https://mekbay.com/?instance=" + goodInstance + "&sel=" + goodSel
+	goodHangarURL = "https://mekbay.com/?instance=" + goodInstance
 )
 
 func TestValidSeed(t *testing.T) {
@@ -47,49 +48,74 @@ func TestPlaythroughIDIsStableAndOpaque(t *testing.T) {
 }
 
 func TestParseHangar(t *testing.T) {
-	good, err := parseHangar("  " + strings.ToUpper(goodHangar[:8]) + goodHangar[8:] + " ")
-	if err != nil || good.Instance != goodInstance || good.Sel != goodSel {
-		t.Fatalf("good link rejected or misparsed: %+v, %v", good, err)
-	}
-	if h, err := parseHangar("https://mekbay.com/?instance=" + goodInstance); err != nil || h.Sel != "" {
-		t.Fatalf("link without sel should be fine: %+v, %v", h, err)
-	}
-	for _, bad := range []string{
-		"",
-		"not a url",
-		"http://mekbay.com/?instance=" + goodInstance,    // not https
-		"https://evil.example/?instance=" + goodInstance, // wrong host
-		"https://mekbay.com.evil.example/?instance=" + goodInstance,
-		"https://user@mekbay.com/?instance=" + goodInstance,
-		"https://mekbay.com:8443/?instance=" + goodInstance,
-		"https://mekbay.com/", // no instance
-		"https://mekbay.com/?instance=nope",
-		"https://mekbay.com/?instance=" + goodInstance + "&sel=nope",
+	// A pasted link is reduced to the hangar: https://mekbay.com/?instance=<id>.
+	for name, in := range map[string]string{
+		"the link as MekBay gives it":    goodHangar,
+		"surrounding space and capitals": "  " + strings.ToUpper(goodHangar[:8]) + goodHangar[8:] + " ",
+		"no unit selection":              "https://mekbay.com/?instance=" + goodInstance,
+		"a garbled unit selection":       "https://mekbay.com/?instance=" + goodInstance + "&sel=nope",
+		"tracking and other parameters":  "https://mekbay.com/?utm_source=x&instance=" + goodInstance + "&operation=abc&tab=Sheet",
+		"a fragment":                     "https://mekbay.com/?instance=" + goodInstance + "#top",
+		"the www host":                   "https://www.mekbay.com/?instance=" + goodInstance,
+		"a path":                         "https://mekbay.com/units/?instance=" + goodInstance,
+		"friendly and enemy forces":      "https://mekbay.com/?instance=" + goodInstance + ",enemy:01a12f98-8a21-7d12-b43d-52bb70872376&sel=" + goodSel,
+		"the enemy listed first":         "https://mekbay.com/?instance=enemy:01a12f98-8a21-7d12-b43d-52bb70872376," + goodInstance,
+		"several enemies around ours":    "https://mekbay.com/?instance=enemy:01a12f98-8a21-7d12-b43d-52bb70872376, " + goodInstance + ",enemy:01a12f98-8a21-7d12-b43d-52bb70872377",
 	} {
-		if _, err := parseHangar(bad); err == nil {
-			t.Errorf("parseHangar(%q) should fail", bad)
+		h, err := parseHangar(in)
+		if err != nil || h.Instance != goodInstance || h.URL != goodHangarURL {
+			t.Errorf("%s: parseHangar(%q) = %+v, %v; want %s", name, in, h, err, goodHangarURL)
+		}
+	}
+	for name, bad := range map[string]string{
+		"nothing":                  "",
+		"not a url":                "not a url",
+		"not https":                "http://mekbay.com/?instance=" + goodInstance,
+		"another site":             "https://evil.example/?instance=" + goodInstance,
+		"a lookalike host":         "https://mekbay.com.evil.example/?instance=" + goodInstance,
+		"a user in the link":       "https://user@mekbay.com/?instance=" + goodInstance,
+		"a port":                   "https://mekbay.com:8443/?instance=" + goodInstance,
+		"no instance":              "https://mekbay.com/",
+		"a bad instance":           "https://mekbay.com/?instance=nope",
+		"only enemy forces":        "https://mekbay.com/?instance=enemy:" + goodInstance,
+		"a bad first friendly one": "https://mekbay.com/?instance=nope," + goodInstance,
+		"an operation link":        "https://mekbay.com/?operation=01a1e329-5a80-76bb-8f8c-5443d79bcd02",
+	} {
+		if h, err := parseHangar(bad); err == nil {
+			t.Errorf("%s: parseHangar(%q) should fail, got %+v", name, bad, h)
+		}
+	}
+	if _, err := parseHangar("https://mekbay.com/?operation=01a1e329-5a80-76bb-8f8c-5443d79bcd02"); err == nil || !strings.Contains(err.Error(), "operation link") {
+		t.Errorf("an operation link should say so, got %v", err)
+	}
+}
+
+func TestParseCompanyName(t *testing.T) {
+	for in, want := range map[string]string{
+		"Wolf's Dragoons":         "Wolf's Dragoons",
+		"  Kell   Hounds ":        "Kell Hounds",
+		"Wolf\nDragoons":          "Wolf Dragoons",
+		"Wolf’s Dragoons":         "Wolf’s Dragoons",
+		"1st Somerset Strikers":   "1st Somerset Strikers",
+		"Gray Death Legion (GDL)": "Gray Death Legion (GDL)",
+		"Écureuils d'Or":          "Écureuils d'Or",
+	} {
+		if got, err := parseCompanyName(in); err != nil || got != want {
+			t.Errorf("parseCompanyName(%q) = %q, %v; want %q", in, got, err, want)
+		}
+	}
+	for _, bad := range []string{"", "   ", "-Dragoons", "<script>alert(1)</script>", "Wolf\x00Dragoons", strings.Repeat("a", 41), "Dragoons/../"} {
+		if _, err := parseCompanyName(bad); err == nil {
+			t.Errorf("parseCompanyName(%q) should fail", bad)
 		}
 	}
 }
 
-func TestParsePlayers(t *testing.T) {
-	for in, ok := range map[string]bool{"1": true, "4": true, " 3 ": true, "0": false, "5": false, "-1": false, "x": false, "": false} {
-		if _, err := parsePlayers(in); (err == nil) != ok {
-			t.Errorf("parsePlayers(%q) ok=%v, want %v", in, err == nil, ok)
-		}
-	}
-}
-
+// newTestServer is a site with a fake MekBay whose hangar meets Refusal War's starting conditions, so tests that
+// start campaigns never touch the network.
 func newTestServer(t *testing.T) (*httptest.Server, *Store) {
 	t.Helper()
-	store, err := OpenSQLite(filepath.Join(t.TempDir(), "test.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { store.Close() })
-	srv := httptest.NewServer(NewHandler("../../campaigns", store))
-	t.Cleanup(srv.Close)
-	return srv, store
+	return newMekBayTestServer(t, &fakeMekBay{hangar: startingHangar()})
 }
 
 func post(t *testing.T, srv *httptest.Server, path string, form url.Values, cookie *http.Cookie, origin string) *http.Response {
@@ -180,53 +206,185 @@ func TestSeedAndCampaignFlow(t *testing.T) {
 		t.Fatal("no hangar link before setup")
 	}
 
-	// Setup needs a seed cookie, a valid hangar and 1-4 players.
-	if r := post(t, srv, "/api/campaign", url.Values{"hangar": {goodHangar}, "players": {"2"}}, nil, ""); r.StatusCode != http.StatusBadRequest {
-		t.Fatalf("setup without a seed: got %d", r.StatusCode)
+	// Naming the company needs a seed cookie and a sensible name.
+	if r := post(t, srv, "/api/company", url.Values{"company": {"Wolf's Dragoons"}}, nil, ""); r.StatusCode != http.StatusBadRequest {
+		t.Fatalf("company without a seed: got %d", r.StatusCode)
 	}
-	if r := post(t, srv, "/api/campaign", url.Values{"hangar": {"https://evil.example/?instance=" + goodInstance}, "players": {"2"}}, cookie, ""); r.StatusCode != http.StatusBadRequest {
-		t.Fatalf("bad hangar: got %d", r.StatusCode)
+	for _, bad := range []string{"", "   ", "<b>", strings.Repeat("a", 41)} {
+		if r := post(t, srv, "/api/company", url.Values{"company": {bad}}, cookie, ""); r.StatusCode != http.StatusBadRequest {
+			t.Fatalf("bad company %q: got %d", bad, r.StatusCode)
+		}
 	}
-	if r := post(t, srv, "/api/campaign", url.Values{"hangar": {goodHangar}, "players": {"5"}}, cookie, ""); r.StatusCode != http.StatusBadRequest {
-		t.Fatalf("bad player count: got %d", r.StatusCode)
-	}
-	if pt, _, _ := store.Playthrough(ctx, id); pt.Configured() {
-		t.Fatal("rejected setups must not be saved")
-	}
-
-	// Cross-origin posts are refused.
-	if r := post(t, srv, "/api/campaign", url.Values{"hangar": {goodHangar}, "players": {"2"}}, cookie, "https://evil.example"); r.StatusCode != http.StatusForbidden {
+	if r := post(t, srv, "/api/company", url.Values{"company": {"Wolf's Dragoons"}}, cookie, "https://evil.example"); r.StatusCode != http.StatusForbidden {
 		t.Fatalf("cross-origin: got %d", r.StatusCode)
 	}
-
-	// A valid setup is saved.
-	if r := post(t, srv, "/api/campaign", url.Values{"hangar": {goodHangar}, "players": {"3"}}, cookie, srv.URL); r.StatusCode != http.StatusNoContent {
-		t.Fatalf("good setup: got %d", r.StatusCode)
+	if pt, _, _ := store.Playthrough(ctx, id); pt.Configured() {
+		t.Fatal("rejected requests must not name the company")
 	}
-	pt, _, _ := store.Playthrough(ctx, id)
-	if !pt.Configured() || pt.Players != 3 || pt.HangarInstance != goodInstance || pt.HangarSel != goodSel || pt.HangarURL != goodHangar {
-		t.Fatalf("setup not saved correctly: %+v", pt)
+	// A campaign can't be started before the company has a name.
+	camp := startForm(goodHangar, "Alrek", "Katarina")
+	if r := post(t, srv, "/api/campaign/start", camp, cookie, srv.URL); r.StatusCode != http.StatusBadRequest {
+		t.Fatalf("start before naming the company: got %d", r.StatusCode)
 	}
 
-	// Entering the same seed again (say, on another device) finds the finished setup.
+	// A good name is saved, tidied.
+	if r := post(t, srv, "/api/company", url.Values{"company": {"  Wolf's   Dragoons "}}, cookie, srv.URL); r.StatusCode != http.StatusNoContent {
+		t.Fatalf("good company: got %d", r.StatusCode)
+	}
+	if pt, _, _ := store.Playthrough(ctx, id); !pt.Configured() || pt.CompanyName != "Wolf's Dragoons" {
+		t.Fatalf("company not saved correctly: %+v", pt)
+	}
+
+	// Entering the same seed again (say, on another device) finds the named company.
 	res = post(t, srv, "/api/seed", url.Values{"seed": {"wolfpack2026"}}, nil, "")
 	var out strings.Builder
 	buf := make([]byte, 256)
 	n, _ := res.Body.Read(buf)
 	out.Write(buf[:n])
 	if !strings.Contains(out.String(), `"configured":true`) {
-		t.Fatalf("existing campaign should report configured: %q", out.String())
+		t.Fatalf("existing company should report configured: %q", out.String())
 	}
 	page := body(t, srv, "/", cookie)
-	if !strings.Contains(page, "Seed <code>wolf…</code>") {
-		t.Fatal("configured page should show the seed chip")
+	if !strings.Contains(page, `<span class="company">Wolf&#39;s Dragoons</span></button>`) {
+		t.Fatalf("configured page should show the company name on the chip: %.1500s", page)
 	}
-	// The header links straight to the player's MekBay hangar.
-	if !strings.Contains(page, `id="hangar-link" href="`+strings.ReplaceAll(goodHangar, "&", "&amp;")+`" target="_blank" rel="noopener noreferrer"`) {
-		t.Fatalf("configured page should link to the hangar, got: %s", page[:min(len(page), 1800)])
+	if strings.Contains(page, "wolf…") {
+		t.Fatal("the header chip should not show the seed")
+	}
+	if strings.Contains(page, `id="hangar-link"`) {
+		t.Fatal("no hangar link before a campaign is started")
 	}
 	if strings.Contains(page, `id="theme"`) {
 		t.Fatal("the theme toggle is gone")
+	}
+
+	// The campaign page offers to start it.
+	if c := body(t, srv, "/refusalwar/", cookie); !strings.Contains(c, `id="wizard-open"`) || !strings.Contains(c, "Start this campaign") || strings.Contains(c, "Campaign started") {
+		t.Fatalf("unstarted campaign page: %.1500s", c)
+	}
+
+	// Starting needs a seed, the same origin, a known campaign and a valid hangar link.
+	for name, c := range map[string]struct {
+		form   url.Values
+		cookie *http.Cookie
+		origin string
+		status int
+	}{
+		"no seed":          {camp, nil, srv.URL, http.StatusBadRequest},
+		"cross-origin":     {camp, cookie, "https://evil.example", http.StatusForbidden},
+		"unknown campaign": {url.Values{"campaign": {"nope"}, "hangar": {goodHangar}}, cookie, srv.URL, http.StatusNotFound},
+		"bad hangar":       {url.Values{"campaign": {"refusalwar"}, "hangar": {"https://evil.example/?instance=" + goodInstance}}, cookie, srv.URL, http.StatusBadRequest},
+	} {
+		if r := post(t, srv, "/api/campaign/start", c.form, c.cookie, c.origin); r.StatusCode != c.status {
+			t.Errorf("start, %s: got %d, want %d", name, r.StatusCode, c.status)
+		}
+	}
+	if _, ok, _ := store.Run(ctx, id, "refusalwar"); ok {
+		t.Fatal("rejected starts must not start the campaign")
+	}
+
+	// A valid start records the campaign's own hangar.
+	if r := post(t, srv, "/api/campaign/start", camp, cookie, srv.URL); r.StatusCode != http.StatusNoContent {
+		t.Fatalf("good start: got %d", r.StatusCode)
+	}
+	run, ok, _ := store.Run(ctx, id, "refusalwar")
+	if !ok || !run.Started() || run.HangarInstance != goodInstance || run.HangarURL != goodHangarURL || run.Campaign != "refusalwar" {
+		t.Fatalf("campaign not started correctly: %+v (started=%v)", run, ok)
+	}
+	if _, ok, _ := store.Run(ctx, id, "another-campaign"); ok {
+		t.Fatal("starting one campaign must not start another")
+	}
+
+	// That campaign's pages link straight to its hangar; other pages don't.
+	link := `id="hangar-link" href="` + goodHangarURL + `" target="_blank" rel="noopener noreferrer"`
+	for _, path := range []string{"/refusalwar/", "/refusalwar/scenario_000/"} {
+		if !strings.Contains(body(t, srv, path, cookie), link) {
+			t.Errorf("%s should link to the hangar", path)
+		}
+	}
+	if strings.Contains(body(t, srv, "/", cookie), `id="hangar-link"`) {
+		t.Error("the home page isn't in a campaign, so it has no hangar link")
+	}
+	if c := body(t, srv, "/refusalwar/manage/", cookie); !strings.Contains(c, "Change hangar link") {
+		t.Errorf("started campaign page: %.1500s", c)
+	}
+
+	// Starting again changes the hangar link and keeps a single run.
+	other := "https://mekbay.com/?instance=01a12f98-8a21-7d12-b43d-52bb70872376"
+	if r := post(t, srv, "/api/campaign/start", url.Values{"campaign": {"refusalwar"}, "hangar": {other}}, cookie, srv.URL); r.StatusCode != http.StatusNoContent {
+		t.Fatalf("change hangar: got %d", r.StatusCode)
+	}
+	var runs int
+	_ = store.db.QueryRow(`SELECT COUNT(*) FROM campaign_runs`).Scan(&runs)
+	if run, _, _ := store.Run(ctx, id, "refusalwar"); runs != 1 || run.HangarInstance != "01a12f98-8a21-7d12-b43d-52bb70872376" || run.HangarURL != "https://mekbay.com/?instance=01a12f98-8a21-7d12-b43d-52bb70872376" {
+		t.Fatalf("changing the hangar should update the one run: %d runs, %+v", runs, run)
+	}
+}
+
+func TestParseOwnerUID(t *testing.T) {
+	const uid = "e66a3544-8fcf-4dab-955a-f4ea2db0b610"
+	if got, err := parseOwnerUID("  " + strings.ToUpper(uid) + " "); err != nil || got != uid {
+		t.Errorf("parseOwnerUID = %q, %v", got, err)
+	}
+	if got, err := parseOwnerUID(""); err != nil || got != "" {
+		t.Errorf("blank should be allowed, got %q, %v", got, err)
+	}
+	for _, bad := range []string{"nope", uid + "x", "https://mekbay.com/?instance=" + goodInstance} {
+		if _, err := parseOwnerUID(bad); err == nil {
+			t.Errorf("parseOwnerUID(%q) should fail", bad)
+		}
+	}
+}
+
+func TestModifyModeIsOptionalAndPrivate(t *testing.T) {
+	const uid = "e66a3544-8fcf-4dab-955a-f4ea2db0b610"
+	srv, store := newTestServer(t)
+	ctx := context.Background()
+	res := post(t, srv, "/api/seed", url.Values{"seed": {"wolfpack2026"}}, nil, "")
+	cookie := res.Cookies()[0]
+	id := playthroughID("wolfpack2026")
+	setup := func(extra url.Values) int {
+		v := url.Values{"company": {"Wolf's Dragoons"}}
+		for k, vs := range extra {
+			v[k] = vs
+		}
+		return post(t, srv, "/api/company", v, cookie, srv.URL).StatusCode
+	}
+
+	// Without a UID the campaign is read-only.
+	if c := setup(nil); c != http.StatusNoContent {
+		t.Fatalf("setup without owner: %d", c)
+	}
+	if pt, _, _ := store.Playthrough(ctx, id); pt.CanModify() {
+		t.Fatal("no UID should mean read-only")
+	}
+	// A malformed UID is refused.
+	if c := setup(url.Values{"owner": {"not-a-uid"}}); c != http.StatusBadRequest {
+		t.Fatalf("bad owner: %d", c)
+	}
+	// A valid UID turns modify mode on, and the page never echoes it back.
+	if c := setup(url.Values{"owner": {uid}}); c != http.StatusNoContent {
+		t.Fatalf("good owner: %d", c)
+	}
+	if pt, _, _ := store.Playthrough(ctx, id); !pt.CanModify() || pt.OwnerUID != uid {
+		t.Fatalf("modify mode not saved: %+v", pt)
+	}
+	page := body(t, srv, "/", cookie)
+	if strings.Contains(page, uid) || !strings.Contains(page, "Modify mode is on.") {
+		t.Fatal("page should say modify mode is on without revealing the UID")
+	}
+	// Saving again with the field blank keeps it; the checkbox clears it.
+	if c := setup(nil); c != http.StatusNoContent {
+		t.Fatalf("resave: %d", c)
+	}
+	if pt, _, _ := store.Playthrough(ctx, id); pt.OwnerUID != uid {
+		t.Fatal("a blank owner field should keep the saved UID")
+	}
+	if c := setup(url.Values{"clear_owner": {"1"}}); c != http.StatusNoContent {
+		t.Fatalf("clear: %d", c)
+	}
+	if pt, _, _ := store.Playthrough(ctx, id); pt.CanModify() {
+		t.Fatal("clear_owner should turn modify mode off")
 	}
 }
 

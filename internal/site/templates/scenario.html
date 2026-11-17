@@ -12,9 +12,34 @@
 <div class="briefing-text">{{.Scenario.BriefingHTML}}</div>
 </section>
 {{end}}<section class="panel">{{.Scenario.SetupHTML}}</section>
-{{if .Scenario.Forces}}<h2>Force files</h2>
-<p class="muted">MegaMek unit lists (.mul) for the opposing forces. Load them in <a href="https://mekbay.com" target="_blank" rel="noopener noreferrer">MekBay</a> or MegaMek.</p>
-<p class="downloads">{{range .Scenario.Forces}}<a class="button" href="/{{$.Campaign.Slug}}/{{$.Scenario.Slug}}/forces/{{.File}}" download>Download {{.Label}} (.mul)</a>{{end}}</p>
+{{if and .Run.Started .Scenario.Forces}}<section class="mekbay" id="mekbay-op">
+<h2>Deploy your force</h2>
+<p class="muted">Choose which mechs from your hangar fly this mission{{if .Scenario.BVLimit}}, up to {{.Scenario.BVLimit}} BV{{end}}. The site sorts your MekBay hangar into <em>Deployed</em> and <em>Hangar</em> groups and sets up the OpFor against them.</p>
+<p class="downloads"><button type="button" class="button" id="deploy-open">Deploy force&hellip;</button>{{if .MekBayOp}}<a class="button" href="{{.MekBayOp}}" target="_blank" rel="noopener noreferrer">Open in MekBay</a>{{end}}</p>
+</section>
+<dialog id="deploy-dialog" class="deploy" aria-labelledby="deploy-title" data-campaign="{{.Campaign.Slug}}" data-scenario="{{.Scenario.Slug}}" data-limit="{{.Scenario.BVLimit}}" data-can-modify="{{if .Play.CanModify}}1{{end}}" data-pilots="{{.PilotsJSON}}" data-abilities="{{.Abilities}}" data-cached="{{.DeployJSON}}">
+<h2 id="deploy-title">Deploy your force</h2>
+<p class="deploy-meter" id="deploy-meter"></p>
+<p class="muted" id="deploy-status">Loading your hangar&hellip;</p>
+<section class="deploy-pilots" id="deploy-pilots" hidden>
+<p class="deploy-pilots-head">Pilots</p>
+<p class="muted">Drag a pilot onto a mech to assign them, or click a pilot and then a mech. Assignments are saved to your hangar when you deploy.</p>
+<div class="deploy-pilots-list" id="deploy-pilots-list"></div>
+</section>
+<ul class="deploy-list" id="deploy-list"></ul>
+{{if not .Play.CanModify}}<p class="muted">The site can only read your hangar. Add your MekBay user ID under Company details to let it deploy for you.</p>
+{{end}}<label class="check themed-check" id="deploy-reset-row" hidden><input type="checkbox" id="deploy-reset" class="themed-box"> Reset the OpFor (wipes any damage recorded on it)</label>
+<p id="deploy-error" class="form-error" role="alert"></p>
+<div class="form-actions"><button type="button" class="button alert" id="deploy-go" disabled>Deploy</button><button type="button" id="deploy-cancel">Cancel</button></div>
+</dialog>
+<script src="/static/mechrow.js" defer></script>
+<script src="/static/abilitycard.js" defer></script>
+<script src="/static/pilotcard.js" defer></script>
+<script src="/static/mekbay.js" defer></script>
+{{else if and .Play.Configured .Scenario.Forces}}<section class="mekbay">
+<h2>Deploy your force</h2>
+<p class="muted"><a href="/{{.Campaign.Slug}}/">Start this campaign</a> to deploy a force from your MekBay hangar.</p>
+</section>
 {{end}}{{if .Scenario.Waypoints}}<details class="fold waypoints">
 <summary>Waypoints</summary>
 <div class="fold-body"><p class="muted">Reveal a waypoint only when the game calls for it. Each stays redacted until you reveal it.</p>
@@ -25,7 +50,14 @@
 </li>
 {{end}}</ul></div>
 </details>
-{{end}}<details class="fold">
+{{end}}{{/* Hidden for now (the .mul downloads and their route still work):
+{{if .Scenario.Forces}}<details class="fold">
+<summary>Force files</summary>
+<div class="fold-body"><p class="muted">MegaMek unit lists (.mul) for the opposing forces. Load them in <a href="https://mekbay.com" target="_blank" rel="noopener noreferrer">MekBay</a> or MegaMek.</p>
+<p class="downloads">{{range .Scenario.Forces}}<a class="button" href="/{{$.Campaign.Slug}}/{{$.Scenario.Slug}}/forces/{{.File}}" download>Download {{.Label}} (.mul)</a>{{end}}</p></div>
+</details>
+{{end}}
+*/}}<details class="fold">
 <summary>Outcome</summary>
 <div class="fold-body"><section class="panel">{{.Scenario.OutcomeHTML}}</section></div>
 </details>

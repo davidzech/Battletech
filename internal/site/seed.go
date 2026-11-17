@@ -28,14 +28,6 @@ func playthroughID(seed string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// seedHint is the short form shown in the header, e.g. "ab12…".
-func seedHint(seed string) string {
-	if len(seed) <= 4 {
-		return seed
-	}
-	return seed[:4] + "…"
-}
-
 // currentSeed returns the seed in the request's cookie, or "" if absent or malformed.
 func currentSeed(r *http.Request) string {
 	c, err := r.Cookie(seedCookie)

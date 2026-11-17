@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/yuin/goldmark"
@@ -28,6 +29,7 @@ type Scenario struct {
 	Readout      []ReadoutRow  // planet readout overlaid on the first image
 	Waypoints    []Waypoint    // from the `## Waypoints` section of Setup.md
 	Forces       []ForceFile   // downloadable .mul files from front matter
+	BVLimit      int           // most battle value the player may deploy (front matter bv_limit); 0 means no limit
 	Next         string        // id of the default next scenario
 	BriefingHTML template.HTML // the fluff: a leading blockquote in Setup.md
 	SetupHTML    template.HTML
@@ -60,7 +62,50 @@ type Campaign struct {
 	Label        string
 	IntroHTML    template.HTML
 	KeywordsHTML template.HTML
-	Scenarios    []Scenario
+	MinPlayers   int // fewest players the campaign is built for (Intro.md front matter min_players); 0 if not given
+	MaxPlayers   int // most players it supports (max_players); 0 if not given
+	// StartingNamedPilots is how many named pilots the campaign requires before scenarios can be played
+	// (Intro.md front matter starting_named_pilots); 0 means none are required.
+	StartingNamedPilots int
+	// StartingPilotSP is the SP each of those pilots allocates, all of it, when the campaign is started (Intro.md
+	// front matter starting_pilot_sp).
+	StartingPilotSP int
+	// StartingBV is the BV of the force a company starts with (Intro.md front matter starting_bv); 0 if not given.
+	StartingBV int
+	// StartingMinMechs is how many mechs the starting hangar must hold at least (Intro.md front matter
+	// starting_min_mechs); 0 if not given.
+	StartingMinMechs int
+	// StartingWarchest is the SP the company's warchest starts the campaign with (Intro.md front matter starting_warchest); 0 if not given.
+	StartingWarchest int
+	// AvailabilityFaction and AvailabilityEra, e.g. "Clan Wolf" and "Clan Invasion", pick the units the purchase search offers by default (see
+	// availability.go); both empty means no such filter.
+	AvailabilityFaction, AvailabilityEra string
+	// Faction is the side the player's force fights for (Intro.md front matter faction), which decides the ranks of its named
+	// pilots; see factions.go. Empty or unknown turns ranks off.
+	Faction string
+	// Ranks is the rank ladder of the campaign's named pilots, lowest first: the Intro.md `ranks` list if it has one, else its
+	// faction's.
+	Ranks     []string
+	Scenarios []Scenario
+}
+
+// PlayersLabel describes how many players the campaign is for, e.g. "1-2 players", "1 player", or "" if the
+// campaign doesn't say.
+func (c *Campaign) PlayersLabel() string {
+	lo, hi := c.MinPlayers, c.MaxPlayers
+	if hi <= 0 {
+		return ""
+	}
+	if lo <= 0 || lo > hi {
+		lo = hi
+	}
+	switch {
+	case lo == hi && hi == 1:
+		return "1 player"
+	case lo == hi:
+		return strconv.Itoa(hi) + " players"
+	}
+	return strconv.Itoa(lo) + "-" + strconv.Itoa(hi) + " players"
 }
 
 // Scenario returns the scenario with the given slug.
@@ -101,14 +146,33 @@ func humanize(name string) string {
 }
 
 type frontData struct {
-	ID          string              `yaml:"id"`
-	Title       string              `yaml:"title"`
-	Map         string              `yaml:"map"`
-	Planet      string              `yaml:"planet"`
-	Images      []string            `yaml:"images"`
-	Readout     []map[string]string `yaml:"readout"`
-	Forces      map[string]string   `yaml:"forces"`
-	DefaultNext string              `yaml:"default_next"`
+	ID         string              `yaml:"id"`
+	Title      string              `yaml:"title"`
+	Map        string              `yaml:"map"`
+	Planet     string              `yaml:"planet"`
+	Images     []string            `yaml:"images"`
+	Readout    []map[string]string `yaml:"readout"`
+	Forces     map[string]string   `yaml:"forces"`
+	BVLimit    int                 `yaml:"bv_limit"`
+	MinPlayers int                 `yaml:"min_players"`
+	MaxPlayers int                 `yaml:"max_players"`
+	// StartingNamedPilots is how many named pilots a company must name to begin the campaign (Intro.md).
+	StartingNamedPilots int `yaml:"starting_named_pilots"`
+	// StartingPilotSP is the SP each starting named pilot allocates when the campaign is started (Intro.md).
+	StartingPilotSP int `yaml:"starting_pilot_sp"`
+	// StartingBV is the battle value of the force a company starts the campaign with (Intro.md).
+	StartingBV int `yaml:"starting_bv"`
+	// StartingMinMechs is how many mechs the starting hangar must hold at least (Intro.md).
+	StartingMinMechs int `yaml:"starting_min_mechs"`
+	// StartingWarchest is the SP the warchest starts with (Intro.md).
+	StartingWarchest int `yaml:"starting_warchest"`
+	// AvailabilityFaction and AvailabilityEra say which MekBay faction and era decide what the purchase search offers by default (Intro.md).
+	AvailabilityFaction string `yaml:"availability_faction"`
+	AvailabilityEra     string `yaml:"availability_era"`
+	DefaultNext         string `yaml:"default_next"`
+	// Faction and Ranks are described on Campaign (Intro.md).
+	Faction string   `yaml:"faction"`
+	Ranks   []string `yaml:"ranks"`
 }
 
 // readMarkdown splits optional YAML front matter from a Markdown file. A missing file yields zero values.
@@ -203,6 +267,7 @@ func (l Library) load(name string) (*Campaign, bool) {
 			Readout:      readoutRows(setup.Readout),
 			Waypoints:    waypoints,
 			Forces:       forceFiles(setup.Forces),
+			BVLimit:      setup.BVLimit,
 			Next:         outcome.DefaultNext,
 			BriefingHTML: renderBriefing(briefing),
 			SetupHTML:    renderMarkdown(setupBody, false),
@@ -220,7 +285,16 @@ func (l Library) load(name string) (*Campaign, bool) {
 		return nil, false
 	}
 	sort.Slice(c.Scenarios, func(i, j int) bool { return c.Scenarios[i].Slug < c.Scenarios[j].Slug })
-	_, intro := readMarkdown(filepath.Join(dir, "Intro.md"))
+	meta, intro := readMarkdown(filepath.Join(dir, "Intro.md"))
+	c.MinPlayers, c.MaxPlayers = meta.MinPlayers, meta.MaxPlayers
+	c.StartingNamedPilots, c.StartingPilotSP, c.StartingBV = meta.StartingNamedPilots, meta.StartingPilotSP, meta.StartingBV
+	c.StartingMinMechs = meta.StartingMinMechs
+	c.StartingWarchest = meta.StartingWarchest
+	c.AvailabilityFaction, c.AvailabilityEra = meta.AvailabilityFaction, meta.AvailabilityEra
+	c.Faction = meta.Faction
+	if c.Ranks = meta.Ranks; len(c.Ranks) == 0 {
+		c.Ranks = factionRanks(meta.Faction)
+	}
 	_, kw := readMarkdown(filepath.Join(dir, "Keywords.md"))
 	c.IntroHTML = renderMarkdown(intro, false)
 	c.KeywordsHTML = renderMarkdown(kw, true)
@@ -354,3 +428,9 @@ func renderBriefing(src string) template.HTML {
 	html = strings.ReplaceAll(html, "<p>—", `<p class="cite">`+"—")
 	return template.HTML(html)
 }
+
+// StartingWarchestText is the starting warchest with a thousands separator, e.g. "4,500".
+func (c *Campaign) StartingWarchestText() string { return withCommas(c.StartingWarchest) }
+
+// StartingBVText is the starting BV with a thousands separator, e.g. "6,000".
+func (c *Campaign) StartingBVText() string { return withCommas(c.StartingBV) }

@@ -1,0 +1,204 @@
+{{define "content"}}<p class="kicker">{{.Campaign.Label}}</p>
+<h1 class="bt-title">Manage force</h1>
+<p><a href="/{{.Campaign.Slug}}/">&lsaquo; Back to the campaign</a></p>
+<dialog id="run-dialog" aria-labelledby="run-title">
+  <form id="run-form" autocomplete="off" novalidate>
+    <h2 id="run-title">Change hangar link</h2>
+    <p>Paste the link to this campaign&rsquo;s MekBay hangar, the force holding all of your mechs.</p>
+    <label for="run-hangar">MekBay hangar link</label>
+    <input id="run-hangar" class="wide" name="hangar" type="url" value="{{.Run.HangarURL}}" placeholder="https://mekbay.com/?instance=&hellip;" spellcheck="false" required>
+    <p id="run-error" class="form-error" role="alert"></p>
+    <div class="form-actions">
+      <button type="submit" class="button">Save link</button>
+      <button type="button" id="run-cancel">Cancel</button>
+    </div>
+  </form>
+</dialog>
+<section class="warchest" id="warchest">
+<h2 class="section-title">Warchest</h2>
+<div class="hangar-stats"><div class="hangar-stat"><span class="hangar-stat-label">Funds</span><span class="hangar-stat-value">{{.Run.WarchestText}} SP</span></div></div>
+<p class="muted">Finances beyond this balance are TBD.</p>
+</section>
+<section class="pilots" id="pilots" data-campaign="{{.Campaign.Slug}}" data-portraits="{{.Portraits}}" data-ladders="{{.Ladders}}" data-abilities="{{.Abilities}}">
+<h2 class="section-title">Named pilots</h2>
+<ul class="pilot-list">
+{{range .Pilots}}{{if not .Fallen}}<li class="pilot" data-pilot="{{.ID}}" data-name="{{.Name}}" data-edge-pending="{{.EdgePending}}" data-learned="{{range .EdgeLearned}}{{.ID}} {{end}}" data-rank="{{.Rank}}" data-portrait="{{.Portrait}}" data-sp="{{range .Columns}}{{.SP}},{{end}}" data-unallocated="{{.Unallocated}}">
+<div class="pilot-card"><div class="pilot-side"><button type="button" class="portrait-btn" title="Change portrait" aria-label="Change {{.Name}}&rsquo;s portrait"><img src="{{.PortraitURL}}" alt="" width="96" height="96"><span class="portrait-edit">Change</span></button>{{if $.Ranks}}<button type="button" class="rank-btn" title="Change rank" aria-label="Change {{.Name}}&rsquo;s rank">{{.Rank}}</button>{{end}}</div>
+<div class="pilot-main">
+<div class="pilot-head"><h3><span class="name-text">{{.Name}}</span><button type="button" class="name-edit" title="Edit name" aria-label="Edit {{.Name}}&rsquo;s name"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button></h3><span class="pilot-stat">SP earned <b>{{.Earned}}</b></span>{{if .Unallocated}}<span class="pilot-stat unalloc">Unallocated <b>{{.Unallocated}}</b></span>{{end}}</div>
+<div class="stat-boxes">{{range .Columns}}<div class="stat-box"><span class="stat-label">{{.Label}}</span><span class="stat-main"><span class="stat-valwrap"><span class="stat-value">{{.Level}}</span>{{if .HasNext}}<span class="stat-to"><span class="stat-arrow" aria-hidden="true"><svg viewBox="0 0 16 10" width="16" height="10" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 5h13M10 1l4 4-4 4"/></svg></span><b>{{.NextLvl}}</b></span>{{end}}</span></span><span class="stat-next">{{if .HasNext}}{{.SP}}/{{.NextAt}} SP{{else}}max{{end}}</span><span class="stat-bar"><span style="width: {{.Percent}}%"></span></span></div>{{end}}</div>
+{{if or .EdgeLearned .EdgePending}}<div class="edge-skills"><span class="edge-skills-label">Edge abilities</span>{{range .EdgeLearned}}<span class="skill-chip" tabindex="0" data-ability="{{.ID}}" aria-describedby="skill-tip">{{.Name}}</span>{{end}}{{if .EdgePending}}<button type="button" class="button skill-pick">{{if eq .EdgePending 1}}Choose a new Edge ability{{else}}Choose {{.EdgePending}} new Edge abilities{{end}}</button>{{end}}</div>
+{{end}}<div class="pilot-actions"><button type="button" class="button pilot-sp">Manage SP{{if .Unallocated}} ({{.Unallocated}}){{end}}</button><details class="more"><summary>More</summary><div class="more-menu"><button type="button" class="pilot-kia"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg><span>Mark as Killed in Action</span></button></div></details></div>
+</div></div>
+</li>
+{{end}}{{end}}</ul>
+<p class="recruit"><button type="button" class="button" id="recruit-open"{{if not .CanRecruit}} disabled title="Your command already has {{.MaxPilots}} living pilots."{{end}}>Recruit New Pilot</button>{{if not .CanRecruit}} <span class="muted">Your command already has {{.MaxPilots}} living pilots.</span>{{end}}</p>
+{{if .Memorial}}<h2 class="memorial-head">Memorial</h2>
+<ul class="pilot-list memorial">
+{{range .Pilots}}{{if .Fallen}}<li class="pilot kia" data-pilot="{{.ID}}" data-name="{{.Name}}">
+<div class="pilot-card"><div class="pilot-side"><span class="portrait-btn"><img src="{{.PortraitURL}}" alt="" width="96" height="96"><span class="kia-stamp">K.I.A.</span></span>{{if .Rank}}<span class="rank-label">{{.Rank}}</span>{{end}}</div>
+<div class="pilot-main">
+<div class="pilot-head"><h3>{{.Name}}</h3><span class="tag bad">Killed in Action</span><span class="pilot-stat">SP earned <b>{{.Earned}}</b></span></div>
+<div class="stat-boxes">{{range .Columns}}<div class="stat-box"><span class="stat-label">{{.Label}}</span><span class="stat-value">{{.Level}}</span></div>{{end}}</div>
+{{if .EdgeLearned}}<div class="edge-skills"><span class="edge-skills-label">Edge abilities</span>{{range .EdgeLearned}}<span class="skill-chip" tabindex="0" data-ability="{{.ID}}" aria-describedby="skill-tip">{{.Name}}</span>{{end}}</div>{{end}}
+</div></div>
+</li>
+{{end}}{{end}}</ul>
+{{end}}<p id="pilot-error" class="form-error" role="alert"></p>
+</section>
+{{if .Ranks}}<dialog id="rank-dialog" class="wizard" aria-labelledby="rank-title">
+  <form id="rank-form" autocomplete="off">
+    <h2 id="rank-title">Change rank</h2>
+    <p class="muted">A pilot&rsquo;s rank is cosmetic: it changes nothing in play.</p>
+    <label for="rank-select">Rank</label>
+    <select id="rank-select">{{range .Ranks}}<option value="{{.}}">{{.}}</option>{{end}}</select>
+    <p id="rank-error" class="form-error" role="alert"></p>
+    <div class="form-actions">
+      <button type="submit" class="button">Save rank</button>
+      <button type="button" id="rank-cancel">Cancel</button>
+    </div>
+  </form>
+</dialog>
+{{end}}<dialog id="recruit-dialog" class="wizard" aria-labelledby="recruit-title" data-sp="{{.Campaign.StartingPilotSP}}">
+  <form id="recruit-form" autocomplete="off" novalidate>
+    <h2 id="recruit-title">Recruit a new pilot</h2>
+    <p class="muted">{{if .Campaign.StartingPilotSP}}A new pilot starts with {{.Campaign.StartingPilotSP}} SP to allocate. Spend as much as you like now; what is left stays unallocated and can be spent later under Manage SP.{{else}}A new pilot is a standard 4/5 pilot with 1 Edge token and no SP.{{end}}</p>
+    <div class="pilot-top">
+      <div class="pilot-id">
+        <button type="button" class="portrait-btn" id="recruit-portrait" title="Choose a portrait" aria-label="Choose a portrait"><img id="recruit-portrait-img" alt="" width="96" height="96"><span class="portrait-edit">Change</span></button>
+        <div class="pilot-name"><label for="recruit-name">Name</label><input id="recruit-name" type="text" maxlength="30" placeholder="Alrek" spellcheck="false" autocomplete="off"></div>
+      </div>
+      <div class="stat-boxes" id="recruit-boxes"></div>
+    </div>
+    {{if .Campaign.StartingPilotSP}}<div class="alloc-headrow"><h3 class="alloc-head">Allocate SP</h3><p class="alloc-remaining" id="recruit-remaining"></p></div>
+    <div id="recruit-rows"></div>
+    {{end}}{{if .Ranks}}<label for="recruit-rank" class="recruit-rank-label">Rank</label>
+    <select id="recruit-rank">{{range .Ranks}}<option value="{{.}}">{{.}}</option>{{end}}</select>
+    {{end}}<p id="recruit-error" class="form-error" role="alert"></p>
+    <div class="form-actions">
+      <button type="submit" class="button" id="recruit-go">Recruit pilot</button>
+      <button type="button" id="recruit-cancel">Cancel</button>
+    </div>
+  </form>
+</dialog>
+<dialog id="skill-dialog" class="wizard" aria-labelledby="skill-title">
+  <form id="skill-form" autocomplete="off" novalidate>
+    <h2 id="skill-title">Choose Edge abilities</h2>
+    <p class="muted" id="skill-intro"></p>
+    <div id="skill-slots"></div>
+    <p id="skill-error" class="form-error" role="alert"></p>
+    <div class="form-actions">
+      <button type="submit" class="button" id="skill-learn" disabled>Learn</button>
+      <button type="button" id="skill-cancel">Cancel</button>
+    </div>
+  </form>
+</dialog>
+<dialog id="sp-dialog" class="wizard" aria-labelledby="sp-title">
+  <form id="sp-form" autocomplete="off" novalidate>
+    <h2 id="sp-title">Manage SP</h2>
+    <div id="sp-body"></div>
+    <p id="sp-error" class="form-error" role="alert"></p>
+    <div class="form-actions">
+      <button type="submit" class="button" id="sp-apply" disabled>Apply</button>
+      <button type="button" id="sp-cancel">Close</button>
+    </div>
+  </form>
+</dialog>
+<section class="hangar-units" id="hangar-units" data-campaign="{{.Campaign.Slug}}" data-hangar-url="{{.Run.HangarURL}}" data-can-modify="{{if .Play.CanModify}}1{{end}}" data-warchest="{{.Run.Warchest}}" data-cached="{{.ForceJSON}}">
+<h2 class="section-title">Hangar</h2>
+<div class="hangar-units-summary" id="hangar-units-summary"></div>
+<p class="muted">{{.Play.CompanyName}}&rsquo;s MekBay hangar holds your mechs, and scenarios deploy from it.</p>
+<div class="mech-list" id="hangar-units-list"><p class="muted">Reading your hangar&hellip;</p></div>
+<p class="downloads" id="campaign-run" data-campaign="{{.Campaign.Slug}}"><button type="button" class="button" id="purchase-open">Purchase new unit</button></p>
+</section>
+<section class="danger-zone" id="danger-zone" data-campaign="{{.Campaign.Slug}}">
+<details class="danger-details">
+<summary><h2>Danger zone</h2></summary>
+<div class="fold-body">
+<p class="muted">Advanced Management corrects pilot records: rename, revive or delete a pilot, reset their SP allocation or Edge abilities, or override their total SP.</p>
+<p class="danger-action"><button type="button" class="button" id="records-open">Advanced Management&hellip;</button></p>
+<p class="muted">Changing the hangar link points this campaign at a different MekBay force. Your pilots and warchest stay as they are, but every unit comes from the new hangar.</p>
+<p class="danger-action"><button type="button" class="button" id="run-open">Change hangar link&hellip;</button></p>
+<p class="muted">Deleting this campaign removes {{.Play.CompanyName}}&rsquo;s progress in it: its named pilots and the link to its hangar. Your company and anything saved in MekBay are not touched.</p>
+<button type="button" class="button danger" id="delete-open">Delete campaign&hellip;</button>
+</div>
+</details>
+<dialog id="delete-dialog" aria-labelledby="delete-title">
+  <form id="delete-form" method="dialog">
+    <h2 id="delete-title">Delete {{.Campaign.Label}}?</h2>
+    <p>This permanently deletes your progress in this campaign, including all of its named pilots. It cannot be undone.</p>
+    <p id="delete-error" class="form-error" role="alert"></p>
+    <div class="form-actions">
+      <button type="submit" class="button danger" id="delete-confirm">Delete campaign</button>
+      <button type="button" id="delete-cancel">Cancel</button>
+    </div>
+  </form>
+</dialog>
+</section>
+<dialog id="purchase-dialog" class="wizard purchase" aria-labelledby="purchase-title" data-faction="{{.Campaign.AvailabilityFaction}}" data-era="{{.Campaign.AvailabilityEra}}">
+  <form id="purchase-form" autocomplete="off">
+    <h2 id="purchase-title">Purchase new unit</h2>
+    <p class="muted">Search MekBay&rsquo;s unit list and click a unit to add it to your cart, and click it again to take it out. Each costs its base BV in SP, paid from the warchest, and joins your hangar.</p>
+    <div class="search-field">
+      <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input type="search" id="purchase-search" placeholder="Search units, e.g. Timber Wolf" autocomplete="off" aria-label="Search units" aria-describedby="purchase-results">
+      <button type="button" class="search-clear" id="purchase-clear" aria-label="Clear search" hidden>&times;</button>
+    </div>
+    {{if and .Campaign.AvailabilityFaction .Campaign.AvailabilityEra}}<label class="themed-check"><input type="checkbox" id="purchase-available" checked><span>Only units {{.Campaign.AvailabilityFaction}} fields in the {{.Campaign.AvailabilityEra}} era</span></label>{{end}}
+    <div class="purchase-results" id="purchase-results" aria-live="polite"></div>
+    <p class="purchase-staged-head" id="purchase-staged-head">Your cart</p>
+    <div class="mech-list purchase-staged" id="purchase-staged"></div>
+    <p id="purchase-cost" class="repair-cost"></p>
+    <p id="purchase-error" class="form-error" role="alert"></p>
+    <div class="form-actions">
+      <button type="submit" class="button" id="purchase-buy" disabled>Buy</button>
+      <button type="button" id="purchase-cancel">Cancel</button>
+    </div>
+  </form>
+</dialog>
+<dialog id="repair-dialog" class="wizard" aria-labelledby="repair-title">
+  <form id="repair-form" autocomplete="off">
+    <h2 id="repair-title">Repair</h2>
+    <p class="muted" id="repair-sub"></p>
+    <label for="repair-select">Kind of repair</label>
+    <select id="repair-select"></select>
+    <p class="muted repair-note">Only the repairs that would fix something are listed, and you pay for the one you choose. Each also covers the ones above it in the list. Clan and Mixed tech cost half again as much.</p>
+    <p id="repair-cost" class="repair-cost"></p>
+    <p id="repair-error" class="form-error" role="alert"></p>
+    <div class="form-actions">
+      <button type="submit" class="button" id="repair-apply">Repair</button>
+      <button type="button" id="repair-cancel">Cancel</button>
+    </div>
+  </form>
+</dialog>
+<dialog id="records-dialog" class="wizard" aria-labelledby="records-title">
+  <h2 id="records-title">Advanced Management</h2>
+  <p class="muted">Every named pilot this campaign has had. Use this to correct a misclick or a mismatch: bring a pilot Killed in Action back, delete a record for good, reset a pilot's SP allocation or their Edge abilities, or override their total SP.</p>
+  <form class="rec-warchest" id="warchest-form">
+    <label>Warchest funds (SP) <input type="number" id="warchest-input" name="funds" min="0" max="100000000" step="100" inputmode="numeric" value="{{.Run.Warchest}}"></label>
+    <button type="submit" class="button" id="warchest-save">Set funds</button>
+  </form>
+  <ul class="records-list" id="records-list">
+{{range .Pilots}}<li data-pilot="{{.ID}}" data-name="{{.Name}}" data-learned-count="{{len .EdgeLearned}}" data-total="{{.Earned}}" data-allocated="{{.Allocated}}">
+<div class="rec-top"><img src="{{.PortraitURL}}" alt="" width="40" height="40"><span class="rec-name"><span class="name-text">{{.Name}}</span><button type="button" class="name-edit" title="Edit name" aria-label="Edit {{.Name}}&rsquo;s name"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button></span><span class="rec-state{{if .Fallen}} kia{{end}}">{{if .Fallen}}Killed in Action{{else}}Active{{end}}</span>{{if .Fallen}}<button type="button" class="rec-revive">Revive</button>{{end}}<button type="button" class="rec-delete" title="Delete {{.Name}}" aria-label="Delete {{.Name}}"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button></div>
+<div class="rec-sp"><span class="rec-sp-text">Total <b class="rec-n-total">{{.Earned}}</b> SP &middot; allocated <b class="rec-n-alloc">{{.Allocated}}</b> &middot; unallocated <b class="rec-n-unalloc">{{.Unallocated}}</b></span><button type="button" class="rec-total">Set total SP</button><button type="button" class="rec-reset">Reset SP allocation</button></div>
+<div class="rec-skills"><span class="rec-skills-text">Edge abilities: <b class="rec-n-skills">{{if .EdgeLearned}}{{range $i, $a := .EdgeLearned}}{{if $i}}, {{end}}{{$a.Name}}{{end}}{{else}}none{{end}}</b></span><button type="button" class="rec-skills-reset"{{if not .EdgeLearned}} disabled{{end}}>Reset Edge abilities</button></div>
+<form class="rec-total-form" hidden><label>New total SP <input type="number" min="0" max="1000000" step="10" inputmode="numeric"></label><button type="submit" class="button">Save</button><button type="button" class="rec-total-cancel">Cancel</button></form>
+</li>
+{{else}}<li class="muted">No pilots.</li>
+{{end}}  </ul>
+  <p id="records-error" class="form-error" role="alert"></p>
+  <div class="form-actions"><button type="button" id="records-close">Close</button></div>
+</dialog>
+<script src="/static/confirm.js" defer></script>
+<script src="/static/mechrow.js" defer></script>
+<script src="/static/forcesummary.js" defer></script>
+<script src="/static/hangarlist.js" defer></script>
+<script src="/static/purchase.js" defer></script>
+<script src="/static/portraitpicker.js" defer></script>
+<script src="/static/allocator.js" defer></script>
+<script src="/static/campaign.js" defer></script>
+<script src="/static/abilitycard.js" defer></script>
+<script src="/static/pilots.js" defer></script>
+<script src="/static/campaigndelete.js" defer></script>
+{{end}}

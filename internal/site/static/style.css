@@ -22,6 +22,8 @@
   --muted: #9a978b;
   --accent: #f2b800;
   --accent-ink: #14110a;
+  --alert: #c8372d;
+  --alert-ink: #fff4ee;
   --link: #ffd24a;
   --display: "Bahnschrift", "Arial Narrow", "Roboto Condensed", "Helvetica Neue", Arial, sans-serif;
   --body: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -122,6 +124,8 @@ h1, h2, h3 {
 h1 { font-size: clamp(2rem, 6vw, 3.2rem); margin: 0.1em 0 0.4em; }
 h2 { font-size: 1.35rem; margin: 2rem 0 0.75rem; color: var(--accent); }
 h3 { font-size: 1.05rem; margin: 1.5rem 0 0.5rem; }
+/* The main sections of the Manage page (Warchest, Named pilots, Hangar) get a bigger heading than the sub-sections inside them. */
+h2.section-title { font-size: 2rem; margin: 2.5rem 0 0.9rem; }
 
 .kicker {
   margin: 0;
@@ -138,7 +142,8 @@ a:hover { color: var(--accent); }
 
 /* Angular, clipped-corner panels */
 .panel {
-  background: var(--panel);
+  /* clip-path also cuts the border along the angled corner, so a gradient redraws it there (18px cut: 18/sqrt2 = 12.73px) */
+  background: linear-gradient(225deg, transparent 12.73px, var(--line) 12.73px 13.73px, transparent 13.73px) top right / 18px 18px no-repeat border-box, var(--panel);
   border: 1px solid var(--line);
   border-left: 4px solid var(--accent);
   padding: 0.5rem 1.4rem 1rem;
@@ -198,6 +203,7 @@ details.fold > .fold-body { overflow: hidden; }
   color: var(--text);
 }
 .card:hover { border-color: var(--accent); background: var(--panel-2); }
+.cards.plain .card { grid-template-columns: 1fr auto; }
 .card .num {
   font: 700 1.5rem var(--display);
   color: var(--accent);
@@ -237,6 +243,12 @@ th {
   clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%);
 }
 .button:hover { color: var(--accent-ink); filter: brightness(1.12); }
+/* Red variant for actions that commit something outside the site (creating the MekBay operation). */
+.button.alert { background: var(--alert); color: var(--alert-ink); }
+.button.alert:hover { color: var(--alert-ink); }
+/* A <button class="button"> looks like the link buttons: no default border, pointer cursor. */
+button.button { border: 0; cursor: pointer; }
+button.button:disabled { opacity: 0.6; cursor: wait; filter: none; }
 
 figure { margin: 1rem 0; }
 /* Scenario art: a wide banner cropped to the top, so dark space at the bottom of the image fades into the page.
@@ -288,6 +300,7 @@ footer .build code { font-family: "Share Tech Mono", ui-monospace, monospace; }
 
 @media (max-width: 30rem) {
   .card { grid-template-columns: auto 1fr; }
+  .cards.plain .card { grid-template-columns: 1fr; }
   .card .go { display: none; }
 }
 
@@ -311,7 +324,7 @@ a.chip { display: inline-block; text-decoration: none; }
 dialog {
   width: min(34rem, calc(100vw - 2rem));
   padding: 1.25rem 1.5rem 1.5rem;
-  background: var(--panel);
+  background: linear-gradient(225deg, transparent 12.73px, var(--line) 12.73px 13.73px, transparent 13.73px) top right / 18px 18px no-repeat border-box, var(--panel);
   color: var(--text);
   border: 1px solid var(--line);
   border-left: 4px solid var(--accent);
@@ -330,7 +343,7 @@ dialog fieldset { border: 0; padding: 0; margin: 0; }
 
 .seed-row { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.4rem; }
 .seed-row input { flex: 1 1 12rem; min-width: 0; }
-dialog input[type="text"], dialog input[type="url"] {
+dialog input[type="text"], dialog input[type="url"], dialog input[type="number"] {
   padding: 0.55rem 0.7rem;
   font: 1.05rem ui-monospace, "Cascadia Mono", Consolas, monospace;
   letter-spacing: 0.04em;
@@ -353,24 +366,285 @@ dialog button:not(.button) {
 }
 dialog button:not(.button):hover { border-color: var(--accent); color: var(--accent); }
 
-.players { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
-.players legend { width: 100%; }
-.pill { margin: 0 !important; cursor: pointer; }
-.pill input { position: absolute; opacity: 0; pointer-events: none; }
-.pill span {
-  display: inline-block;
-  min-width: 2.6rem;
-  padding: 0.45rem 0.9rem;
+/* The starting rules listed on an unstarted campaign. */
+.start-rules { margin: 0.4rem 0 0.9rem; padding-left: 1.2rem; display: grid; gap: 0.3rem; }
+.start-rules li::marker { color: var(--accent); }
+.start-rules b { color: var(--accent); font-weight: 700; }
+
+/* Named pilots on the campaign page. */
+.pilots { margin: 1.5rem 0; }
+.pilots .need { color: var(--accent); font: 700 1rem var(--display); letter-spacing: 0.05em; }
+.pilot-list { list-style: none; margin: 0.75rem 0; padding: 0; display: grid; gap: 0.75rem; }
+.pilot {
+  padding: 0.75rem 1.1rem 0.9rem;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--accent);
+}
+.pilot.fallen { opacity: 0.55; border-left-color: #ff7a59; }
+.pilot-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.4rem 1.1rem; }
+.pilot-head h3 { margin: 0; font: 700 1.2rem var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
+.pilot-stat { color: var(--muted); font: 0.8rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; }
+.pilot-stat b { color: var(--text); font-size: 1.05rem; margin-left: 0.2rem; }
+.pilot-cols { list-style: none; margin: 0.5rem 0 0; padding: 0; display: grid; gap: 0.15rem; font-size: 0.9rem; }
+.pilot-cols li { display: flex; flex-wrap: wrap; gap: 0.2rem 1rem; }
+.pilot-cols .col-name { min-width: 8rem; font: 700 0.85rem var(--display); letter-spacing: 0.08em; text-transform: uppercase; }
+.pilot-award { margin-top: 0.6rem; }
+.pilot-award summary { cursor: pointer; color: var(--link); }
+.award-form { display: flex; flex-wrap: wrap; align-items: end; gap: 0.6rem; margin: 0.6rem 0 0.4rem; }
+.award-form label { display: grid; gap: 0.2rem; font: 0.75rem var(--display); letter-spacing: 0.08em; text-transform: uppercase; }
+.award-form input { width: 6.5rem; }
+.pilot-add { display: flex; flex-wrap: wrap; align-items: end; gap: 0.6rem; margin-top: 0.5rem; }
+.pilot-add label { flex-basis: 100%; font: 0.85rem var(--display); letter-spacing: 0.08em; text-transform: uppercase; }
+.pilot-add input { flex: 1 1 14rem; max-width: 22rem; }
+
+/* Campaign start wizard: a step per named pilot with an SP allocator, then the hangar link, with progress at the bottom. */
+dialog.wizard { width: min(46rem, calc(100vw - 2rem)); }
+/* Campaign overview: compressed pilot rows and hangar summary. */
+/* The overview's pilots: portrait, name and the same boxes with yellow numbers as the start wizard. */
+.roster { list-style: none; margin: 0.5rem 0 0; padding: 0; display: grid; gap: 0.4rem; }
+.roster-pilot { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.9rem; padding: 0.35rem 0.6rem; background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--accent); }
+.roster-pilot img { flex: none; width: 2.75rem; height: 2.75rem; object-fit: cover; object-position: top; background: var(--bg); border: 1px solid var(--line); }
+.roster-name { flex: 1 1 9rem; display: grid; gap: 0.15rem; min-width: 0; }
+.roster-name b { font: 700 1.05rem var(--display); letter-spacing: 0.06em; text-transform: uppercase; overflow-wrap: anywhere; }
+.roster-name span { font: 700 0.65rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.roster-pilot .stat-boxes { grid-template-columns: repeat(4, 4.2rem); gap: 0.3rem; }
+.roster-pilot .stat-box { grid-template-rows: auto auto; padding: 0.2rem 0.2rem 0.25rem; gap: 0; }
+.roster-pilot .stat-label { font-size: 0.55rem; }
+.roster-pilot .stat-value { font-size: 1.5rem; }
+@media (max-width: 40rem) { .roster-pilot .stat-boxes { flex-basis: 100%; } }
+.force-units { margin: 0.4rem 0 1rem; }
+/* One line for the hangar, in the same card style (and so the same width) as the pilot rows above it. */
+.force-summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.3rem 1rem; padding: 0.55rem 0.75rem; background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--accent); }
+.force-summary { align-items: center; }
+.force-summary .icons { display: flex; align-items: center; gap: 0.2rem; flex-wrap: wrap; }
+.force-summary .icons img { box-sizing: border-box; width: 3.4rem; height: 2.7rem; padding: 0.2rem; object-fit: contain; background: var(--bg); border: 1px solid var(--line); }
+.force-summary .icons img.destroyed { opacity: 0.35; }
+.force-summary .icons .more { font: 700 0.8rem var(--display); letter-spacing: 0.06em; color: var(--muted); padding-left: 0.2rem; }
+.force-summary b { font: 700 1.05rem var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
+.force-summary .notes { font: 700 0.65rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.force-summary .total { margin-left: auto; font: 700 1.5rem var(--display); letter-spacing: 0.04em; color: var(--accent); }
+/* Danger zone: deleting a campaign. */
+.danger-zone { margin: 2.5rem 0 1rem; padding-top: 1rem; border-top: 1px solid var(--line); }
+.danger-zone h2 { color: #e5594f; }
+button.danger, button.button.danger { background: #c0392b; color: #fff; border-color: #c0392b; }
+button.danger:hover:not(:disabled), button.button.danger:hover:not(:disabled) { background: #e5594f; border-color: #e5594f; }
+button.danger:disabled { opacity: 0.5; cursor: wait; }
+/* Portrait buttons (wizard and pilot cards) and the picker grid. */
+.pilot-id { display: flex; align-items: center; gap: 1rem; min-width: 0; }
+.pilot-id .pilot-name { flex: 1; min-width: 0; }
+.portrait-btn { position: relative; flex: none; width: 8rem; height: 8rem; padding: 0; background: var(--bg); border: 1px solid var(--line); display: block; overflow: hidden; }
+button.portrait-btn { cursor: pointer; }
+button.portrait-btn:hover, button.portrait-btn:focus-visible { border-color: var(--accent); }
+.portrait-btn img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: top; }
+.portrait-edit { position: absolute; left: 0; right: 0; bottom: 0; padding: 0.15rem 0; text-align: center; background: rgba(0, 0, 0, 0.7); color: var(--accent); font: 700 0.65rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; opacity: 0; transition: opacity 0.15s; }
+button.portrait-btn:hover .portrait-edit, button.portrait-btn:focus-visible .portrait-edit { opacity: 1; }
+@media (hover: none) { .portrait-edit { opacity: 1; } }
+.pilot-card { display: flex; gap: 1rem; align-items: flex-start; }
+.pilot-main { flex: 1; min-width: 0; }
+.pilot.fallen .portrait-btn img { filter: grayscale(1); opacity: 0.6; }
+dialog.portrait-dialog { width: min(46rem, calc(100vw - 2rem)); }
+.portrait-scroll { max-height: min(60vh, 34rem); overflow-y: auto; margin: 0.5rem 0 0.75rem; padding-right: 0.25rem; }
+.portrait-scroll h3 { margin: 1rem 0 0.4rem; font: 700 0.85rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.portrait-scroll h3:first-child { margin-top: 0; }
+.portrait-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(5.5rem, 1fr)); gap: 0.4rem; }
+.portrait-choice { padding: 0.15rem; background: var(--bg); border: 2px solid var(--line); cursor: pointer; line-height: 0; }
+.portrait-choice img { width: 100%; height: auto; aspect-ratio: 1; object-fit: cover; }
+.portrait-choice:hover:not(:disabled), .portrait-choice:focus-visible { border-color: var(--accent); }
+.portrait-choice.selected { border-color: var(--accent); background: rgba(255, 204, 0, 0.12); }
+.portrait-choice.taken { opacity: 0.3; cursor: not-allowed; filter: grayscale(1); }
+.pilot-top { display: grid; grid-template-columns: minmax(11rem, 1fr) auto; gap: 1.25rem; align-items: center; margin-top: 0.75rem; }
+.pilot-name { display: grid; gap: 0.4rem; }
+dialog .pilot-name label { margin: 0; }
+dialog .pilot-name input {
+  width: 100%;
+  padding: 0.75rem 0.85rem;
+  font: 700 1.35rem var(--display);
+  letter-spacing: 0.04em;
+  border-bottom: 3px solid var(--accent);
+}
+dialog .pilot-name input::placeholder { color: var(--muted); font-weight: 400; opacity: 0.55; }
+.alloc-name input { padding: 0.4rem 0.5rem; font: 700 1rem var(--display); letter-spacing: 0.04em; }
+.stat-boxes { display: grid; grid-template-columns: repeat(4, 5.6rem); gap: 0.5rem; }
+.stat-box {
+  display: grid;
+  grid-template-rows: 2.4em auto auto auto;
+  justify-items: center;
+  gap: 0.1rem;
+  padding: 0.45rem 0.3rem 0.4rem;
   text-align: center;
-  font: 700 1rem var(--display);
+  background: var(--bg);
   border: 1px solid var(--line);
 }
-.pill input:checked + span { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
-.pill input:focus-visible + span { outline: 2px solid var(--text); outline-offset: 2px; }
+.stat-box.up { border-color: var(--accent); }
+.stat-label { display: flex; align-items: center; justify-content: center; font: 700 0.65rem/1.2 var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--text); }
+.stat-value { font: 700 2.6rem/1 var(--display); color: var(--accent); }
+.stat-main { display: flex; justify-content: center; width: 100%; }
+.stat-valwrap { position: relative; display: inline-block; }
+/* The tiny "-> next level" hangs off the lower right of the value, so the value itself stays centred. */
+.stat-to { position: absolute; left: 100%; bottom: 0.3rem; margin-left: 0.2rem; display: inline-flex; align-items: center; gap: 0.15rem; white-space: nowrap; font-size: 0.7rem; line-height: 1; }
+.stat-to[hidden] { display: none; }
+.stat-to b { color: var(--muted); font-weight: 700; }
+.stat-arrow { display: inline-flex; color: var(--muted); line-height: 0; }
+.stat-arrow svg { width: 0.6rem; height: 0.38rem; }
+.stat-next { font-size: 0.65rem; line-height: 1.2; color: var(--muted); }
+/* A thin yellow bar: how far along to the next level (full at the top of the ladder). */
+.stat-bar { display: block; width: 100%; height: 3px; margin-top: 0.15rem; background: var(--line); }
+.stat-bar > span { display: block; height: 100%; background: var(--accent); }
+.alloc-head { margin: 1rem 0 0.25rem; font: 700 1rem var(--display); letter-spacing: 0.08em; text-transform: uppercase; }
+.alloc-remaining { margin: 0.2rem 0 0.6rem; font: 700 1.05rem var(--display); letter-spacing: 0.05em; color: var(--accent); }
+.alloc-remaining.done { color: var(--text); }
+.alloc-row {
+  display: grid;
+  grid-template-columns: 13rem 1fr;
+  gap: 0.2rem 0.9rem;
+  align-items: center;
+  padding: 0.5rem 0;
+  border-top: 1px solid var(--line);
+}
+dialog .alloc-name {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  font: 700 0.85rem var(--display);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.alloc-name input { width: 6rem; } /* room for four digits and the spinner arrows */
+.alloc-row input[type="range"] { width: 100%; accent-color: var(--accent); }
+.wiz-hint { min-height: 1.4em; margin: 0.8rem 0 0; color: var(--accent); font-size: 0.9rem; }
+.wizard .wiz-hint + .form-error { min-height: 0; margin: 0; }
+dialog.wizard button.button:disabled { opacity: 0.4; cursor: not-allowed; filter: grayscale(0.5); }
+.recap-num { color: var(--accent); font-weight: 700; }
+.hangar-check { margin-top: 0.6rem; font-size: 0.9rem; }
+.hc-summary { display: flex; flex-wrap: wrap; gap: 0.2rem 1.4rem; margin: 0; font: 700 0.85rem var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
+.hc-summary b { margin-right: 0.25rem; color: var(--accent); font-size: 1.3rem; }
+.hc-summary .bad b { color: #ff7a59; }
+.hc-problem { margin: 0.4rem 0 0; color: #ff7a59; }
+/* On a result that is being read again: it stays put, with a small note beside the summary. */
+.hc-summary .hc-updating { display: inline-flex; align-items: center; gap: 0.4rem; margin-left: auto; font: 0.7rem var(--display); letter-spacing: 0.1em; color: var(--muted); }
+.hc-summary .hc-updating .spinner { width: 0.75rem; height: 0.75rem; }
+/* Shown while the hangar is being read from MekBay. */
+.hc-loading { display: flex; align-items: center; gap: 0.6rem; margin: 0; color: var(--muted); }
+.spinner {
+  flex: none;
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid var(--line);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+/* Reduced motion: slow it down rather than stop it, so it still says "working". */
+@media (prefers-reduced-motion: reduce) { .spinner, .link-field .refresh.spinning svg { animation-duration: 2.4s; } }
+/* The link box with the refresh icon embedded on its right. */
+.link-field { position: relative; margin-top: 0.4rem; }
+dialog .link-field input.wide { margin-top: 0; padding-right: 3.2rem; }
+dialog .link-field .refresh {
+  position: absolute;
+  top: 50%;
+  right: 0.4rem;
+  display: grid;
+  place-items: center;
+  width: 2.2rem;
+  height: 2.2rem;
+  padding: 0;
+  transform: translateY(-50%);
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+dialog .link-field .refresh:hover:not(:disabled), dialog .link-field .refresh:focus-visible { color: var(--accent); border-color: var(--accent); outline: none; }
+dialog .link-field .refresh:disabled { opacity: 0.35; cursor: not-allowed; }
+.link-field .refresh.spinning svg { color: var(--accent); animation: spin 0.8s linear infinite; }
+.hc-units { list-style: none; margin: 0.6rem 0 0; padding: 0; max-height: 18.8rem; overflow-y: auto; display: grid; gap: 0.4rem; }
+.wiz-recap { margin: 0.25rem 0 0.75rem; padding-left: 1.1rem; }
+.wiz-footer { display: flex; align-items: center; gap: 0.9rem; margin-top: 1rem; }
+.wiz-count { font: 700 0.8rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+.wiz-progress { flex: 1; height: 0.5rem; background: var(--bg); border: 1px solid var(--line); }
+.wiz-progress > span { display: block; width: 0; height: 100%; background: var(--accent); transition: width 0.25s ease; }
+@media (prefers-reduced-motion: reduce) { .wiz-progress > span { transition: none; } }
+@media (max-width: 40rem) {
+  .alloc-row { grid-template-columns: 1fr; }
+  .pilot-top { grid-template-columns: 1fr; }
+  .stat-boxes { grid-template-columns: repeat(4, 1fr); }
+}
 
+/* Deploy popup: the player's hangar as a pick list with a BV meter. */
+dialog.deploy { width: min(68rem, calc(100vw - 2rem)); }
+.deploy-meter { margin: 0.5rem 0 0; font: 700 1.1rem var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
+.deploy-meter.over { color: #ff7a59; }
+.deploy-list { list-style: none; margin: 0.75rem 0; padding: 0; max-height: 50vh; overflow-y: auto; border-top: 1px solid var(--line); }
+.deploy-unit { margin-bottom: 0.5rem; }
+dialog .deploy-unit label {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.7rem;
+  margin: 0;
+  cursor: pointer;
+  font: inherit;
+  letter-spacing: normal;
+  text-transform: none;
+}
+.deploy-unit:hover .mech-row { border-color: rgb(242 184 0 / 0.6); }
+.deploy-unit.picked .mech-row { background: color-mix(in srgb, var(--accent) 38%, var(--bg)); border-color: var(--accent); }
+.deploy-unit.unavailable { opacity: 0.5; }
+.deploy-unit.unavailable label { cursor: not-allowed; }
+
+/* A mech row in the style of MekBay's: role band, icon, model over a bold name, and BV / tonnage / pilot chips. */
+.mech-row {
+  display: grid;
+  grid-template-columns: 1.6rem 3.4rem minmax(0, 1fr);
+  align-items: stretch;
+  min-height: 4.2rem;
+  background: var(--panel);
+  border: 1px solid var(--line);
+}
+/* The role runs down the band on one line; a label longer than "Missile Boat" is scaled down in mechrow.js, never wrapped. */
+.mr-role { display: flex; align-items: center; justify-content: center; overflow: hidden; color: var(--accent-ink); background: var(--accent); }
+.mr-role > span { padding: 0.12rem 0; white-space: nowrap; font: 700 calc(var(--role-size, 0.54rem) * var(--role-scale, 1))/1.1 var(--display); letter-spacing: 0.05em; text-align: center; text-transform: uppercase; writing-mode: vertical-rl; transform: rotate(180deg); }
+.mr-icon { align-self: center; justify-self: center; width: 3.1rem; height: auto; max-height: 3.3rem; object-fit: contain; }
+.mr-main { display: grid; align-content: center; gap: 0.05rem; min-width: 0; padding: 0.3rem 0.6rem 0.3rem 0.2rem; }
+.mr-model { min-height: 1.1em; font-size: 0.72rem; line-height: 1.1; color: var(--muted); }
+.mr-name { font: 700 1rem/1.1 var(--display); letter-spacing: 0.03em; overflow-wrap: anywhere; }
+.mr-chips { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.15rem; }
+.mr-chip { display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.06rem 0.4rem; font: 700 0.72rem var(--display); letter-spacing: 0.04em; background: rgb(0 0 0 / 0.4); }
+.mr-chip .mr-ico { display: inline-flex; }
+.mr-chip svg { width: 0.8rem; height: 0.8rem; fill: currentColor; }
+.mr-chip.pilot { color: var(--accent-ink); background: var(--accent); }
+.mr-chip.warn { color: var(--accent); background: transparent; border: 1px solid currentColor; text-transform: uppercase; font-size: 0.62rem; letter-spacing: 0.08em; }
+.mr-chip.cond-armor, .mr-chip.cond-structure, .mr-chip.cond-crippled, .mr-chip.cond-destroyed, .mr-chip.ammo { background: transparent; border: 1px solid currentColor; text-transform: uppercase; font-size: 0.62rem; letter-spacing: 0.08em; }
+.mr-chip.cond-armor { color: #e8c547; }
+.mr-chip.cond-structure { color: #ff9a4d; }
+.mr-chip.cond-crippled { color: #ff6b4a; background: rgb(255 107 74 / 0.14); }
+.mr-chip.cond-destroyed { color: #fff; background: #c0392b; border-color: #c0392b; }
+.mr-chip.ammo { color: #6cb8ff; }
+.mech-list .mr-chip.cond-armor, .mech-list .mr-chip.cond-structure, .mech-list .mr-chip.cond-crippled, .mech-list .mr-chip.cond-destroyed, .mech-list .mr-chip.ammo { font-size: 0.66rem; }
+.mr-chip.bad { color: #ff7a59; background: transparent; border: 1px solid currentColor; text-transform: uppercase; font-size: 0.62rem; letter-spacing: 0.08em; }
+.mech-row.destroyed .mr-icon { filter: grayscale(1); opacity: 0.6; }
+/* The opt-in "open on MekBay" button at the right of a row (mechrow.js externalUrl). */
+.mech-row.has-row-link { cursor: pointer; }
+.mech-row.has-row-link:hover, .mech-row.has-row-link:focus-visible { border-color: var(--accent); outline: none; }
+.mr-nameline { display: flex; align-items: center; gap: 0.45rem; }
+/* The little gray external-link icon after the unit name: a link to the unit's generic page, with no button around it. */
+.mr-ext { flex: none; display: inline-flex; align-items: center; color: var(--muted); }
+.mr-ext svg { width: 0.95rem; height: 0.95rem; }
+.mr-ext:hover, .mr-ext:focus-visible { color: var(--accent); outline: none; }
+@media (max-width: 40rem) {
+  .mech-row { grid-template-columns: 1.5rem 2.8rem minmax(0, 1fr); }
+  .mr-icon { width: 2.6rem; }
+  .mr-name { font-size: 0.95rem; }
+}
+dialog .optional { color: var(--muted, #9a9a9a); text-transform: none; letter-spacing: 0; }
+dialog .hint { margin: 0.4rem 0 0; font-size: 0.85rem; color: var(--muted, #9a9a9a); }
+dialog label.check { display: flex; align-items: center; gap: 0.5rem; text-transform: none; letter-spacing: 0; font-family: inherit; }
 .form-error { min-height: 1.4em; margin: 0.6rem 0 0; color: #ff7a59; }
 .form-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; margin-top: 0.5rem; }
-.form-actions .button { border: 0; cursor: pointer; }
 
 /* Mission briefing: the scenario fluff, shown as an incoming transmission */
 .briefing {
@@ -378,6 +652,8 @@ dialog button:not(.button):hover { border-color: var(--accent); color: var(--acc
   margin: 1.5rem 0 2rem;
   padding: 1.1rem 1.6rem 1.5rem 1.8rem;
   background:
+    linear-gradient(225deg, transparent 18.38px, color-mix(in srgb, var(--accent) 45%, var(--line)) 18.38px 19.38px, transparent 19.38px) top right / 26px 26px no-repeat border-box,
+    linear-gradient(45deg, transparent 18.38px, color-mix(in srgb, var(--accent) 45%, var(--line)) 18.38px 19.38px, transparent 19.38px) bottom left / 26px 26px no-repeat border-box,
     repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.025) 0 1px, transparent 1px 4px),
     linear-gradient(135deg, color-mix(in srgb, var(--accent) 10%, var(--panel)), var(--panel) 55%);
   border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line));
@@ -535,7 +811,7 @@ details.fold + details.fold { margin-top: 1rem; }
 .waypoint-list { list-style: none; margin: 0.75rem 0 0; padding: 0; display: grid; gap: 0.75rem; }
 .waypoint {
   padding: 0.75rem 1.1rem 1rem;
-  background: var(--panel);
+  background: linear-gradient(225deg, transparent 9.9px, var(--line) 9.9px 10.9px, transparent 10.9px) top right / 14px 14px no-repeat border-box, var(--panel);
   border: 1px solid var(--line);
   border-left: 4px solid var(--accent);
   clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 0 100%);
@@ -584,3 +860,395 @@ html:not(.js) .wp-toggle, html:not(.js) .wp-stamp { display: none; }
   .wp-text .redact, .wp-stamp { transition: none; }
   .wp-text > .redact, .wp-text > * .redact { transition-delay: 0s; }
 }
+
+/* The unit hover card on the overview's hangar summary. */
+.unit-tip { position: fixed; z-index: 50; max-width: 18rem; padding: 0.6rem 0.75rem; background: var(--panel-2); border: 1px solid var(--line); border-left: 3px solid var(--accent); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.6); pointer-events: none; }
+.unit-tip[hidden] { display: none; }
+.unit-tip .tip-head { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.3rem; }
+.unit-tip .tip-head img { flex: none; object-fit: contain; }
+.unit-tip .tip-head b { display: block; font: 700 1.1rem var(--display); letter-spacing: 0.05em; text-transform: uppercase; }
+.unit-tip .tip-model { display: block; font-size: 0.8rem; color: var(--muted); }
+.unit-tip .tag { margin-bottom: 0.3rem; display: inline-block; }
+.unit-tip .tip-facts { display: grid; grid-template-columns: auto 1fr; gap: 0.15rem 0.8rem; margin: 0; font-size: 0.85rem; }
+.unit-tip dt { font: 700 0.7rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); align-self: center; }
+.unit-tip dd { margin: 0; }
+.pill-tip { max-width: 20rem; }
+.pill-tip.wide { max-width: none; width: max-content; padding: 0.7rem 0.8rem; }
+.pill-tip .pill-tip-title { display: block; margin-bottom: 0.25rem; font: 700 0.85rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; }
+.pill-tip .pill-tip-title.cond-armor { color: #e8c547; }
+.pill-tip .pill-tip-title.cond-structure { color: #ff9a4d; }
+.pill-tip .pill-tip-title.cond-crippled { color: #ff6b4a; }
+.pill-tip .pill-tip-title.cond-destroyed, .pill-tip .pill-tip-title.cond-truly { color: #ff8d83; }
+.pill-tip .pill-tip-title.cond-ammo { color: #6cb8ff; }
+.pill-tip .pill-tip-text { margin: 0; font-size: 0.85rem; line-height: 1.4; }
+.pill-tip .tip-facts { margin-top: 0.4rem; }
+.mr-chip[tabindex]:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
+.force-summary .icons img { transition: border-color 0.12s, background-color 0.12s; cursor: default; }
+.force-summary .icons img:hover, .force-summary .icons img:focus-visible { border-color: var(--accent); background: rgba(255, 204, 0, 0.1); outline: none; }
+
+/* Manage page: pilot cards with the wizard's stat boxes, and the Manage SP dialog. */
+.pilot-main .stat-boxes { margin: 0.6rem 0 0.5rem; max-width: 100%; }
+.pilot-stat.unalloc b { color: var(--accent); }
+.alloc-row.changed input[type="number"] { color: var(--accent); border-color: var(--accent); }
+.sp-earn { display: flex; flex-wrap: wrap; align-items: end; gap: 0.6rem; margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--line); }
+.sp-earn label { display: grid; gap: 0.3rem; font: 700 0.8rem var(--display); letter-spacing: 0.08em; text-transform: uppercase; }
+.sp-earn input { width: 7rem; }
+#sp-dialog .stat-boxes { margin-top: 0.5rem; }
+
+/* Manage page: pilot cards with the wizard's stat boxes, and the Manage SP dialog. */
+.pilot-stat.unalloc b { color: var(--accent); }
+.sp-earn { display: flex; flex-wrap: wrap; align-items: end; gap: 0.6rem; margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--line); }
+.sp-earn label { display: grid; gap: 0.3rem; font: 700 0.8rem var(--display); letter-spacing: 0.08em; text-transform: uppercase; }
+.sp-earn input { width: 7rem; }
+
+/* The "More" drop-down on a pilot card, and the memorial for pilots killed in action. */
+/* Manage SP and More sit together as one split button: Manage SP solid yellow, More hollow yellow. Both have the same fixed
+   height and a centred label so they line up to the pixel. The hollow outline is a yellow clipped shape with a clipped
+   inner fill (::before), so the cut corner keeps its border. */
+.pilot-actions { display: flex; align-items: stretch; gap: 2px; margin: 0.4rem 0 0; }
+.pilot-actions .pilot-sp, details.more > summary { box-sizing: border-box; height: 2.5rem; display: inline-flex; align-items: center; margin: 0; line-height: 1; }
+.pilot-actions .pilot-sp { clip-path: none; }
+details.more { position: relative; display: flex; }
+details.more > summary { list-style: none; cursor: pointer; padding: 0 1rem; position: relative; font: 700 0.9rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); background: var(--accent); clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%); user-select: none; }
+details.more > summary::before { content: ""; position: absolute; inset: 2px; z-index: -1; background: var(--panel); clip-path: polygon(0 0, calc(100% - 8.83px) 0, 100% 8.83px, 100% 100%, 0 100%); transition: background-color 0.12s; }
+details.more > summary::-webkit-details-marker { display: none; }
+details.more > summary::after { content: ""; display: inline-block; margin-left: 0.5rem; vertical-align: 0.12em; border: 0.3rem solid transparent; border-top-color: currentColor; border-bottom-width: 0; transition: transform 0.15s; }
+details.more[open] > summary::after { transform: rotate(180deg); }
+details.more > summary:hover::before, details.more[open] > summary::before, details.more > summary:focus-visible::before { background: color-mix(in srgb, var(--accent) 16%, var(--panel)); }
+details.more > summary:focus-visible { outline: none; }
+.more-menu { position: absolute; z-index: 5; top: calc(100% + 0.25rem); left: 0; min-width: 14rem; padding: 0.25rem; background: var(--panel-2); border: 1px solid var(--line); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.6); }
+.more-menu { min-width: 17rem; }
+/* The Killed in Action item is a dire action, so it looks like one: red, with a warning icon and a red edge. */
+.more-menu button.pilot-kia { display: flex; align-items: center; gap: 0.6rem; width: 100%; padding: 0.65rem 0.8rem; text-align: left; font: 700 0.85rem var(--display); letter-spacing: 0.08em; text-transform: uppercase; color: #ff8d83; background: rgba(229, 89, 79, 0.08); border: 0; border-left: 3px solid #e5594f; cursor: pointer; }
+.more-menu button.pilot-kia svg { flex: none; }
+.more-menu button.pilot-kia:hover, .more-menu button.pilot-kia:focus-visible { color: #fff; background: #c0392b; outline: none; }
+.memorial-head { margin-top: 2rem; color: var(--muted); }
+/* A pilot Killed in Action: the portrait, stats and abilities are dimmed, but the words that say so stay vivid (red), and a K.I.A. stamp
+   is laid over the portrait. */
+.pilot.kia { border-left-color: #7a3a34; }
+.pilot.kia .portrait-btn img { filter: grayscale(1) brightness(0.7); }
+.pilot.kia .stat-boxes, .pilot.kia .edge-skills, .pilot.kia .pilot-stat { opacity: 0.55; }
+.pilot.kia .stat-value { color: var(--muted); }
+.pilot.kia h3 { color: var(--muted); }
+.pilot.kia .tag.bad { padding: 0.15rem 0.6rem; font: 700 0.75rem var(--display); letter-spacing: 0.12em; text-transform: uppercase; color: #ff5a4d; background: rgba(229, 89, 79, 0.12); border: 1px solid #c0392b; }
+.pilot.kia .rank-label { opacity: 0.7; }
+.kia-stamp { position: absolute; left: 50%; top: 50%; padding: 0.1rem 0.55rem; font: 700 1.55rem/1.2 var(--display); letter-spacing: 0.14em; text-transform: uppercase; white-space: nowrap; color: #ff5a4d; background: rgba(10, 8, 8, 0.6); border: 3px solid #e5594f; border-radius: 3px; text-shadow: 0 0 6px rgba(0, 0, 0, 0.9); transform: translate(-50%, -50%) rotate(-16deg); pointer-events: none; }
+/* The pilot records link at the bottom of the page is deliberately quiet. */
+.danger-action { margin: 0 0 1.4rem; }
+.link-button { padding: 0; background: none; border: 0; color: var(--muted); font: 0.8rem var(--display); letter-spacing: 0.08em; text-transform: uppercase; text-decoration: underline; text-underline-offset: 0.2em; cursor: pointer; }
+.link-button:hover, .link-button:focus-visible { color: var(--text); }
+.records-list { list-style: none; margin: 0.75rem 0; padding: 0; display: grid; gap: 0.4rem; }
+.records-list li { display: grid; gap: 0.4rem; padding: 0.4rem 0.5rem; background: var(--bg); border: 1px solid var(--line); }
+.rec-top { display: flex; align-items: center; gap: 0.7rem; }
+.rec-sp { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.7rem; padding-top: 0.35rem; border-top: 1px solid var(--line); font-size: 0.85rem; color: var(--muted); }
+.rec-sp-text { flex: 1 1 14rem; }
+.rec-sp-text b { color: var(--text); }
+.rec-warchest { display: flex; flex-wrap: wrap; align-items: end; gap: 0.6rem; margin: 0.8rem 0; padding: 0.6rem 0.5rem; background: var(--bg); border: 1px solid var(--line); }
+.rec-warchest label { display: grid; gap: 0.3rem; font: 700 0.75rem var(--display); letter-spacing: 0.08em; text-transform: uppercase; }
+.rec-warchest input { width: 10rem; }
+.rec-total-form { display: flex; flex-wrap: wrap; align-items: end; gap: 0.6rem; }
+.rec-total-form[hidden] { display: none; }
+.rec-total-form label { display: grid; gap: 0.3rem; font: 700 0.75rem var(--display); letter-spacing: 0.08em; text-transform: uppercase; }
+.rec-total-form input { width: 8rem; }
+.records-list img { flex: none; width: 2.5rem; height: 2.5rem; object-fit: cover; object-position: top; }
+.rec-name { flex: 1; min-width: 0; font: 700 1rem var(--display); letter-spacing: 0.05em; text-transform: uppercase; overflow-wrap: anywhere; }
+.rec-state { font: 700 0.7rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.rec-state.kia { color: #e5594f; }
+dialog button.rec-delete { display: inline-flex; align-items: center; justify-content: center; width: 2.25rem; height: 2.25rem; padding: 0; color: #e5594f; border-color: #7a3a34; }
+dialog button.rec-delete:hover:not(:disabled), dialog button.rec-delete:focus-visible { color: #fff; background: #c0392b; border-color: #c0392b; }
+.alloc-headrow { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; margin: 1rem 0 0.4rem; }
+.alloc-headrow .alloc-head, .alloc-headrow .alloc-remaining { margin: 0; }
+.alloc-headrow .alloc-remaining { text-align: right; }
+.sp-staged { margin: 0.6rem 0 0; font-size: 0.85rem; color: var(--accent); }
+.sp-staged .link-button { margin-left: 0.4rem; }
+dialog .sp-staged button.link-button { padding: 0; background: none; border: 0; color: var(--muted); }
+dialog .sp-staged button.link-button:hover { color: var(--text); background: none; }
+
+/* Editing a pilot's name in the records dialog: a pencil, then a text field with the confirm button embedded in it. */
+.rec-name { display: flex; align-items: center; gap: 0.5rem; }
+.name-text { overflow-wrap: anywhere; }
+dialog button.name-edit { display: inline-flex; padding: 0.25rem; color: var(--muted); background: none; border: 0; cursor: pointer; }
+dialog button.name-edit:hover, dialog button.name-edit:focus-visible { color: var(--accent); background: none; }
+.name-form { position: relative; flex: 1; min-width: 10rem; }
+.name-form input { width: 100%; padding: 0.4rem 2.4rem 0.4rem 0.6rem; font: 700 1rem var(--display); letter-spacing: 0.05em; text-transform: uppercase; }
+dialog button.name-ok { position: absolute; top: 2px; right: 2px; bottom: 2px; display: inline-flex; align-items: center; padding: 0 0.5rem; color: var(--accent-ink); background: var(--accent); border: 0; cursor: pointer; }
+dialog button.name-ok:hover { background: var(--accent); filter: brightness(1.12); }
+dialog button.name-ok:disabled { opacity: 0.5; cursor: wait; }
+
+/* The site's own confirmation dialog (confirm.js). */
+dialog.confirm-dialog { width: min(30rem, calc(100vw - 2rem)); }
+dialog.confirm-dialog.danger { border-left-color: #e5594f; }
+dialog.confirm-dialog.danger h2 { color: #ff8d83; }
+.confirm-message { margin: 0.5rem 0 1rem; line-height: 1.5; }
+
+/* Buttons side by side in a form-actions row (Apply / Close, Delete / Cancel, Back / Next ...) share one box: the same
+   height, font and centring, whichever style they have, so they line up exactly. */
+.form-actions > button, .form-actions > .button { box-sizing: border-box; height: 2.5rem; margin: 0; padding: 0 1.1rem; display: inline-flex; align-items: center; justify-content: center; font: 700 0.85rem var(--display); letter-spacing: 0.1em; line-height: 1; text-transform: uppercase; }
+.form-actions > button:not(.button) { border: 1px solid var(--line); }
+
+/* The pilot's portrait with their rank underneath, and the rank picker. */
+.pilot-side { display: flex; flex-direction: column; gap: 0.35rem; width: 8rem; flex: none; }
+.rank-btn, .rank-label { display: block; width: 100%; padding: 0.3rem 0.2rem; text-align: center; font: 700 0.62rem/1.2 var(--display); letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap; overflow: hidden; } /* never wraps; pilots.js shrinks a rank that is still too long */
+button.rank-btn { color: var(--text); background: var(--bg); border: 1px solid var(--line); cursor: pointer; }
+button.rank-btn:hover, button.rank-btn:focus-visible { color: var(--accent); border-color: var(--accent); outline: none; }
+.rank-label { color: var(--muted); }
+dialog select { display: block; width: 100%; margin-top: 0.4rem; padding: 0.55rem 0.7rem; font: 700 1rem var(--display); letter-spacing: 0.05em; color: var(--text); background: var(--bg); border: 1px solid var(--line); }
+dialog select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* The name pencil on a pilot card (the same editor as in Advanced Management). */
+.pilot-head h3 { display: flex; align-items: center; gap: 0.3rem; }
+.pilot-head h3 .name-form { min-width: 12rem; }
+.pilot-head h3 .name-form input { font-size: 1.1rem; }
+.pilot-head h3 button.name-edit { padding: 0.25rem; color: var(--muted); background: none; border: 0; cursor: pointer; }
+.pilot-head h3 button.name-edit:hover, .pilot-head h3 button.name-edit:focus-visible { color: var(--accent); outline: none; }
+/* The name editor on a pilot card sits outside any dialog, so it carries its own field and embedded confirm button styles. */
+.pilot-head h3 .name-form { position: relative; flex: 1; min-width: 12rem; }
+.pilot-head h3 .name-form input { width: 100%; padding: 0.4rem 2.4rem 0.4rem 0.6rem; font: 700 1.1rem var(--display); letter-spacing: 0.05em; text-transform: uppercase; color: var(--text); background: var(--bg); border: 1px solid var(--line); }
+.pilot-head h3 .name-form input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.pilot-head h3 button.name-ok { position: absolute; top: 2px; right: 2px; bottom: 2px; display: inline-flex; align-items: center; padding: 0 0.5rem; color: var(--accent-ink); background: var(--accent); border: 0; cursor: pointer; }
+.pilot-head h3 button.name-ok:hover { filter: brightness(1.12); }
+.pilot-head h3 button.name-ok:disabled { opacity: 0.5; cursor: wait; }
+
+/* Recruit New Pilot: the button under the active pilots, and its one-step dialog. */
+.recruit { margin: 1rem 0 0; display: flex; justify-content: flex-end; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+.recruit .muted { margin: 0; }
+.recruit button.button:disabled { opacity: 0.45; cursor: not-allowed; filter: grayscale(0.5); }
+.recruit-rank-label { display: block; margin-top: 1rem; }
+#recruit-dialog .pilot-top { margin-top: 0.75rem; }
+
+/* Edge abilities: the chips under a pilot's stat boxes, the "choose" button, the picker and the records row. */
+.edge-skills { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.5rem; margin: 0.5rem 0 0; }
+.edge-skills-label { font: 700 0.65rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.skill-chip { padding: 0.2rem 0.6rem; font: 700 0.72rem var(--display); letter-spacing: 0.06em; text-transform: uppercase; color: var(--text); background: var(--bg); border: 1px solid var(--line); cursor: help; }
+.skill-chip:hover, .skill-chip:focus-visible { color: var(--accent); border-color: var(--accent); outline: none; }
+button.button.skill-pick { padding: 0.4rem 0.9rem; font-size: 0.75rem; }
+.pilot.kia .skill-chip { color: var(--muted); }
+.skill-slot { margin-top: 0.9rem; }
+.skill-slot label { display: block; margin-bottom: 0.1rem; font: 700 0.8rem var(--display); letter-spacing: 0.08em; text-transform: uppercase; }
+/* The ability card under a combo box in the picker: name, a category pill in the category's colour, and the rule. */
+.skill-card { --cat: var(--accent); margin-top: 0.55rem; min-height: 6.4rem; padding: 0.75rem 1rem 0.85rem; background: linear-gradient(135deg, color-mix(in srgb, var(--cat) 12%, var(--panel)), var(--panel) 65%); border: 1px solid color-mix(in srgb, var(--cat) 30%, var(--line)); border-left: 3px solid var(--cat); }
+.skill-card.empty { display: flex; align-items: center; background: var(--bg); border: 1px dashed var(--line); border-left: 3px solid var(--line); color: var(--muted); }
+.skill-card-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.8rem; margin-bottom: 0.45rem; }
+.skill-name { font: 700 1.2rem var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
+.skill-cat { padding: 0.12rem 0.55rem; font: 700 0.65rem var(--display); letter-spacing: 0.12em; text-transform: uppercase; color: var(--cat); border: 1px solid var(--cat); background: color-mix(in srgb, var(--cat) 14%, transparent); }
+.skill-rule { margin: 0; font-size: 0.92rem; line-height: 1.55; color: color-mix(in srgb, var(--text) 82%, var(--muted)); }
+.skill-trigger { font-weight: 700; color: var(--text); }
+.skill-rule .tw { font-size: 0.84rem; color: var(--muted); }
+.skill-card.cat-attack { --cat: #e5594f; }
+.skill-card.cat-defense { --cat: #4f9de5; }
+.skill-card.cat-heat { --cat: #e5933b; }
+.skill-card.cat-indirect-fire { --cat: #a97be5; }
+.skill-card.cat-melee { --cat: #d46a9c; }
+.skill-card.cat-movement { --cat: #5fc47e; }
+.rec-skills { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.7rem; font-size: 0.85rem; color: var(--muted); }
+.rec-skills-text { flex: 1 1 14rem; }
+.rec-skills-text b { color: var(--text); }
+dialog button.rec-skills-reset:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* The hover card for a learned Edge ability: the picker's ability card in a floating panel. */
+.skill-tip { position: fixed; z-index: 60; width: min(26rem, calc(100vw - 1rem)); pointer-events: none; box-shadow: 0 8px 22px rgba(0, 0, 0, 0.65); }
+.skill-tip[hidden] { display: none; }
+.skill-tip .skill-card { margin: 0; min-height: 0; background-color: var(--panel-2); }
+
+/* Manage page: the full list of the hangar's mechs, as the same rows as the deploy popup. */
+.hangar-units { margin: 2rem 0 0; }
+.hangar-units .downloads { margin: 0.6rem 0 0.9rem; }
+.hangar-units-summary { margin: 0.6rem 0 0.9rem; }
+/* UNITS and BASE BV as big labelled numbers, in the style of the pilots' stat boxes. */
+.hangar-stats { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.hangar-stat { display: grid; justify-items: center; gap: 0.1rem; min-width: 7.5rem; padding: 0.5rem 1.1rem 0.45rem; text-align: center; background: var(--bg); border: 1px solid var(--line); }
+.hangar-stat-label { font: 700 0.68rem var(--display); letter-spacing: 0.12em; text-transform: uppercase; color: var(--text); }
+.hangar-stat-value { font: 700 2.4rem/1.05 var(--display); color: var(--accent); }
+.hangar-stat.warn .hangar-stat-value { color: #ff9a4d; }
+.hangar-stat.bad .hangar-stat-value { color: #ff7a59; }
+.hangar-units-summary:empty { display: none; }
+.mech-list { display: grid; gap: 0.4rem; margin-top: 0.6rem; }
+/* The Hangar list has a little more room than the compact rows in the popup and the wizard: about 5.2rem tall, with the icon, name and chips
+   sized between the two. */
+.mech-list .mech-row { grid-template-columns: 1.7rem 4.4rem minmax(0, 1fr); min-height: 5.2rem; }
+.mech-list .mr-icon { width: 3.8rem; max-height: 4rem; }
+.mech-list .mr-main { gap: 0.1rem; padding: 0.45rem 0.8rem 0.45rem 0.25rem; }
+.mech-list .mr-model { font-size: 0.77rem; }
+.mech-list .mr-name { font-size: 1.15rem; }
+.mech-list .mr-chips { gap: 0.35rem; margin-top: 0.25rem; }
+.mech-list .mr-chip { padding: 0.09rem 0.48rem; font-size: 0.77rem; }
+#campaign-run { margin-top: 1.1rem; }
+
+/* Rearm and Repair buttons at the right end of a Hangar row. */
+.mech-row.has-actions { grid-template-columns: 1.6rem 3.4rem minmax(0, 1fr) auto; }
+.mech-list .mech-row.has-actions { grid-template-columns: 1.7rem 4.4rem minmax(0, 1fr) auto; }
+.mr-actions { align-self: center; display: flex; gap: 0.4rem; margin-right: 0.8rem; }
+.mr-action { padding: 0.4rem 0.8rem; font: 700 0.72rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--text); background: var(--bg); border: 1px solid var(--line); cursor: pointer; }
+.mr-action:hover:not(:disabled), .mr-action:focus-visible { color: var(--accent); border-color: var(--accent); outline: none; }
+.mr-action:disabled { opacity: 0.4; cursor: not-allowed; }
+@media (max-width: 640px) { .mr-actions { flex-direction: column; margin-right: 0.5rem; } }
+/* Truly destroyed: gone for good, darker than a plain destroyed unit. */
+.mr-chip.cond-truly { color: #ff9c8f; background: #3b0f0c; border: 1px solid #c0392b; text-transform: uppercase; font-size: 0.62rem; letter-spacing: 0.08em; }
+.mech-list .mr-chip.cond-truly { font-size: 0.66rem; }
+.repair-note { font-size: 0.85rem; }
+.repair-cost, .confirm-detail { font: 700 1.05rem var(--display); color: var(--accent); }
+.repair-cost.short, .confirm-detail.short { color: #ff7a59; }
+.confirm-detail { margin: 0 0 1rem; }
+/* A small breakdown under a confirmation's message: what, then how much. */
+.confirm-items { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 0.3rem 1.2rem; margin: 0 0 0.9rem; padding: 0.6rem 0.8rem; background: var(--bg); border: 1px solid var(--line); }
+.confirm-items[hidden] { display: none; }
+.confirm-items dt { margin: 0; line-height: 1.3; font: 700 0.85rem var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
+.confirm-items dd { margin: 0; color: var(--muted); text-align: right; }
+.confirm-detail[hidden] { display: none; }
+
+/* The Danger zone is collapsed behind its heading, so the advanced and destructive actions aren't in the way. */
+.danger-details > summary { display: inline-flex; align-items: center; gap: 0.5rem; list-style: none; cursor: pointer; }
+.danger-details > summary::-webkit-details-marker { display: none; }
+.danger-details > summary h2 { margin: 0.4rem 0; }
+.danger-details > summary::after { content: "\25BE"; font-size: 1.2rem; color: #e5594f; transition: transform 0.15s; }
+.danger-details[open]:not(.is-closing) > summary::after { transform: rotate(180deg); }
+.danger-details > .fold-body { overflow: hidden; }
+@media (prefers-reduced-motion: reduce) { .danger-details > summary::after { transition: none; } }
+.danger-details > summary:focus-visible { outline: 2px solid #e5594f; outline-offset: 3px; }
+.danger-details[open] > summary { margin-bottom: 0.5rem; }
+
+/* The Purchase new unit popup: a themed search field and checkbox, results you click to select, and your selection below. */
+dialog.purchase { width: min(46rem, calc(100vw - 2rem)); }
+.search-field { position: relative; margin-top: 0.9rem; }
+.search-field input[type="search"] {
+  display: block; width: 100%; padding: 0.8rem 2.6rem 0.8rem 2.7rem;
+  font: 1.05rem var(--body); letter-spacing: 0.01em; color: var(--text);
+  background: var(--bg); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 0;
+  -webkit-appearance: none; appearance: none;
+}
+.search-field input[type="search"]::placeholder { color: var(--muted); }
+.search-field input[type="search"]::-webkit-search-cancel-button, .search-field input[type="search"]::-webkit-search-decoration { -webkit-appearance: none; display: none; }
+.search-field input[type="search"]:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 0 14px rgb(242 184 0 / 0.18); }
+.search-icon { position: absolute; left: 0.9rem; top: 50%; width: 1.15rem; height: 1.15rem; transform: translateY(-50%); fill: none; stroke: var(--muted); stroke-width: 2.2; stroke-linecap: round; pointer-events: none; }
+.search-field:focus-within .search-icon { stroke: var(--accent); }
+dialog button.search-clear { position: absolute; right: 0.4rem; top: 50%; width: 1.9rem; height: 1.9rem; margin: 0; padding: 0; transform: translateY(-50%); font: 1.3rem/1 var(--body); letter-spacing: 0; text-transform: none; color: var(--muted); background: none; border: 0; box-shadow: none; cursor: pointer; }
+dialog button.search-clear:hover:not(:disabled), dialog button.search-clear:focus-visible { color: var(--accent); background: none; border: 0; outline: none; }
+.search-clear[hidden] { display: none; }
+
+/* A square checkbox in the site's colours: a dark box that fills yellow with a dark tick. */
+.themed-check { display: flex; align-items: center; gap: 0.65rem; margin: 0.8rem 0 0; font: 700 0.78rem var(--display); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); cursor: pointer; }
+.themed-check:hover { color: var(--text); }
+.themed-check input, input.themed-box { flex: none; width: 1.2rem; height: 1.2rem; margin: 0; display: grid; place-content: center; -webkit-appearance: none; appearance: none; background: var(--bg); border: 1px solid var(--line); cursor: pointer; }
+.themed-check input::before, input.themed-box::before { content: ""; width: 0.7rem; height: 0.7rem; transform: scale(0); transition: transform 0.12s ease; background: var(--accent-ink); clip-path: polygon(14% 52%, 0 66%, 38% 100%, 100% 20%, 86% 6%, 38% 72%); }
+.themed-check input:checked, input.themed-box:checked { background: var(--accent); border-color: var(--accent); }
+.themed-check input:checked::before, input.themed-box:checked::before { transform: scale(1); }
+.themed-check input:hover, input.themed-box:hover:not(:disabled) { border-color: var(--accent); }
+input.themed-box:disabled { opacity: 0.4; cursor: not-allowed; }
+.themed-check input:focus-visible, input.themed-box:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.themed-check input:checked + span { color: var(--text); }
+
+.purchase-results { margin: 0.8rem 0 1rem; }
+.purchase-results:empty { display: none; }
+.purchase-results > p { margin: 0.4rem 0; font-size: 0.9rem; }
+.purchase-found { height: 15rem; overflow-y: auto; padding-bottom: 1px; margin-bottom: 0.4rem; align-content: start; } /* rows keep their own height however few there are */
+.purchase-found .mech-row, .purchase-staged .mech-row { min-height: 4.2rem; }
+.purchase-staged-head { margin: 0 0 0.4rem; font: 700 0.8rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; }
+.purchase-staged { align-content: start; max-height: 14rem; overflow-y: auto; padding-bottom: 1px; margin-bottom: 0.9rem; }
+.purchase-empty { margin: 0; padding: 0.7rem 0.9rem; font-size: 0.9rem; border: 1px dashed var(--line); }
+
+/* A row you can click to choose, tinted like a chosen unit in the deploy popup. */
+.mech-row.has-pick { cursor: pointer; }
+.mech-row.has-pick:hover, .mech-row.has-pick:focus-visible { border-color: rgb(242 184 0 / 0.6); outline: none; }
+.mech-row.picked { background: color-mix(in srgb, var(--accent) 22%, var(--bg)); border-color: var(--accent); }
+.mr-badge { align-self: center; padding: 0.2rem 0.55rem; font: 700 0.68rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent-ink); background: var(--accent); }
+.mr-action.mr-action-icon { width: 2.1rem; height: 2.1rem; padding: 0; font: 1.4rem/1 var(--body); letter-spacing: 0; }
+
+/* The Deploy popup's pilot tray and the pilot slot beside each mech. */
+.deploy-pilots { margin: 0.9rem 0 0.4rem; padding: 0.7rem 0.8rem; background: var(--bg); border: 1px solid var(--line); border-left: 3px solid var(--accent); }
+.deploy-pilots.over { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--bg)); }
+.deploy-pilots[hidden] { display: none; }
+.deploy-pilots-head { margin: 0; font: 700 0.8rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; }
+.deploy-pilots .muted { margin: 0.2rem 0 0.6rem; font-size: 0.85rem; }
+.deploy-pilots-list { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.deploy-pilot, .deploy-slot.filled { display: flex; align-items: center; gap: 0.55rem; padding: 0.35rem 0.6rem 0.35rem 0.4rem; color: var(--text); background: var(--panel-2); border: 1px solid var(--line); font: inherit; letter-spacing: normal; text-transform: none; text-align: left; }
+.deploy-pilot { cursor: grab; }
+dialog button.deploy-pilot:hover:not(:disabled), .deploy-pilot:focus-visible { border-color: var(--accent); background: var(--panel-2); outline: none; }
+.deploy-pilot.held { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 24%, var(--bg)); }
+.deploy-pilot.assigned:not(.held) { opacity: 0.7; }
+.deploy-pilot.dragging, .deploy-slot.dragging { opacity: 0.4; }
+.deploy-portrait { flex: none; width: 2rem; height: 2rem; object-fit: cover; object-position: top; background: var(--bg); }
+.deploy-pilot-text { display: grid; line-height: 1.15; min-width: 0; }
+.deploy-pilot-text b { font: 700 0.9rem var(--display); letter-spacing: 0.05em; text-transform: uppercase; white-space: nowrap; }
+.deploy-pilot-text small { font: 0.68rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); white-space: nowrap; } /* explicit, so the tray (a button) and the slot (a div) match */
+.deploy-unit.has-slot { display: grid; grid-template-columns: minmax(0, 1fr) 14.5rem; gap: 0.5rem; align-items: stretch; }
+.deploy-slot { display: flex; align-items: center; gap: 0.55rem; min-width: 0; border: 1px dashed var(--line); padding: 0.3rem; }
+.deploy-slot.filled { border-style: solid; padding: 0.35rem 0.4rem 0.35rem 0.4rem; cursor: grab; position: relative; }
+.deploy-slot.unavailable { visibility: hidden; }
+.deploy-slot-empty { margin: 0 auto; font: 700 0.72rem var(--display); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); text-align: center; }
+.deploy-slot.over { border-color: var(--accent); border-style: solid; background: color-mix(in srgb, var(--accent) 16%, var(--bg)); }
+.holding-pilot .deploy-slot:not(.filled):not(.unavailable) { border-color: var(--accent); cursor: pointer; }
+.holding-pilot .deploy-slot:not(.unavailable) { cursor: pointer; }
+.deploy-slot:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+dialog button.deploy-slot-x { margin-left: auto; width: 1.6rem; height: 1.6rem; padding: 0; font: 1.2rem/1 var(--body); letter-spacing: 0; text-transform: none; color: var(--muted); background: none; border: 0; box-shadow: none; cursor: pointer; }
+dialog button.deploy-slot-x:hover:not(:disabled), dialog button.deploy-slot-x:focus-visible { color: var(--accent); background: none; border: 0; outline: none; }
+@media (max-width: 640px) { .deploy-unit.has-slot { grid-template-columns: 1fr; } }
+
+/* A pilot card is two rows: who they are, then their four numbers. */
+.deploy-pilot, .deploy-slot.filled { flex-direction: column; align-items: stretch; gap: 0.4rem; width: 14.5rem; padding: 0.4rem 0.5rem 0.45rem; }
+.deploy-pilot-top { display: flex; align-items: center; gap: 0.55rem; min-width: 0; }
+.deploy-pilot-top .deploy-pilot-text { flex: 1; }
+.deploy-slot.filled { justify-content: center; }
+.deploy-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.25rem; }
+.deploy-stat { display: grid; justify-items: center; padding: 0.15rem 0 0.2rem; background: var(--bg); border: 1px solid var(--line); line-height: 1; }
+.deploy-stat-label { font: 700 0.55rem var(--display); letter-spacing: 0.1em; color: var(--muted); }
+.deploy-stat-value { margin-top: 0.12rem; font: 700 1.15rem/1 var(--display); color: var(--accent); }
+.deploy-unit.has-slot { grid-template-columns: minmax(0, 1fr) 15rem; }
+
+/* The hover card for a pilot in the Deploy popup: the Manage page's pilot card, in small. */
+.deploy-pilot-card { display: grid; gap: 0.55rem; }
+.dpc-head { display: flex; align-items: center; gap: 0.7rem; }
+.dpc-head img { flex: none; width: 3.4rem; height: 3.4rem; object-fit: cover; object-position: top; background: var(--bg); border: 1px solid var(--line); }
+.dpc-name { display: block; font: 700 1.15rem var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
+/* The rank is styled exactly like the tray's and the slot's (small, uppercase, letter-spaced); SP earned like the Manage page's pilot stat captions. */
+.dpc-sub { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.1rem 0.9rem; margin-top: 0.1rem; }
+.dpc-rank, .dpc-sp { font: 0.68rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.dpc-sp b { margin-left: 0.2rem; font-size: 0.9rem; color: var(--text); }
+.deploy-pilot-card .stat-boxes { margin: 0; }
+.deploy-pilot-card .edge-skills { margin: 0; }
+.dpc-none { font-size: 0.8rem; color: var(--muted); }
+
+/* Every mech row in the Deploy popup is as tall as a row with a pilot in its slot, empty or not, and the mech row fills that height. */
+.deploy-slot { min-height: 5.85rem; }
+.deploy-unit.has-slot > label { align-items: stretch; }
+.deploy-unit.has-slot > label input.themed-box { align-self: center; }
+.deploy-unit.has-slot > label .mech-row { height: 100%; }
+
+/* The Deploy popup's mech rows are tall (they match a row with a pilot in its slot), so their content is scaled up to fill them. */
+.deploy-unit.has-slot .mech-row { grid-template-columns: 1.7rem 5.6rem minmax(0, 1fr); }
+.deploy-unit.has-slot .mr-icon { width: 4.8rem; max-height: 5rem; }
+.deploy-unit.has-slot .mr-main { gap: 0.15rem; padding: 0.5rem 0.9rem 0.5rem 0.3rem; }
+.deploy-unit.has-slot .mr-model { font-size: 0.95rem; }
+.deploy-unit.has-slot .mr-name { font-size: 1.5rem; }
+.deploy-unit.has-slot .mr-ext svg { width: 1.1rem; height: 1.1rem; }
+.deploy-unit.has-slot .mr-chips { gap: 0.4rem; margin-top: 0.3rem; }
+.deploy-unit.has-slot .mr-chip { padding: 0.14rem 0.6rem; font-size: 0.95rem; }
+.deploy-unit.has-slot .mr-chip.cond-armor, .deploy-unit.has-slot .mr-chip.cond-structure, .deploy-unit.has-slot .mr-chip.cond-crippled, .deploy-unit.has-slot .mr-chip.cond-destroyed, .deploy-unit.has-slot .mr-chip.cond-truly, .deploy-unit.has-slot .mr-chip.ammo, .deploy-unit.has-slot .mr-chip.warn, .deploy-unit.has-slot .mr-chip.bad { font-size: 0.74rem; }
+.deploy-unit.has-slot .mr-chip svg { width: 0.95rem; height: 0.95rem; }
+
+/* The role label in the Deploy popup is bigger: a wider band and a larger base size (a long role still scales down by --role-scale). */
+.deploy-unit.has-slot .mech-row { grid-template-columns: 2.3rem 5.6rem minmax(0, 1fr); }
+.deploy-unit.has-slot .mr-role { --role-size: 0.68rem; }
+/* The hover card is a popover (see mechrow.js): drop the browser's popover box and keep the card's own look. */
+.unit-tip[popover] { inset: auto; margin: 0; overflow: visible; color: var(--text); }
+
+/* The ability card's floating panel is a popover too (abilitycard.js): above the pilot card it is shown from, and unclipped by a dialog. */
+.skill-tip[popover] { inset: auto; margin: 0; padding: 0; border: 0; background: none; overflow: visible; color: inherit; }
+/* An interactive card (the pilot card) takes the pointer; the ability card shown from inside it does not, so the pointer stays on the pilot card. */
+.pill-tip.wide { pointer-events: auto; }
+
+/* A themed checkbox keeps no ring after a mouse click (the dialog's generic input:focus outline used to leave a clipped one behind); keyboard focus draws
+   the ring inside the box, so the list's overflow can't cut it off. */
+dialog input.themed-box:focus, dialog .themed-check input:focus { outline: none; }
+.themed-check input:focus-visible, input.themed-box:focus-visible, dialog input.themed-box:focus-visible, dialog .themed-check input:focus-visible { outline: 2px solid var(--text); outline-offset: -4px; }
+
+/* A bridge between a pilot and its card: the card's invisible edge reaches back across the gap to the pilot, so the pointer is never on neither of them. */
+.pill-tip.wide::before { content: ""; position: absolute; left: 0; right: 0; top: -14px; height: 14px; }
+.pill-tip.wide.above::before { top: auto; bottom: -14px; }
+
+/* The condition pills inside the unit hover card on the overview. */
+.unit-tip .tip-pills { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-bottom: 0.4rem; }
+
+/* An element whose hover card is open is highlighted with a yellow border, so the card has an obvious owner. */
+.roster-pilot { transition: border-color 0.12s; }
+.roster-pilot[tabindex]:hover, .roster-pilot.tip-open, .roster-pilot[tabindex]:focus-visible { border-color: var(--accent); outline: none; }
+.deploy-pilot.tip-open, .deploy-slot.filled.tip-open { border-color: var(--accent); }
