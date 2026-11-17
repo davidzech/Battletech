@@ -8,6 +8,7 @@ import (
 	"log"
 	"math"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 )
@@ -104,6 +105,42 @@ func repairCosts(tons float64, techBase string) map[string]int {
 
 // rearmCost is the SP to refill a unit's spent ammunition. Each ammo bin that has been used counts as one ton (the usual bin size).
 func rearmCost(bins int) int { return bins * rearmCostPerTon }
+
+// ammoLine is one ammo type of a rearm: how many tons are refilled and how many shots were used out of the shots those tons hold.
+type ammoLine struct {
+	Name     string `json:"name"`
+	Tons     int    `json:"tons"`
+	Used     int    `json:"used"`
+	Capacity int    `json:"capacity"`
+}
+
+// ammoBreakdown lists what a rearm would refill, by ammo type, alphabetically. Each used bin is a ton; its capacity is the unit's shots for
+// that ammo in that location divided by its slots there (the catalog knows that, MekBay only records the shots used). A bin the catalog doesn't
+// list is still counted, with an unknown (zero) capacity.
+func ammoBreakdown(hu HangarUnit, u Unit) []ammoLine {
+	var out []ammoLine
+	index := map[string]int{}
+	for _, use := range hu.AmmoUsed2 {
+		name, capacity := use.Name, 0
+		for _, b := range u.Ammo {
+			if b.ID == use.Name && b.Loc == use.Loc && b.Slots > 0 {
+				name, capacity = b.Name, b.Shots/b.Slots
+				break
+			}
+		}
+		i, ok := index[name]
+		if !ok {
+			i = len(out)
+			index[name] = i
+			out = append(out, ammoLine{Name: name})
+		}
+		out[i].Tons++
+		out[i].Used += use.Used
+		out[i].Capacity += capacity
+	}
+	sort.Slice(out, func(a, b int) bool { return out[a].Name < out[b].Name })
+	return out
+}
 
 // ServiceRequest asks MekBay to clear a unit's damage (repair) or refill its ammunition (rearm) in the player's hangar force.
 type ServiceRequest struct {

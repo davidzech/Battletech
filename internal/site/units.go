@@ -17,18 +17,28 @@ var unitsIndexJSON []byte
 
 // Unit is one catalog entry: Name is MekBay's unit ID (e.g. BMMadCat_H), which is what a saved force
 // stores in each unit's `unit` field.
+// AmmoBin is one ammo entry of a unit: the bins of one ammo type in one location (Slots tons, Shots shots in all of them).
+type AmmoBin struct {
+	ID    string `json:"id"` // MekBay's name for the ammo, as it appears on a critical slot
+	Name  string `json:"n"`  // e.g. "LRM 5 Ammo"
+	Loc   string `json:"l"`
+	Slots int    `json:"q"`
+	Shots int    `json:"s"`
+}
+
 type Unit struct {
-	Name     string  `json:"name"`
-	Chassis  string  `json:"chassis"`
-	Model    string  `json:"model"`
-	BV       int     `json:"bv"` // base battle value, before pilot skills
-	Tons     float64 `json:"tons"`
-	Class    string  `json:"weightClass"` // Light, Medium, Heavy, Assault...
-	Role     string  `json:"role"`        // Master Unit List role
-	Type     string  `json:"type"`        // Mek, Tank, ProtoMek...
-	TechBase string  `json:"techBase"`    // Clan, Inner Sphere, Mixed
-	Engine   string  `json:"engine"`      // Fusion, XL (Clan), Light, ICE...
-	Icon     string  `json:"icon"`        // file name in icons/ (mechs only; "" for anything else)
+	Name     string    `json:"name"`
+	Chassis  string    `json:"chassis"`
+	Model    string    `json:"model"`
+	BV       int       `json:"bv"` // base battle value, before pilot skills
+	Tons     float64   `json:"tons"`
+	Class    string    `json:"weightClass"` // Light, Medium, Heavy, Assault...
+	Role     string    `json:"role"`        // Master Unit List role
+	Type     string    `json:"type"`        // Mek, Tank, ProtoMek...
+	TechBase string    `json:"techBase"`    // Clan, Inner Sphere, Mixed
+	Engine   string    `json:"engine"`      // Fusion, XL (Clan), Light, ICE...
+	Ammo     []AmmoBin `json:"ammo"`        // the unit's ammunition, for the rearm breakdown
+	Icon     string    `json:"icon"`        // file name in icons/ (mechs only; "" for anything else)
 }
 
 var (

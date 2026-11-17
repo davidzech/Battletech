@@ -1,6 +1,8 @@
 // The site's own confirmation dialog, used instead of the browser's window.confirm so it matches the rest of the page.
 //
-//   Confirm.ask({ title, message, detail, confirmLabel, cancelLabel, danger }) -> Promise<boolean>
+//   Confirm.ask({ title, message, items, detail, confirmLabel, cancelLabel, danger }) -> Promise<boolean>
+//
+// `items` is an optional list of { label, value } rows shown under the message as a small breakdown (the rearm popup's tons of each ammo type).
 //
 // `detail` is an optional second line in bold yellow, the same style as the repair dialog's cost line (e.g. "Cost 10 SP. Warchest 4,500 \u2192 4,490 SP.").
 //
@@ -8,7 +10,7 @@
 // confirm button red and puts the focus on Cancel, so a stray Enter never confirms something destructive. Text is inserted
 // as text, never HTML. It opens on top of any dialog that is already open (a modal dialog stacks above the others).
 (function () {
-  var dialog = null, titleEl = null, messageEl = null, detailEl = null, okBtn = null, cancelBtn = null;
+  var dialog = null, titleEl = null, messageEl = null, itemsEl = null, detailEl = null, okBtn = null, cancelBtn = null;
   var settle = null; // resolves the question that is open
 
   function el(tag, cls, text) {
@@ -26,6 +28,7 @@
     titleEl.id = 'confirm-title';
     messageEl = el('p', 'confirm-message');
     messageEl.id = 'confirm-message';
+    itemsEl = el('dl', 'confirm-items');
     detailEl = el('p', 'confirm-detail');
     var actions = el('div', 'form-actions');
     okBtn = el('button', 'button');
@@ -36,6 +39,7 @@
     actions.appendChild(cancelBtn);
     dialog.appendChild(titleEl);
     dialog.appendChild(messageEl);
+    dialog.appendChild(itemsEl);
     dialog.appendChild(detailEl);
     dialog.appendChild(actions);
 
@@ -62,6 +66,12 @@
     if (settle) { var previous = settle; settle = null; previous(false); } // a second question replaces the first
     titleEl.textContent = o.title || 'Are you sure?';
     messageEl.textContent = o.message || '';
+    itemsEl.textContent = '';
+    (o.items || []).forEach(function (it) {
+      itemsEl.appendChild(el('dt', null, it.label));
+      itemsEl.appendChild(el('dd', null, it.value));
+    });
+    itemsEl.hidden = !(o.items && o.items.length);
     detailEl.textContent = o.detail || '';
     detailEl.hidden = !o.detail;
     detailEl.classList.toggle('short', !!o.detailShort);

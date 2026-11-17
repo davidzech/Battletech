@@ -51,6 +51,13 @@ type CritDamage struct {
 	Engine bool
 }
 
+// AmmoUse is one ammo bin with some of its shots used.
+type AmmoUse struct {
+	Name string // MekBay's name for the ammo
+	Loc  string
+	Used int // shots used
+}
+
 type HangarUnit struct {
 	ID        string // the unit's own ID inside the force
 	Unit      string // MekBay unit ID, e.g. BMMadCat_H
@@ -64,6 +71,7 @@ type HangarUnit struct {
 	Locations  map[string]LocationLoss // armor and internal structure points lost, by location (HD, CT, LT, RT, LA, RA, LL, RL ...)
 	AmmoUsed   int                     // ammo consumed, summed over its ammo bins
 	AmmoBins   int                     // ammo bins with some consumed (each counts as a ton to rearm)
+	AmmoUsed2  []AmmoUse               // the ammo bins with some used, for the rearm breakdown
 	Crits      []CritDamage            // critical slots that are hit or destroyed (ammo use is not damage), to know what a repair would fix
 	EngineHits int                     // destroyed engine slots
 	// TorsoCheckFailed is MekBay's stored result of the torso crippling check (rule check core.torso-crippling).
@@ -315,6 +323,7 @@ func parseHangarForce(raw json.RawMessage) (HangarForce, error) {
 				hu.AmmoUsed += c.Consumed
 				if c.Consumed > 0 {
 					hu.AmmoBins++
+					hu.AmmoUsed2 = append(hu.AmmoUsed2, AmmoUse{Name: c.Name, Loc: c.Loc, Used: c.Consumed})
 				}
 				// Each destroyed slot (or hit) of these components is a critical hit on it, which the crippling rules count.
 				n := c.Hits

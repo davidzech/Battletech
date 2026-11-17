@@ -75,6 +75,8 @@ type hangarUnitView struct {
 	RepairLevels []string       `json:"repairLevels"`
 	RepairCosts  map[string]int `json:"repairCosts,omitempty"`
 	RearmCost    int            `json:"rearmCost"`
+	// AmmoBreakdown says what a rearm would refill: tons of each ammo type and the shots used out of the shots those tons hold.
+	AmmoBreakdown []ammoLine `json:"ammoBreakdown"`
 }
 
 var chassisNames = regexp.MustCompile(`^(.*?)\s*\((.+)\)$`)
@@ -134,6 +136,7 @@ func hangarViews(h HangarForce) []hangarUnitView {
 		v.Condition, v.ConditionNote, v.AmmoExpended = string(c), note, hu.AmmoUsed > 0
 		if u, ok := unitByName(hu.Unit); ok && u.Type == "Mek" {
 			v.RepairLevels, v.RepairCosts, v.RearmCost = repairOptions(hu, c, u.Tons), repairCosts(u.Tons, u.TechBase), rearmCost(hu.AmmoBins)
+			v.AmmoBreakdown = ammoBreakdown(hu, u)
 		}
 		views = append(views, v)
 	}

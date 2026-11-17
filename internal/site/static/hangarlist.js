@@ -46,7 +46,10 @@
     }
     Confirm.ask({
       title: 'Rearm ' + u.name + '?',
-      message: 'Refills its spent ammunition, at 10 SP per ton.',
+      message: 'Refills the ammunition it has used, at 10 SP per ton.',
+      items: (u.ammoBreakdown || []).map(function (a) {
+        return { label: a.name, value: a.tons + (a.tons === 1 ? ' ton' : ' tons') + ' \u00b7 ' + a.used + (a.capacity ? ' of ' + a.capacity : '') + ' shots used' };
+      }),
       detail: 'Cost ' + u.rearmCost + ' SP. Warchest ' + commas(warchest) + ' \u2192 ' + commas(after) + ' SP.',
       confirmLabel: 'Rearm for ' + u.rearmCost + ' SP'
     }).then(function (yes) {

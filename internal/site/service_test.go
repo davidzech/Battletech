@@ -250,3 +250,37 @@ func TestServiceCostsInTheHangarViews(t *testing.T) {
 		t.Errorf("the view should say there is no repair level: %s", b)
 	}
 }
+
+func TestAmmoBreakdown(t *testing.T) {
+	baboon, ok := unitByName("BMBaboon")
+	if !ok || len(baboon.Ammo) == 0 {
+		t.Fatalf("the unit index should carry the Howler's ammunition: %+v", baboon)
+	}
+	// The raw state of the live Howler: one LRM 5 bin (of three, 24 shots a ton) with 5 shots used.
+	var f map[string]any
+	if err := json.Unmarshal([]byte(crippledForce), &f); err != nil {
+		t.Fatal(err)
+	}
+	hu := readBack(t, f)
+	got := ammoBreakdown(hu, baboon)
+	if len(got) != 1 || got[0] != (ammoLine{Name: "LRM 5 Ammo", Tons: 1, Used: 5, Capacity: 24}) {
+		t.Errorf("Howler: %+v", got)
+	}
+	// Two bins of one type add up, and different types are listed apart, in name order; a bin the catalog doesn't know is still a ton.
+	grizzly, _ := unitByName("BMGrizzly")
+	hu = HangarUnit{AmmoBins: 4, AmmoUsed2: []AmmoUse{
+		{Name: "Clan Ammo LRM-10", Loc: "LT", Used: 4}, {Name: "Clan Gauss Ammo", Loc: "RA", Used: 3}, {Name: "Clan Gauss Ammo", Loc: "RA", Used: 5}, {Name: "Mystery Ammo", Loc: "CT", Used: 2},
+	}}
+	got = ammoBreakdown(hu, grizzly)
+	want := []ammoLine{{"Gauss Ammo", 2, 8, 16}, {"LRM 10 Ammo", 1, 4, 12}, {"Mystery Ammo", 1, 2, 0}}
+	if len(got) != 3 || got[0] != want[0] || got[1] != want[1] || got[2] != want[2] {
+		t.Errorf("Grizzly: %+v, want %+v", got, want)
+	}
+	// The view carries it, and the cost is the tons times 10.
+	h := hangarOf("BMBaboon")
+	h.Units[0] = HangarUnit{ID: "ua", Unit: "BMBaboon", AmmoBins: 1, AmmoUsed: 5, AmmoUsed2: []AmmoUse{{Name: "Clan Ammo LRM-5", Loc: "RT", Used: 5}}}
+	v := hangarViews(h)[0]
+	if v.RearmCost != 10 || len(v.AmmoBreakdown) != 1 || v.AmmoBreakdown[0].Tons != 1 {
+		t.Errorf("view: %+v", v)
+	}
+}
