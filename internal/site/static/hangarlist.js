@@ -41,12 +41,13 @@
   function rearm(u) {
     var after = warchest - u.rearmCost;
     if (after < 0) {
-      Confirm.ask({ title: 'Not enough funds', message: 'Rearming ' + fullName(u) + ' costs ' + u.rearmCost + ' SP and the warchest has ' + commas(warchest) + '.', confirmLabel: 'OK', cancelLabel: 'Close' });
+      Confirm.ask({ title: 'Not enough funds', message: 'The warchest cannot cover rearming ' + fullName(u) + '.', detail: 'Cost ' + u.rearmCost + ' SP. Warchest ' + commas(warchest) + ' SP. Not enough funds.', detailShort: true, confirmLabel: 'OK', cancelLabel: 'Close' });
       return;
     }
     Confirm.ask({
       title: 'Rearm ' + u.name + '?',
-      message: 'Refilling its spent ammunition costs ' + u.rearmCost + ' SP (10 SP per ton). The warchest goes from ' + commas(warchest) + ' to ' + commas(after) + ' SP.',
+      message: 'Refills its spent ammunition, at 10 SP per ton.',
+      detail: 'Cost ' + u.rearmCost + ' SP. Warchest ' + commas(warchest) + ' \u2192 ' + commas(after) + ' SP.',
       confirmLabel: 'Rearm for ' + u.rearmCost + ' SP'
     }).then(function (yes) {
       if (!yes) return;

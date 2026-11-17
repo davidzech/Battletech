@@ -1,12 +1,14 @@
 // The site's own confirmation dialog, used instead of the browser's window.confirm so it matches the rest of the page.
 //
-//   Confirm.ask({ title, message, confirmLabel, cancelLabel, danger }) -> Promise<boolean>
+//   Confirm.ask({ title, message, detail, confirmLabel, cancelLabel, danger }) -> Promise<boolean>
+//
+// `detail` is an optional second line in bold yellow, the same style as the repair dialog's cost line (e.g. "Cost 10 SP. Warchest 4,500 \u2192 4,490 SP.").
 //
 // It resolves true when the player confirms and false for Cancel, Escape or a click on the backdrop. `danger` makes the
 // confirm button red and puts the focus on Cancel, so a stray Enter never confirms something destructive. Text is inserted
 // as text, never HTML. It opens on top of any dialog that is already open (a modal dialog stacks above the others).
 (function () {
-  var dialog = null, titleEl = null, messageEl = null, okBtn = null, cancelBtn = null;
+  var dialog = null, titleEl = null, messageEl = null, detailEl = null, okBtn = null, cancelBtn = null;
   var settle = null; // resolves the question that is open
 
   function el(tag, cls, text) {
@@ -24,6 +26,7 @@
     titleEl.id = 'confirm-title';
     messageEl = el('p', 'confirm-message');
     messageEl.id = 'confirm-message';
+    detailEl = el('p', 'confirm-detail');
     var actions = el('div', 'form-actions');
     okBtn = el('button', 'button');
     okBtn.type = 'button';
@@ -33,6 +36,7 @@
     actions.appendChild(cancelBtn);
     dialog.appendChild(titleEl);
     dialog.appendChild(messageEl);
+    dialog.appendChild(detailEl);
     dialog.appendChild(actions);
 
     function finish(answer) {
@@ -58,6 +62,9 @@
     if (settle) { var previous = settle; settle = null; previous(false); } // a second question replaces the first
     titleEl.textContent = o.title || 'Are you sure?';
     messageEl.textContent = o.message || '';
+    detailEl.textContent = o.detail || '';
+    detailEl.hidden = !o.detail;
+    detailEl.classList.toggle('short', !!o.detailShort);
     okBtn.textContent = o.confirmLabel || 'Confirm';
     cancelBtn.textContent = o.cancelLabel || 'Cancel';
     okBtn.classList.toggle('danger', !!o.danger);
