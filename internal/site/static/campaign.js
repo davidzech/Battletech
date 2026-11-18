@@ -558,11 +558,16 @@
     var limits = [];
     if (minMechs) limits.push('at least ' + minMechs + ' mechs');
     if (maxBV) limits.push('up to ' + number(maxBV) + ' BV in all');
-    body.appendChild(el('p', 'muted', 'Pick the mechs of your starting force' + (limits.length ? ': ' + limits.join(', ') : '') + '. Click a mech to add it, and again to add another of it. Each starts fully repaired, with an unnamed 4/5 pilot.'));
+    body.appendChild(el('p', 'muted', 'Pick the mechs of your starting force' + (limits.length ? ': ' + limits.join(', ') : '') + '. Click a mech to add it, and again to add another of it; right-click it to take one off. Each starts fully repaired, with an unnamed 4/5 pilot.'));
     unitSearch = UnitSearch.create({
       campaign: wiz.dataset.campaign, faction: wiz.dataset.faction, era: wiz.dataset.era, idPrefix: 'wiz-units',
       decorate: function (row, u) { var n = pickCount(u.unit); if (n) { row.picked = true; row.badge = n === 1 ? 'In force' : n + ' in force'; } },
-      onPick: function (u) { picks.push(u); renderPicks(); unitSearch.repaint(); updateNext(); }
+      onPick: function (u) { picks.push(u); renderPicks(); unitSearch.repaint(); updateNext(); },
+      // A right-click takes one of that mech back off (the last one picked), down to none.
+      onUnpick: function (u) {
+        for (var i = picks.length - 1; i >= 0; i--) if (picks[i].unit === u.unit) { picks.splice(i, 1); break; }
+        renderPicks(); unitSearch.repaint(); updateNext();
+      }
     });
     body.appendChild(unitSearch.element);
     body.appendChild(el('p', 'purchase-staged-head', 'Your force'));

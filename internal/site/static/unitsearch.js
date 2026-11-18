@@ -8,7 +8,8 @@
 //     placeholder: 'Search units, e.g. Timber Wolf',
 //     idPrefix: 'purchase',                           // optional: ids for its parts (purchase-search, -clear, -available, -results)
 //     decorate: function (row, unit) { ... },        // optional: mark a result (row.picked, row.badge) from the caller's state
-//     onPick: function (unit) { ... }                 // a result was clicked
+//     onPick: function (unit) { ... },               // a result was clicked
+//     onUnpick: function (unit) { ... }               // optional: a result was right-clicked (take one back)
 //   });
 //   container.appendChild(search.element);
 //   search.repaint();   // after the caller's state changes, so the badges follow
@@ -66,12 +67,32 @@
     element.appendChild(results);
 
     var last = null, lastQuery = '', seq = 0, timer = null;
+    var painted = null; // the reply the list on screen shows, so a repaint after a pick updates its rows in place
+
+    function rowFor(u) {
+      var row = plain(u);
+      if (u.mekbayUrl) row.externalUrl = u.mekbayUrl;
+      if (opts.decorate) opts.decorate(row, u);
+      row.onPick = function () { opts.onPick(u); };
+      var built = MechRow.build(row);
+      if (opts.onUnpick) built.addEventListener('contextmenu', function (e) { e.preventDefault(); opts.onUnpick(u); });
+      return built;
+    }
 
     function paint() {
       if (!last) return;
       var units = last.units || [];
-      var scroll = results.querySelector('.purchase-found');
-      var keep = scroll ? scroll.scrollTop : 0;
+      var list = results.querySelector('.purchase-found');
+      // The same results as on screen (a pick changed a badge): each row is swapped where it stands, so the list never leaves the page. Rebuilding it would
+      // collapse the dialog for a moment, which moves its scroll position and makes the rows jump under the pointer.
+      if (list && painted === last && list.children.length === units.length) {
+        var focused = Array.prototype.indexOf.call(list.children, document.activeElement);
+        units.forEach(function (u, i) { list.replaceChild(rowFor(u), list.children[i]); });
+        if (focused >= 0) list.children[focused].focus({ preventScroll: true });
+        return;
+      }
+      var keep = list ? list.scrollTop : 0;
+      painted = last;
       results.textContent = '';
       if (!units.length) {
         var none = 'No mechs match “' + lastQuery + '”.';
@@ -79,14 +100,8 @@
         results.appendChild(el('p', 'muted', none));
         return;
       }
-      var list = el('div', 'mech-list purchase-found');
-      units.forEach(function (u) {
-        var row = plain(u);
-        if (u.mekbayUrl) row.externalUrl = u.mekbayUrl;
-        if (opts.decorate) opts.decorate(row, u);
-        row.onPick = function () { opts.onPick(u); };
-        list.appendChild(MechRow.build(row));
-      });
+      list = el('div', 'mech-list purchase-found');
+      units.forEach(function (u) { list.appendChild(rowFor(u)); });
       results.appendChild(list);
       list.scrollTop = keep;
       if (last.limited) results.appendChild(el('p', 'muted', 'Showing the first ' + units.length + ' of ' + last.total + ' matches. Type more to narrow them down.'));

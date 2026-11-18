@@ -1066,7 +1066,7 @@ dialog button.rec-skills-reset:disabled { opacity: 0.4; cursor: not-allowed; }
 .hangar-stat.warn .hangar-stat-value { color: #ff9a4d; }
 .hangar-stat.bad .hangar-stat-value { color: #ff7a59; }
 .hangar-units-summary:empty { display: none; }
-.mech-list { display: grid; gap: 0.4rem; margin-top: 0.6rem; }
+.mech-list { display: grid; grid-auto-rows: max-content; gap: 0.4rem; margin-top: 0.6rem; } /* each row as tall as its content: in a fixed-height scrolling list, auto rows could be held to the rows' min-height and the content spill into the next row */
 /* The Hangar list has a little more room than the compact rows in the popup and the wizard: about 5.2rem tall, with the icon, name and chips
    sized between the two. */
 .mech-list .mech-row { grid-template-columns: 1.7rem 4.4rem minmax(0, 1fr); min-height: 5.2rem; }

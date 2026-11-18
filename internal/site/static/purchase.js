@@ -83,7 +83,8 @@
     faction: dialog.dataset.faction, era: dialog.dataset.era,
     idPrefix: 'purchase',
     decorate: function (row, u) { if (countOf(u.unit)) { row.picked = true; row.badge = 'In cart'; } },
-    onPick: toggle
+    onPick: toggle,
+    onUnpick: function (u) { if (countOf(u.unit)) toggle(u); } // a right-click only ever takes a unit out of the cart
   });
   document.getElementById('purchase-search-box').appendChild(search.element);
   function paintResults() { search.repaint(); }
