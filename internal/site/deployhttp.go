@@ -1,0 +1,76 @@
+package site
+
+import (
+	"encoding/json"
+	"log"
+	"net/http"
+)
+
+// The Deploy popup's endpoints: what every MekBay endpoint needs first, and the hangar as the popup lists it.
+
+// mekbayRequest is what both MekBay endpoints need first: the seed's playthrough, the campaign and scenario named by
+// the request, and the playthrough's run of that campaign (which holds its hangar). It writes the error response
+// itself and reports ok=false.
+func (s *Server) mekbayRequest(w http.ResponseWriter, r *http.Request) (pt Playthrough, run CampaignRun, c *Campaign, sc *Scenario, ok bool) {
+	seed := currentSeed(r)
+	if seed == "" {
+		http.Error(w, "Choose a seed first.", http.StatusBadRequest)
+		return
+	}
+	c, found := s.lib.Campaign(r.FormValue("campaign"))
+	if !found {
+		http.Error(w, "unknown campaign", http.StatusNotFound)
+		return
+	}
+	sc, found = c.Scenario(r.FormValue("scenario"))
+	if !found || len(sc.Forces) == 0 {
+		http.Error(w, "unknown scenario, or it has no OpFor to deploy against", http.StatusNotFound)
+		return
+	}
+	pt, found, err := s.store.Playthrough(r.Context(), playthroughID(seed))
+	if err != nil {
+		http.Error(w, "could not load playthrough", http.StatusInternalServerError)
+		return
+	}
+	if !found || !pt.Configured() {
+		http.Error(w, "Name your account first.", http.StatusBadRequest)
+		return
+	}
+	run, started, err := s.store.Run(r.Context(), pt.ID, c.Slug)
+	if err != nil {
+		http.Error(w, "could not load campaign", http.StatusInternalServerError)
+		return
+	}
+	if !started {
+		http.Error(w, "Start this campaign first.", http.StatusBadRequest)
+		return
+	}
+	return pt, run, c, sc, true
+}
+
+// hangarJSON lists the player's hangar for the deploy popup, with the scenario's BV limit.
+func (s *Server) hangarJSON(w http.ResponseWriter, r *http.Request) {
+	pt, run, c, sc, ok := s.mekbayRequest(w, r)
+	if !ok {
+		return
+	}
+	h, err := s.scenarioHangar(r.Context(), run, sc)
+	if err != nil {
+		log.Printf("read hangar for %s: %v", sc.ID, err)
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	_, hasOp, err := s.store.MekBayOperation(r.Context(), pt.ID, c.Slug, sc.ID)
+	if err != nil {
+		http.Error(w, "could not load operation", http.StatusInternalServerError)
+		return
+	}
+	if !sc.provides() { // the scenario's own mechs are not the hangar, so they are never cached as it
+		s.cacheHangar(r.Context(), pt.ID, c.Slug, run.HangarInstance, h)
+	}
+	out := deployData(h, sc.BVLimit, run.Owned(), hasOp)
+	out["provided"] = sc.provides()
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	_ = json.NewEncoder(w).Encode(out)
+}

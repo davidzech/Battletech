@@ -98,6 +98,12 @@ type Server struct {
 	onProxy  func(*mekbayProxy) // tests take hold of the proxy here
 }
 
+// Option customizes the handler returned by NewHandler.
+type Option func(*Server)
+
+// WithMekBay replaces the MekBay client (tests use a fake one).
+func WithMekBay(m MekBay) Option { return func(s *Server) { s.mekbay = m } }
+
 // NewHandler returns the site's HTTP handler. Campaign files are re-read on every request,
 // so edits show up on refresh.
 func NewHandler(contentRoot string, store *Store, opts ...Option) http.Handler {
