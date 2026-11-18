@@ -63,14 +63,14 @@ func (s *Store) Pilots(ctx context.Context, playthroughID, campaign string) ([]N
 // AddPilot names a new pilot with the given starting SP. A command may have at most max living named pilots
 // (ErrPilotLimit otherwise).
 // AddPilot adds a pilot with the lowest rank and every SP allocated (see AddPilotWithRank).
-func (s *Store) AddPilot(ctx context.Context, playthroughID, campaign, name, portrait string, start SPAllocation, max int) (NamedPilot, error) {
-	return s.AddPilotWithRank(ctx, playthroughID, campaign, name, portrait, "", start, start.Total(), max)
+func (s *Store) AddPilot(ctx context.Context, playthroughID, campaign, name, portrait string, start SPAllocation, limit int) (NamedPilot, error) {
+	return s.AddPilotWithRank(ctx, playthroughID, campaign, name, portrait, "", start, start.Total(), limit)
 }
 
 // AddPilotWithRank adds a living named pilot to a campaign run with the given rank ("" is the lowest) and starting SP, refusing
 // it when the command already has max living pilots (ErrPilotLimit), another living pilot has the portrait (ErrPortraitTaken) or
 // the name is taken (ErrNameTaken, ignoring case).
-func (s *Store) AddPilotWithRank(ctx context.Context, playthroughID, campaign, name, portrait, rank string, start SPAllocation, total, max int) (NamedPilot, error) {
+func (s *Store) AddPilotWithRank(ctx context.Context, playthroughID, campaign, name, portrait, rank string, start SPAllocation, total, limit int) (NamedPilot, error) {
 	total = max(total, start.Total()) // the total can't be below what is allocated; any more is unallocated
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -83,7 +83,7 @@ func (s *Store) AddPilotWithRank(ctx context.Context, playthroughID, campaign, n
 		playthroughID, campaign).Scan(&alive); err != nil {
 		return NamedPilot{}, err
 	}
-	if alive >= max {
+	if alive >= limit {
 		return NamedPilot{}, ErrPilotLimit
 	}
 	if portrait != "" {
@@ -231,7 +231,7 @@ func (s *Store) SetPilotPortrait(ctx context.Context, playthroughID, campaign, p
 // RevivePilot brings a pilot marked killed in action back, to correct a misclick (sql.ErrNoRows if there is no such
 // killed pilot, ErrPilotLimit if the command already has the most living pilots it may have). If another living pilot has
 // taken the portrait in the meantime, the pilot gets altPortrait instead.
-func (s *Store) RevivePilot(ctx context.Context, playthroughID, campaign, pilotID, altPortrait string, max int) error {
+func (s *Store) RevivePilot(ctx context.Context, playthroughID, campaign, pilotID, altPortrait string, limit int) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -249,7 +249,7 @@ func (s *Store) RevivePilot(ctx context.Context, playthroughID, campaign, pilotI
 		playthroughID, campaign).Scan(&alive); err != nil {
 		return err
 	}
-	if alive >= max {
+	if alive >= limit {
 		return ErrPilotLimit
 	}
 	if portrait != "" {
