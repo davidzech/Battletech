@@ -2,6 +2,7 @@ package site
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 )
 
@@ -81,6 +82,18 @@ func (s *Server) setScenarioCompleted(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	done := r.PostFormValue("done") == "1"
+	if sc.HasOutcome() {
+		// A mission with an outcome is completed by reporting it (POST /api/campaign/scenario-outcome/commit), which gives the rewards; marking it by hand would skip
+		// them, and un-completing it would let them be given twice.
+		if done {
+			http.Error(w, "Report this mission's outcome to complete it.", http.StatusBadRequest)
+			return
+		}
+		if rec, was, err := s.store.CompletionOutcome(r.Context(), pt.ID, c.Slug, sc.Slug); err == nil && was && rec != nil {
+			http.Error(w, "This mission's outcome has been committed. To correct it, adjust the pilots and funds under Manage force.", http.StatusConflict)
+			return
+		}
+	}
 	if done {
 		completed, err := s.store.Completions(r.Context(), pt.ID, c.Slug)
 		if err != nil {
@@ -97,4 +110,50 @@ func (s *Server) setScenarioCompleted(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// recordedOutcome is the stored report of a completed scenario's outcome, for the scenario page (nil if there is none).
+func (s *Server) recordedOutcome(r *http.Request, c *Campaign, sc *Scenario, completed map[string]bool) *OutcomeResult {
+	seed := currentSeed(r)
+	if seed == "" || !sc.HasOutcome() || !completed[sc.Slug] {
+		return nil
+	}
+	res, _, err := s.store.CompletionOutcome(r.Context(), playthroughID(seed), c.Slug, sc.Slug)
+	if err != nil {
+		return nil
+	}
+	return res
+}
+
+// OutcomeInputsJSON is the scenario's outcome inputs for the completion dialog.
+func (p Page) OutcomeInputsJSON() string {
+	if p.Scenario == nil {
+		return "[]"
+	}
+	b, err := json.Marshal(p.Scenario.OutcomeInputs)
+	if err != nil {
+		return "[]"
+	}
+	return string(b)
+}
+
+// OutcomePilotsJSON is the living named pilots, for the completion dialog's list of who took part.
+func (p Page) OutcomePilotsJSON() string {
+	type pilot struct {
+		ID       string `json:"id"`
+		Name     string `json:"name"`
+		Portrait string `json:"portrait"`
+		Rank     string `json:"rank"`
+	}
+	out := []pilot{}
+	for _, v := range p.Pilots {
+		if !v.Fallen {
+			out = append(out, pilot{ID: v.ID, Name: v.Name, Portrait: v.PortraitURL, Rank: v.Rank})
+		}
+	}
+	b, err := json.Marshal(out)
+	if err != nil {
+		return "[]"
+	}
+	return string(b)
 }

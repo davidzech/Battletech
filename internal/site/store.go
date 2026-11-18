@@ -39,6 +39,7 @@ type CampaignRun struct {
 	SourceURL      string // the MekBay link the player gave, which the copy was made from; kept so it can be imported again
 	Warchest       int    // the force's finances in SP; starts at the campaign's starting_warchest
 	ForceName      string // the campaign's force name, e.g. "Wolf's Dragoons", chosen when the campaign is started and editable on the Manage page ("" on a run from before it was asked)
+	FreeRecruits   int    // recruits that cost no SP (a mission outcome can grant them, e.g. a replacement for a pilot who died)
 	Players        int    // how many players the company plays this campaign with: the Deploy wizard's default count (0 on a run from before it was asked)
 }
 
@@ -104,7 +105,16 @@ func (s *Store) schemaStatements() []string {
 	campaign       TEXT NOT NULL,
 	scenario_id    TEXT NOT NULL,
 	completed_at   %s,
+	outcome        TEXT NOT NULL DEFAULT '',
 	PRIMARY KEY (playthrough_id, campaign, scenario_id)
+)`, s.timestampColumn()),
+		fmt.Sprintf(`CREATE TABLE IF NOT EXISTS campaign_keywords (
+	playthrough_id TEXT NOT NULL REFERENCES playthroughs(id) ON DELETE CASCADE,
+	campaign       TEXT NOT NULL,
+	keyword        TEXT NOT NULL,
+	scenario_id    TEXT NOT NULL,
+	granted_at     %s,
+	PRIMARY KEY (playthrough_id, campaign, keyword)
 )`, s.timestampColumn()),
 		`CREATE TABLE IF NOT EXISTS hangar_cache (
 	playthrough_id TEXT NOT NULL REFERENCES playthroughs(id) ON DELETE CASCADE,
@@ -214,6 +224,12 @@ func (s *Store) init() error {
 		return err
 	}
 	if err := s.ensureColumn("campaign_runs", "force_name", "TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
+	if err := s.ensureColumn("campaign_runs", "free_recruits", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
+	if err := s.ensureColumn("scenario_completions", "outcome", "TEXT NOT NULL DEFAULT ''"); err != nil {
 		return err
 	}
 	if err := s.ensureColumn("named_pilots", "portrait", "TEXT NOT NULL DEFAULT ''"); err != nil {
@@ -401,9 +417,9 @@ func (s *Store) RefundWarchest(ctx context.Context, playthroughID, campaign stri
 // Run loads a playthrough's run through a campaign; ok is false if the campaign hasn't been started.
 func (s *Store) Run(ctx context.Context, playthroughID, campaign string) (r CampaignRun, ok bool, err error) {
 	err = s.db.QueryRowContext(ctx,
-		s.q(`SELECT campaign, hangar_url, hangar_instance, source_url, warchest, players, force_name FROM campaign_runs WHERE playthrough_id = ? AND campaign = ?`),
+		s.q(`SELECT campaign, hangar_url, hangar_instance, source_url, warchest, players, force_name, free_recruits FROM campaign_runs WHERE playthrough_id = ? AND campaign = ?`),
 		playthroughID, campaign,
-	).Scan(&r.Campaign, &r.HangarURL, &r.HangarInstance, &r.SourceURL, &r.Warchest, &r.Players, &r.ForceName)
+	).Scan(&r.Campaign, &r.HangarURL, &r.HangarInstance, &r.SourceURL, &r.Warchest, &r.Players, &r.ForceName, &r.FreeRecruits)
 	if errors.Is(err, sql.ErrNoRows) {
 		return CampaignRun{}, false, nil
 	}
@@ -747,7 +763,7 @@ func (s *Store) DeleteRun(ctx context.Context, playthroughID, campaign string) (
 		playthroughID, campaign); err != nil {
 		return false, err
 	}
-	for _, table := range []string{"named_pilots", "mekbay_operations", "hangar_cache", "scenario_completions"} {
+	for _, table := range []string{"named_pilots", "mekbay_operations", "hangar_cache", "scenario_completions", "campaign_keywords"} {
 		if _, err := tx.ExecContext(ctx, s.q("DELETE FROM "+table+" WHERE playthrough_id = ? AND campaign = ?"), playthroughID, campaign); err != nil {
 			return false, err
 		}

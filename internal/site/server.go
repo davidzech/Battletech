@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"embed"
 	"encoding/hex"
+	"fmt"
 	"html/template"
 	"log"
 	"net/http"
@@ -48,17 +49,19 @@ type Page struct {
 	Crumbs             []Crumb
 	Campaign           *Campaign
 	Scenario           *Scenario
-	Next               *Scenario
 	Cards              []Card
-	HasLocked          bool        // some scenario cards are locked, so the campaign page offers 'Show all scenarios'
-	ScenarioState      string      // on a scenario page: completed, available or locked
-	Images             []string    // URLs of the scenario's images
-	Seed               string      // the visitor's seed ("" if none chosen yet)
-	Play               Playthrough // the visitor's playthrough (zero value if no seed)
-	Run                CampaignRun // the playthrough's run of this page's campaign (zero value until it is started)
-	Pilots             []PilotView // the run's named pilots
-	CanRecruit         bool        // the command has room for another living named pilot
-	MaxPilots          int         // most living named pilots a command may have
+	HasLocked          bool           // some scenario cards are locked, so the campaign page offers 'Show all scenarios'
+	ScenarioState      string         // on a scenario page: completed, available or locked
+	Ledger             []LedgerEntry  // the keywords the campaign has been granted (on the keywords page)
+	Outcome            *OutcomeResult // on a completed scenario page: the recorded report of its outcome
+	Images             []string       // URLs of the scenario's images
+	Seed               string         // the visitor's seed ("" if none chosen yet)
+	Play               Playthrough    // the visitor's playthrough (zero value if no seed)
+	Run                CampaignRun    // the playthrough's run of this page's campaign (zero value until it is started)
+	Pilots             []PilotView    // the run's named pilots
+	CanRecruit         bool           // the command has room for another living named pilot, and the warchest can pay for them
+	RecruitNote        string         // the short gray note under Recruit New Pilot: why it is unavailable, or what it costs
+	MaxPilots          int            // most living named pilots a command may have
 	// CachedHangar is the hangar last read from MekBay for this run (nil if none yet), and CachedAt when; the campaign and scenario
 	// pages embed it so they can paint the hangar before the live read finishes (see hangarcache.go).
 	CachedHangar *HangarForce
@@ -126,6 +129,8 @@ func NewHandler(contentRoot string, store *Store, opts ...Option) http.Handler {
 	mux.HandleFunc("POST /api/campaign/players", s.setPlayers)
 	mux.HandleFunc("POST /api/campaign/force-name", s.setForceName)
 	mux.HandleFunc("POST /api/campaign/scenario-complete", s.setScenarioCompleted)
+	mux.HandleFunc("POST /api/campaign/scenario-outcome", s.previewOutcome)
+	mux.HandleFunc("POST /api/campaign/scenario-outcome/commit", s.commitOutcome)
 	mux.HandleFunc("POST /api/hangar/service", s.serviceUnit)
 	mux.HandleFunc("POST /api/hangar/purchase", s.purchaseUnits)
 	mux.HandleFunc("POST /api/hangar/sell", s.sellUnit)
@@ -171,7 +176,20 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name
 					}
 					var alive int
 					p.Pilots, alive = pilotViews(pilots, p.Campaign.Ranks)
-					p.CanRecruit = alive < maxNamedPilots
+					limit := p.Campaign.PilotLimit()
+					cost := p.Campaign.RecruitCost
+					free := p.Run.FreeRecruits > 0
+					p.CanRecruit = alive < limit && (free || p.Run.Warchest >= cost)
+					switch {
+					case alive >= limit:
+						p.RecruitNote = fmt.Sprintf("Your command is full: %d of %d pilots.", alive, limit)
+					case free:
+						p.RecruitNote = "A replacement pilot is free: recruiting costs no SP."
+					case p.Run.Warchest < cost:
+						p.RecruitNote = fmt.Sprintf("Recruiting costs %s SP (warchest: %s).", withCommas(cost), withCommas(p.Run.Warchest))
+					case cost > 0:
+						p.RecruitNote = fmt.Sprintf("Recruiting costs %s SP.", withCommas(cost))
+					}
 					p.Ranks = p.Campaign.Ranks
 					if name == "campaign" || name == "scenario" || name == "manage" {
 						if h, at, ok, err := s.store.CachedHangar(r.Context(), id, p.Campaign.Slug, p.Run.HangarInstance); err != nil {
@@ -183,7 +201,7 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name
 					for _, v := range p.Pilots {
 						p.Memorial = p.Memorial || v.Fallen
 					}
-					p.MaxPilots = maxNamedPilots
+					p.MaxPilots = limit
 				}
 			}
 		}
@@ -240,11 +258,19 @@ func (s *Server) keywords(w http.ResponseWriter, r *http.Request) {
 		s.notFound(w, r)
 		return
 	}
-	s.render(w, r, http.StatusOK, "keywords", Page{
+	p := Page{
 		Title:    "Keywords | " + c.Label,
 		Crumbs:   []Crumb{{Label: c.Label, URL: "/" + c.Slug + "/"}, {Label: "Keywords", URL: "/" + c.Slug + "/keywords/"}},
 		Campaign: c,
-	})
+	}
+	if seed := currentSeed(r); seed != "" {
+		if ledger, err := s.store.Ledger(r.Context(), playthroughID(seed), c.Slug); err != nil {
+			log.Printf("load the campaign ledger: %v", err)
+		} else {
+			p.Ledger = ledger
+		}
+	}
+	s.render(w, r, http.StatusOK, "keywords", p)
 }
 
 func (s *Server) scenario(w http.ResponseWriter, r *http.Request) {
@@ -258,7 +284,6 @@ func (s *Server) scenario(w http.ResponseWriter, r *http.Request) {
 		s.notFound(w, r)
 		return
 	}
-	next, _ := c.ScenarioByID(sc.Next)
 	completed, available := s.progress(r, c)
 	var images []string
 	for _, img := range sc.Images {
@@ -279,8 +304,8 @@ func (s *Server) scenario(w http.ResponseWriter, r *http.Request) {
 		Crumbs:        []Crumb{{Label: c.Label, URL: "/" + c.Slug + "/"}, scenarioCrumb(c, sc, available)},
 		Campaign:      c,
 		Scenario:      sc,
-		Next:          next,
 		ScenarioState: scenarioState(sc.Slug, completed, available),
+		Outcome:       s.recordedOutcome(r, c, sc, completed),
 	})
 }
 

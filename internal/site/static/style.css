@@ -249,6 +249,12 @@ th {
 /* A <button class="button"> looks like the link buttons: no default border, pointer cursor. */
 button.button { border: 0; cursor: pointer; }
 button.button:disabled { opacity: 0.6; cursor: wait; filter: none; }
+/* The outline button: a square yellow border, nothing inside, yellow text. */
+.button.button-outline, button.button.button-outline { background: transparent; color: var(--accent); border: 1px solid var(--accent); clip-path: none; }
+.button.button-outline:hover, button.button.button-outline:hover:not(:disabled) { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); filter: none; }
+button.button.button-outline:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* The big version, for the one button a page is really about (Complete mission): larger, with a bolder border. */
+.button.button-outline.button-large, button.button.button-outline.button-large { padding: 1rem 2.6rem; font-size: 1.15rem; letter-spacing: 0.14em; border-width: 3px; }
 
 figure { margin: 1rem 0; }
 /* Scenario art: a wide banner cropped to the top, so dark space at the bottom of the image fades into the page.
@@ -286,7 +292,6 @@ figure { margin: 1rem 0; }
 img { max-width: 100%; height: auto; }
 code { background: var(--panel-2); padding: 0.1em 0.35em; }
 
-.next { margin-top: 2rem; font: 1rem var(--display); letter-spacing: 0.08em; text-transform: uppercase; }
 
 footer {
   padding: 1.5rem 1.25rem 2rem;
@@ -1335,9 +1340,52 @@ dialog button.deploy-count:disabled, .overview-players button.deploy-count:disab
 .mission-log { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 1rem; margin: 1rem 0; padding: 0.6rem 1rem; background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--line); }
 .mission-log.completed { border-left-color: #5fc47e; }
 .mission-log-label { font: 700 0.75rem var(--display); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
-.mission-log-state { font: 700 1rem var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
+.mission-log-state { display: inline-flex; align-items: center; gap: 0.6rem; font: 700 1rem var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
 .mission-log.completed .mission-log-state { color: #5fc47e; }
 .mission-log.locked .mission-log-state { color: var(--muted); }
-.mission-log .button { margin-left: auto; }
-.mission-log .form-error { flex-basis: 100%; margin: 0; }
-.mission-log .form-error:empty { display: none; }
+.mission-log .outcome-summary { flex-basis: 100%; }
+/* The status LED after the mission log's state: a soft glowing red dot until the mission is completed, then green (gray while the mission is not available). */
+.mission-led { flex: none; width: 0.5rem; height: 0.5rem; border-radius: 50%; background: #e5594f; box-shadow: 0 0 0.3rem 0.05rem rgba(229, 89, 79, 0.65), 0 0 0.75rem 0.15rem rgba(229, 89, 79, 0.25); transition: background 0.3s, box-shadow 0.3s; }
+.mission-log.completed .mission-led { background: #5fc47e; box-shadow: 0 0 0.3rem 0.05rem rgba(95, 196, 126, 0.65), 0 0 0.75rem 0.15rem rgba(95, 196, 126, 0.25); }
+.mission-log.locked .mission-led { background: var(--line); box-shadow: none; }
+/* Completing the mission is the last thing on the page. */
+.mission-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 0.6rem 1rem; margin: 1.6rem 0 1rem; padding-top: 1rem; border-top: 1px solid var(--line); }
+.mission-actions .form-error { flex-basis: 100%; margin: 0; text-align: center; }
+.mission-actions .form-error:empty { display: none; }
+
+.recruit-note { margin: 0.4rem 0 1rem; font-size: 0.85rem; text-align: right; } /* under the right-aligned Recruit New Pilot button */
+#recruit-cost[hidden] { display: none; }
+
+/* The mission completion dialog (outcome.js): a card for each pilot with what to report, and the result as it would be. */
+dialog.outcome { width: min(46rem, calc(100vw - 2rem)); }
+.outcome-pilot { margin: 0.7rem 0; padding: 0.7rem 0.9rem; background: var(--bg); border: 1px solid var(--line); border-left: 3px solid var(--accent); }
+.outcome-pilot-head { display: flex; align-items: center; gap: 0.8rem; }
+.outcome-pilot-head img { background: var(--panel); border: 1px solid var(--line); }
+.outcome-pilot-name { display: grid; gap: 0.1rem; margin-right: auto; }
+.outcome-pilot-name b { font: 700 1.1rem var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
+.outcome-pilot-name .muted { font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.outcome-fields { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem 1.6rem; margin-top: 0.6rem; }
+.outcome-fields[hidden] { display: none; }
+.outcome-field { display: inline-flex; align-items: center; gap: 0.6rem; }
+.outcome-label { font: 700 0.75rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; }
+.outcome-field input[type=number] { width: 5rem; padding: 0.35rem 0.5rem; font: 700 1rem var(--display); color: var(--text); background: var(--panel); border: 1px solid var(--line); }
+.outcome-field input[type=number]:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.outcome-preview { margin: 0.6rem 0 0; padding: 0.4rem 0 0; list-style: none; border-top: 1px dashed var(--line); font: 700 0.9rem var(--display); letter-spacing: 0.05em; text-transform: uppercase; }
+.outcome-preview li { margin: 0.1rem 0; }
+.outcome-good { color: #5fc47e; }
+.outcome-bad { color: #e5594f; }
+.outcome-mission { margin: 0.9rem 0 0; }
+.outcome-summary { flex-basis: 100%; margin: 0.3rem 0 0; padding: 0; list-style: none; }
+.outcome-summary li { margin: 0.25rem 0; }
+.outcome-summary .outcome-note { margin-left: 0.5rem; font: 700 0.85rem var(--display); letter-spacing: 0.05em; text-transform: uppercase; color: #5fc47e; }
+.outcome-summary li:has(.outcome-note) .outcome-note:not(:first-of-type) { color: var(--muted); }
+
+/* The scenario's outcome text (victory conditions and rewards) at the top of the completion dialog. */
+.outcome-rules { margin: 0.4rem 0 1rem; padding: 0.7rem 0.9rem; font-size: 0.9rem; background: var(--bg); border: 1px solid var(--line); border-left: 3px solid var(--line); }
+.outcome-rules > :first-child { margin-top: 0; }
+.outcome-rules > :last-child { margin-bottom: 0; }
+.outcome-rules h2, .outcome-rules h3 { margin: 0.2rem 0 0.5rem; font: 700 0.85rem var(--display); letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); }
+.outcome-rules p { margin: 0.5rem 0; }
+.outcome-rules table { width: 100%; border-collapse: collapse; margin: 0.5rem 0; font-size: 0.85rem; }
+.outcome-rules th, .outcome-rules td { padding: 0.25rem 0.6rem; text-align: left; border-bottom: 1px solid var(--line); }
+.outcome-rules th { font: 700 0.7rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }

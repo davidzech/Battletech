@@ -26,7 +26,7 @@
 {{end}}{{if .Campaign.StartingWarchest}}<li>Your warchest starts at <b>{{.Campaign.StartingWarchestText}} SP</b>.</li>
 {{end}}<li>You name your force, then link a MekBay force holding the mechs it fields; the site copies it and manages the copy.</li>
 </ul>
-<p class="downloads"><button type="button" class="button" id="wizard-open">Start campaign&hellip;</button></p>
+<p class="downloads"><button type="button" class="button" id="wizard-open">Start campaign</button></p>
 </section>
 <dialog id="start-wizard" class="wizard" aria-labelledby="wiz-title" data-campaign="{{.Campaign.Slug}}" data-pilots="{{.Campaign.StartingNamedPilots}}" data-player-ids="{{.PlayerIDsJSON}}" data-min-players="{{.Campaign.MinPlayers}}" data-max-players="{{.Campaign.MaxPlayers}}" data-sp="{{.Campaign.StartingPilotSP}}" data-ladders="{{.Ladders}}" data-portraits="{{.Portraits}}" data-abilities="{{.Abilities}}">
   <form id="wiz-form" autocomplete="off" novalidate>

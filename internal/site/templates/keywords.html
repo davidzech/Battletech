@@ -1,4 +1,7 @@
 {{define "content"}}<p class="kicker">{{.Campaign.Label}}</p>
 <h1 class="bt-title">Keywords</h1>
 <section class="panel">{{.Campaign.KeywordsHTML}}</section>
+<h2>Your campaign ledger</h2>
+{{if .Ledger}}<ul class="ledger" id="ledger">{{range .Ledger}}<li><code>{{.Keyword}}</code> <span class="muted">granted by scenario {{.Scenario}}</span></li>
+{{end}}</ul>{{else}}<p class="muted" id="ledger">No keywords earned yet.</p>{{end}}
 {{end}}

@@ -33,6 +33,15 @@ type Scenario struct {
 	// ProvidedUnits, when set (front matter provided_units: MekBay unit IDs), replace the player's hangar for this scenario: the players pick from this fixed pool
 	// instead, for story reasons. The units exist only for this scenario and never touch the hangar (see provided.go).
 	ProvidedUnits []string
+	// OutcomeInputs and OutcomeRules are the scenario's outcome engine (Outcome.md front matter `inputs` and `outcomes`, see outcomes.go); OutcomeError says what is wrong
+	// with them, in which case the scenario has no engine.
+	OutcomeInputs     []OutcomeInput
+	OutcomeObjectives []OutcomeObjective
+	// OutcomePilotSP is the flat SP each active pilot gets from the pool (half for a benched one, none for one killed; Outcome.md pilot_sp).
+	OutcomePilotSP any
+	pilotShare     *Expr
+	OutcomeRules   []OutcomeRule
+	OutcomeError   string
 	// Branches are the scenarios (slugs) this one may lead to once it is completed: the Outcome.md front matter `branches` list, or when that is omitted its
 	// `default_next`, or else the next scenario number. Only a scenario that is the campaign's first, completed, or a branch of a completed one is available.
 	Branches       []string
@@ -74,8 +83,10 @@ type Campaign struct {
 	Label        string
 	IntroHTML    template.HTML
 	KeywordsHTML template.HTML
-	MinPlayers   int // fewest players the campaign is built for (Intro.md front matter min_players); 0 if not given
-	MaxPlayers   int // most players it supports (max_players); 0 if not given
+	// Keywords are the keyword IDs Keywords.md registers (the campaign's ledger can hold only these).
+	Keywords   []string
+	MinPlayers int // fewest players the campaign is built for (Intro.md front matter min_players); 0 if not given
+	MaxPlayers int // most players it supports (max_players); 0 if not given
 	// StartingNamedPilots is how many named pilots the campaign requires before scenarios can be played
 	// (Intro.md front matter starting_named_pilots); 0 means none are required.
 	StartingNamedPilots int
@@ -89,6 +100,10 @@ type Campaign struct {
 	StartingMinMechs int
 	// StartingWarchest is the SP the company's warchest starts the campaign with (Intro.md front matter starting_warchest); 0 if not given.
 	StartingWarchest int
+	// MaxNamedPilots is the most living named pilots the force may have at once (Intro.md max_named_pilots; Refusal War: 4); 0 means the default of four. RecruitCost is
+	// the SP it costs from the warchest to recruit a new named pilot later on (Intro.md recruit_cost; Refusal War: 300); 0 is free. The starting pilots are free.
+	MaxNamedPilots int
+	RecruitCost    int
 	// AvailabilityFaction and AvailabilityEra, e.g. "Clan Wolf" and "Clan Invasion", pick the units the purchase search offers by default (see
 	// availability.go); both empty means no such filter.
 	AvailabilityFaction, AvailabilityEra string
@@ -138,6 +153,46 @@ func (c *Campaign) ScenarioByID(id string) (*Scenario, bool) {
 		}
 	}
 	return nil, false
+}
+
+// PilotLimit is the most living named pilots the force may have at once.
+func (c *Campaign) PilotLimit() int {
+	if c.MaxNamedPilots > 0 {
+		return c.MaxNamedPilots
+	}
+	return maxNamedPilots
+}
+
+// keywordBullet matches a keyword's bullet in Keywords.md: a lowercase snake_case ID in backticks at the start.
+var keywordBullet = regexp.MustCompile("(?m)^\\s*[-*]\\s+`([a-z][a-z0-9_]*)`")
+
+// keywordIDs lists the keyword IDs registered in a Keywords.md body.
+func keywordIDs(body string) []string {
+	var out []string
+	for _, m := range keywordBullet.FindAllStringSubmatch(body, -1) {
+		out = append(out, m[1])
+	}
+	return out
+}
+
+// checkGrants marks a scenario whose outcome grants a keyword that Keywords.md doesn't register: it then has no outcome engine, and the mistake is reported.
+func (c *Campaign) checkGrants() {
+	known := map[string]bool{}
+	for _, k := range c.Keywords {
+		known[k] = true
+	}
+	for i := range c.Scenarios {
+		sc := &c.Scenarios[i]
+		if sc.OutcomeError != "" {
+			continue
+		}
+		for _, g := range sc.GrantedKeywords() {
+			if !known[g] {
+				sc.OutcomeError = fmt.Sprintf("grants the keyword %q, which is not in Keywords.md", g)
+				break
+			}
+		}
+	}
 }
 
 // lowerAll lowercases and trims a list of scenario IDs.
@@ -235,10 +290,17 @@ type frontData struct {
 	StartingMinMechs int `yaml:"starting_min_mechs"`
 	// StartingWarchest is the SP the warchest starts with (Intro.md).
 	StartingWarchest int `yaml:"starting_warchest"`
+	MaxNamedPilots   int `yaml:"max_named_pilots"`
+	RecruitCost      int `yaml:"recruit_cost"`
 	// AvailabilityFaction and AvailabilityEra say which MekBay faction and era decide what the purchase search offers by default (Intro.md).
 	AvailabilityFaction string `yaml:"availability_faction"`
 	AvailabilityEra     string `yaml:"availability_era"`
 	DefaultNext         string `yaml:"default_next"`
+	// Inputs and Outcomes (Outcome.md) are the scenario's outcome engine.
+	Inputs     []OutcomeInput     `yaml:"inputs"`
+	Objectives []OutcomeObjective `yaml:"objectives"`
+	PilotSP    any                `yaml:"pilot_sp"`
+	Outcomes   []OutcomeRule      `yaml:"outcomes"`
 	// Branches (Outcome.md) lists the scenario IDs this scenario may branch to; omitted, it leads to the next scenario number.
 	Branches []string `yaml:"branches"`
 	// Faction and Ranks are described on Campaign (Intro.md).
@@ -327,31 +389,36 @@ func (l Library) load(name string) (*Campaign, bool) {
 		setupBody, waypoints := splitWaypoints(setupBody)
 		outcome, outcomeBody := readMarkdown(filepath.Join(sdir, "Outcome.md"))
 		s := Scenario{
-			Dir:            sdir,
-			Slug:           strings.ToLower(e.Name()),
-			ID:             setup.ID,
-			Number:         m[1],
-			Title:          setup.Title,
-			Map:            setup.Map,
-			Planet:         setup.Planet,
-			Images:         setup.Images,
-			Readout:        readoutRows(setup.Readout),
-			Waypoints:      waypoints,
-			Forces:         forceFiles(setup.Forces),
-			BVLimit:        setup.BVLimit,
-			ProvidedUnits:  setup.Provided,
-			UnitLimit:      setup.UnitLimit,
-			PilotsRequired: setup.PilotsReq,
-			Next:           outcome.DefaultNext,
-			Branches:       lowerAll(outcome.Branches),
-			branchesListed: outcome.Branches != nil,
-			BriefingHTML:   renderBriefing(briefing),
-			SetupHTML:      renderMarkdown(setupBody, false),
-			OutcomeHTML:    renderMarkdown(outcomeBody, true),
+			Dir:               sdir,
+			Slug:              strings.ToLower(e.Name()),
+			ID:                setup.ID,
+			Number:            m[1],
+			Title:             setup.Title,
+			Map:               setup.Map,
+			Planet:            setup.Planet,
+			Images:            setup.Images,
+			Readout:           readoutRows(setup.Readout),
+			Waypoints:         waypoints,
+			Forces:            forceFiles(setup.Forces),
+			BVLimit:           setup.BVLimit,
+			ProvidedUnits:     setup.Provided,
+			UnitLimit:         setup.UnitLimit,
+			PilotsRequired:    setup.PilotsReq,
+			Next:              outcome.DefaultNext,
+			OutcomeInputs:     outcome.Inputs,
+			OutcomeObjectives: outcome.Objectives,
+			OutcomePilotSP:    outcome.PilotSP,
+			OutcomeRules:      outcome.Outcomes,
+			Branches:          lowerAll(outcome.Branches),
+			branchesListed:    outcome.Branches != nil,
+			BriefingHTML:      renderBriefing(briefing),
+			SetupHTML:         renderMarkdown(setupBody, false),
+			OutcomeHTML:       renderMarkdown(outcomeBody, true),
 		}
 		if s.ID == "" {
 			s.ID = s.Slug
 		}
+		s.compileOutcomes()
 		if s.Title == "" {
 			s.Title = humanize(e.Name())
 		}
@@ -367,6 +434,7 @@ func (l Library) load(name string) (*Campaign, bool) {
 	c.StartingNamedPilots, c.StartingPilotSP, c.StartingBV = meta.StartingNamedPilots, meta.StartingPilotSP, meta.StartingBV
 	c.StartingMinMechs = meta.StartingMinMechs
 	c.StartingWarchest = meta.StartingWarchest
+	c.MaxNamedPilots, c.RecruitCost = meta.MaxNamedPilots, meta.RecruitCost
 	c.AvailabilityFaction, c.AvailabilityEra = meta.AvailabilityFaction, meta.AvailabilityEra
 	c.Faction = meta.Faction
 	if c.Ranks = meta.Ranks; len(c.Ranks) == 0 {
@@ -375,6 +443,8 @@ func (l Library) load(name string) (*Campaign, bool) {
 	_, kw := readMarkdown(filepath.Join(dir, "Keywords.md"))
 	c.IntroHTML = renderMarkdown(intro, false)
 	c.KeywordsHTML = renderMarkdown(kw, true)
+	c.Keywords = keywordIDs(kw)
+	c.checkGrants()
 	return c, true
 }
 

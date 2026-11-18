@@ -9,11 +9,28 @@
 </div>{{end}}</figure>
 {{end}}{{if .Run.Started}}<section class="mission-log {{.ScenarioState}}" id="mission-log" data-campaign="{{.Campaign.Slug}}" data-scenario="{{.Scenario.Slug}}" data-done="{{if eq .ScenarioState "completed"}}1{{end}}">
 <span class="mission-log-label">Mission log</span>
-<span class="mission-log-state" id="mission-log-state">{{if eq .ScenarioState "completed"}}Completed &#10003;{{else if eq .ScenarioState "locked"}}Not available yet: complete the mission before it first.{{else}}Not completed{{end}}</span>
-{{if ne .ScenarioState "locked"}}<button type="button" class="button" id="mission-log-toggle">{{if eq .ScenarioState "completed"}}Mark not completed{{else}}Mark completed{{end}}</button>{{end}}
-<p class="form-error" id="mission-log-error" role="alert"></p>
+<span class="mission-log-state" id="mission-log-state"><span>{{if eq .ScenarioState "completed"}}Completed &#10003;{{else if eq .ScenarioState "locked"}}Not available yet: complete the mission before it first.{{else}}Not completed{{end}}</span><i class="mission-led" aria-hidden="true"></i></span>
+{{if .Outcome}}<ul class="outcome-summary" id="outcome-summary">{{range .Outcome.Pilots}}<li><b>{{.Name}}</b>{{if eq .Status "benched"}} <span class="muted">benched</span>{{end}} <span class="muted">{{range $i, $e := .Entered}}{{if $i}} &middot; {{end}}{{$e}}{{end}}</span>{{range .Notes}} <span class="outcome-note">{{.}}</span>{{end}}</li>
+{{end}}{{range .Outcome.Notes}}<li class="outcome-note">{{.}}</li>
+{{end}}{{if and .Outcome.Warchest (not .Outcome.Pool)}}<li class="outcome-note">{{.Outcome.Warchest}} SP to the warchest</li>{{end}}{{if .Outcome.FreeRecruits}}<li class="outcome-note">{{.Outcome.FreeRecruits}} free recruit{{if ne .Outcome.FreeRecruits 1}}s{{end}}: {{if eq .Outcome.FreeRecruits 1}}a replacement pilot can{{else}}replacement pilots can{{end}} be recruited for free.</li>{{end}}{{if .Outcome.Keywords}}<li class="outcome-note">Keywords granted: {{range $i, $k := .Outcome.Keywords}}{{if $i}}, {{end}}<code>{{$k}}</code>{{end}}</li>{{end}}</ul>{{end}}
 </section>
 <script src="/static/missionlog.js" defer></script>
+{{if and .Scenario.HasOutcome (ne .ScenarioState "locked") (ne .ScenarioState "completed")}}<dialog id="outcome-dialog" class="wizard outcome" aria-labelledby="outcome-title" data-campaign="{{.Campaign.Slug}}" data-scenario="{{.Scenario.Slug}}" data-inputs="{{.OutcomeInputsJSON}}" data-pilots="{{.OutcomePilotsJSON}}">
+  <form id="outcome-form" autocomplete="off" novalidate>
+    <h2 id="outcome-title">Complete mission</h2>
+    <section class="outcome-rules" id="outcome-rules">{{.Scenario.OutcomeHTML}}</section>
+    <div id="outcome-body"></div>
+    <p id="outcome-total" class="repair-cost" hidden></p>
+    <p id="outcome-error" class="form-error" role="alert"></p>
+    <div class="form-actions">
+      <button type="submit" class="button" id="outcome-commit">Commit as completed</button>
+      <button type="button" id="outcome-cancel">Cancel</button>
+    </div>
+  </form>
+</dialog>
+<script src="/static/confirm.js" defer></script>
+<script src="/static/outcome.js" defer></script>
+{{end}}
 {{end}}{{if .Scenario.BriefingHTML}}<section class="briefing" aria-label="Mission briefing">
 <p class="briefing-tag">Incoming transmission</p>
 <div class="briefing-text">{{.Scenario.BriefingHTML}}</div>
@@ -22,7 +39,7 @@
 {{if and .Run.Started .Scenario.Forces}}<section class="mekbay" id="mekbay-op">
 <h2>Deploy your force</h2>
 {{if .Scenario.ProvidedUnits}}<p class="muted">This mission provides its own mechs. They are only used for this mission, and will be lost upon completion.</p>{{else}}<p class="muted">Choose which mechs from your hangar fly this mission{{if .Scenario.BVLimit}}, up to {{.Scenario.BVLimit}} BV{{end}}. The site sorts your MekBay hangar into <em>Deployed</em> and <em>Hangar</em> groups and sets up the OpFor against them.</p>{{end}}
-<p class="downloads"><button type="button" class="button" id="deploy-open">Deploy force&hellip;</button>{{if not .Scenario.ProvidedUnits}}<a class="button" id="manage-link" href="/{{.Campaign.Slug}}/manage/?back={{.Scenario.Slug}}">Manage force</a>{{end}}{{if .MekBayOp}}<a class="button" href="{{.MekBayOp}}" target="_blank" rel="noopener noreferrer">Open in MekBay</a>{{end}}</p>
+<p class="downloads"><button type="button" class="button" id="deploy-open">Deploy force</button>{{if not .Scenario.ProvidedUnits}}<a class="button" id="manage-link" href="/{{.Campaign.Slug}}/manage/?back={{.Scenario.Slug}}">Manage force</a>{{end}}{{if .MekBayOp}}<a class="button" href="{{.MekBayOp}}" target="_blank" rel="noopener noreferrer">Open in MekBay</a>{{end}}</p>
 </section>
 <dialog id="deploy-dialog" class="deploy" aria-labelledby="deploy-title" data-campaign="{{.Campaign.Slug}}" data-scenario="{{.Scenario.Slug}}" data-limit="{{.Scenario.BVLimit}}" data-unit-limit="{{.Scenario.UnitLimit}}" data-pilots-required="{{if .Scenario.PilotsRequired}}1{{end}}" data-can-modify="{{if .Run.Owned}}1{{end}}" data-player-ids="{{.PlayerIDsJSON}}" data-default-players="{{.Run.Players}}" data-min-players="{{.Campaign.MinPlayers}}" data-max-players="{{.Campaign.MaxPlayers}}" data-pilots="{{.PilotsJSON}}" data-abilities="{{.Abilities}}" data-cached="{{.DeployJSON}}">
 <h2 id="deploy-title">Deploy your force</h2>
@@ -72,9 +89,12 @@
 <p class="downloads">{{range .Scenario.Forces}}<a class="button" href="/{{$.Campaign.Slug}}/{{$.Scenario.Slug}}/forces/{{.File}}" download>Download {{.Label}} (.mul)</a>{{end}}</p></div>
 </details>
 {{end}}
-*/}}<details class="fold">
+*/}}{{if not (and .Run.Started .Scenario.HasOutcome (ne .ScenarioState "locked") (ne .ScenarioState "completed"))}}<details class="fold">
 <summary>Outcome</summary>
 <div class="fold-body"><section class="panel">{{.Scenario.OutcomeHTML}}</section></div>
 </details>
-{{with .Next}}<p class="next"><a href="/{{$.Campaign.Slug}}/{{.Slug}}/">Next: {{.Title}} &rsaquo;</a></p>{{end}}
-{{end}}
+{{end}}{{if and .Run.Started (ne .ScenarioState "locked")}}{{if or (not .Scenario.HasOutcome) (ne .ScenarioState "completed")}}<section class="mission-actions" id="mission-actions">
+{{if ne .ScenarioState "locked"}}{{if .Scenario.HasOutcome}}{{if ne .ScenarioState "completed"}}<button type="button" class="button button-outline button-large" id="outcome-open">Complete mission</button>{{end}}{{else}}<button type="button" class="button button-outline button-large" id="mission-log-toggle">{{if eq .ScenarioState "completed"}}Mark not completed{{else}}Mark completed{{end}}</button>{{end}}{{end}}
+<p class="form-error" id="mission-log-error" role="alert"></p>
+</section>
+{{end}}{{end}}{{end}}

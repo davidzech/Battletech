@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -96,16 +97,53 @@ func (s *Server) addPilot(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("A new pilot has %d SP to allocate.", c.StartingPilotSP), http.StatusBadRequest)
 		return
 	}
-	if _, err := s.store.AddPilotWithRank(r.Context(), pt.ID, c.Slug, name, portrait, rank, start, c.StartingPilotSP, maxNamedPilots); errors.Is(err, ErrPilotLimit) {
-		http.Error(w, fmt.Sprintf("You can have at most %d named pilots at a time.", maxNamedPilots), http.StatusBadRequest)
+	// Recruiting costs SP from the warchest (the campaign's recruit_cost): charged first, and given back if the pilot can't be added.
+	cost := c.RecruitCost
+	// A free recruit (a mission outcome can grant one, e.g. a replacement for a pilot who died) is used up instead of paying.
+	usedFree := false
+	if cost > 0 {
+		if ok, err := s.store.ConsumeFreeRecruit(r.Context(), pt.ID, c.Slug); err != nil {
+			http.Error(w, "could not use the free recruit", http.StatusInternalServerError)
+			return
+		} else if ok {
+			usedFree, cost = true, 0
+		}
+	}
+	if cost > 0 {
+		if err := s.store.SpendWarchest(r.Context(), pt.ID, c.Slug, cost); errors.Is(err, ErrInsufficientFunds) {
+			http.Error(w, fmt.Sprintf("Not enough in the warchest: recruiting a pilot costs %d SP.", cost), http.StatusConflict)
+			return
+		} else if err != nil {
+			http.Error(w, "could not charge the warchest", http.StatusInternalServerError)
+			return
+		}
+	}
+	refund := func() {
+		if usedFree {
+			if err := s.store.RestoreFreeRecruit(r.Context(), pt.ID, c.Slug); err != nil {
+				log.Printf("could not restore a free recruit: %v", err)
+			}
+		}
+		if cost > 0 {
+			if err := s.store.RefundWarchest(r.Context(), pt.ID, c.Slug, cost); err != nil {
+				log.Printf("could not refund %d SP: %v", cost, err)
+			}
+		}
+	}
+	if _, err := s.store.AddPilotWithRank(r.Context(), pt.ID, c.Slug, name, portrait, rank, start, c.StartingPilotSP, c.PilotLimit()); errors.Is(err, ErrPilotLimit) {
+		refund()
+		http.Error(w, fmt.Sprintf("You can have at most %d named pilots at a time.", c.PilotLimit()), http.StatusBadRequest)
 		return
 	} else if errors.Is(err, ErrNameTaken) {
+		refund()
 		http.Error(w, "Another pilot already has that name.", http.StatusBadRequest)
 		return
 	} else if errors.Is(err, ErrPortraitTaken) {
+		refund()
 		http.Error(w, "Another pilot already has that portrait.", http.StatusBadRequest)
 		return
 	} else if err != nil {
+		refund()
 		http.Error(w, "could not save the pilot", http.StatusInternalServerError)
 		return
 	}
@@ -371,11 +409,11 @@ func (s *Server) revivePilot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	alt := randomPortrait(livingPortraits(existing))
-	if err := s.store.RevivePilot(r.Context(), pt.ID, c.Slug, r.PostFormValue("pilot"), alt, maxNamedPilots); errors.Is(err, sql.ErrNoRows) {
+	if err := s.store.RevivePilot(r.Context(), pt.ID, c.Slug, r.PostFormValue("pilot"), alt, c.PilotLimit()); errors.Is(err, sql.ErrNoRows) {
 		http.Error(w, "No such pilot killed in action.", http.StatusNotFound)
 		return
 	} else if errors.Is(err, ErrPilotLimit) {
-		http.Error(w, fmt.Sprintf("You already have %d living named pilots.", maxNamedPilots), http.StatusBadRequest)
+		http.Error(w, fmt.Sprintf("You already have %d living named pilots.", c.PilotLimit()), http.StatusBadRequest)
 		return
 	} else if err != nil {
 		http.Error(w, "could not revive the pilot", http.StatusInternalServerError)

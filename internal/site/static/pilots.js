@@ -325,6 +325,10 @@
     // The new pilot's starting SP (the campaign's) and the same sliders, number boxes and stat boxes as the start wizard. Spending it
     // all is optional: what is left stays unallocated.
     var rBudget = parseInt(recruit.dataset.sp, 10) || 0;
+    var rCost = parseInt(recruit.dataset.cost, 10) || 0;          // what recruiting takes from the warchest
+    var rWarchest = parseInt(recruit.dataset.warchest, 10) || 0;
+    var rCostText = document.getElementById('recruit-cost');
+    function commas(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
     var rSP = {};
     ladders.forEach(function (l) { rSP[l.key] = 0; });
     var rPilot = { sp: rSP };
@@ -371,6 +375,14 @@
       rRefresh();
       if (rRank) rRank.selectedIndex = 0;
       rGo.disabled = false;
+      if (rCost > 0) {
+        var after = rWarchest - rCost;
+        rCostText.hidden = false;
+        rCostText.textContent = 'Cost ' + commas(rCost) + ' SP. Warchest ' + commas(rWarchest) + ' \u2192 ' + commas(Math.max(after, 0)) + ' SP.' + (after < 0 ? ' Not enough funds.' : '');
+        rCostText.classList.toggle('short', after < 0);
+        rGo.textContent = 'Recruit for ' + commas(rCost) + ' SP';
+        if (after < 0) rGo.disabled = true;
+      }
       recruit.showModal();
       rName.focus();
     });
