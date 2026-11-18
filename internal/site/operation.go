@@ -123,6 +123,9 @@ func displayName(u Unit) string {
 	return strings.TrimSpace(name + " " + model)
 }
 
+// deployedGroup is the hangar group whose units the Deploy wizard gives Player 1 to start with (a group the player may have made in MekBay).
+const deployedGroup = "Deployed"
+
 // hangarViews describes every unit of a hangar for the deploy popup.
 func hangarViews(h HangarForce) []hangarUnitView {
 	views := make([]hangarUnitView, 0, len(h.Units))
@@ -239,7 +242,7 @@ func (s *Server) hangarJSON(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
-	op, hasOp, err := s.store.MekBayOperation(r.Context(), pt.ID, c.Slug, sc.ID)
+	_, hasOp, err := s.store.MekBayOperation(r.Context(), pt.ID, c.Slug, sc.ID)
 	if err != nil {
 		http.Error(w, "could not load operation", http.StatusInternalServerError)
 		return
@@ -249,94 +252,9 @@ func (s *Server) hangarJSON(w http.ResponseWriter, r *http.Request) {
 	}
 	out := deployData(h, sc.BVLimit, run.Owned(), hasOp)
 	out["provided"] = sc.provides()
-	if hasOp {
-		out["url"] = OperationURL(op.OperationID)
-	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	_ = json.NewEncoder(w).Encode(out)
-}
-
-// deploy sorts the player's hangar into "Deployed" (the chosen units) and "Hangar" (the rest) in MekBay, creates the
-// scenario's OpFor force and ties both into one operation. It needs modify mode (the owner's UID), because MekBay only
-// lets the owner save. An existing OpFor is kept, with whatever damage it has, unless reset_opfor=1.
-func (s *Server) deploy(w http.ResponseWriter, r *http.Request) {
-	if !sameOrigin(r) {
-		http.Error(w, "cross-origin request refused", http.StatusForbidden)
-		return
-	}
-	r.Body = http.MaxBytesReader(w, r.Body, 8192)
-	if err := r.ParseForm(); err != nil {
-		http.Error(w, "bad request", http.StatusBadRequest)
-		return
-	}
-	pt, run, c, sc, ok := s.mekbayRequest(w, r)
-	if !ok {
-		return
-	}
-	if !run.Owned() {
-		http.Error(w, notOwnedMessage, http.StatusConflict)
-		return
-	}
-	ids := r.PostForm["units"]
-	h, err := s.scenarioHangar(r.Context(), run, sc)
-	if err != nil {
-		log.Printf("read hangar for %s: %v", sc.ID, err)
-		http.Error(w, err.Error(), http.StatusBadGateway)
-		return
-	}
-	if msg := deployProblem(h, ids, sc.BVLimit); msg != "" {
-		http.Error(w, msg, http.StatusBadRequest)
-		return
-	}
-	pilots, err := s.store.Pilots(r.Context(), pt.ID, c.Slug)
-	if err != nil {
-		http.Error(w, "could not load your pilots", http.StatusInternalServerError)
-		return
-	}
-	crew, err := parseCrew(r, h, pilots)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	if msg := sc.rulesProblem([][]string{ids}, [][]CrewAssignment{crew}); msg != "" {
-		http.Error(w, msg, http.StatusBadRequest)
-		return
-	}
-	existing, has, err := s.store.MekBayOperation(r.Context(), pt.ID, c.Slug, sc.ID)
-	if err != nil {
-		http.Error(w, "could not load operation", http.StatusInternalServerError)
-		return
-	}
-	draft, err := opForDraft(c, sc)
-	if err != nil {
-		log.Printf("opfor draft for %s: %v", sc.ID, err) // never log the owner UID
-		http.Error(w, "could not read this scenario's OpFor files", http.StatusInternalServerError)
-		return
-	}
-	res, err := s.mekbay.SyncOperation(r.Context(), OperationRequest{
-		OwnerUID:         accountUID(currentSeed(r), SlotHangar),
-		CampaignInstance: run.HangarInstance,
-		DeployedUnitIDs:  ids,
-		Crew:             crew,
-		OpFor:            draft,
-		OpForInstance:    existing.OpForInstance,
-		KeepOpFor:        has && r.PostFormValue("reset_opfor") != "1",
-		OperationName:    operationName(c, sc),
-		OperationID:      existing.OperationID,
-	})
-	if err != nil {
-		log.Printf("mekbay sync for %s: %v", sc.ID, err)
-		http.Error(w, err.Error(), http.StatusBadGateway)
-		return
-	}
-	op := MekBayOperation(res)
-	if err := s.store.SaveMekBayOperation(r.Context(), pt.ID, c.Slug, sc.ID, op); err != nil {
-		http.Error(w, "deployed in MekBay but could not remember it", http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]string{"url": OperationURL(op.OperationID)})
 }
 
 // unitPageURL is the link to a unit's page on mekbay.com, from its MekBay unit ID (e.g. BMMadCat_H): the General tab of that design's page,

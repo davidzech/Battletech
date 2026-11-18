@@ -166,38 +166,6 @@ func parseSP(raw string) (int, error) {
 	return n, nil
 }
 
-// awardSP gives a pilot SP, allocated across their columns as the player chooses. (The book caps a pilot at 100 SP
-// per track, but campaigns set their own rewards, e.g. Refusal War's trial pays up to 900, so no cap is enforced.)
-func (s *Server) awardSP(w http.ResponseWriter, r *http.Request) {
-	pt, c, ok := s.pilotRequest(w, r)
-	if !ok {
-		return
-	}
-	var a SPAllocation
-	for field, dst := range map[string]*int{
-		"gunnery": &a.Gunnery, "piloting": &a.Piloting, "edge_tokens": &a.EdgeTokens, "edge_abilities": &a.EdgeAbilities,
-	} {
-		n, err := parseSP(r.PostFormValue(field))
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		*dst = n
-	}
-	if a.Total() == 0 {
-		http.Error(w, "Give the pilot some SP to allocate.", http.StatusBadRequest)
-		return
-	}
-	if err := s.store.AwardSP(r.Context(), pt.ID, c.Slug, r.PostFormValue("pilot"), a); errors.Is(err, sql.ErrNoRows) {
-		http.Error(w, "No such living pilot.", http.StatusNotFound)
-		return
-	} else if err != nil {
-		http.Error(w, "could not save the SP", http.StatusInternalServerError)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
-}
-
 // pilotFallen records that a named pilot died. They are permanently removed from the campaign.
 func (s *Server) pilotFallen(w http.ResponseWriter, r *http.Request) {
 	pt, c, ok := s.pilotRequest(w, r)

@@ -20,9 +20,6 @@ const (
 	mekbayProtocol = 2 // PROTOCOL_VERSION in ws.service.ts
 )
 
-// OperationURL is the link that opens an operation (its forces, with alignments) in MekBay.
-func OperationURL(operationID string) string { return "https://mekbay.com/?operation=" + operationID }
-
 // ForceDraft is a force to create in MekBay: groups of units, with their pilots.
 type ForceDraft struct {
 	Name   string
@@ -86,37 +83,12 @@ type HangarForce struct {
 	Units     []HangarUnit
 }
 
-// OperationRequest asks MekBay to (re)create an operation pairing the campaign's hangar force (friendly) with a
-// synthesized OpFor force (enemy). OpForInstance and OperationID are reused when set, so repeating the request
-// updates the same force and operation instead of creating new ones.
-type OperationRequest struct {
-	OwnerUID         string // MekBay account that owns the hangar; only its owner may save forces
-	CampaignInstance string // the hangar force's instance ID
-	// DeployedUnitIDs, when set, are the hangar units going on the mission: they are moved into the "Deployed"
-	// group and every other unit into "Hangar". Nil leaves the hangar's groups alone.
-	DeployedUnitIDs []string
-	// Crew assigns named pilots to hangar units (see crew.go); it is saved together with the Deployed and Hangar groups.
-	Crew          []CrewAssignment
-	OpFor         ForceDraft
-	OpForInstance string
-	KeepOpFor     bool // OpForInstance already exists: reuse it as is, without resetting its damage
-	OperationName string
-	OperationID   string
-}
-
-// OperationResult identifies what was created.
-type OperationResult struct {
-	OpForInstance string
-	OperationID   string
-}
-
 // MekBay reads and creates things on mekbay.com. It is an interface so tests can run without the network.
 type MekBay interface {
 	// ReadHangar reads a saved force (anyone can read one by its instance ID).
 	ReadHangar(ctx context.Context, instance string) (HangarForce, error)
 	// CloneHangar copies the player's force into a clean force the site owns (see clone.go).
 	CloneHangar(ctx context.Context, req CloneRequest) (HangarForce, error)
-	SyncOperation(ctx context.Context, req OperationRequest) (OperationResult, error)
 	// ServiceUnit repairs or rearms one unit of the player's hangar force (modify mode only).
 	ServiceUnit(ctx context.Context, req ServiceRequest) error
 	// PurchaseUnits adds bought units to the player's hangar force (modify mode only).
@@ -125,7 +97,7 @@ type MekBay interface {
 	SellUnit(ctx context.Context, req SellRequest) error
 	// SwapUnit reconfigures an omnimech of the player's hangar force to another variant.
 	SwapUnit(ctx context.Context, req SwapRequest) error
-	// StartBattle builds the players' forces and the OpFor's, starts a multiplayer lobby and seats everyone in it (see battle.go).
+	// StartBattle builds the players' forces and the OpFor's and one operation that pairs them (see battle.go).
 	StartBattle(ctx context.Context, req BattleRequest) (BattleResult, error)
 	// ReadBattle reads an operation and every force in it, anonymously, for the battle's live status.
 	ReadBattle(ctx context.Context, operationID string) (BattleStatus, error)
@@ -165,97 +137,6 @@ func (c *MekBayClient) ReadHangar(ctx context.Context, instance string) (HangarF
 		return HangarForce{}, err
 	}
 	return parseHangarForce(raw)
-}
-
-// SyncOperation arranges the hangar (when asked to), saves the OpFor force, then saves the operation and reads
-// it back to confirm it (MekBay doesn't acknowledge saveOperation).
-func (c *MekBayClient) SyncOperation(ctx context.Context, req OperationRequest) (OperationResult, error) {
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-	s, err := dialMekBay(ctx, c.url(), req.OwnerUID)
-	if err != nil {
-		return OperationResult{}, err
-	}
-	defer s.close()
-
-	camp, err := s.call(ctx, map[string]any{"action": "getForce", "uuid": req.OwnerUID, "instanceId": req.CampaignInstance, "ownedOnly": false})
-	if err != nil {
-		return OperationResult{}, err
-	}
-	var campaign struct {
-		Data map[string]any `json:"data"`
-	}
-	if err := json.Unmarshal(camp, &campaign); err != nil || campaign.Data == nil {
-		return OperationResult{}, errors.New("MekBay has no force for your hangar link; check that the link is saved in MekBay")
-	}
-	friendlyTS, _ := campaign.Data["timestamp"].(string)
-
-	// Move the chosen units into Deployed and the rest into Hangar. This goes first: it is the step that
-	// proves the UID owns the hangar, and the one with the most consequences.
-	if req.DeployedUnitIDs != nil {
-		deployed := make(map[string]bool, len(req.DeployedUnitIDs))
-		for _, id := range req.DeployedUnitIDs {
-			deployed[id] = true
-		}
-		force := campaign.Data
-		if err := deployGroups(force, deployed, newID); err != nil {
-			return OperationResult{}, err
-		}
-		if err := applyCrew(force, req.Crew); err != nil {
-			return OperationResult{}, err
-		}
-		delete(force, "owned") // set by the server for readers; the app never sends it back
-		friendlyTS = mekbayTime(time.Now())
-		force["timestamp"] = friendlyTS
-		if _, err := s.call(ctx, map[string]any{"action": "saveForce", "uuid": req.OwnerUID, "data": force, "savedForceCount": 1}); err != nil {
-			return OperationResult{}, err
-		}
-	}
-
-	opforID, opforTS := req.OpForInstance, ""
-	if opforID == "" {
-		opforID = newID()
-	}
-	if req.KeepOpFor && req.OpForInstance != "" {
-		got, err := s.call(ctx, map[string]any{"action": "getForce", "uuid": req.OwnerUID, "instanceId": opforID, "ownedOnly": false})
-		if err != nil {
-			return OperationResult{}, err
-		}
-		var existing struct {
-			Data *struct {
-				Timestamp string `json:"timestamp"`
-			} `json:"data"`
-		}
-		if json.Unmarshal(got, &existing) != nil || existing.Data == nil {
-			return OperationResult{}, errors.New("the OpFor force this operation used is gone from MekBay; reset the OpFor to recreate it")
-		}
-		opforTS = existing.Data.Timestamp
-	} else {
-		force := buildForce(opforID, time.Now().UTC(), req.OpFor)
-		opforTS = force.Timestamp
-		if _, err := s.call(ctx, map[string]any{"action": "saveForce", "uuid": req.OwnerUID, "data": force, "savedForceCount": 1}); err != nil {
-			return OperationResult{}, err
-		}
-	}
-
-	opID := req.OperationID
-	if opID == "" {
-		opID = newID()
-	}
-	op := map[string]any{
-		"operationId": opID,
-		"name":        req.OperationName,
-		"note":        "",
-		"timestamp":   time.Now().UnixMilli(),
-		"forces": []map[string]any{
-			{"instanceId": req.CampaignInstance, "alignment": "friendly", "timestamp": friendlyTS},
-			{"instanceId": opforID, "alignment": "enemy", "timestamp": opforTS},
-		},
-	}
-	if err := s.saveOperation(ctx, op, opID); err != nil {
-		return OperationResult{}, err
-	}
-	return OperationResult{OpForInstance: opforID, OperationID: opID}, nil
 }
 
 // mekbayTime formats a time the way MekBay writes force timestamps.

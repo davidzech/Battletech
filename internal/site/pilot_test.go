@@ -318,38 +318,9 @@ func TestNamedPilotsFlow(t *testing.T) {
 		t.Fatalf("alrek = %+v", alrek)
 	}
 
-	// Awarding SP.
-	award := func(pilot string, kv ...string) int {
-		v := pilots("pilot", pilot)
-		for i := 0; i+1 < len(kv); i += 2 {
-			v.Set(kv[i], kv[i+1])
-		}
-		return post(t, srv, "/api/pilots/sp", v, cookie, srv.URL).StatusCode
-	}
-	for name, c := range map[string]struct {
-		status int
-		kv     []string
-	}{
-		"nothing":       {http.StatusBadRequest, nil},
-		"all zero":      {http.StatusBadRequest, []string{"gunnery", "0"}},
-		"negative":      {http.StatusBadRequest, []string{"gunnery", "-5"}},
-		"not a number":  {http.StatusBadRequest, []string{"gunnery", "lots"}},
-		"absurd":        {http.StatusBadRequest, []string{"gunnery", "99999999"}},
-		"one bad field": {http.StatusBadRequest, []string{"gunnery", "100", "piloting", "x"}},
-	} {
-		if got := award(alrek.ID, c.kv...); got != c.status {
-			t.Errorf("award %s: got %d, want %d", name, got, c.status)
-		}
-	}
-	if got := award("no-such-pilot", "gunnery", "100"); got != http.StatusNotFound {
-		t.Errorf("unknown pilot: %d", got)
-	}
-	if ps, _ := store.Pilots(ctx, id, "refusalwar"); ps[0].Earned() != 150 || ps[0].SP.Total() != 0 {
-		t.Fatalf("refused awards changed the pilot: %+v", ps[0])
-	}
-	// The trial pays 150 to 900 SP, so there is no per-award cap below the typo guard.
-	if got := award(alrek.ID, "gunnery", "300", "edge_tokens", "60", "edge_abilities", ""); got != http.StatusNoContent {
-		t.Fatalf("award: %d", got)
+	// SP earned and allocated (the earn and allocate endpoints, with their validation, are covered by TestSPEndpoints).
+	if err := store.AwardSP(ctx, id, "refusalwar", alrek.ID, SPAllocation{Gunnery: 300, EdgeTokens: 60}); err != nil {
+		t.Fatalf("award: %v", err)
 	}
 	ps, _ = store.Pilots(ctx, id, "refusalwar")
 	if ps[0].SP != (SPAllocation{Gunnery: 300, EdgeTokens: 60}) {
@@ -367,8 +338,8 @@ func TestNamedPilotsFlow(t *testing.T) {
 	if r := post(t, srv, "/api/pilots/fallen", pilots("pilot", ps[1].ID), cookie, srv.URL); r.StatusCode != http.StatusNotFound {
 		t.Fatalf("already fallen: %d", r.StatusCode)
 	}
-	if got := award(ps[1].ID, "gunnery", "100"); got != http.StatusNotFound {
-		t.Errorf("award to the fallen: %d", got)
+	if got := post(t, srv, "/api/pilots/earn", pilots("pilot", ps[1].ID, "sp", "100"), cookie, srv.URL).StatusCode; got != http.StatusNotFound {
+		t.Errorf("SP earned by the fallen: %d", got)
 	}
 	if c := body(t, srv, "/refusalwar/manage/", cookie); !strings.Contains(c, "Killed in Action") || !strings.Contains(c, `class="rec-revive"`) || strings.Contains(c, `id="pilot-add"`) {
 		t.Fatalf("a fallen pilot should show, and free a place: %.3000s", c)

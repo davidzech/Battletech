@@ -100,8 +100,8 @@ func TestDeployPlanEndpoint(t *testing.T) {
 		t.Errorf("player 2: %+v", two.Players[1])
 	}
 	// Nothing is saved or sent to MekBay.
-	if len(fake.reqs) != 0 || len(fake.services) != 0 || len(fake.purchases) != 0 {
-		t.Errorf("a plan must not touch MekBay: %+v", fake.reqs)
+	if len(fake.battles) != 0 || len(fake.services) != 0 || len(fake.purchases) != 0 {
+		t.Errorf("a plan must not touch MekBay: %+v", fake.battles)
 	}
 	bad := map[string][]string{
 		"no players":           {"p1_units", "ua"},

@@ -7,8 +7,17 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 )
+
+// hangarGroup is the name of the group a hangar force's units sit in, where a purchase adds new units.
+const hangarGroup = "Hangar"
+
+// sameGroupName compares group names the way the site reads them: ignoring case and surrounding space.
+func sameGroupName(name, want string) bool {
+	return strings.EqualFold(strings.TrimSpace(name), want)
+}
 
 // Buying new units for the hangar. The price is the unit's base BV in SP (this campaign counts BV as SP, Hot Spots: Draconis Reach, SP Activity
 // Cost Table: Purchase Unit = Battle Value). A purchase adds each unit, undamaged and with a standard 4/5 pilot, to the "Hangar" group of the
