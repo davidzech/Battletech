@@ -249,6 +249,12 @@ th {
 /* A <button class="button"> looks like the link buttons: no default border, pointer cursor. */
 button.button { border: 0; cursor: pointer; }
 button.button:disabled { opacity: 0.6; cursor: wait; filter: none; }
+/* The outline button: a square yellow border, nothing inside, yellow text. */
+.button.button-outline, button.button.button-outline { background: transparent; color: var(--accent); border: 1px solid var(--accent); clip-path: none; }
+.button.button-outline:hover, button.button.button-outline:hover:not(:disabled) { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); filter: none; }
+button.button.button-outline:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* The big version, for the one button a page is really about (Complete mission): larger, with a bolder border. */
+.button.button-outline.button-large, button.button.button-outline.button-large { padding: 1rem 2.6rem; font-size: 1.15rem; letter-spacing: 0.14em; border-width: 3px; }
 
 figure { margin: 1rem 0; }
 /* Scenario art: a wide banner cropped to the top, so dark space at the bottom of the image fades into the page.
@@ -1344,8 +1350,8 @@ dialog button.deploy-count:disabled, .overview-players button.deploy-count:disab
 .mission-log.completed .mission-led { background: #5fc47e; box-shadow: 0 0 0.3rem 0.05rem rgba(95, 196, 126, 0.65), 0 0 0.75rem 0.15rem rgba(95, 196, 126, 0.25); }
 .mission-log.locked .mission-led { background: var(--line); box-shadow: none; }
 /* Completing the mission is the last thing on the page. */
-.mission-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem 1rem; margin: 1.6rem 0 1rem; padding-top: 1rem; border-top: 1px solid var(--line); }
-.mission-actions .form-error { flex-basis: 100%; margin: 0; }
+.mission-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 0.6rem 1rem; margin: 1.6rem 0 1rem; padding-top: 1rem; border-top: 1px solid var(--line); }
+.mission-actions .form-error { flex-basis: 100%; margin: 0; text-align: center; }
 .mission-actions .form-error:empty { display: none; }
 
 .recruit-note { margin: 0.4rem 0 1rem; font-size: 0.85rem; text-align: right; } /* under the right-aligned Recruit New Pilot button */

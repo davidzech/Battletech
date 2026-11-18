@@ -39,7 +39,7 @@
 {{if and .Run.Started .Scenario.Forces}}<section class="mekbay" id="mekbay-op">
 <h2>Deploy your force</h2>
 {{if .Scenario.ProvidedUnits}}<p class="muted">This mission provides its own mechs. They are only used for this mission, and will be lost upon completion.</p>{{else}}<p class="muted">Choose which mechs from your hangar fly this mission{{if .Scenario.BVLimit}}, up to {{.Scenario.BVLimit}} BV{{end}}. The site sorts your MekBay hangar into <em>Deployed</em> and <em>Hangar</em> groups and sets up the OpFor against them.</p>{{end}}
-<p class="downloads"><button type="button" class="button" id="deploy-open">Deploy force&hellip;</button>{{if not .Scenario.ProvidedUnits}}<a class="button" id="manage-link" href="/{{.Campaign.Slug}}/manage/?back={{.Scenario.Slug}}">Manage force</a>{{end}}{{if .MekBayOp}}<a class="button" href="{{.MekBayOp}}" target="_blank" rel="noopener noreferrer">Open in MekBay</a>{{end}}</p>
+<p class="downloads"><button type="button" class="button" id="deploy-open">Deploy force</button>{{if not .Scenario.ProvidedUnits}}<a class="button" id="manage-link" href="/{{.Campaign.Slug}}/manage/?back={{.Scenario.Slug}}">Manage force</a>{{end}}{{if .MekBayOp}}<a class="button" href="{{.MekBayOp}}" target="_blank" rel="noopener noreferrer">Open in MekBay</a>{{end}}</p>
 </section>
 <dialog id="deploy-dialog" class="deploy" aria-labelledby="deploy-title" data-campaign="{{.Campaign.Slug}}" data-scenario="{{.Scenario.Slug}}" data-limit="{{.Scenario.BVLimit}}" data-unit-limit="{{.Scenario.UnitLimit}}" data-pilots-required="{{if .Scenario.PilotsRequired}}1{{end}}" data-can-modify="{{if .Run.Owned}}1{{end}}" data-player-ids="{{.PlayerIDsJSON}}" data-default-players="{{.Run.Players}}" data-min-players="{{.Campaign.MinPlayers}}" data-max-players="{{.Campaign.MaxPlayers}}" data-pilots="{{.PilotsJSON}}" data-abilities="{{.Abilities}}" data-cached="{{.DeployJSON}}">
 <h2 id="deploy-title">Deploy your force</h2>
@@ -94,7 +94,7 @@
 <div class="fold-body"><section class="panel">{{.Scenario.OutcomeHTML}}</section></div>
 </details>
 {{end}}{{if and .Run.Started (ne .ScenarioState "locked")}}{{if or (not .Scenario.HasOutcome) (ne .ScenarioState "completed")}}<section class="mission-actions" id="mission-actions">
-{{if ne .ScenarioState "locked"}}{{if .Scenario.HasOutcome}}{{if ne .ScenarioState "completed"}}<button type="button" class="button" id="outcome-open">Complete mission&hellip;</button>{{end}}{{else}}<button type="button" class="button" id="mission-log-toggle">{{if eq .ScenarioState "completed"}}Mark not completed{{else}}Mark completed{{end}}</button>{{end}}{{end}}
+{{if ne .ScenarioState "locked"}}{{if .Scenario.HasOutcome}}{{if ne .ScenarioState "completed"}}<button type="button" class="button button-outline button-large" id="outcome-open">Complete mission</button>{{end}}{{else}}<button type="button" class="button button-outline button-large" id="mission-log-toggle">{{if eq .ScenarioState "completed"}}Mark not completed{{else}}Mark completed{{end}}</button>{{end}}{{end}}
 <p class="form-error" id="mission-log-error" role="alert"></p>
 </section>
 {{end}}{{end}}{{with .Next}}<p class="next"><a href="/{{$.Campaign.Slug}}/{{.Slug}}/">Next: {{.Title}} &rsaquo;</a></p>{{end}}
