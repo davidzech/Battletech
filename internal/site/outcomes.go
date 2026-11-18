@@ -69,6 +69,8 @@ type OutcomeInput struct {
 	Min   int    `yaml:"min" json:"min"`
 	Max   int    `yaml:"max" json:"max"` // for a number: 99 when omitted
 	Help  string `yaml:"help" json:"help,omitempty"`
+	// Required (a yes/no input only): it must be true to complete the mission, so the dialog ticks it and cannot untick it (a primary objective).
+	Required bool `yaml:"required" json:"required,omitempty"`
 }
 
 // OutcomeObjective is the shorthand for an objective of the mission: a yes/no mission input, and what meeting it (or missing it) grants.
@@ -78,6 +80,7 @@ type OutcomeObjective struct {
 	SP          any      `yaml:"sp"`           // SP added to the pool when the objective is met
 	Grants      []string `yaml:"grants"`       // keywords granted when it is met
 	UnmetGrants []string `yaml:"unmet_grants"` // keywords granted when it is not
+	Required    bool     `yaml:"required"`     // a primary objective: the mission cannot be completed without it
 }
 
 // OutcomeRule is one rule of a scenario's outcomes.
@@ -112,7 +115,7 @@ func (sc *Scenario) compileOutcomes() {
 			fail("an objective has no id")
 			return
 		}
-		in := OutcomeInput{ID: o.ID, Label: o.Label, Scope: "mission", Type: "bool"}
+		in := OutcomeInput{ID: o.ID, Label: o.Label, Scope: "mission", Type: "bool", Required: o.Required}
 		if o.Label == "" {
 			in.Label = o.ID
 		}
@@ -330,6 +333,9 @@ func (sc *Scenario) inputValues(scope string, raw map[string]any) (map[string]an
 		}
 		if in.Type == "bool" {
 			out[in.ID] = f != 0
+			if in.Required && f == 0 {
+				return nil, fmt.Errorf("%q is required to complete the mission", in.Label)
+			}
 		} else {
 			out[in.ID] = int(f)
 		}

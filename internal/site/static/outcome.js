@@ -36,7 +36,9 @@
     var wrap = el('label', 'outcome-field' + (input.type === 'bool' ? ' check themed-check' : ''));
     var box = document.createElement('input');
     if (input.type === 'bool') {
-      box.type = 'checkbox'; box.className = 'themed-box'; box.checked = !!values[key];
+      box.type = 'checkbox'; box.className = 'themed-box';
+      if (input.required) { values[key] = true; box.disabled = true; wrap.title = 'Required to complete the mission'; wrap.classList.add('required'); }
+      box.checked = !!values[key];
       box.addEventListener('change', function () { values[key] = box.checked; onChange(); });
       wrap.appendChild(box);
       wrap.appendChild(el('span', null, input.label));

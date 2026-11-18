@@ -306,13 +306,35 @@ func TestScenario001Outcome(t *testing.T) {
 	names := map[string]string{"a": "Alrek", "b": "Katarina"}
 	res, err := sc.EvaluateOutcome(OutcomeInputs{
 		Pilots:  []OutcomeEntry{{PilotID: "a", TookPart: true}, {PilotID: "b", TookPart: true, Killed: true}},
-		Mission: map[string]any{"plant_large": true, "plant_small": false, "firebase_inspected": true, "waypoint_a": false, "waypoint_e": false, "falcon_mechs": float64(3)},
+		Mission: map[string]any{"plant_large": true, "plant_small": true, "firebase_inspected": true, "waypoint_a": false, "waypoint_e": false, "falcon_mechs": float64(3)},
 	}, names)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Pool: 400 + 450 + 3 x 200 = 1450. Alrek draws 100, Katarina (killed) nothing, so 1350 goes to the warchest.
-	if res.Pool != 1450 || res.Pilots[0].SP != 100 || res.Pilots[1].SP != 0 || !res.Pilots[1].KIA || res.Warchest != 1350 {
+	// Pool: 400 + 250 + 450 + 3 x 200 = 1700. Alrek draws 100, Katarina (killed) nothing, so 1600 goes to the warchest.
+	if res.Pool != 1700 || res.Pilots[0].SP != 100 || res.Pilots[1].SP != 0 || !res.Pilots[1].KIA || res.Warchest != 1600 {
 		t.Errorf("pool %d, pilots %+v, warchest %d", res.Pool, res.Pilots, res.Warchest)
+	}
+}
+
+// The primary objectives are required: the mission cannot be completed without them, whatever the form says.
+func TestScenario001PrimaryObjectivesAreRequired(t *testing.T) {
+	sc, _ := refusalWar(t).Scenario("scenario_001")
+	for _, missing := range []string{"plant_large", "plant_small"} {
+		mission := map[string]any{"plant_large": true, "plant_small": true, "firebase_inspected": false, "waypoint_a": false, "waypoint_e": false, "falcon_mechs": float64(0)}
+		mission[missing] = false
+		_, err := sc.EvaluateOutcome(OutcomeInputs{Pilots: []OutcomeEntry{{PilotID: "a", TookPart: true}}, Mission: mission}, map[string]string{"a": "Alrek"})
+		if err == nil || !strings.Contains(err.Error(), "required") {
+			t.Errorf("without %s: %v", missing, err)
+		}
+	}
+	var required []string
+	for _, in := range sc.OutcomeInputs {
+		if in.Required {
+			required = append(required, in.ID)
+		}
+	}
+	if strings.Join(required, ",") != "plant_large,plant_small" {
+		t.Errorf("the required inputs are sent to the dialog: %v", required)
 	}
 }

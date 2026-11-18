@@ -1431,3 +1431,5 @@ button.mission-log-open:hover span { text-decoration: underline; }
 button.mission-log-open:focus-visible { outline: 2px solid var(--text); outline-offset: 3px; }
 .outcome-total-row { display: flex; gap: 0.8rem; justify-content: space-between; }
 .outcome-total-row b { color: var(--accent); font-family: var(--display); letter-spacing: 0.04em; }
+.outcome-field.required { cursor: default; }
+.outcome-field.required input:disabled { opacity: 0.75; cursor: not-allowed; }

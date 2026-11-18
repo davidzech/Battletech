@@ -6,9 +6,11 @@ objectives:
   - id: plant_large
     label: "Primary: destroy the chemical plant, large building"
     sp: 400
+    required: true
   - id: plant_small
     label: "Primary: destroy the chemical plant, small building"
     sp: 250
+    required: true
   - id: firebase_inspected
     label: "Secondary: inspect the firebase"
     sp: 450
