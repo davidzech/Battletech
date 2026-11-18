@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -474,5 +475,76 @@ func TestMekBayTokens(t *testing.T) {
 	}
 	if id, _, err := tk.Open(link, time.Now()); err != nil || id != testAccount {
 		t.Errorf("the exported helper makes tokens the proxy accepts: %q %v", id, err)
+	}
+}
+
+func TestMekBayLinkBuilder(t *testing.T) {
+	s := &Server{proxy: newMekBayProxy(newMekBayTokens("k"))}
+	for _, c := range []struct{ host, proto, wantPrefix string }{
+		{"battletech.zech.io", "https", "https://mekbay.battletech.zech.io/?"},
+		{"localhost:8080", "", "http://mekbay.localhost:8080/?"},
+		{"mekbay.localhost:8080", "", "http://mekbay.localhost:8080/?"},
+	} {
+		r := httptest.NewRequest("GET", "/", nil)
+		r.Host = c.host
+		if c.proto != "" {
+			r.Header.Set("X-Forwarded-Proto", c.proto)
+		}
+		link, err := s.mekbayLink(r, testAccount, "force-1", time.Hour)
+		if err != nil || !strings.HasPrefix(link, c.wantPrefix) {
+			t.Fatalf("%s: %q %v", c.host, link, err)
+		}
+		u, _ := url.Parse(link)
+		if u.Query().Get("instance") != "force-1" {
+			t.Errorf("the link opens the force: %q", link)
+		}
+		if id, _, err := s.proxy.tokens.Open(u.Query().Get("t"), time.Now()); err != nil || id != testAccount {
+			t.Errorf("the link's token names the account: %q %v", id, err)
+		}
+		if strings.Contains(link, testAccount) {
+			t.Errorf("the account never appears in the link: %q", link)
+		}
+	}
+	if link, _ := s.mekbayLink(httptest.NewRequest("GET", "/", nil), testAccount, "", time.Hour); strings.Contains(link, "instance=") {
+		t.Errorf("no force, no instance: %q", link)
+	}
+	if _, err := s.mekbayLink(httptest.NewRequest("GET", "/", nil), "nope", "", time.Hour); err == nil {
+		t.Error("only a real account gets a link")
+	}
+}
+
+// The Manage page offers the site's hangar copy editable through the proxy, acting as the account derived from the seed.
+func TestManagePageOpensTheHangarEditable(t *testing.T) {
+	srv, store, cookie := startedCompany(t)
+	page := body(t, srv, "/refusalwar/manage/", cookie)
+	m := regexp.MustCompile(`href="(http://mekbay\.[^"]+)"[^>]*>open it editable`).FindStringSubmatch(page)
+	if m == nil {
+		t.Fatalf("the advanced note links to the editable hangar: %.300s", page)
+	}
+	link, _ := url.Parse(strings.ReplaceAll(m[1], "&amp;", "&"))
+	run, _, _ := store.Run(context.Background(), playthroughID("wolfpack2026"), "refusalwar")
+	if link.Query().Get("instance") != run.HangarInstance || link.Query().Get("t") == "" || strings.Contains(m[1], accountUID("wolfpack2026", SlotHangar)) {
+		t.Errorf("the link opens the site's copy without showing the account: %q", m[1])
+	}
+	// Following it makes this server's proxy remember the account, and strips the token from the address.
+	addr := strings.TrimPrefix(srv.URL, "http://")
+	client := &http.Client{
+		Transport: &http.Transport{DialContext: func(ctx context.Context, n, _ string) (net.Conn, error) {
+			return (&net.Dialer{}).DialContext(ctx, n, addr)
+		}},
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}
+	resp, err := client.Get(link.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusSeeOther || strings.Contains(resp.Header.Get("Location"), "t=") || len(resp.Cookies()) != 1 || resp.Cookies()[0].Name != mekbayCookie {
+		t.Errorf("the token is accepted by the same server: %d %q %v", resp.StatusCode, resp.Header.Get("Location"), resp.Cookies())
+	}
+	// A run from before the site copied hangars has nothing to open.
+	_, _ = store.db.Exec(`UPDATE campaign_runs SET source_url = ''`)
+	if page := body(t, srv, "/refusalwar/manage/", cookie); strings.Contains(page, "open it editable") {
+		t.Error("without a site-owned hangar there is nothing to open editable")
 	}
 }

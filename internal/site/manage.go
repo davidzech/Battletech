@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"time"
 )
 
 // manage serves /<campaign>/manage/, the page for managing a started campaign's force: hangar link, named pilots and
@@ -18,13 +19,17 @@ func (s *Server) manage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	back := "/" + c.Slug + "/"
-	if seed := currentSeed(r); seed == "" {
+	seed := currentSeed(r)
+	if seed == "" {
 		http.Redirect(w, r, back, http.StatusSeeOther)
 		return
-	} else if run, _, err := s.store.Run(r.Context(), playthroughID(seed), c.Slug); err != nil {
+	}
+	run, _, err := s.store.Run(r.Context(), playthroughID(seed), c.Slug)
+	if err != nil {
 		http.Error(w, "could not load campaign", http.StatusInternalServerError)
 		return
-	} else if !run.Started() {
+	}
+	if !run.Started() {
 		http.Redirect(w, r, back, http.StatusSeeOther)
 		return
 	}
@@ -34,6 +39,11 @@ func (s *Server) manage(w http.ResponseWriter, r *http.Request) {
 		Title:    "Manage force | " + c.Label,
 		Crumbs:   []Crumb{{Label: c.Label, URL: back}, {Label: "Manage", URL: back + "manage/"}},
 		Campaign: c,
+	}
+	if run.Owned() { // the site's copy of the hangar belongs to the account derived from the seed: open it in MekBay as that account
+		if link, err := s.mekbayLink(r, accountUID(seed, SlotHangar), run.HangarInstance, 12*time.Hour); err == nil {
+			p.MekBayEditURL = link
+		}
 	}
 	if sc, ok := c.Scenario(r.URL.Query().Get("back")); ok {
 		p.BackURL = back + sc.Slug + "/"

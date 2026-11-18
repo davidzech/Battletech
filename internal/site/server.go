@@ -46,22 +46,24 @@ type Page struct {
 	Title string
 	// BackURL and BackLabel, when set, replace the Manage page's "Back to the campaign" link (it returns to the sortie the player came from).
 	BackURL, BackLabel string
-	Crumbs             []Crumb
-	Campaign           *Campaign
-	Scenario           *Scenario
-	Cards              []Card
-	HasLocked          bool           // some scenario cards are locked, so the campaign page offers 'Show all scenarios'
-	ScenarioState      string         // on a scenario page: completed, available or locked
-	Ledger             []LedgerEntry  // the keywords the campaign has been granted (on the keywords page)
-	Outcome            *OutcomeResult // on a completed scenario page: the recorded report of its outcome
-	Images             []string       // URLs of the scenario's images
-	Seed               string         // the visitor's seed ("" if none chosen yet)
-	Play               Playthrough    // the visitor's playthrough (zero value if no seed)
-	Run                CampaignRun    // the playthrough's run of this page's campaign (zero value until it is started)
-	Pilots             []PilotView    // the run's named pilots
-	CanRecruit         bool           // the command has room for another living named pilot, and the warchest can pay for them
-	RecruitNote        string         // the short gray note under Recruit New Pilot: why it is unavailable, or what it costs
-	MaxPilots          int            // most living named pilots a command may have
+	// MekBayEditURL, on the Manage page, opens the site's hangar copy in the MekBay proxy acting as the account that owns it, so it is editable.
+	MekBayEditURL string
+	Crumbs        []Crumb
+	Campaign      *Campaign
+	Scenario      *Scenario
+	Cards         []Card
+	HasLocked     bool           // some scenario cards are locked, so the campaign page offers 'Show all scenarios'
+	ScenarioState string         // on a scenario page: completed, available or locked
+	Ledger        []LedgerEntry  // the keywords the campaign has been granted (on the keywords page)
+	Outcome       *OutcomeResult // on a completed scenario page: the recorded report of its outcome
+	Images        []string       // URLs of the scenario's images
+	Seed          string         // the visitor's seed ("" if none chosen yet)
+	Play          Playthrough    // the visitor's playthrough (zero value if no seed)
+	Run           CampaignRun    // the playthrough's run of this page's campaign (zero value until it is started)
+	Pilots        []PilotView    // the run's named pilots
+	CanRecruit    bool           // the command has room for another living named pilot, and the warchest can pay for them
+	RecruitNote   string         // the short gray note under Recruit New Pilot: why it is unavailable, or what it costs
+	MaxPilots     int            // most living named pilots a command may have
 	// CachedHangar is the hangar last read from MekBay for this run (nil if none yet), and CachedAt when; the campaign and scenario
 	// pages embed it so they can paint the hangar before the live read finishes (see hangarcache.go).
 	CachedHangar *HangarForce

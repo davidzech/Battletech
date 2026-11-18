@@ -398,3 +398,25 @@ func withMekBayUpstream(web, ws, origin string) Option {
 
 // withMekBayProxyHook hands the proxy to a test once it is built.
 func withMekBayProxyHook(f func(*mekbayProxy)) Option { return func(s *Server) { s.onProxy = f } }
+
+// mekbayLink is a link that opens MekBay (the proxy on mekbay.<this host>) acting as account, with the given force loaded when instance is
+// set. It carries a fresh token valid for ttl.
+func (s *Server) mekbayLink(r *http.Request, account, instance string, ttl time.Duration) (string, error) {
+	tok, err := s.proxy.tokens.Issue(account, ttl, s.proxy.now())
+	if err != nil {
+		return "", err
+	}
+	scheme := "http"
+	if isHTTPS(r) {
+		scheme = "https"
+	}
+	host := r.Host
+	if !isMekBayHost(host) {
+		host = "mekbay." + host
+	}
+	q := url.Values{"t": {tok}}
+	if instance != "" {
+		q.Set("instance", instance)
+	}
+	return scheme + "://" + host + "/?" + q.Encode(), nil
+}
