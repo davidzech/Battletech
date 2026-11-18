@@ -8,8 +8,10 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"net/url"
 	"path"
 	"path/filepath"
+	"strconv"
 	"time"
 )
 
@@ -48,10 +50,12 @@ type Page struct {
 	BackURL, BackLabel string
 	Crumbs             []Crumb
 	Campaign           *Campaign
+	OnManagePage       bool // the Manage force page itself, which has no Manage force button in its header
 	Scenario           *Scenario
 	Cards              []Card
 	HasLocked          bool           // some scenario cards are locked, so the campaign page offers 'Show all scenarios'
 	ScenarioState      string         // on a scenario page: completed, available or locked
+	NextScenarios      []Scenario     // on a completed scenario's page: the scenarios it leads to, which are now available
 	Ledger             []LedgerEntry  // the keywords the campaign has been granted (on the keywords page)
 	Outcome            *OutcomeResult // on a completed scenario page: the recorded report of its outcome
 	Images             []string       // URLs of the scenario's images
@@ -66,13 +70,16 @@ type Page struct {
 	// pages embed it so they can paint the hangar before the live read finishes (see hangarcache.go).
 	CachedHangar *HangarForce
 	CachedAt     time.Time
-	Ranks        []string // the campaign's pilot ranks, lowest first (empty when it has none)
-	Memorial     bool     // at least one named pilot was killed in action
-	Ladders      string   // the pilot improvement ladders as JSON, for the pilot builder's live preview
-	Abilities    string   // the Edge ability catalog as JSON, for the ability picker
-	Portraits    string   // the portrait list as JSON, for the portrait picker
-	MekBayOp     string   // link to the scenario's MekBay operation, once created ("" until then)
-	Commit       string   // git commit the server was built from, short form ("dev" if unknown)
+	Ranks        []string         // the campaign's pilot ranks, lowest first (empty when it has none)
+	Memorial     bool             // at least one named pilot was killed in action
+	Ladders      string           // the pilot improvement ladders as JSON, for the pilot builder's live preview
+	Abilities    string           // the Edge ability catalog as JSON, for the ability picker
+	Portraits    string           // the portrait list as JSON, for the portrait picker
+	InProgress   bool             // the scenario has a battle in progress (an operation that is neither completed nor aborted)
+	OperationURL string           // the table's link to that battle, so the Operation in progress view can show it before anything is read from MekBay
+	Checkpoints  []CheckpointView // the campaign's rollback points, newest first (the Manage page)
+	BattleCache  string           // the last status read of that battle as JSON ({forces, updatedAt}), so the view paints it at once while a fresh read is made
+	Commit       string           // git commit the server was built from, short form ("dev" if unknown)
 }
 
 // Card is one entry in a list of links (campaigns or scenarios).
@@ -84,6 +91,12 @@ type Server struct {
 	store  *Store
 	pages  map[string]*template.Template
 	mekbay MekBay
+
+	// The MekBay proxy (mekbayproxy.go), served on the hosts mekbay-<link id>.<site host> (and mekbay.localhost).
+	linkKey  string
+	upstream *[3]string // web, WebSocket and Origin of the MekBay to proxy; tests replace it
+	proxy    *mekbayProxy
+	onProxy  func(*mekbayProxy) // tests take hold of the proxy here
 }
 
 // NewHandler returns the site's HTTP handler. Campaign files are re-read on every request,
@@ -92,6 +105,13 @@ func NewHandler(contentRoot string, store *Store, opts ...Option) http.Handler {
 	s := &Server{lib: Library{Root: contentRoot}, store: store, pages: map[string]*template.Template{}, mekbay: &MekBayClient{}}
 	for _, o := range opts {
 		o(s)
+	}
+	s.proxy = newMekBayProxy(newMekBayVault(s.linkKey), store)
+	if s.upstream != nil {
+		s.proxy.web, s.proxy.ws, s.proxy.origin = s.upstream[0], s.upstream[1], s.upstream[2]
+	}
+	if s.onProxy != nil {
+		s.onProxy(s.proxy)
 	}
 	for _, name := range []string{"home", "campaign", "manage", "scenario", "keywords", "notfound"} {
 		s.pages[name] = template.Must(template.ParseFS(assets, "templates/layout.html", "templates/"+name+".html"))
@@ -127,6 +147,7 @@ func NewHandler(contentRoot string, store *Store, opts ...Option) http.Handler {
 	mux.HandleFunc("POST /api/pilots/total", s.setPilotTotal)
 	mux.HandleFunc("POST /api/warchest", s.setWarchest)
 	mux.HandleFunc("POST /api/campaign/players", s.setPlayers)
+	mux.HandleFunc("POST /api/campaign/rollback", s.rollbackCampaign)
 	mux.HandleFunc("POST /api/campaign/force-name", s.setForceName)
 	mux.HandleFunc("POST /api/campaign/scenario-complete", s.setScenarioCompleted)
 	mux.HandleFunc("POST /api/campaign/scenario-outcome", s.previewOutcome)
@@ -136,6 +157,9 @@ func NewHandler(contentRoot string, store *Store, opts ...Option) http.Handler {
 	mux.HandleFunc("POST /api/hangar/sell", s.sellUnit)
 	mux.HandleFunc("POST /api/hangar/swap", s.swapUnit)
 	mux.HandleFunc("POST /api/deploy/plan", s.deployPlan)
+	mux.HandleFunc("POST /api/battle/start", s.startBattle)
+	mux.HandleFunc("GET /api/battle/status", s.battleStatus)
+	mux.HandleFunc("POST /api/battle/abort", s.abortBattle)
 	mux.HandleFunc("GET /api/units/search", s.searchUnitsHandler)
 	mux.HandleFunc("POST /api/pilots/delete", s.deletePilot)
 	mux.HandleFunc("POST /api/pilots/portrait", s.setPortrait)
@@ -149,7 +173,13 @@ func NewHandler(contentRoot string, store *Store, opts ...Option) http.Handler {
 	mux.HandleFunc("GET /{campaign}/{scenario}/images/{file}", s.image)
 	mux.HandleFunc("GET /{campaign}/{scenario}/forces/{file}", s.force)
 	mux.HandleFunc("/", s.notFound)
-	return mux
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if isMekBayHost(r.Host) {
+			s.proxy.ServeHTTP(w, r)
+			return
+		}
+		mux.ServeHTTP(w, r)
+	})
 }
 
 func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name string, p Page) {
@@ -289,16 +319,37 @@ func (s *Server) scenario(w http.ResponseWriter, r *http.Request) {
 	for _, img := range sc.Images {
 		images = append(images, "/"+c.Slug+"/"+sc.Slug+"/images/"+path.Base(img))
 	}
-	var opLink string
-	if seed := currentSeed(r); seed != "" && len(sc.Forces) > 0 {
+	inProgress, operationURL, battleCache := false, "", ""
+	if seed := currentSeed(r); seed != "" && len(sc.Forces) > 0 && !completed[sc.Slug] {
 		if op, ok, err := s.store.MekBayOperation(r.Context(), playthroughID(seed), c.Slug, sc.ID); err != nil {
 			log.Printf("load mekbay operation: %v", err)
 		} else if ok {
-			opLink = OperationURL(op.OperationID)
+			inProgress = true
+			if forces, at, err := s.store.BattleStatusCache(r.Context(), playthroughID(seed), c.Slug, sc.ID); err != nil {
+				log.Printf("load the battle status cache: %v", err)
+			} else if forces != "" {
+				battleCache = `{"forces":` + forces + `,"updatedAt":` + strconv.FormatInt(at, 10) + `}`
+			}
+			if link, err := s.mekbayLink(r, playthroughID(seed), c.Slug, tableLabel, accountUID(seed, SlotHangar), url.Values{"operation": {op.OperationID}}); err != nil {
+				log.Printf("link to the operation: %v", err)
+			} else {
+				operationURL = link
+			}
+		}
+	}
+	var next []Scenario
+	if completed[sc.Slug] {
+		for _, b := range sc.Branches {
+			if n, ok := c.Scenario(b); ok {
+				next = append(next, *n)
+			}
 		}
 	}
 	s.render(w, r, http.StatusOK, "scenario", Page{
-		MekBayOp:      opLink,
+		InProgress:    inProgress,
+		NextScenarios: next,
+		OperationURL:  operationURL,
+		BattleCache:   battleCache,
 		Images:        images,
 		Title:         sc.Title + " | " + c.Label,
 		Crumbs:        []Crumb{{Label: c.Label, URL: "/" + c.Slug + "/"}, scenarioCrumb(c, sc, available)},

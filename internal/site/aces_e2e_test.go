@@ -3,6 +3,7 @@ package site
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -64,7 +65,7 @@ outcomes:
 	ctx := context.Background()
 	cookie := post(t, srv, "/api/seed", url.Values{"seed": {"wolfpack2026"}}, nil, "").Cookies()[0]
 	id := playthroughID("wolfpack2026")
-	post(t, srv, "/api/account", url.Values{"account": {"Wolf Pack"}, "uid_p1": {uidP1}}, cookie, srv.URL)
+	post(t, srv, "/api/account", url.Values{"account": {"Wolf Pack"}}, cookie, srv.URL)
 	if r := post(t, srv, "/api/campaign/start", startForm(goodHangar, "Alrek", "Katarina"), cookie, srv.URL); r.StatusCode != http.StatusNoContent {
 		t.Fatalf("start: %d", r.StatusCode)
 	}
@@ -102,9 +103,30 @@ outcomes:
 	if res.Pool != 600 || sps(res) != "Alrek=80,Katarina=0,Jarek=80,Sybille=40" || res.Warchest != 400 || strings.Join(res.Keywords, ",") != "depot_gone,data_saved" || !res.Pilots[1].KIA {
 		t.Fatalf("preview: %+v (%s)", res, sps(res))
 	}
+	// With a battle in progress, the battle's units are written back into the hangar before the mission is completed: if that fails, nothing is completed.
+	if err := store.SaveMekBayOperation(ctx, id, "refusalwar", "scenario_000", MekBayOperation{OpForInstance: "opfor", OperationID: "op-1"}); err != nil {
+		t.Fatal(err)
+	}
+	fake.mu.Lock()
+	fake.commitErr = errors.New("MekBay is not reachable")
+	fake.mu.Unlock()
+	if got := post(t, srv, "/api/campaign/scenario-outcome/commit", report(true, true, entries...), cookie, srv.URL).StatusCode; got != http.StatusBadGateway {
+		t.Fatalf("a failed write-back refuses the commit: %d", got)
+	}
+	if done, _ := store.Completions(ctx, id, "refusalwar"); len(done) != 0 {
+		t.Fatalf("and nothing is completed: %v", done)
+	}
+	fake.mu.Lock()
+	fake.commitErr = nil
+	fake.mu.Unlock()
 	if got := post(t, srv, "/api/campaign/scenario-outcome/commit", report(true, true, entries...), cookie, srv.URL).StatusCode; got != http.StatusNoContent {
 		t.Fatalf("commit: %d", got)
 	}
+	fake.mu.Lock()
+	if len(fake.commits) != 2 || fake.commits[1].OperationID != "op-1" || fake.commits[1].HangarInstance != run0.HangarInstance || fake.commits[1].OwnerUID != accountUID("wolfpack2026", SlotHangar) {
+		t.Errorf("the hangar was written back from the battle's operation: %+v", fake.commits)
+	}
+	fake.mu.Unlock()
 	after, _ := store.Pilots(ctx, id, "refusalwar")
 	for _, p := range after {
 		want := map[string]int{"Alrek": 80, "Katarina": 0, "Jarek": 80, "Sybille": 40}[p.Name]
@@ -120,7 +142,7 @@ outcomes:
 		t.Errorf("the keywords are in the ledger: %+v", ledger)
 	}
 	page = body(t, srv, "/refusalwar/scenario_000/", cookie)
-	for _, want := range []string{`id="outcome-summary"`, "<b>Jarek</b>", "<b>Sybille</b>", "benched", "&#43;40 SP (benched: half)", "Pool: 600 SP. 200 to the pilots, 400 to the warchest.", "Keywords granted:", "<code>depot_gone</code>", "Killed in Action."} {
+	for _, want := range []string{`id="outcome-summary"`, "<b>Jarek</b>", "<b>Sybille</b>", "benched", "&#43;40 SP (benched: half)", "Awarded: 600 SP", "Assigned to pilots: 200 SP", "Warchest: +400 SP", "Keywords granted:", "<code>depot_gone</code>", "Killed in Action."} {
 		if !strings.Contains(page, want) {
 			t.Errorf("the report on the page is missing %q", want)
 		}

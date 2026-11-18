@@ -59,8 +59,8 @@ func TestAcesOutcomeModel(t *testing.T) {
 	if res.Pilots[2].Status != "benched" || res.Pilots[0].Status != "active" || res.Pilots[0].KIA || res.Pilots[2].Notes[0] != "+40 SP (benched: half)" || res.Pilots[0].Notes[0] != "+80 SP" {
 		t.Errorf("statuses and notes: %+v", res.Pilots)
 	}
-	if res.Notes[len(res.Notes)-1] != "Pool: 600 SP. 240 to the pilots, 360 to the warchest." {
-		t.Errorf("the report says where the pool went: %v", res.Notes)
+	if res.Pool != 600 || res.Paid != 240 || res.Warchest != 360 {
+		t.Errorf("the report says where the pool went (awarded, assigned to pilots, warchest): %d, %d, %d", res.Pool, res.Paid, res.Warchest)
 	}
 	// A pilot killed gets nothing and does not draw from the pool: 80 + 0 + 40 + 40 = 160, and 440 are left.
 	res = acesRun(t, sc, map[string]any{"depot": true, "escape": true},

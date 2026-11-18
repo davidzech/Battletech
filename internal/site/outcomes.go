@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"math"
 	"net/http"
 	"regexp"
@@ -56,6 +57,9 @@ import (
 // The players enter what happened in the completion dialog, which previews the result by asking the server (POST /api/campaign/scenario-outcome); committing it
 // (POST /api/campaign/scenario-outcome/commit) applies every effect and records the report in one transaction, so a mission can only be completed once.
 
+// mvpBonusSP is the extra SP the mission's MVP earns.
+const mvpBonusSP = 20
+
 // OutcomeInput is something the players report when a mission is completed.
 type OutcomeInput struct {
 	ID    string `yaml:"id" json:"id"`
@@ -65,6 +69,8 @@ type OutcomeInput struct {
 	Min   int    `yaml:"min" json:"min"`
 	Max   int    `yaml:"max" json:"max"` // for a number: 99 when omitted
 	Help  string `yaml:"help" json:"help,omitempty"`
+	// Required (a yes/no input only): it must be true to complete the mission, so the dialog ticks it and cannot untick it (a primary objective).
+	Required bool `yaml:"required" json:"required,omitempty"`
 }
 
 // OutcomeObjective is the shorthand for an objective of the mission: a yes/no mission input, and what meeting it (or missing it) grants.
@@ -74,6 +80,7 @@ type OutcomeObjective struct {
 	SP          any      `yaml:"sp"`           // SP added to the pool when the objective is met
 	Grants      []string `yaml:"grants"`       // keywords granted when it is met
 	UnmetGrants []string `yaml:"unmet_grants"` // keywords granted when it is not
+	Required    bool     `yaml:"required"`     // a primary objective: the mission cannot be completed without it
 }
 
 // OutcomeRule is one rule of a scenario's outcomes.
@@ -108,7 +115,7 @@ func (sc *Scenario) compileOutcomes() {
 			fail("an objective has no id")
 			return
 		}
-		in := OutcomeInput{ID: o.ID, Label: o.Label, Scope: "mission", Type: "bool"}
+		in := OutcomeInput{ID: o.ID, Label: o.Label, Scope: "mission", Type: "bool", Required: o.Required}
 		if o.Label == "" {
 			in.Label = o.ID
 		}
@@ -254,6 +261,7 @@ type OutcomeEntry struct {
 	PilotID  string         `json:"id"`
 	TookPart bool           `json:"tookPart"` // active; false means benched
 	Killed   bool           `json:"killed"`   // killed in action (only an active pilot can be)
+	MVP      bool           `json:"mvp"`      // the mission's most valuable pilot: an extra mvpBonusSP (at most one, and one who took part and lives)
 	Values   map[string]any `json:"values"`   // numbers, or true/false for a bool input
 }
 
@@ -271,6 +279,7 @@ type PilotOutcome struct {
 	Entered []string `json:"entered"` // what was reported, as text ("Kills: 2")
 	SP      int      `json:"sp"`      // SP the pilot earns in all
 	KIA     bool     `json:"kia"`     // killed in action: removed from the campaign
+	MVP     bool     `json:"mvp"`     // chosen as the mission's MVP
 	Notes   []string `json:"notes"`
 }
 
@@ -278,6 +287,7 @@ type PilotOutcome struct {
 type OutcomeResult struct {
 	Pilots       []PilotOutcome `json:"pilots"`
 	Pool         int            `json:"pool"`         // SP granted for the objectives met, before the pilots take their shares
+	Paid         int            `json:"paid"`         // SP of the pool the pilots took as their shares (the rest of the pool went to the warchest)
 	Warchest     int            `json:"warchest"`     // SP added to the warchest: what is left of the pool, and any direct grants
 	FreeRecruits int            `json:"freeRecruits"` // recruits that cost no SP
 	Keywords     []string       `json:"keywords"`     // keywords added to the campaign ledger
@@ -323,6 +333,9 @@ func (sc *Scenario) inputValues(scope string, raw map[string]any) (map[string]an
 		}
 		if in.Type == "bool" {
 			out[in.ID] = f != 0
+			if in.Required && f == 0 {
+				return nil, fmt.Errorf("%q is required to complete the mission", in.Label)
+			}
 		} else {
 			out[in.ID] = int(f)
 		}
@@ -359,6 +372,7 @@ func (sc *Scenario) EvaluateOutcome(in OutcomeInputs, names map[string]string) (
 		return res, err
 	}
 	seen := map[string]bool{}
+	mvps := 0
 	type taken struct {
 		out  *PilotOutcome
 		vars map[string]any
@@ -377,6 +391,15 @@ func (sc *Scenario) EvaluateOutcome(in OutcomeInputs, names map[string]string) (
 		if e.Killed && !e.TookPart {
 			return res, fmt.Errorf("%s was benched, so they cannot have been killed", name)
 		}
+		if e.MVP {
+			mvps++
+			if !e.TookPart || e.Killed {
+				return res, fmt.Errorf("%s cannot be the MVP: only a pilot who took part and lives can be", name)
+			}
+			if mvps > 1 {
+				return res, errors.New("only one pilot can be the MVP")
+			}
+		}
 		if e.TookPart {
 			vals, err := sc.inputValues("pilot", e.Values)
 			if err != nil {
@@ -394,6 +417,7 @@ func (sc *Scenario) EvaluateOutcome(in OutcomeInputs, names map[string]string) (
 			for k, v := range vals {
 				vars[k] = v
 			}
+			po.MVP = e.MVP
 			res.Pilots = append(res.Pilots, po)
 			active = append(active, taken{vars: vars})
 			continue
@@ -536,12 +560,16 @@ func (sc *Scenario) EvaluateOutcome(in OutcomeInputs, names map[string]string) (
 			paid += d
 		}
 		res.Warchest += res.Pool - paid
-		if res.Pool > 0 {
-			res.Notes = append(res.Notes, fmt.Sprintf("Pool: %d SP. %d to the pilots, %d to the warchest.", res.Pool, paid, res.Pool-paid))
-		}
+		res.Paid = paid
 	} else if res.Pool > 0 {
 		res.Warchest += res.Pool
-		res.Notes = append(res.Notes, fmt.Sprintf("Pool: %d SP, all to the warchest.", res.Pool))
+	}
+	// The MVP earns an extra mvpBonusSP, on top of their share and not drawn from the pool.
+	for i := range res.Pilots {
+		if p := &res.Pilots[i]; p.MVP {
+			p.SP += mvpBonusSP
+			p.Notes = append(p.Notes, fmt.Sprintf("+%d SP (MVP)", mvpBonusSP))
+		}
 	}
 	for i := range res.Pilots {
 		if p := &res.Pilots[i]; len(p.Notes) == 0 {
@@ -621,6 +649,10 @@ func (s *Store) CompleteWithOutcome(ctx context.Context, playthroughID, campaign
 		}
 	}
 	if _, err := tx.ExecContext(ctx, s.q(`INSERT INTO scenario_completions (playthrough_id, campaign, scenario_id, outcome) VALUES (?, ?, ?, ?)`), playthroughID, campaign, scenario, string(record)); err != nil {
+		return err
+	}
+	// The battle is over: the scenario has no operation in progress any more.
+	if _, err := tx.ExecContext(ctx, s.q(`DELETE FROM mekbay_operations WHERE playthrough_id = ? AND campaign = ? AND scenario_id = ?`), playthroughID, campaign, scenario); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -740,6 +772,19 @@ func (s *Server) commitOutcome(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if !s.writeBackBattle(w, r, pt, c, sc) {
+		return
+	}
+	// Two stages for the hangar: its frozen copy is made now, and the checkpoint that holds it is recorded once the completion is saved.
+	copyID, cerr := "", error(nil)
+	if run, ok, err := s.store.Run(r.Context(), pt.ID, c.Slug); err == nil && ok {
+		copyID, cerr = s.checkpointCopy(r.Context(), currentSeed(r), run)
+	}
+	if cerr != nil {
+		http.Error(w, "Could not save a checkpoint of your hangar in MekBay: "+cerr.Error(), http.StatusBadGateway)
+		return
+	}
+	label := "Completed Sortie " + sc.Number + ": " + sc.Title
 	switch err := s.store.CompleteWithOutcome(r.Context(), pt.ID, c.Slug, sc.Slug, res); {
 	case errors.Is(err, ErrAlreadyCompleted):
 		http.Error(w, "This mission is already completed.", http.StatusConflict)
@@ -750,7 +795,12 @@ func (s *Server) commitOutcome(w http.ResponseWriter, r *http.Request) {
 	case err != nil:
 		http.Error(w, "could not save the outcome", http.StatusInternalServerError)
 	default:
+		s.recordCheckpoint(r.Context(), currentSeed(r), pt.ID, c.Slug, label, copyID)
 		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if copyID != "" {
+		s.deleteHangars(r.Context(), currentSeed(r), []string{copyID}) // the completion was not saved: the staged copy is not needed
 	}
 }
 
@@ -776,4 +826,31 @@ func (s *Store) Ledger(ctx context.Context, playthroughID, campaign string) ([]L
 		out = append(out, e)
 	}
 	return out, rows.Err()
+}
+
+// writeBackBattle, for a mission fought with the player's own force (not a provided one) that has a battle in progress, writes the battle's units back into the
+// hangar before the mission is completed (see commitbattle.go), so a failure leaves the mission open to try again (writing the same state twice changes nothing). It
+// answers the request itself and returns false when it fails.
+func (s *Server) writeBackBattle(w http.ResponseWriter, r *http.Request, pt Playthrough, c *Campaign, sc *Scenario) bool {
+	if sc.provides() {
+		return true
+	}
+	op, had, err := s.store.MekBayOperation(r.Context(), pt.ID, c.Slug, sc.ID)
+	if err != nil {
+		http.Error(w, "could not load the battle", http.StatusInternalServerError)
+		return false
+	}
+	run, started, err := s.store.Run(r.Context(), pt.ID, c.Slug)
+	if !had || err != nil || !started || !run.Owned() {
+		return true // no battle to write back, or a hangar the site doesn't own
+	}
+	rep, err := s.mekbay.CommitBattle(r.Context(), CommitBattleRequest{OwnerUID: accountUID(currentSeed(r), SlotHangar), HangarInstance: run.HangarInstance, OperationID: op.OperationID})
+	if err != nil {
+		http.Error(w, "Could not write the battle's damage back into your hangar: "+err.Error(), http.StatusBadGateway)
+		return false
+	}
+	if len(rep.Skipped) > 0 {
+		log.Printf("battle write-back: %d units written, no match in the hangar for %v", rep.Matched, rep.Skipped)
+	}
+	return true
 }

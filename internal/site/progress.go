@@ -3,6 +3,7 @@ package site
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 )
 
@@ -34,8 +35,11 @@ func (s *Store) SetScenarioCompleted(ctx context.Context, playthroughID, campaig
 		_, err := s.db.ExecContext(ctx, s.q(`DELETE FROM scenario_completions WHERE playthrough_id = ? AND campaign = ? AND scenario_id = ?`), playthroughID, campaign, scenario)
 		return err
 	}
-	_, err := s.db.ExecContext(ctx, s.q(`INSERT INTO scenario_completions (playthrough_id, campaign, scenario_id) VALUES (?, ?, ?)
-		ON CONFLICT (playthrough_id, campaign, scenario_id) DO NOTHING`), playthroughID, campaign, scenario)
+	if _, err := s.db.ExecContext(ctx, s.q(`INSERT INTO scenario_completions (playthrough_id, campaign, scenario_id) VALUES (?, ?, ?)
+		ON CONFLICT (playthrough_id, campaign, scenario_id) DO NOTHING`), playthroughID, campaign, scenario); err != nil {
+		return err
+	}
+	_, err := s.DeleteMekBayOperation(ctx, playthroughID, campaign, scenario) // a completed mission has no battle in progress
 	return err
 }
 
@@ -108,6 +112,15 @@ func (s *Server) setScenarioCompleted(w http.ResponseWriter, r *http.Request) {
 	if err := s.store.SetScenarioCompleted(r.Context(), pt.ID, c.Slug, sc.Slug, done); err != nil {
 		http.Error(w, "could not save the campaign log", http.StatusInternalServerError)
 		return
+	}
+	if done { // a mission completed by hand is a rollback point too
+		if run, ok, err := s.store.Run(r.Context(), pt.ID, c.Slug); err == nil && ok {
+			if copyID, err := s.checkpointCopy(r.Context(), currentSeed(r), run); err != nil {
+				log.Printf("checkpoint after %s: %v", sc.Slug, err)
+			} else {
+				s.recordCheckpoint(r.Context(), currentSeed(r), pt.ID, c.Slug, "Completed Sortie "+sc.Number+": "+sc.Title, copyID)
+			}
+		}
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

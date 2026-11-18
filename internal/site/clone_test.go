@@ -78,7 +78,7 @@ func TestStartClonesTheHangar(t *testing.T) {
 	srv, store := newMekBayTestServer(t, fake)
 	ctx := context.Background()
 	cookie := post(t, srv, "/api/seed", url.Values{"seed": {"wolfpack2026"}}, nil, "").Cookies()[0]
-	post(t, srv, "/api/account", url.Values{"uid_p1": {uidP1}, "account": {"Wolf Pack"}}, cookie, srv.URL)
+	post(t, srv, "/api/account", url.Values{"account": {"Wolf Pack"}}, cookie, srv.URL)
 	if r := post(t, srv, "/api/campaign/start", startForm(goodHangar+"&sel=abc", "Alrek", "Katarina"), cookie, srv.URL); r.StatusCode != http.StatusNoContent {
 		t.Fatalf("start: %d", r.StatusCode)
 	}
@@ -95,25 +95,19 @@ func TestStartClonesTheHangar(t *testing.T) {
 	}
 	// The player never sees the site's copy: neither its link nor the account that owns it.
 	for _, path := range []string{"/refusalwar/", "/refusalwar/manage/", "/refusalwar/scenario_001/"} {
-		if path == "/refusalwar/manage/" {
-			continue // the Manage page shows the copy and its account, for advanced users
-		}
 		p := body(t, srv, path, cookie)
 		if strings.Contains(p, run.HangarInstance) || strings.Contains(p, MekBayUID("wolfpack2026", SlotHangar)) {
 			t.Errorf("%s leaks the site's MekBay copy or account", path)
 		}
 	}
-	if p := body(t, srv, "/refusalwar/manage/", cookie); !strings.Contains(p, MekBayUID("wolfpack2026", SlotHangar)) || !strings.Contains(p, "instance="+run.HangarInstance) {
-		t.Error("the Manage page should link the site's copy and name the account that owns it")
-	}
-	if p := body(t, srv, "/refusalwar/manage/", cookie); !strings.Contains(p, goodHangarURL) {
-		t.Error("the change-link dialog should show the link the player gave")
+	if p := body(t, srv, "/refusalwar/manage/", cookie); strings.Contains(p, `id="run-dialog"`) {
+		t.Error("there is no Re-import hangar dialog any more")
 	}
 	// A failing clone starts nothing.
 	fake2 := &fakeMekBay{hangar: startingHangar()}
 	srv2, store2 := newMekBayTestServer(t, fake2)
 	cookie2 := post(t, srv2, "/api/seed", url.Values{"seed": {"wolfpack2027"}}, nil, "").Cookies()[0]
-	post(t, srv2, "/api/account", url.Values{"uid_p1": {uidP1}, "account": {"Wolf Pack"}}, cookie2, srv2.URL)
+	post(t, srv2, "/api/account", url.Values{"account": {"Wolf Pack"}}, cookie2, srv2.URL)
 	fake2.setHangar(startingHangar(), nil)
 	fake2.mu.Lock()
 	fake2.cloneErr = context.DeadlineExceeded
@@ -132,7 +126,7 @@ func TestStartChoosesEdgeAbilities(t *testing.T) {
 	srv, store := newMekBayTestServer(t, fake)
 	ctx := context.Background()
 	cookie := post(t, srv, "/api/seed", url.Values{"seed": {"wolfpack2026"}}, nil, "").Cookies()[0]
-	post(t, srv, "/api/account", url.Values{"uid_p1": {uidP1}, "account": {"Wolf Pack"}}, cookie, srv.URL)
+	post(t, srv, "/api/account", url.Values{"account": {"Wolf Pack"}}, cookie, srv.URL)
 	form := func(abilities ...string) url.Values {
 		v := startForm(goodHangar, "Alrek", "Katarina")
 		v.Set("pilot0_gunnery", "30")

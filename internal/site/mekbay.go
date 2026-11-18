@@ -65,6 +65,7 @@ type HangarUnit struct {
 	Pilot     string
 	Gunnery   int
 	Piloting  int
+	PilotDead bool // the record sheet shows the pilot dead (see crewIsDead)
 	Damaged   bool // has recorded armor/structure damage, critical hits or spent ammo
 	Destroyed bool
 	// The raw damage MekBay records, from which conditionOf works out the unit's state (see condition.go).
@@ -124,6 +125,18 @@ type MekBay interface {
 	SellUnit(ctx context.Context, req SellRequest) error
 	// SwapUnit reconfigures an omnimech of the player's hangar force to another variant.
 	SwapUnit(ctx context.Context, req SwapRequest) error
+	// StartBattle builds the players' forces and the OpFor's, starts a multiplayer lobby and seats everyone in it (see battle.go).
+	StartBattle(ctx context.Context, req BattleRequest) (BattleResult, error)
+	// ReadBattle reads an operation and every force in it, anonymously, for the battle's live status.
+	ReadBattle(ctx context.Context, operationID string) (BattleStatus, error)
+	// CommitBattle writes the units' state from a finished battle back into the matching hangar units (see commitbattle.go).
+	CommitBattle(ctx context.Context, req CommitBattleRequest) (CommitBattleReport, error)
+	// CopyForce saves a copy of one of the owner's forces under another instance ID (checkpoints, see checkpoint.go).
+	CopyForce(ctx context.Context, req CopyRequest) error
+	// DeleteForce deletes forces of the owner's (best effort).
+	DeleteForce(ctx context.Context, owner string, instances ...string) error
+	// DeleteBattle deletes a battle's operation and all its forces (best effort).
+	DeleteBattle(ctx context.Context, owner, operationID string) error
 }
 
 // MekBayClient is the real implementation, speaking to MekBay's WebSocket server.
@@ -239,29 +252,10 @@ func (c *MekBayClient) SyncOperation(ctx context.Context, req OperationRequest) 
 			{"instanceId": opforID, "alignment": "enemy", "timestamp": opforTS},
 		},
 	}
-	if err := s.send(ctx, map[string]any{"action": "saveOperation", "data": op}); err != nil {
+	if err := s.saveOperation(ctx, op, opID); err != nil {
 		return OperationResult{}, err
 	}
-	for attempt := 0; attempt < 6; attempt++ {
-		select {
-		case <-ctx.Done():
-			return OperationResult{}, ctx.Err()
-		case <-time.After(400 * time.Millisecond):
-		}
-		got, err := s.call(ctx, map[string]any{"action": "getOperation", "operationId": opID})
-		if err != nil {
-			return OperationResult{}, err
-		}
-		var back struct {
-			Data *struct {
-				Owned bool `json:"owned"`
-			} `json:"data"`
-		}
-		if json.Unmarshal(got, &back) == nil && back.Data != nil {
-			return OperationResult{OpForInstance: opforID, OperationID: opID}, nil
-		}
-	}
-	return OperationResult{}, errors.New("MekBay did not confirm the operation was saved")
+	return OperationResult{OpForInstance: opforID, OperationID: opID}, nil
 }
 
 // mekbayTime formats a time the way MekBay writes force timestamps.
@@ -295,6 +289,8 @@ func parseHangarForce(raw json.RawMessage) (HangarForce, error) {
 							Name     string `json:"name"`
 							Gunnery  int    `json:"gunnerySkill"`
 							Piloting int    `json:"pilotingSkill"`
+							Hits     int    `json:"hits"`
+							State    int    `json:"state"`
 						} `json:"crew"`
 						RuleChecks map[string]struct {
 							Status string `json:"status"`
@@ -317,6 +313,7 @@ func parseHangarForce(raw json.RawMessage) (HangarForce, error) {
 			if len(u.State.Crew) > 0 {
 				c := u.State.Crew[0]
 				hu.Pilot, hu.Gunnery, hu.Piloting = c.Name, c.Gunnery, c.Piloting
+				hu.PilotDead = crewIsDead(c.State, c.Hits)
 			}
 			hu.Damaged = len(u.State.Locations) > 0
 			for k, l := range u.State.Locations {
@@ -346,6 +343,17 @@ func parseHangarForce(raw json.RawMessage) (HangarForce, error) {
 				if strings.Contains(strings.ToLower(c.Name), "engine") {
 					hu.EngineHits += n
 				}
+			}
+			// MekBay also counts a pilot dead when their cockpit is gone, whatever the crew's stored state says: the cockpit slot destroyed, or the head (which holds it)
+			// with no internal structure left. Every standard mech's head has 3 points of internal structure.
+			for _, c := range u.State.Crits {
+				name := strings.ToLower(c.Name)
+				if strings.Contains(name, "cockpit") && !strings.Contains(name, "command") && c.Destroyed != nil && c.Destroyed != float64(0) {
+					hu.PilotDead = true
+				}
+			}
+			if hd, ok := hu.Locations["HD"]; ok && hd.Internal >= 3 && len(u.State.Crew) > 0 {
+				hu.PilotDead = true
 			}
 			hu.TorsoCheckFailed = u.State.RuleChecks["core.torso-crippling"].Status == "failed"
 			h.Units = append(h.Units, hu)
@@ -502,3 +510,7 @@ func buildForce(instanceID string, now time.Time, d ForceDraft) serializedForce 
 	}
 	return f
 }
+
+// crewIsDead says whether MekBay's record of a crew member shows them dead: its stored state is dead (2) or killed (4), or they have taken the six hits that kill.
+// (The other states are healthy 0, unconscious 1, ejected 3 and stunned 5.)
+func crewIsDead(state, hits int) bool { return state == 2 || state == 4 || hits >= 6 }

@@ -230,7 +230,7 @@ func startedCompany(t *testing.T) (*httptest.Server, *Store, *http.Cookie) {
 	t.Helper()
 	srv, store := newTestServer(t)
 	cookie := post(t, srv, "/api/seed", url.Values{"seed": {"wolfpack2026"}}, nil, "").Cookies()[0]
-	if r := post(t, srv, "/api/account", url.Values{"uid_p1": {uidP1}, "account": {"Wolf's Dragoons"}}, cookie, srv.URL); r.StatusCode != http.StatusNoContent {
+	if r := post(t, srv, "/api/account", url.Values{"account": {"Wolf's Dragoons"}}, cookie, srv.URL); r.StatusCode != http.StatusNoContent {
 		t.Fatalf("company: %d", r.StatusCode)
 	}
 	if r := post(t, srv, "/api/campaign/start", startForm(goodHangar, "Alrek", "Katarina"), cookie, srv.URL); r.StatusCode != http.StatusNoContent {
@@ -258,7 +258,7 @@ func TestNamedPilotsFlow(t *testing.T) {
 	if r := post(t, srv, "/api/pilots", pilots("name", "Alrek"), cookie, srv.URL); r.StatusCode != http.StatusBadRequest {
 		t.Fatalf("no company: %d", r.StatusCode)
 	}
-	post(t, srv, "/api/account", url.Values{"uid_p1": {uidP1}, "account": {"Wolf's Dragoons"}}, cookie, srv.URL)
+	post(t, srv, "/api/account", url.Values{"account": {"Wolf's Dragoons"}}, cookie, srv.URL)
 	if r := post(t, srv, "/api/pilots", pilots("name", "Alrek"), cookie, srv.URL); r.StatusCode != http.StatusBadRequest {
 		t.Fatalf("campaign not started: %d", r.StatusCode)
 	}
@@ -382,7 +382,7 @@ func TestStartWizardSubmission(t *testing.T) {
 	srv, store := newTestServer(t)
 	ctx := context.Background()
 	cookie := post(t, srv, "/api/seed", url.Values{"seed": {"wolfpack2026"}}, nil, "").Cookies()[0]
-	post(t, srv, "/api/account", url.Values{"uid_p1": {uidP1}, "account": {"Wolf's Dragoons"}}, cookie, srv.URL)
+	post(t, srv, "/api/account", url.Values{"account": {"Wolf's Dragoons"}}, cookie, srv.URL)
 	id := playthroughID("wolfpack2026")
 
 	// The wizard page carries what the script needs: the pilot count, the SP budget and the ladders.
@@ -459,8 +459,8 @@ func TestStartWizardSubmission(t *testing.T) {
 	if ps[0].EdgeTokens() != 2 || ps[1].Piloting() != 4 || ps[1].EdgeAbilities() != 0 {
 		t.Errorf("levels follow the ladders: %+v", ps)
 	}
-	if c := body(t, srv, "/refusalwar/manage/", cookie); !strings.Contains(c, "Katarina") || strings.Contains(c, "needs 2 named pilots") || strings.Contains(c, `id="start-wizard"`) || !strings.Contains(c, `id="run-dialog"`) {
-		t.Fatalf("a started campaign shows its pilots and the change-link dialog: %.3000s", c)
+	if c := body(t, srv, "/refusalwar/manage/", cookie); !strings.Contains(c, "Katarina") || strings.Contains(c, "needs 2 named pilots") || strings.Contains(c, `id="start-wizard"`) || strings.Contains(c, `id="run-dialog"`) {
+		t.Fatalf("a started campaign shows its pilots and no change-link dialog: %.3000s", c)
 	}
 
 	// Submitting the wizard again only re-imports the hangar: no duplicate pilots.
@@ -606,7 +606,7 @@ func TestManageAndOverview(t *testing.T) {
 	}
 	// The manage page holds all of them.
 	man := body(t, srv, "/refusalwar/manage/", cookie)
-	for _, want := range []string{`id="run-dialog"`, `id="delete-dialog"`, `id="sp-dialog"`, `class="button pilot-sp"`, "Purchase new unit"} {
+	for _, want := range []string{`id="delete-dialog"`, `id="sp-dialog"`, `class="button pilot-sp"`, "Purchase new unit"} {
 		if !strings.Contains(man, want) {
 			t.Errorf("manage page is missing %q", want)
 		}

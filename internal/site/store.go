@@ -23,8 +23,6 @@ type Store struct {
 type Playthrough struct {
 	ID          string // hash of the seed, never the seed itself
 	AccountName string // the company's name in the lore, e.g. "Wolf's Dragoons" ("" until named)
-	// PlayerIDs says which players (1 to 4) have a saved MekBay user ID. The IDs themselves are secret and never leave the store (see accounts.go).
-	PlayerIDs [maxPlayers]bool
 }
 
 // Configured reports whether the company has been named, which is what setting a seed up amounts to.
@@ -94,12 +92,8 @@ func (s *Store) schemaStatements() []string {
 	hangar_instance TEXT NOT NULL DEFAULT '',
 	PRIMARY KEY (playthrough_id, campaign)
 )`, s.timestampColumn()),
-		`CREATE TABLE IF NOT EXISTS player_accounts (
-	playthrough_id TEXT NOT NULL,
-	slot           TEXT NOT NULL,
-	uid            TEXT NOT NULL,
-	PRIMARY KEY (playthrough_id, slot)
-)`,
+		// The players' own MekBay user IDs are no longer asked for (every player's account is derived from the seed); forget any that were saved.
+		`DROP TABLE IF EXISTS player_accounts`,
 		fmt.Sprintf(`CREATE TABLE IF NOT EXISTS scenario_completions (
 	playthrough_id TEXT NOT NULL REFERENCES playthroughs(id) ON DELETE CASCADE,
 	campaign       TEXT NOT NULL,
@@ -130,7 +124,29 @@ func (s *Store) schemaStatements() []string {
 	scenario_id    TEXT NOT NULL,
 	opfor_instance TEXT NOT NULL,
 	operation_id   TEXT NOT NULL,
+	status_json    TEXT NOT NULL DEFAULT '',
+	status_at      INTEGER NOT NULL DEFAULT 0,
 	PRIMARY KEY (playthrough_id, campaign, scenario_id)
+)`,
+		`CREATE TABLE IF NOT EXISTS campaign_checkpoints (
+	playthrough_id TEXT NOT NULL REFERENCES playthroughs(id) ON DELETE CASCADE,
+	campaign       TEXT NOT NULL,
+	seq            INTEGER NOT NULL,
+	label          TEXT NOT NULL,
+	created_at     INTEGER NOT NULL,
+	hangar_copy    TEXT NOT NULL DEFAULT '',
+	snapshot       TEXT NOT NULL,
+	PRIMARY KEY (playthrough_id, campaign, seq)
+)`,
+		`CREATE TABLE IF NOT EXISTS mekbay_links (
+	id             TEXT PRIMARY KEY,
+	playthrough_id TEXT NOT NULL REFERENCES playthroughs(id) ON DELETE CASCADE,
+	campaign       TEXT NOT NULL,
+	label          TEXT NOT NULL,
+	sealed         TEXT NOT NULL,
+	ttl_seconds    BIGINT NOT NULL,
+	expires_at     BIGINT NOT NULL,
+	UNIQUE (playthrough_id, campaign, label)
 )`,
 		fmt.Sprintf(`CREATE TABLE IF NOT EXISTS named_pilots (
 	id               TEXT PRIMARY KEY,
@@ -214,6 +230,12 @@ func (s *Store) init() error {
 	}
 	// Columns added after a table first shipped. CREATE TABLE IF NOT EXISTS leaves an existing table as it was, so they
 	// are added here (neither database has ADD COLUMN IF NOT EXISTS in common).
+	if err := s.ensureColumn("mekbay_operations", "status_json", "TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
+	if err := s.ensureColumn("mekbay_operations", "status_at", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
 	if err := s.ensureColumn("campaign_runs", "warchest", "INTEGER NOT NULL DEFAULT 0"); err != nil {
 		return err
 	}
@@ -359,9 +381,6 @@ func (s *Store) Playthrough(ctx context.Context, id string) (p Playthrough, ok b
 	if err != nil {
 		return p, false, err
 	}
-	if err := s.loadPlayerIDs(ctx, &p); err != nil {
-		return p, false, err
-	}
 	return p, true, nil
 }
 
@@ -479,11 +498,37 @@ func (s *Store) MekBayOperation(ctx context.Context, playthroughID, campaign, sc
 	return op, err == nil, err
 }
 
+// DeleteMekBayOperation forgets a scenario's operation: the battle is over (the mission was completed or aborted). Nothing is deleted in MekBay.
+func (s *Store) DeleteMekBayOperation(ctx context.Context, playthroughID, campaign, scenarioID string) (bool, error) {
+	res, err := s.db.ExecContext(ctx, s.q(`DELETE FROM mekbay_operations WHERE playthrough_id = ? AND campaign = ? AND scenario_id = ?`), playthroughID, campaign, scenarioID)
+	if err != nil {
+		return false, err
+	}
+	n, _ := res.RowsAffected()
+	return n > 0, nil
+}
+
+// SaveBattleStatus keeps the last status read of a battle (the players' forces, as JSON), so the Operation in progress view can show it at once on the next visit
+// while a fresh read is made (see the hangar cache, which does the same for the hangar). It does nothing if the battle is gone.
+func (s *Store) SaveBattleStatus(ctx context.Context, playthroughID, campaign, scenarioID, forcesJSON string, at int64) error {
+	_, err := s.db.ExecContext(ctx, s.q(`UPDATE mekbay_operations SET status_json = ?, status_at = ? WHERE playthrough_id = ? AND campaign = ? AND scenario_id = ?`), forcesJSON, at, playthroughID, campaign, scenarioID)
+	return err
+}
+
+// BattleStatusCache returns what SaveBattleStatus kept: the forces as JSON and when they were read (zero and empty if never).
+func (s *Store) BattleStatusCache(ctx context.Context, playthroughID, campaign, scenarioID string) (forcesJSON string, at int64, err error) {
+	err = s.db.QueryRowContext(ctx, s.q(`SELECT status_json, status_at FROM mekbay_operations WHERE playthrough_id = ? AND campaign = ? AND scenario_id = ?`), playthroughID, campaign, scenarioID).Scan(&forcesJSON, &at)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", 0, nil
+	}
+	return forcesJSON, at, err
+}
+
 // SaveMekBayOperation stores (or replaces) the operation for a scenario of a campaign run.
 func (s *Store) SaveMekBayOperation(ctx context.Context, playthroughID, campaign, scenarioID string, op MekBayOperation) error {
 	_, err := s.db.ExecContext(ctx,
 		s.q(`INSERT INTO mekbay_operations (playthrough_id, campaign, scenario_id, opfor_instance, operation_id) VALUES (?, ?, ?, ?, ?)
-		     ON CONFLICT (playthrough_id, campaign, scenario_id) DO UPDATE SET opfor_instance = excluded.opfor_instance, operation_id = excluded.operation_id`),
+		     ON CONFLICT (playthrough_id, campaign, scenario_id) DO UPDATE SET opfor_instance = excluded.opfor_instance, operation_id = excluded.operation_id, status_json = '', status_at = 0`),
 		playthroughID, campaign, scenarioID, op.OpForInstance, op.OperationID)
 	return err
 }
@@ -763,7 +808,7 @@ func (s *Store) DeleteRun(ctx context.Context, playthroughID, campaign string) (
 		playthroughID, campaign); err != nil {
 		return false, err
 	}
-	for _, table := range []string{"named_pilots", "mekbay_operations", "hangar_cache", "scenario_completions", "campaign_keywords"} {
+	for _, table := range []string{"named_pilots", "mekbay_operations", "mekbay_links", "hangar_cache", "scenario_completions", "campaign_keywords", "campaign_checkpoints"} {
 		if _, err := tx.ExecContext(ctx, s.q("DELETE FROM "+table+" WHERE playthrough_id = ? AND campaign = ?"), playthroughID, campaign); err != nil {
 			return false, err
 		}

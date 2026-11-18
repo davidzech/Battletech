@@ -157,7 +157,7 @@ details.fold > summary {
   display: inline-flex;
   align-items: center;
   gap: 0.6rem;
-  padding: 0.35rem 2rem 0.35rem 0.9rem;
+  padding: 0.35rem 1.4rem 0.35rem 0.9rem;
   background: var(--accent);
   color: var(--accent-ink);
   font: 700 1.35rem var(--display);
@@ -165,8 +165,7 @@ details.fold > summary {
   text-transform: uppercase;
   cursor: pointer;
   list-style: none;
-  clip-path: polygon(0 0, 100% 0, calc(100% - 12px) 100%, 0 100%);
-}
+  }
 details.fold > summary::-webkit-details-marker { display: none; }
 details.fold > summary::before {
   content: "";
@@ -1257,6 +1256,8 @@ dialog input.themed-box:focus, dialog .themed-check input:focus { outline: none;
 .roster-pilot { transition: border-color 0.12s; }
 .roster-pilot[tabindex]:hover, .roster-pilot.tip-open, .roster-pilot[tabindex]:focus-visible { border-color: var(--accent); outline: none; }
 .deploy-pilot.tip-open, .deploy-slot.filled.tip-open { border-color: var(--accent); }
+/* A named pilot shown in the review and the Operation in progress view lights its border as soon as the pointer is on it; the hover card follows after its delay. */
+.deploy-slot.static.filled:hover { border-color: var(--accent); }
 
 /* The Company details dialog's MekBay user ID rows: Player 1 to 4 and the OpFor. */
 fieldsetfieldset
@@ -1304,13 +1305,6 @@ dialog button.deploy-count[aria-pressed="true"] { color: var(--accent-ink); back
 #swap-select option.swap-down, #swap-select.swap-down { color: #e5594f; }
 
 /* The company settings' MekBay user IDs, one row per player. */
-.mekbay-ids { margin: 1rem 0 0; padding: 0; border: 0; min-width: 0; }
-.mekbay-ids legend { padding: 0; font: 700 0.8rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; }
-.mekbay-ids .optional { font-weight: 400; color: var(--muted); letter-spacing: 0.04em; text-transform: none; }
-.mekbay-ids .hint { margin: 0.3rem 0 0.5rem; font-size: 0.85rem; color: var(--muted); }
-.mekbay-id-row { display: grid; grid-template-columns: 5.2rem minmax(0, 1fr) 4.6rem; align-items: center; gap: 0.5rem; margin-top: 0.4rem; }
-.mekbay-id-row > label:first-child { font: 700 0.75rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; }
-.mekbay-id-row input.mekbay-id { margin: 0; }
 
 /* The Manage page's Overview: the default player count, the same segmented picker as the Deploy wizard's. */
 .overview-players { align-content: center; }
@@ -1381,11 +1375,75 @@ dialog.outcome { width: min(46rem, calc(100vw - 2rem)); }
 .outcome-summary li:has(.outcome-note) .outcome-note:not(:first-of-type) { color: var(--muted); }
 
 /* The scenario's outcome text (victory conditions and rewards) at the top of the completion dialog. */
-.outcome-rules { margin: 0.4rem 0 1rem; padding: 0.7rem 0.9rem; font-size: 0.9rem; background: var(--bg); border: 1px solid var(--line); border-left: 3px solid var(--line); }
-.outcome-rules > :first-child { margin-top: 0; }
-.outcome-rules > :last-child { margin-bottom: 0; }
-.outcome-rules h2, .outcome-rules h3 { margin: 0.2rem 0 0.5rem; font: 700 0.85rem var(--display); letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); }
-.outcome-rules p { margin: 0.5rem 0; }
-.outcome-rules table { width: 100%; border-collapse: collapse; margin: 0.5rem 0; font-size: 0.85rem; }
-.outcome-rules th, .outcome-rules td { padding: 0.25rem 0.6rem; text-align: left; border-bottom: 1px solid var(--line); }
-.outcome-rules th { font: 700 0.7rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+
+/* The result of Start battle: the MekBay link the whole table opens. The link text is selectable, and the anchor isn't draggable so dragging selects it. */
+.battle-links { margin: 0.5rem 0 1rem; }
+.battle-link-list { list-style: none; margin: 0.7rem 0 0.4rem; padding: 0; display: grid; gap: 0.5rem; }
+.battle-link { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 0.5rem; padding: 0.55rem 0.75rem; background: var(--bg); border: 1px solid var(--line); }
+.battle-link-url { display: block; min-width: 0; font: 0.8rem ui-monospace, Consolas, "Courier New", monospace; color: var(--accent); overflow-wrap: anywhere; word-break: break-all; user-select: text; -webkit-user-select: text; -webkit-user-drag: none; cursor: pointer; }
+.battle-link-url:hover { text-decoration: underline; }
+.battle-copy { min-width: 4.4rem; }
+.battle-links-note { margin: 0.4rem 0 0; font-size: 0.8rem; }
+@media (max-width: 40rem) {
+  .battle-link-url { grid-column: 1 / -1; }
+}
+
+/* The Operation in progress view (the last pane of the Deploy dialog): the table's link, how the battle stands, and the mission's actions. */
+.op-status-bar { display: flex; align-items: center; justify-content: space-between; gap: 0.8rem; margin: 0.7rem 0 0.3rem; font-size: 0.85rem; color: var(--muted); }
+/* The small square icon buttons of the operation view (refresh, QR code). The selector has to beat the dialog's generic button padding, which would push the icon off centre. */
+dialog button.op-icon { display: grid; place-items: center; width: 2.2rem; height: 2.2rem; padding: 0; color: var(--muted); background: transparent; border: 1px solid var(--line); cursor: pointer; }
+dialog button.op-icon svg { display: block; }
+dialog button.op-icon:hover:not(:disabled), dialog button.op-icon:focus-visible { color: var(--accent); border-color: var(--accent); outline: none; }
+dialog button.op-icon:disabled { cursor: progress; }
+dialog button.op-icon.spinning svg { color: var(--accent); animation: spin 0.8s linear infinite; }
+.op-actions { display: flex; flex-direction: column; align-items: center; gap: 0.9rem; margin: 1.1rem 0 0.4rem; }
+.op-abort { width: 100%; text-align: center; }
+.op-abort summary { display: inline-block; cursor: pointer; font-size: 0.8rem; color: var(--muted); list-style: none; padding: 0.2rem 0.6rem; }
+.op-abort summary::-webkit-details-marker { display: none; }
+.op-abort summary:hover { color: var(--text); }
+.op-abort[open] summary { margin-bottom: 0.7rem; }
+.button.button-outline.danger, button.button.button-outline.danger { color: var(--alert); border-color: var(--alert); background: transparent; }
+.button.button-outline.danger:hover, button.button.button-outline.danger:hover:not(:disabled) { color: #fff; background: color-mix(in srgb, var(--alert) 85%, transparent); }
+
+/* The QR code dialog: the code on white, whatever the theme, big enough to scan. */
+dialog.qr-dialog { padding: 0; max-width: min(92vw, 24rem); }
+.qr-inner { padding: 1.4rem 1.6rem 1.2rem; text-align: center; }
+.qr-inner h2 { margin: 0 0 1rem; }
+.qr-box svg { display: block; width: min(72vw, 17rem); height: auto; margin: 0 auto; }
+.qr-inner .form-actions { justify-content: center; margin-top: 1rem; }
+/* A dead pilot in the operation view: the card greyed out under the Memorial's red K.I.A. stamp. */
+.deploy-slot.static.filled.kia { position: relative; border-color: #7a3a34; }
+.deploy-slot.static.filled.kia > :not(.kia-stamp) { opacity: 0.4; }
+.deploy-slot.kia .deploy-portrait { filter: grayscale(1); }
+.deploy-slot .kia-stamp { font-size: 1.05rem; border-width: 2px; padding: 0 0.4rem; }
+#deploy-open:disabled { opacity: 0.4; cursor: not-allowed; filter: grayscale(1); }
+.next-missions { margin-top: 2.5rem; }
+.next-missions ul { list-style: none; margin: 0.6rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; align-items: flex-start; }
+.next-missions h2 { margin: 0; font: 0.85rem var(--display); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+.next-missions li { display: block; }
+.deploy-unit.has-slot.wide { grid-template-columns: minmax(0, 1fr); }
+.deploy-unit.has-slot.wide .mech-row { min-height: 5.85rem; height: 100%; }
+/* In progress: a yellow LED, and the state is a button that opens the operation. */
+.mission-log.in-progress { border-left-color: var(--accent); }
+.mission-log.in-progress .mission-led { background: var(--accent); box-shadow: 0 0 0.3rem 0.05rem rgba(255, 200, 0, 0.65), 0 0 0.75rem 0.15rem rgba(255, 200, 0, 0.25); }
+button.mission-log-open { background: transparent; border: 0; padding: 0; color: var(--accent); cursor: pointer; }
+button.mission-log-open:hover span { text-decoration: underline; }
+button.mission-log-open:focus-visible { outline: 2px solid var(--text); outline-offset: 3px; }
+.outcome-total-row { display: flex; gap: 0.8rem; justify-content: space-between; }
+.outcome-total-row b { color: var(--accent); font-family: var(--display); letter-spacing: 0.04em; }
+.outcome-field.required { cursor: default; }
+.outcome-field.required input:disabled { opacity: 0.75; cursor: not-allowed; }
+dialog.rollback { width: min(40rem, 94vw); }
+.checkpoints { list-style: none; margin: 0.8rem 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+.checkpoints li { display: flex; align-items: center; gap: 0.9rem; padding: 0.55rem 0.9rem; background: var(--panel); border: 1px solid var(--line); }
+.checkpoints .cp-label { flex: 1; font: 700 0.95rem var(--display); letter-spacing: 0.05em; text-transform: uppercase; }
+.checkpoints .cp-when, .checkpoints .cp-now { font-size: 0.8rem; }
+.checkpoints .cp-rollback { padding: 0.3rem 0.8rem; font-size: 0.8rem; }
+dialog.abort-dialog { padding: 0; width: min(92vw, 34rem); }
+.abort-inner { padding: 1.4rem 1.6rem 1.2rem; }
+.abort-inner h2 { margin: 0 0 0.6rem; }
+.abort-choice { display: grid; grid-template-columns: 9rem 1fr; gap: 0.9rem; align-items: center; margin: 0.9rem 0; }
+.abort-choice p { margin: 0; font-size: 0.9rem; }
+.abort-choice .button { width: 100%; text-align: center; }
+.abort-inner .form-actions { justify-content: flex-end; margin-top: 1rem; }
+@media (max-width: 640px) { .abort-choice { grid-template-columns: 1fr; } }

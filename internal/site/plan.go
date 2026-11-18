@@ -54,8 +54,6 @@ type planResult struct {
 	TotalBV  int          `json:"totalBV"`
 	Limit    int          `json:"limit"`
 	Deployed bool         `json:"deployed"` // always false for now: nothing was sent to MekBay
-	// Lobby says who will own each force of the multiplayer lobby operation (a player's own MekBay account, or the site's for the OpFor), never the accounts themselves.
-	Lobby []lobbyForceView `json:"lobby"`
 }
 
 // rulesProblem checks a plan against the scenario's own rules, beyond the BV limit: the most mechs in all (unit_limit), and a named pilot on every mech
@@ -102,21 +100,34 @@ func planProblem(h HangarForce, units [][]string, bvLimit int) string {
 	return deployProblem(h, all, bvLimit)
 }
 
-// deployPlan is POST /api/deploy/plan: check a deployment plan and describe it. Fields: campaign, scenario, players, and for each player i the repeated
-// p<i>_units and the paired p<i>_assign_unit and p<i>_assign_pilot. It needs a started campaign but not modify mode, since it writes nothing.
-func (s *Server) deployPlan(w http.ResponseWriter, r *http.Request) {
+// builtPlan is a deployment plan that has passed every check.
+type builtPlan struct {
+	pt    Playthrough
+	run   CampaignRun
+	c     *Campaign
+	sc    *Scenario
+	h     HangarForce // the force the players take their mechs from (the hangar, or the scenario's provided mechs)
+	views map[string]hangarUnitView
+	units [][]string // each player's mechs
+	crews [][]CrewAssignment
+	res   planResult
+}
+
+// checkPlan reads and checks a deployment plan from a request, and answers the request itself when it is not good. Fields: campaign, scenario, players, and for each player i the repeated
+// p<i>_units and the paired p<i>_assign_unit and p<i>_assign_pilot. It needs a started campaign and writes nothing.
+func (s *Server) checkPlan(w http.ResponseWriter, r *http.Request) (*builtPlan, bool) {
 	if !sameOrigin(r) {
 		http.Error(w, "cross-origin request refused", http.StatusForbidden)
-		return
+		return nil, false
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 32768)
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
-		return
+		return nil, false
 	}
 	pt, run, c, sc, ok := s.mekbayRequest(w, r)
 	if !ok {
-		return
+		return nil, false
 	}
 	lo, hi := playerRange(c)
 	n, err := strconv.Atoi(strings.TrimSpace(r.PostFormValue("players")))
@@ -126,23 +137,18 @@ func (s *Server) deployPlan(w http.ResponseWriter, r *http.Request) {
 			msg = fmt.Sprintf("%s is played by %d player(s).", c.Label, lo)
 		}
 		http.Error(w, msg, http.StatusBadRequest)
-		return
-	}
-	// Every player takes their own force into the lobby, owned by their own MekBay account, so each needs a user ID saved.
-	if msg := playerIDsProblem(pt.PlayerIDs, n); msg != "" {
-		http.Error(w, msg, http.StatusBadRequest)
-		return
+		return nil, false
 	}
 	h, err := s.scenarioHangar(r.Context(), run, sc)
 	if err != nil {
 		log.Printf("read hangar for the plan: %v", err)
 		http.Error(w, err.Error(), http.StatusBadGateway)
-		return
+		return nil, false
 	}
 	pilots, err := s.store.Pilots(r.Context(), pt.ID, c.Slug)
 	if err != nil {
 		http.Error(w, "could not load your pilots", http.StatusInternalServerError)
-		return
+		return nil, false
 	}
 	units := make([][]string, n)
 	for i := range units {
@@ -150,13 +156,13 @@ func (s *Server) deployPlan(w http.ResponseWriter, r *http.Request) {
 	}
 	if msg := planProblem(h, units, sc.BVLimit); msg != "" {
 		http.Error(w, msg, http.StatusBadRequest)
-		return
+		return nil, false
 	}
 	views := map[string]hangarUnitView{}
 	for _, v := range hangarViews(h) {
 		views[v.ID] = v
 	}
-	res := planResult{Players: []planPlayer{}, Limit: sc.BVLimit, Lobby: []lobbyForceView{}}
+	res := planResult{Players: []planPlayer{}, Limit: sc.BVLimit}
 	pilotUsed := map[string]int{}
 	crews := make([][]CrewAssignment, n)
 	for i := 0; i < n; i++ {
@@ -173,19 +179,19 @@ func (s *Server) deployPlan(w http.ResponseWriter, r *http.Request) {
 		crew, err := parseCrewPairs(r.PostForm[pre+"assign_unit"], r.PostForm[pre+"assign_pilot"], h, pilots)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Player %d: %s", num, err.Error()), http.StatusBadRequest)
-			return
+			return nil, false
 		}
 		for _, a := range crew {
 			if !mine[a.UnitID] {
 				http.Error(w, fmt.Sprintf("Player %d assigned a pilot to a mech they aren't taking.", num), http.StatusBadRequest)
-				return
+				return nil, false
 			}
 			if a.Name == "" {
 				continue
 			}
 			if other, dup := pilotUsed[strings.ToLower(a.Name)]; dup {
 				http.Error(w, fmt.Sprintf("%s is assigned to both Player %d and Player %d.", a.Name, other, num), http.StatusBadRequest)
-				return
+				return nil, false
 			}
 			pilotUsed[strings.ToLower(a.Name)] = num
 			pp.Crew = append(pp.Crew, planCrew{Unit: a.UnitID, UnitName: views[a.UnitID].Name, Pilot: a.Name, Gunnery: a.Gunnery, Piloting: a.Piloting})
@@ -196,21 +202,18 @@ func (s *Server) deployPlan(w http.ResponseWriter, r *http.Request) {
 	}
 	if msg := sc.rulesProblem(units, crews); msg != "" {
 		http.Error(w, msg, http.StatusBadRequest)
+		return nil, false
+	}
+	return &builtPlan{pt: pt, run: run, c: c, sc: sc, h: h, views: views, units: units, crews: crews, res: res}, true
+}
+
+// deployPlan is POST /api/deploy/plan: check a deployment plan and describe it, without sending anything to MekBay.
+func (s *Server) deployPlan(w http.ResponseWriter, r *http.Request) {
+	bp, ok := s.checkPlan(w, r)
+	if !ok {
 		return
 	}
-	// Build the lobby's plan (who owns each force) now, so a plan the real deploy couldn't carry out is refused here.
-	uids, err := s.store.PlayerUIDs(r.Context(), pt.ID)
-	if err != nil {
-		http.Error(w, "could not load your MekBay user IDs", http.StatusInternalServerError)
-		return
-	}
-	lobby, err := buildLobbyPlan(currentSeed(r), uids, units, crews)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	res.Lobby = lobby.View()
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
-	_ = json.NewEncoder(w).Encode(res)
+	_ = json.NewEncoder(w).Encode(bp.res)
 }

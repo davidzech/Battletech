@@ -122,7 +122,7 @@ func TestCampaignLog(t *testing.T) {
 	if !strings.Contains(page, `id="show-all-scenarios"`) || !strings.Contains(page, "Show all Scenarios") || !strings.Contains(page, "/static/scenariolist.js") {
 		t.Error("the campaign page offers a Show all Scenarios checkbox while some are locked")
 	}
-	post(t, srv, "/api/account", url.Values{"account": {"Wolf Pack"}, "uid_p1": {uidP1}}, cookie, srv.URL)
+	post(t, srv, "/api/account", url.Values{"account": {"Wolf Pack"}}, cookie, srv.URL)
 	if got := complete("scenario_000", "1"); got != http.StatusBadRequest {
 		t.Errorf("an unstarted campaign has no log: %d", got)
 	}
@@ -154,6 +154,18 @@ func TestCampaignLog(t *testing.T) {
 		t.Error("the menu should not list a locked scenario")
 	}
 
+	// A started campaign's pages have a Manage Force button in the header, except the Manage page itself.
+	for _, path := range []string{"/refusalwar/", "/refusalwar/scenario_000/"} {
+		if p := body(t, srv, path, cookie); !strings.Contains(p, `class="chip manage-chip" href="/refusalwar/manage/">Manage Force</a>`) {
+			t.Errorf("%s: no Manage Force button in the header", path)
+		}
+	}
+	if p := body(t, srv, "/refusalwar/manage/", cookie); strings.Contains(p, "manage-chip") {
+		t.Error("the Manage page has no Manage Force button")
+	}
+	if p := body(t, srv, "/", cookie); strings.Contains(p, "manage-chip") {
+		t.Error("outside a campaign there is no Manage Force button")
+	}
 	// Completing 000 turns its card green and opens 001.
 	if got := complete("scenario_000", "1"); got != http.StatusNoContent {
 		t.Fatalf("complete 000: %d", got)
@@ -166,6 +178,13 @@ func TestCampaignLog(t *testing.T) {
 	}
 	if got := complete("scenario_001", "0"); got != http.StatusNoContent {
 		t.Errorf("unmark 001 for now: %d", got)
+	}
+	// Only a completed scenario's page lists the missions it leads to, one link each.
+	if p := body(t, srv, "/refusalwar/scenario_000/", cookie); !strings.Contains(p, `id="next-missions"`) || !strings.Contains(p, "<h2>Next mission</h2>") || !strings.Contains(p, `<li><a class="button" href="/refusalwar/scenario_001/">`) {
+		t.Errorf("a completed scenario links to its next missions: %.300s", p)
+	}
+	if p := body(t, srv, "/refusalwar/scenario_001/", cookie); strings.Contains(p, `id="next-missions"`) {
+		t.Error("an uncompleted scenario lists no next missions")
 	}
 	page = cards()
 	if !strings.Contains(page, `<li class="completed"><a class="card completed" href="/refusalwar/scenario_000/">`) || !strings.Contains(page, "Completed &#10003;") || !strings.Contains(page, `<li class="available"><a class="card available" href="/refusalwar/scenario_001/">`) {

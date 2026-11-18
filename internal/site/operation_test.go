@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"sync"
@@ -287,6 +289,18 @@ type fakeMekBay struct {
 	swaps      []SwapRequest
 	cloneErr   error
 	serviceErr error
+	// battles records Start battle requests; battleErr makes them fail.
+	battles       []BattleRequest
+	battleErr     error
+	status        BattleStatus // what ReadBattle answers
+	statusErr     error
+	statusOps     []string // the operations ReadBattle was asked for
+	commits       []CommitBattleRequest
+	copies        []CopyRequest
+	deletes       []string
+	battleDeletes []string
+	copyErr       error
+	commitErr     error
 }
 
 func (f *fakeMekBay) ReadHangar(context.Context, string) (HangarForce, error) {
@@ -303,6 +317,66 @@ func (f *fakeMekBay) CloneHangar(_ context.Context, req CloneRequest) (HangarFor
 		return HangarForce{}, f.cloneErr
 	}
 	return f.hangar, f.err
+}
+
+func (f *fakeMekBay) StartBattle(_ context.Context, req BattleRequest) (BattleResult, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.battles = append(f.battles, req)
+	if f.battleErr != nil {
+		return BattleResult{}, f.battleErr
+	}
+	res := BattleResult{OperationID: req.OperationID, OpForInstance: req.OpFor.Reuse}
+	if res.OperationID == "" {
+		res.OperationID = newID()
+	}
+	if res.OpForInstance == "" {
+		res.OpForInstance = newID()
+	}
+	for range req.Players {
+		res.PlayerInstances = append(res.PlayerInstances, newID())
+	}
+	return res, nil
+}
+
+// CommitBattle records what it was asked to write back.
+func (f *fakeMekBay) CommitBattle(_ context.Context, req CommitBattleRequest) (CommitBattleReport, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.commits = append(f.commits, req)
+	if f.commitErr != nil {
+		return CommitBattleReport{}, f.commitErr
+	}
+	return CommitBattleReport{Matched: 1}, nil
+}
+
+// CopyForce and DeleteForce record what they were asked.
+func (f *fakeMekBay) CopyForce(_ context.Context, req CopyRequest) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.copies = append(f.copies, req)
+	return f.copyErr
+}
+
+func (f *fakeMekBay) DeleteForce(_ context.Context, _ string, instances ...string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.deletes = append(f.deletes, instances...)
+	return nil
+}
+
+func (f *fakeMekBay) DeleteBattle(_ context.Context, _ string, operationID string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.battleDeletes = append(f.battleDeletes, operationID)
+	return nil
+}
+
+func (f *fakeMekBay) ReadBattle(_ context.Context, operationID string) (BattleStatus, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.statusOps = append(f.statusOps, operationID)
+	return f.status, f.statusErr
 }
 
 func (f *fakeMekBay) SellUnit(_ context.Context, req SellRequest) error {
@@ -357,7 +431,7 @@ func newMekBayTestServer(t *testing.T, mb MekBay) (*httptest.Server, *Store) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { store.Close() })
-	srv := httptest.NewServer(NewHandler("../../campaigns", store, WithMekBay(mb)))
+	srv := httptest.NewServer(NewHandler(plainScenario001Root(t), store, WithMekBay(mb)))
 	t.Cleanup(srv.Close)
 	return srv, store
 }
@@ -410,7 +484,7 @@ func TestDeployFlow(t *testing.T) {
 	if r := get(t, srv, hangar, cookie); r.StatusCode != http.StatusBadRequest {
 		t.Fatalf("hangar before naming the company: %d", r.StatusCode)
 	}
-	if r := post(t, srv, "/api/account", url.Values{"uid_p1": {uidP1}, "account": {"Wolf's Dragoons"}}, cookie, srv.URL); r.StatusCode != http.StatusNoContent {
+	if r := post(t, srv, "/api/account", url.Values{"account": {"Wolf's Dragoons"}}, cookie, srv.URL); r.StatusCode != http.StatusNoContent {
 		t.Fatalf("company: %d", r.StatusCode)
 	}
 	if r := get(t, srv, hangar, cookie); r.StatusCode != http.StatusBadRequest {
@@ -509,8 +583,8 @@ func TestDeployFlow(t *testing.T) {
 	if op, ok, _ := store.MekBayOperation(ctx, id, "refusalwar", "scenario_001"); !ok || op.OperationID == "" || op.OpForInstance == "" {
 		t.Fatalf("operation not remembered: %+v", op)
 	}
-	if p := body(t, srv, page, cookie); !strings.Contains(p, `href="https://mekbay.com/?operation=op-`+goodInstance[:8]+`"`) {
-		t.Fatalf("page should link to the operation: %.900s", p)
+	if p := body(t, srv, page, cookie); !strings.Contains(p, `id="deploy-open">View operation</button>`) || strings.Contains(p, "Open in MekBay") {
+		t.Fatalf("the page shows the battle in progress: %.900s", p)
 	}
 	r = get(t, srv, hangar, cookie)
 	view.HasOperation = false
@@ -784,4 +858,45 @@ func TestMekBayLive(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Logf("operation %s, opfor force %s", OperationURL(res.OperationID), res.OpForInstance)
+}
+
+// plainScenario001Root is a copy of the campaigns (without the images) in which Scenario 001 has no outcome engine, standing in for a scenario that is completed
+// by a plain Mark completed. The real Scenario 001 follows the Aces model (see TestScenario001Outcome).
+func plainScenario001Root(t *testing.T) string {
+	t.Helper()
+	src, dst := "../../campaigns", t.TempDir()
+	err := filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, _ := filepath.Rel(src, path)
+		if d.IsDir() {
+			if d.Name() == "images" {
+				return filepath.SkipDir
+			}
+			return os.MkdirAll(filepath.Join(dst, rel), 0o755)
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		if filepath.ToSlash(rel) == "RefusalWar/Scenario_001/Outcome.md" {
+			data = []byte(`---
+id: scenario_001
+default_next: ""
+---
+
+# Scenario 001: Pyre Light - Outcome
+
+## Victory & Rewards
+
+A plain scenario for the tests.
+`)
+		}
+		return os.WriteFile(filepath.Join(dst, rel), data, 0o644)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return dst
 }

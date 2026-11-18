@@ -13,6 +13,7 @@
 <header class="top">
   <a class="brand" href="/"><span class="mark">&#9632;</span> Campaigns</a>
   <nav class="crumbs" aria-label="Breadcrumb">{{range $i, $c := .Crumbs}}{{if $i}}<span class="sep">/</span>{{end}}{{if $c.Menu}}<details class="crumb-menu"><summary>{{$c.Label}}</summary><ul>{{range $c.Menu}}<li><a href="{{.URL}}"{{if .Current}} aria-current="page"{{end}}>{{.Label}}</a></li>{{end}}</ul></details>{{else}}<a href="{{$c.URL}}">{{$c.Label}}</a>{{end}}{{end}}</nav>
+  {{if and .Campaign .Run.Started (not .OnManagePage)}}<a class="chip manage-chip" href="/{{.Campaign.Slug}}/manage/">Manage Force</a>{{end}}
   <button id="seed-btn" type="button" class="chip" aria-haspopup="dialog">{{if not .Seed}}Set seed{{else if not .Play.Configured}}Finish setup{{else}}<span class="account">{{.Play.AccountName}}</span>{{end}}</button>
 </header>
 <main>
@@ -40,16 +41,6 @@
     <p>Your account holds everything tracked under this seed, across every campaign you run. Call it whatever you like; each campaign gets its own force name when you start it.</p>
     <label for="account-input">Account name</label>
     <input id="account-input" class="wide" name="account" value="{{.Play.AccountName}}" maxlength="40" placeholder="Your account name" autocomplete="off" spellcheck="false" required>
-    <fieldset class="mekbay-ids">
-      <legend>Players&rsquo; MekBay user IDs <span class="optional">(needed to start)</span></legend>
-      <p class="hint">Each player who plays a campaign needs their own MekBay user ID, so the force they take into a deploy is theirs in MekBay&rsquo;s multiplayer lobby. Starting a campaign with N players needs Players 1 to N saved. An ID works like a password for that account&rsquo;s MekBay forces, so only enter yours if you trust this site; it is never shown again. Your hangar and the OpFor are managed by the site and need none.</p>
-      {{range .Play.Slots}}<div class="mekbay-id-row">
-        <label for="uid-input-{{.N}}">{{.Label}}</label>
-        <input id="uid-input-{{.N}}" class="wide mekbay-id" name="{{.Field}}" type="password" placeholder="{{if .Saved}}Saved. Leave blank to keep it{{else}}Not set{{end}}" spellcheck="false" autocomplete="off">
-        {{if .Saved}}<label class="check themed-check"><input type="checkbox" class="themed-box clear-id" name="{{.ClearField}}" value="1"> Forget</label>{{end}}
-      </div>
-      {{end}}
-    </fieldset>
     <p id="setup-error" class="form-error" role="alert"></p>
     <div class="form-actions">
       <button type="submit" class="button">Save account</button>

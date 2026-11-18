@@ -57,6 +57,7 @@ type hangarUnitView struct {
 	Tons       float64 `json:"tons"`
 	BV         int     `json:"bv"` // base battle value; pilot skills never change it in this campaign
 	Pilot      string  `json:"pilot"`
+	PilotDead  bool    `json:"pilotDead"` // the record sheet shows the pilot dead
 	Gunnery    int     `json:"gunnery"`
 	Piloting   int     `json:"piloting"`
 	Damaged    bool    `json:"damaged"`
@@ -126,7 +127,7 @@ func displayName(u Unit) string {
 func hangarViews(h HangarForce) []hangarUnitView {
 	views := make([]hangarUnitView, 0, len(h.Units))
 	for _, hu := range h.Units {
-		v := hangarUnitView{MekBayURL: unitPageURL(hu.Unit), ID: hu.ID, Pilot: hu.Pilot, Gunnery: hu.Gunnery, Piloting: hu.Piloting, Damaged: hu.Damaged, Destroyed: hu.Destroyed, InDeployed: sameGroupName(hu.Group, deployedGroup)}
+		v := hangarUnitView{MekBayURL: unitPageURL(hu.Unit), ID: hu.ID, Pilot: hu.Pilot, PilotDead: hu.PilotDead, Gunnery: hu.Gunnery, Piloting: hu.Piloting, Damaged: hu.Damaged, Destroyed: hu.Destroyed, InDeployed: sameGroupName(hu.Group, deployedGroup)}
 		if u, ok := unitByName(hu.Unit); ok {
 			v.Name, v.Model = unitNames(u)
 			v.Class, v.Role, v.Tons, v.Icon = u.Class, roleLabel(u), u.Tons, iconURL(u)
