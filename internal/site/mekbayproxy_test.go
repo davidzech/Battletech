@@ -653,40 +653,18 @@ func TestMekBayLinkBuilder(t *testing.T) {
 	}
 }
 
-// The Manage page offers the site's hangar copy editable through the proxy, acting as the account derived from the seed.
-func TestManagePageOpensTheHangarEditable(t *testing.T) {
+// Deleting a campaign takes its MekBay links with it.
+func TestDeletingTheCampaignRevokesItsLinks(t *testing.T) {
 	srv, store, cookie := startedCompany(t)
-	page := body(t, srv, "/refusalwar/manage/", cookie)
-	m := regexp.MustCompile(`href="(http://mekbay-([a-z2-7]{32})\.[^"]+)"[^>]*>open it editable`).FindStringSubmatch(page)
-	if m == nil {
-		t.Fatalf("the advanced note links to the editable hangar: %.300s", page)
-	}
-	link, _ := url.Parse(strings.ReplaceAll(m[1], "&amp;", "&"))
 	ctx := context.Background()
-	run, _, _ := store.Run(ctx, playthroughID("wolfpack2026"), "refusalwar")
-	if link.Query().Get("instance") != run.HangarInstance || strings.Contains(m[1], accountUID("wolfpack2026", SlotHangar)) {
-		t.Errorf("the link opens the site's copy without showing the account: %q", m[1])
+	id, err := store.EnsureMekBayLink(ctx, playthroughID("wolfpack2026"), "refusalwar", tableLabel, accountUID("wolfpack2026", SlotHangar), newMekBayVault("k"), time.Hour, time.Now())
+	if err != nil {
+		t.Fatal(err)
 	}
-	if _, ok, err := store.MekBayLink(ctx, m[2], time.Now()); err != nil || !ok {
-		t.Errorf("the link is live in the table: %v %v", ok, err)
-	}
-	// Reloading the page gives the very same link, so it can be bookmarked.
-	if again := regexp.MustCompile(`href="(http://mekbay-[^"]+)"[^>]*>open it editable`).FindStringSubmatch(body(t, srv, "/refusalwar/manage/", cookie)); again == nil || again[1] != m[1] {
-		t.Errorf("the link is stable across page loads: %v", again)
-	}
-	// Deleting the campaign takes its links with it.
 	if r := post(t, srv, "/api/campaign/delete", url.Values{"campaign": {"refusalwar"}}, cookie, srv.URL); r.StatusCode != http.StatusNoContent {
 		t.Fatalf("delete: %d", r.StatusCode)
 	}
-	if _, ok, _ := store.MekBayLink(ctx, m[2], time.Now()); ok {
+	if _, ok, _ := store.MekBayLink(ctx, id, time.Now()); ok {
 		t.Error("deleting the campaign revokes its links")
-	}
-}
-
-func TestManagePageHasNoEditableLinkWithoutASiteHangar(t *testing.T) {
-	srv, store, cookie := startedCompany(t)
-	_, _ = store.db.Exec(`UPDATE campaign_runs SET source_url = ''`) // a run from before the site copied hangars
-	if page := body(t, srv, "/refusalwar/manage/", cookie); strings.Contains(page, "open it editable") {
-		t.Error("without a site-owned hangar there is nothing to open editable")
 	}
 }

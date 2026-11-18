@@ -737,24 +737,59 @@
   });
   dialog.addEventListener('close', stopPolling);
   // One Escape can be taken for both dialogs when the QR code was opened without a click in between; the one under it stays.
-  dialog.addEventListener('cancel', function (e) { if (qrDialog && qrDialog.open) e.preventDefault(); });
+  dialog.addEventListener('cancel', function (e) { if ((qrDialog && qrDialog.open) || (abortDialog && abortDialog.open)) e.preventDefault(); });
   cancel.addEventListener('click', function () { dialog.close(); });
   next.addEventListener('click', function () { if (!next.disabled && step < stepCount() - 1) { step++; held = ''; error.textContent = ''; render(); } });
   back.addEventListener('click', function () { if (step > 0) { step--; held = ''; error.textContent = ''; render(); } });
 
   // Abort mission: give the battle up after a confirmation. The scenario goes back to not started, with no rewards.
+  // The two ways to give a battle up, in a dialog of their own: roll the campaign back to the end of the previous mission, or just close the battle and keep every
+  // change made since (repairs, sales, purchases, pilots). Resolves to 'rollback', 'keep' or null (keep playing).
+  var abortDialog = null;
+  function chooseAbort() {
+    return new Promise(function (resolve) {
+      if (!abortDialog) {
+        abortDialog = el('dialog', 'abort-dialog');
+        abortDialog.setAttribute('aria-labelledby', 'abort-title');
+        var inner = el('div', 'abort-inner');
+        var h = el('h2', null, 'Abort mission');
+        h.id = 'abort-title';
+        inner.appendChild(h);
+        inner.appendChild(el('p', 'muted', 'The battle is given up and the mission goes back to not started, with no rewards. Choose what happens to the campaign.'));
+        [['rollback', 'Roll back', 'Return the campaign to the end of the previous mission. Repairs, sales, purchases and SP spent since then are undone.', 'button button-outline danger'],
+         ['keep', 'Just close', 'Close the battle and clean up its operation in MekBay. Every change since the previous mission stays.', 'button button-outline']].forEach(function (o) {
+          var row = el('div', 'abort-choice');
+          var btn = el('button', o[3], o[1]);
+          btn.type = 'button';
+          btn.dataset.choice = o[0];
+          row.appendChild(btn);
+          row.appendChild(el('p', 'muted', o[2]));
+          inner.appendChild(row);
+        });
+        var actions = el('div', 'form-actions');
+        var keep = el('button', null, 'Keep playing');
+        keep.type = 'button';
+        keep.dataset.choice = '';
+        actions.appendChild(keep);
+        inner.appendChild(actions);
+        abortDialog.appendChild(inner);
+        document.body.appendChild(abortDialog);
+      }
+      var picked = null;
+      abortDialog.querySelectorAll('button[data-choice]').forEach(function (b) {
+        b.onclick = function () { picked = b.dataset.choice || null; abortDialog.close(); };
+      });
+      abortDialog.onclose = function () { resolve(picked); };
+      abortDialog.onclick = function (e) { if (e.target === abortDialog) abortDialog.close(); };
+      abortDialog.showModal();
+    });
+  }
+
   if (abortOpen) abortOpen.addEventListener('click', function () {
-    var ask = typeof Confirm !== 'undefined' ? Confirm.ask({
-      title: 'Abort mission',
-      message: 'The battle is given up and the campaign rolls back to the end of the previous mission: repairs, sales, purchases and SP spent since then are undone, and the mission goes back to not started with no rewards.',
-      confirmLabel: 'Abort mission',
-      cancelLabel: 'Keep playing',
-      danger: true
-    }) : Promise.resolve(true);
-    ask.then(function (yes) {
-      if (!yes) return;
+    chooseAbort().then(function (mode) {
+      if (!mode) return;
       fetch('/api/battle/abort', {
-        method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: query, credentials: 'same-origin'
+        method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: query + '&mode=' + mode, credentials: 'same-origin'
       }).then(function (res) {
         if (res.ok || res.status === 404) { location.reload(); return; }
         return res.text().then(function (t) { error.textContent = t.trim() || 'Could not abort the battle.'; });

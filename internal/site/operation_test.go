@@ -290,16 +290,17 @@ type fakeMekBay struct {
 	cloneErr   error
 	serviceErr error
 	// battles records Start battle requests; battleErr makes them fail.
-	battles   []BattleRequest
-	battleErr error
-	status    BattleStatus // what ReadBattle answers
-	statusErr error
-	statusOps []string // the operations ReadBattle was asked for
-	commits   []CommitBattleRequest
-	copies    []CopyRequest
-	deletes   []string
-	copyErr   error
-	commitErr error
+	battles       []BattleRequest
+	battleErr     error
+	status        BattleStatus // what ReadBattle answers
+	statusErr     error
+	statusOps     []string // the operations ReadBattle was asked for
+	commits       []CommitBattleRequest
+	copies        []CopyRequest
+	deletes       []string
+	battleDeletes []string
+	copyErr       error
+	commitErr     error
 }
 
 func (f *fakeMekBay) ReadHangar(context.Context, string) (HangarForce, error) {
@@ -361,6 +362,13 @@ func (f *fakeMekBay) DeleteForce(_ context.Context, _ string, instances ...strin
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.deletes = append(f.deletes, instances...)
+	return nil
+}
+
+func (f *fakeMekBay) DeleteBattle(_ context.Context, _ string, operationID string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.battleDeletes = append(f.battleDeletes, operationID)
 	return nil
 }
 

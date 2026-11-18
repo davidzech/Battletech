@@ -183,16 +183,24 @@ func (s *Server) abortBattle(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if _, had, err := s.store.MekBayOperation(r.Context(), pt.ID, c.Slug, sc.ID); err != nil {
+	op, had, err := s.store.MekBayOperation(r.Context(), pt.ID, c.Slug, sc.ID)
+	if err != nil {
 		http.Error(w, "could not abort the battle", http.StatusInternalServerError)
 		return
 	} else if !had {
 		http.Error(w, "There is no battle in progress.", http.StatusNotFound)
 		return
 	}
-	// A failed mission undoes everything since the last checkpoint (the end of the previous mission): repairs, sales, purchases and SP spent in between included.
-	// A campaign with no checkpoint (started before they existed) only forgets the operation.
-	if cps, err := s.store.Checkpoints(r.Context(), pt.ID, c.Slug); err == nil && len(cps) > 0 {
+	// Two ways to give a battle up (the `mode` field): "keep" (the default) closes it and cleans up its operation and forces in MekBay, keeping every change made
+	// since the last checkpoint (repairs, sales, purchases, pilots); "rollback" also puts the campaign back to that checkpoint (the end of the previous mission),
+	// undoing them. A campaign with no checkpoint (started before they existed) can only keep.
+	mode := r.PostFormValue("mode")
+	if mode != "" && mode != "keep" && mode != "rollback" {
+		http.Error(w, "Choose how to abort: keep your changes or roll back.", http.StatusBadRequest)
+		return
+	}
+	defer s.deleteBattle(r.Context(), currentSeed(r), op.OperationID)
+	if cps, err := s.store.Checkpoints(r.Context(), pt.ID, c.Slug); err == nil && len(cps) > 0 && mode == "rollback" {
 		if err := s.rollbackTo(r.Context(), currentSeed(r), pt.ID, c.Slug, cps[0].Seq); err != nil {
 			log.Printf("roll back on abort: %v", err)
 			http.Error(w, "Could not roll the campaign back: "+err.Error(), http.StatusBadGateway)
@@ -204,4 +212,11 @@ func (s *Server) abortBattle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// deleteBattle cleans up an aborted battle in MekBay (its operation and every force in it), in the background of the request: a failure only leaves them behind.
+func (s *Server) deleteBattle(ctx context.Context, seed, operationID string) {
+	if err := s.mekbay.DeleteBattle(context.WithoutCancel(ctx), accountUID(seed, SlotHangar), operationID); err != nil {
+		log.Printf("delete the aborted battle in MekBay: %v", err)
+	}
 }

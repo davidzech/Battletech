@@ -6,7 +6,6 @@ import (
 	"errors"
 	"log"
 	"net/http"
-	"net/url"
 )
 
 // manage serves /<campaign>/manage/, the page for managing a started campaign's force: hangar link, named pilots and
@@ -39,11 +38,6 @@ func (s *Server) manage(w http.ResponseWriter, r *http.Request) {
 		Title:    "Manage force | " + c.Label,
 		Crumbs:   []Crumb{{Label: c.Label, URL: back}, {Label: "Manage", URL: back + "manage/"}},
 		Campaign: c,
-	}
-	if run.Owned() { // the site's copy of the hangar belongs to the account derived from the seed: open it in MekBay as that account
-		if link, err := s.mekbayLink(r, playthroughID(seed), c.Slug, tableLabel, accountUID(seed, SlotHangar), url.Values{"instance": {run.HangarInstance}}); err == nil {
-			p.MekBayEditURL = link
-		}
 	}
 	if sc, ok := c.Scenario(r.URL.Query().Get("back")); ok {
 		p.BackURL = back + sc.Slug + "/"

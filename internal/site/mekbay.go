@@ -135,6 +135,8 @@ type MekBay interface {
 	CopyForce(ctx context.Context, req CopyRequest) error
 	// DeleteForce deletes forces of the owner's (best effort).
 	DeleteForce(ctx context.Context, owner string, instances ...string) error
+	// DeleteBattle deletes a battle's operation and all its forces (best effort).
+	DeleteBattle(ctx context.Context, owner, operationID string) error
 }
 
 // MekBayClient is the real implementation, speaking to MekBay's WebSocket server.

@@ -44,9 +44,5 @@ func accountUID(seed, slot string) string {
 	return MekBayUID(seed, slot)
 }
 
-// SiteAccountUID is the synthesized account that owns the visitor's hangar copy, for the Manage page's advanced-users note. The visitor already holds the seed it is
-// derived from, so showing it to them reveals nothing new; it is never shown to anyone else or put anywhere else.
-func (p Page) SiteAccountUID() string { return accountUID(p.Seed, SlotHangar) }
-
 // notOwnedMessage is what the hangar-changing endpoints say about a run that predates the site's own copy of the hangar.
 const notOwnedMessage = "Your hangar is from before the site kept its own copy. Import it again (Manage force, Danger zone, Re-import hangar) first."
