@@ -89,6 +89,8 @@ type MekBay interface {
 	ReadHangar(ctx context.Context, instance string) (HangarForce, error)
 	// CloneHangar copies the player's force into a clean force the site owns (see clone.go).
 	CloneHangar(ctx context.Context, req CloneRequest) (HangarForce, error)
+	// CreateForce saves a new force built from a draft under the owner's account (a starting hangar built on the site, see buildforce.go).
+	CreateForce(ctx context.Context, owner, instance string, d ForceDraft) (HangarForce, error)
 	// ServiceUnit repairs or rearms one unit of the player's hangar force (modify mode only).
 	ServiceUnit(ctx context.Context, req ServiceRequest) error
 	// PurchaseUnits adds bought units to the player's hangar force (modify mode only).

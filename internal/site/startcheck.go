@@ -93,6 +93,20 @@ func (s *Server) hangarCheck(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Name your account first.", http.StatusBadRequest)
 		return
 	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	// Mechs picked on the site are checked as they are; a link is read from MekBay first.
+	if units, err := parseStartingUnits(r); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	} else if units != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "no-store")
+		_ = json.NewEncoder(w).Encode(checkStartingHangar(draftHangar(units), c))
+		return
+	}
 	link, err := parseHangar(r.FormValue("hangar"))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)

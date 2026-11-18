@@ -3,6 +3,7 @@ package site
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
@@ -217,6 +218,7 @@ type fakeMekBay struct {
 	services   []ServiceRequest
 	purchases  []PurchaseRequest
 	clones     []CloneRequest
+	created    []createdForce
 	sales      []SellRequest
 	swaps      []SwapRequest
 	cloneErr   error
@@ -239,6 +241,29 @@ func (f *fakeMekBay) ReadHangar(context.Context, string) (HangarForce, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.hangar, f.err
+}
+
+// CreateForce records the force it was asked to make and answers it as MekBay would read it back.
+func (f *fakeMekBay) CreateForce(_ context.Context, owner, instance string, d ForceDraft) (HangarForce, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.created = append(f.created, createdForce{Owner: owner, Instance: instance, Draft: d})
+	if f.cloneErr != nil {
+		return HangarForce{}, f.cloneErr
+	}
+	h := HangarForce{Name: d.Name}
+	for _, g := range d.Groups {
+		for i, u := range g.Units {
+			h.Units = append(h.Units, HangarUnit{ID: fmt.Sprintf("%s-%d", instance[:8], i), Unit: u.Unit, Group: g.Name, Gunnery: u.Gunnery, Piloting: u.Piloting})
+		}
+	}
+	return h, nil
+}
+
+// createdForce is one CreateForce call.
+type createdForce struct {
+	Owner, Instance string
+	Draft           ForceDraft
 }
 
 func (f *fakeMekBay) CloneHangar(_ context.Context, req CloneRequest) (HangarForce, error) {
