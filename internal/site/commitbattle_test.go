@@ -19,6 +19,21 @@ func unitMap(id, design string, state map[string]any) map[string]any {
 	return map[string]any{"id": id, "unit": design, "state": state}
 }
 
+// crewIsUnnamed says whether a unit state's crew is the default one: present, with no name and a 4/5 pilot.
+func crewIsUnnamed(state map[string]any) bool {
+	crew, _ := state["crew"].([]any)
+	if len(crew) == 0 {
+		return false
+	}
+	for _, c := range crew {
+		cm, _ := c.(map[string]any)
+		if cm["name"] != "" || cm["gunnerySkill"] != float64(4) || cm["pilotingSkill"] != float64(5) || cm["hits"] != float64(0) {
+			return false
+		}
+	}
+	return true
+}
+
 func stateOf(h map[string]any, id string) map[string]any {
 	for _, g := range h["groups"].([]any) {
 		for _, u := range g.(map[string]any)["units"].([]any) {
@@ -48,8 +63,8 @@ func TestCommitStateMatchesByID(t *testing.T) {
 	if rep.Matched != 1 || len(rep.Skipped) != 2 {
 		t.Fatalf("one unit written back, two skipped: %+v", rep)
 	}
-	if got := stateOf(hangar, "a2"); got == nil || got["locations"] == nil || got["crew"] != nil {
-		t.Errorf("the second Orion has the battle's damage and no crew: %+v", got)
+	if got := stateOf(hangar, "a2"); got == nil || got["locations"] == nil || !crewIsUnnamed(got) {
+		t.Errorf("the second Orion has the battle's damage and an unnamed crew: %+v", got)
 	}
 	if got := stateOf(hangar, "a1"); got == nil || got["crew"] == nil {
 		t.Errorf("the first Orion was not in the battle and is left exactly as it was: %+v", got)
@@ -59,7 +74,7 @@ func TestCommitStateMatchesByID(t *testing.T) {
 	}
 	// The same state written twice changes nothing.
 	again := commitState(hangar, battle)
-	if again.Matched != 1 || stateOf(hangar, "a2")["crew"] != nil {
+	if again.Matched != 1 || !crewIsUnnamed(stateOf(hangar, "a2")) {
 		t.Errorf("writing back twice: %+v", again)
 	}
 }
@@ -97,7 +112,7 @@ func TestCommitBattleWritesTheHangar(t *testing.T) {
 	other := stateOf(got, ids[0])
 	fought := stateOf(got, ids[1])
 	f.mu.Unlock()
-	if s := fought; s == nil || len(s["locations"].(map[string]any)) == 0 || s["crew"] != nil {
+	if s := fought; s == nil || len(s["locations"].(map[string]any)) == 0 || !crewIsUnnamed(s) {
 		t.Errorf("the unit that fought has its damage and no crew: %+v", s)
 	}
 	if s := other; s != nil && len(s["locations"].(map[string]any)) != 0 {

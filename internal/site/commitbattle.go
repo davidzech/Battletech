@@ -53,7 +53,12 @@ func commitState(hangar map[string]any, battle map[string]map[string]any) Commit
 			if ns == nil {
 				ns = map[string]any{}
 			}
-			delete(ns, "crew") // pilots are assigned during an operation only: a unit back in the hangar has the default, unnamed crew
+			// Pilots are assigned during an operation only: a unit back in the hangar has the default, unnamed crew. MekBay needs the crew entry to be there, so it is
+			// reset rather than removed (the hangar's own entries if it has them, else the battle's).
+			if old, _ := um["state"].(map[string]any); old != nil && old["crew"] != nil {
+				ns["crew"] = old["crew"]
+			}
+			resetCrew(ns)
 			um["state"] = ns
 			used[id] = true
 			rep.Matched++
@@ -143,4 +148,14 @@ func (c *MekBayClient) CommitBattle(ctx context.Context, req CommitBattleRequest
 		return rep, err
 	}
 	return rep, nil
+}
+
+// resetCrew turns every crew member of a unit's state into the default one: no name, Gunnery 4, Piloting 5, unhurt (a 4/5 pilot is what MekBay gives a new unit).
+func resetCrew(state map[string]any) {
+	crew, _ := state["crew"].([]any)
+	for _, c := range crew {
+		if cm, ok := c.(map[string]any); ok {
+			cm["name"], cm["gunnerySkill"], cm["pilotingSkill"], cm["hits"], cm["state"] = "", float64(4), float64(5), float64(0), float64(0)
+		}
+	}
 }
