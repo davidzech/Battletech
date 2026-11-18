@@ -118,6 +118,13 @@ func TestStartBattleEndpoint(t *testing.T) {
 	} else if !strings.Contains(page, `data-operation-url="`+first.URL+`"`) {
 		t.Errorf("the page already carries the table's link, so the operation view can show it before anything is read from MekBay")
 	}
+	// The mission log says IN PROGRESS, with a button that opens the operation, instead of Not completed.
+	if page := body(t, srv, "/refusalwar/scenario_001/", cookie); !strings.Contains(page, ` in-progress" id="mission-log"`) || !strings.Contains(page, `id="mission-log-open"`) || !strings.Contains(page, "<span>In progress</span>") || strings.Contains(page, "Not completed") {
+		t.Errorf("the mission log shows the mission in progress: %.600s", page)
+	}
+	if page := body(t, srv, "/refusalwar/scenario_001/", cookie); strings.Contains(page, `id="manage-link"`) {
+		t.Error("Manage force is hidden while the operation is in progress")
+	}
 	if hb := body(t, srv, "/api/mekbay/hangar?campaign=refusalwar&scenario=scenario_001", cookie); !strings.Contains(hb, `"hasOperation":true`) {
 		t.Errorf("a started scenario has an OpFor to reset: %.200s", hb)
 	}

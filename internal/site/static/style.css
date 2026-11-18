@@ -1431,3 +1431,9 @@ dialog.qr-dialog { padding: 0; max-width: min(92vw, 24rem); }
 .next-missions li { display: block; }
 .deploy-unit.has-slot.wide { grid-template-columns: minmax(0, 1fr); }
 .deploy-unit.has-slot.wide .mech-row { min-height: 5.85rem; height: 100%; }
+/* In progress: a yellow LED, and the state is a button that opens the operation. */
+.mission-log.in-progress { border-left-color: var(--accent); }
+.mission-log.in-progress .mission-led { background: var(--accent); box-shadow: 0 0 0.3rem 0.05rem rgba(255, 200, 0, 0.65), 0 0 0.75rem 0.15rem rgba(255, 200, 0, 0.25); }
+button.mission-log-open { background: transparent; border: 0; padding: 0; color: var(--accent); cursor: pointer; }
+button.mission-log-open:hover span { text-decoration: underline; }
+button.mission-log-open:focus-visible { outline: 2px solid var(--text); outline-offset: 3px; }

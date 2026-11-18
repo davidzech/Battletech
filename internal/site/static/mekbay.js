@@ -18,6 +18,10 @@
   var openBtn = document.getElementById('deploy-open');
   if (!dialog || !openBtn || typeof dialog.showModal !== 'function') return;
 
+  // The mission log's IN PROGRESS state opens the operation, like the View operation button.
+  var logOpen = document.getElementById('mission-log-open');
+  if (logOpen) logOpen.addEventListener('click', function () { openBtn.click(); });
+
   var list = document.getElementById('deploy-list');
   var meter = document.getElementById('deploy-meter');
   var status = document.getElementById('deploy-status');
