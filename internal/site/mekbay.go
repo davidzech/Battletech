@@ -338,6 +338,17 @@ func parseHangarForce(raw json.RawMessage) (HangarForce, error) {
 					hu.EngineHits += n
 				}
 			}
+			// MekBay also counts a pilot dead when their cockpit is gone, whatever the crew's stored state says: the cockpit slot destroyed, or the head (which holds it)
+			// with no internal structure left. Every standard mech's head has 3 points of internal structure.
+			for _, c := range u.State.Crits {
+				name := strings.ToLower(c.Name)
+				if strings.Contains(name, "cockpit") && !strings.Contains(name, "command") && c.Destroyed != nil && c.Destroyed != float64(0) {
+					hu.PilotDead = true
+				}
+			}
+			if hd, ok := hu.Locations["HD"]; ok && hd.Internal >= 3 && len(u.State.Crew) > 0 {
+				hu.PilotDead = true
+			}
 			hu.TorsoCheckFailed = u.State.RuleChecks["core.torso-crippling"].Status == "failed"
 			h.Units = append(h.Units, hu)
 		}
