@@ -18,8 +18,8 @@ type Option func(*Server)
 // WithMekBay replaces the MekBay client (tests use a fake one).
 func WithMekBay(m MekBay) Option { return func(s *Server) { s.mekbay = m } }
 
-// operationName is the operation's name in MekBay, e.g. "Refusal War - Scenario 001".
-func operationName(c *Campaign, sc *Scenario) string { return c.Label + " - Scenario " + sc.Number }
+// operationName is the operation's name in MekBay, e.g. "Refusal War - Sortie 001".
+func operationName(c *Campaign, sc *Scenario) string { return c.Label + " - " + c.MissionNumber(*sc) }
 
 // opForDraft turns a scenario's .mul force files into one OpFor force, a group per file ("OpFor 1", "OpFor 2").
 func opForDraft(c *Campaign, sc *Scenario) (ForceDraft, error) {

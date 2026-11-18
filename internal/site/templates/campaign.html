@@ -1,5 +1,6 @@
 {{define "content"}}<p class="kicker">Campaign</p>
 <h1 class="bt-title">{{.Campaign.Label}}</h1>
+{{if .Campaign.Problems}}<section class="campaign-problems" role="alert"><h2>Problems in this campaign&rsquo;s files</h2><ul>{{range .Campaign.Problems}}<li><code>{{.}}</code></li>{{end}}</ul></section>{{end}}
 <section class="panel">{{if .Campaign.IntroHTML}}{{.Campaign.IntroHTML}}{{else}}<p class="muted">Campaign briefing coming soon.</p>{{end}}</section>
 {{if not .Seed}}<p class="muted">Choose a seed (top right) to track your progress through this campaign.</p>
 {{else if not .Play.Configured}}<p class="muted">Name your account (top right) to start this campaign.</p>

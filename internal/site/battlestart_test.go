@@ -81,7 +81,7 @@ func TestStartBattleEndpoint(t *testing.T) {
 		t.Fatalf("one start: %d", len(fake.battles))
 	}
 	req := fake.battles[0]
-	if req.Account != MekBayUID(seed, SlotHangar) || req.Provided || req.HangarInstance != run.HangarInstance || len(req.Players) != 2 || req.OperationName != "Refusal War - Scenario 001" {
+	if req.Account != MekBayUID(seed, SlotHangar) || req.Provided || req.HangarInstance != run.HangarInstance || len(req.Players) != 2 || req.OperationName != "Refusal War - Sortie 001" {
 		t.Fatalf("the request: %+v", req)
 	}
 	for i, p := range req.Players {

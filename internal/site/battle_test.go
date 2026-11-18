@@ -141,7 +141,7 @@ func TestStartBattleBuildsForcesAndTheOperation(t *testing.T) {
 	req := BattleRequest{
 		Account:        tableAccount,
 		HangarInstance: hangar,
-		OperationName:  "Refusal War - Scenario 001",
+		OperationName:  "Refusal War - Sortie 001",
 		OpFor:          BattleOpFor{Draft: ForceDraft{Name: "OpFor", Groups: []GroupDraft{{Name: "OpFor 1", Units: []UnitDraft{{Unit: "BMLoki_Prime", Pilot: "Alrek", Gunnery: 3, Piloting: 4}}}}}},
 		Players: []BattlePlayer{
 			{Number: 1, Name: "Dragoons - Player 1", Units: []string{ids[0], ids[1]}, Crew: []CrewAssignment{{UnitID: ids[0], Name: "Katarina", Gunnery: 3, Piloting: 4}}},
@@ -185,7 +185,7 @@ func TestStartBattleBuildsForcesAndTheOperation(t *testing.T) {
 	}
 	// The operation sets every player's force against the OpFor's, with the forces' own timestamps.
 	op := f.ops[res.OperationID]
-	if op == nil || op["name"] != "Refusal War - Scenario 001" {
+	if op == nil || op["name"] != "Refusal War - Sortie 001" {
 		t.Fatalf("the operation: %+v", op)
 	}
 	if want := []string{"friendly:" + res.PlayerInstances[0], "friendly:" + res.PlayerInstances[1], "enemy:" + res.OpForInstance}; !slices.Equal(operationForces(op), want) {

@@ -126,6 +126,7 @@ func TestCommitBattleWritesTheHangar(t *testing.T) {
 // The MVP earns an extra mvpBonusSP, on top of their share; only one pilot can be it, and only one who took part and lives.
 func TestMVPBonus(t *testing.T) {
 	sc := acesScenario(t, 80)
+	sc.MVPSP = 20 // Refusal War's mvp_sp
 	mission := map[string]any{"depot": true, "escape": false}
 	run := func(entries ...OutcomeEntry) (OutcomeResult, error) {
 		return sc.EvaluateOutcome(OutcomeInputs{Pilots: entries, Mission: mission}, map[string]string{"a": "Alrek", "b": "Katarina", "c": "Jarek", "d": "Sybille"})
@@ -142,5 +143,16 @@ func TestMVPBonus(t *testing.T) {
 		if _, err := run(entries...); err == nil {
 			t.Errorf("%s: an MVP who cannot be one is refused", name)
 		}
+	}
+}
+
+// A mission with no MVP bonus (a campaign without mvp_sp) refuses an MVP rather than silently giving nothing.
+func TestNoMVPWithoutABonus(t *testing.T) {
+	sc := acesScenario(t, 80)
+	if _, err := sc.EvaluateOutcome(OutcomeInputs{Pilots: []OutcomeEntry{{PilotID: "a", TookPart: true, MVP: true}}, Mission: map[string]any{"depot": true, "escape": false}}, map[string]string{"a": "Alrek"}); err == nil {
+		t.Error("an MVP in a mission without one is refused")
+	}
+	if sc, _ := refusalWar(t).Scenario("scenario_001"); sc.MVPSP != 20 {
+		t.Errorf("Refusal War's missions take its mvp_sp: %d", sc.MVPSP)
 	}
 }

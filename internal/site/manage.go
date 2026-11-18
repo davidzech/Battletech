@@ -41,7 +41,7 @@ func (s *Server) manage(w http.ResponseWriter, r *http.Request) {
 	}
 	if sc, ok := c.Scenario(r.URL.Query().Get("back")); ok {
 		p.BackURL = back + sc.Slug + "/"
-		p.BackLabel = "Back to Sortie " + sc.Number + ": " + sc.Title
+		p.BackLabel = "Back to " + c.MissionName(*sc)
 	}
 	if cps, err := s.store.Checkpoints(r.Context(), playthroughID(seed), c.Slug); err == nil {
 		p.Checkpoints = checkpointViews(cps)

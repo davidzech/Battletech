@@ -118,7 +118,7 @@ func (s *Server) setScenarioCompleted(w http.ResponseWriter, r *http.Request) {
 			if copyID, err := s.checkpointCopy(r.Context(), currentSeed(r), run); err != nil {
 				log.Printf("checkpoint after %s: %v", sc.Slug, err)
 			} else {
-				s.recordCheckpoint(r.Context(), currentSeed(r), pt.ID, c.Slug, "Completed Sortie "+sc.Number+": "+sc.Title, copyID)
+				s.recordCheckpoint(r.Context(), currentSeed(r), pt.ID, c.Slug, "Completed "+c.MissionName(*sc), copyID)
 			}
 		}
 	}

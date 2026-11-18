@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"fmt"
 	"html/template"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -42,6 +43,8 @@ type Scenario struct {
 	pilotShare     *Expr
 	OutcomeRules   []OutcomeRule
 	OutcomeError   string
+	// MVPSP is the extra SP the mission's MVP earns (the campaign's mvp_sp, or the scenario's own Outcome.md mvp_sp); 0 means the mission has no MVP.
+	MVPSP int
 	// Branches are the scenarios (slugs) this one may lead to once it is completed: the Outcome.md front matter `branches` list, or when that is omitted its
 	// `default_next`, or else the next scenario number. Only a scenario that is the campaign's first, completed, or a branch of a completed one is available.
 	Branches       []string
@@ -112,7 +115,14 @@ type Campaign struct {
 	Faction string
 	// Ranks is the rank ladder of the campaign's named pilots, lowest first: the Intro.md `ranks` list if it has one, else its
 	// faction's.
-	Ranks     []string
+	Ranks []string
+	// MissionTerm is what the campaign calls its scenarios, e.g. "Sortie" (Intro.md mission_term; "Scenario" by default): see MissionName.
+	MissionTerm string
+	// MVPSP is the extra SP the most valuable pilot of a mission earns (Intro.md mvp_sp; 0 means the campaign has no MVP). A scenario's Outcome.md can override it.
+	MVPSP int
+	// Problems lists what is wrong with the campaign's files (front matter that doesn't parse or has unknown keys, outcome rules that don't compile, branches to
+	// scenarios that don't exist), so an author sees them on the campaign page rather than a setting silently ignored. TestCampaignFilesAreValid keeps it empty.
+	Problems  []string
 	Scenarios []Scenario
 }
 
@@ -266,61 +276,73 @@ func humanize(name string) string {
 	return strings.ReplaceAll(camelGap.ReplaceAllString(name, "$1 $2"), "_", " ")
 }
 
-type frontData struct {
-	ID         string              `yaml:"id"`
-	Title      string              `yaml:"title"`
-	Map        string              `yaml:"map"`
-	Planet     string              `yaml:"planet"`
-	Images     []string            `yaml:"images"`
-	Readout    []map[string]string `yaml:"readout"`
-	Forces     map[string]string   `yaml:"forces"`
-	BVLimit    int                 `yaml:"bv_limit"`
-	Provided   []string            `yaml:"provided_units"`
-	UnitLimit  int                 `yaml:"unit_limit"`
-	PilotsReq  bool                `yaml:"pilots_required"`
-	MinPlayers int                 `yaml:"min_players"`
-	MaxPlayers int                 `yaml:"max_players"`
-	// StartingNamedPilots is how many named pilots a company must name to begin the campaign (Intro.md).
-	StartingNamedPilots int `yaml:"starting_named_pilots"`
-	// StartingPilotSP is the SP each starting named pilot allocates when the campaign is started (Intro.md).
-	StartingPilotSP int `yaml:"starting_pilot_sp"`
-	// StartingBV is the battle value of the force a company starts the campaign with (Intro.md).
-	StartingBV int `yaml:"starting_bv"`
-	// StartingMinMechs is how many mechs the starting hangar must hold at least (Intro.md).
-	StartingMinMechs int `yaml:"starting_min_mechs"`
-	// StartingWarchest is the SP the warchest starts with (Intro.md).
-	StartingWarchest int `yaml:"starting_warchest"`
-	MaxNamedPilots   int `yaml:"max_named_pilots"`
-	RecruitCost      int `yaml:"recruit_cost"`
-	// AvailabilityFaction and AvailabilityEra say which MekBay faction and era decide what the purchase search offers by default (Intro.md).
-	AvailabilityFaction string `yaml:"availability_faction"`
-	AvailabilityEra     string `yaml:"availability_era"`
-	DefaultNext         string `yaml:"default_next"`
-	// Inputs and Outcomes (Outcome.md) are the scenario's outcome engine.
-	Inputs     []OutcomeInput     `yaml:"inputs"`
-	Objectives []OutcomeObjective `yaml:"objectives"`
-	PilotSP    any                `yaml:"pilot_sp"`
-	Outcomes   []OutcomeRule      `yaml:"outcomes"`
-	// Branches (Outcome.md) lists the scenario IDs this scenario may branch to; omitted, it leads to the next scenario number.
-	Branches []string `yaml:"branches"`
-	// Faction and Ranks are described on Campaign (Intro.md).
-	Faction string   `yaml:"faction"`
-	Ranks   []string `yaml:"ranks"`
+// introMeta is a campaign's Intro.md front matter: the campaign-wide settings (see Campaign).
+type introMeta struct {
+	MinPlayers          int      `yaml:"min_players"`
+	MaxPlayers          int      `yaml:"max_players"`
+	StartingNamedPilots int      `yaml:"starting_named_pilots"`
+	StartingPilotSP     int      `yaml:"starting_pilot_sp"`
+	StartingBV          int      `yaml:"starting_bv"`
+	StartingMinMechs    int      `yaml:"starting_min_mechs"`
+	StartingWarchest    int      `yaml:"starting_warchest"`
+	MaxNamedPilots      int      `yaml:"max_named_pilots"`
+	RecruitCost         int      `yaml:"recruit_cost"`
+	AvailabilityFaction string   `yaml:"availability_faction"`
+	AvailabilityEra     string   `yaml:"availability_era"`
+	Faction             string   `yaml:"faction"`
+	Ranks               []string `yaml:"ranks"`
+	MissionTerm         string   `yaml:"mission_term"`
+	MVPSP               int      `yaml:"mvp_sp"`
 }
 
-// readMarkdown splits optional YAML front matter from a Markdown file. A missing file yields zero values.
-func readMarkdown(path string) (frontData, string) {
+// setupMeta is a scenario's Setup.md front matter.
+type setupMeta struct {
+	ID        string              `yaml:"id"`
+	Title     string              `yaml:"title"`
+	Map       string              `yaml:"map"`
+	Planet    string              `yaml:"planet"`
+	Images    []string            `yaml:"images"`
+	Readout   []map[string]string `yaml:"readout"`
+	Forces    map[string]string   `yaml:"forces"`
+	BVLimit   int                 `yaml:"bv_limit"`
+	Provided  []string            `yaml:"provided_units"`
+	UnitLimit int                 `yaml:"unit_limit"`
+	PilotsReq bool                `yaml:"pilots_required"`
+}
+
+// outcomeMeta is a scenario's Outcome.md front matter: where it leads, and its outcome engine (see outcomes.go).
+type outcomeMeta struct {
+	ID          string             `yaml:"id"`
+	DefaultNext string             `yaml:"default_next"`
+	Branches    []string           `yaml:"branches"`
+	Inputs      []OutcomeInput     `yaml:"inputs"`
+	Objectives  []OutcomeObjective `yaml:"objectives"`
+	PilotSP     any                `yaml:"pilot_sp"`
+	Outcomes    []OutcomeRule      `yaml:"outcomes"`
+	MVPSP       *int               `yaml:"mvp_sp"` // overrides the campaign's
+}
+
+// readMarkdown reads a Markdown file with optional YAML front matter into dst, and returns the body. The front matter is decoded strictly, so a misspelt or
+// misplaced key is an error rather than a setting silently ignored; a missing file is not an error (it yields an empty body).
+func readMarkdown(path string, dst any) (string, error) {
 	raw, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return "", nil
+	}
 	if err != nil {
-		return frontData{}, ""
+		return "", err
 	}
 	text := string(bytes.TrimPrefix(raw, []byte{0xEF, 0xBB, 0xBF}))
-	var fm frontData
-	if m := frontMatter.FindStringSubmatch(text); m != nil {
-		_ = yaml.Unmarshal([]byte(m[1]), &fm)
-		text = m[2]
+	m := frontMatter.FindStringSubmatch(text)
+	if m == nil {
+		return text, nil
 	}
-	return fm, text
+	dec := yaml.NewDecoder(strings.NewReader(m[1]))
+	dec.KnownFields(true)
+	if err := dec.Decode(dst); err != nil && err != io.EOF {
+		return m[2], fmt.Errorf("front matter: %w", err)
+	}
+	return m[2], nil
 }
 
 func renderMarkdown(src string, stripTitle bool) template.HTML {
@@ -359,13 +381,13 @@ func (l Library) Campaigns() ([]*Campaign, error) {
 
 // Campaign finds a campaign by its URL slug (lowercased folder name).
 func (l Library) Campaign(slug string) (*Campaign, bool) {
-	cs, err := l.Campaigns()
+	entries, err := os.ReadDir(l.Root)
 	if err != nil {
 		return nil, false
 	}
-	for _, c := range cs {
-		if c.Slug == slug {
-			return c, true
+	for _, e := range entries {
+		if e.IsDir() && !strings.HasPrefix(e.Name(), ".") && strings.ToLower(e.Name()) == slug {
+			return l.load(e.Name()) // only this campaign is read, not every one
 		}
 	}
 	return nil, false
@@ -378,16 +400,29 @@ func (l Library) load(name string) (*Campaign, bool) {
 		return nil, false
 	}
 	c := &Campaign{Slug: strings.ToLower(name), Label: humanize(name)}
+	problem := func(file string, err error) {
+		if err != nil {
+			c.Problems = append(c.Problems, file+": "+err.Error())
+		}
+	}
+	var meta introMeta
+	intro, err := readMarkdown(filepath.Join(dir, "Intro.md"), &meta)
+	problem("Intro.md", err)
+	c.applyIntro(meta)
 	for _, e := range entries {
 		m := scenarioDir.FindStringSubmatch(e.Name())
 		if !e.IsDir() || m == nil {
 			continue
 		}
 		sdir := filepath.Join(dir, e.Name())
-		setup, setupBody := readMarkdown(filepath.Join(sdir, "Setup.md"))
+		var setup setupMeta
+		setupBody, err := readMarkdown(filepath.Join(sdir, "Setup.md"), &setup)
+		problem(e.Name()+"/Setup.md", err)
 		briefing, setupBody := splitBriefing(leadingTitle.ReplaceAllString(setupBody, ""))
 		setupBody, waypoints := splitWaypoints(setupBody)
-		outcome, outcomeBody := readMarkdown(filepath.Join(sdir, "Outcome.md"))
+		var outcome outcomeMeta
+		outcomeBody, err := readMarkdown(filepath.Join(sdir, "Outcome.md"), &outcome)
+		problem(e.Name()+"/Outcome.md", err)
 		s := Scenario{
 			Dir:               sdir,
 			Slug:              strings.ToLower(e.Name()),
@@ -409,11 +444,15 @@ func (l Library) load(name string) (*Campaign, bool) {
 			OutcomeObjectives: outcome.Objectives,
 			OutcomePilotSP:    outcome.PilotSP,
 			OutcomeRules:      outcome.Outcomes,
+			MVPSP:             c.MVPSP,
 			Branches:          lowerAll(outcome.Branches),
 			branchesListed:    outcome.Branches != nil,
 			BriefingHTML:      renderBriefing(briefing),
 			SetupHTML:         renderMarkdown(setupBody, false),
 			OutcomeHTML:       renderMarkdown(outcomeBody, true),
+		}
+		if outcome.MVPSP != nil {
+			s.MVPSP = *outcome.MVPSP
 		}
 		if s.ID == "" {
 			s.ID = s.Slug
@@ -429,7 +468,19 @@ func (l Library) load(name string) (*Campaign, bool) {
 	}
 	sort.Slice(c.Scenarios, func(i, j int) bool { return c.Scenarios[i].Slug < c.Scenarios[j].Slug })
 	c.resolveBranches()
-	meta, intro := readMarkdown(filepath.Join(dir, "Intro.md"))
+	var kwMeta struct{}
+	kw, err := readMarkdown(filepath.Join(dir, "Keywords.md"), &kwMeta)
+	problem("Keywords.md", err)
+	c.IntroHTML = renderMarkdown(intro, false)
+	c.KeywordsHTML = renderMarkdown(kw, true)
+	c.Keywords = keywordIDs(kw)
+	c.checkGrants()
+	c.checkScenarios()
+	return c, true
+}
+
+// applyIntro takes the campaign-wide settings from Intro.md.
+func (c *Campaign) applyIntro(meta introMeta) {
 	c.MinPlayers, c.MaxPlayers = meta.MinPlayers, meta.MaxPlayers
 	c.StartingNamedPilots, c.StartingPilotSP, c.StartingBV = meta.StartingNamedPilots, meta.StartingPilotSP, meta.StartingBV
 	c.StartingMinMechs = meta.StartingMinMechs
@@ -440,13 +491,32 @@ func (l Library) load(name string) (*Campaign, bool) {
 	if c.Ranks = meta.Ranks; len(c.Ranks) == 0 {
 		c.Ranks = factionRanks(meta.Faction)
 	}
-	_, kw := readMarkdown(filepath.Join(dir, "Keywords.md"))
-	c.IntroHTML = renderMarkdown(intro, false)
-	c.KeywordsHTML = renderMarkdown(kw, true)
-	c.Keywords = keywordIDs(kw)
-	c.checkGrants()
-	return c, true
+	c.MissionTerm = strings.TrimSpace(meta.MissionTerm)
+	if c.MissionTerm == "" {
+		c.MissionTerm = "Scenario"
+	}
+	c.MVPSP = meta.MVPSP
 }
+
+// checkScenarios reports what is wrong with the scenarios as a whole: an outcome engine that doesn't compile, and a branch to a scenario that doesn't exist.
+func (c *Campaign) checkScenarios() {
+	for _, sc := range c.Scenarios {
+		if sc.OutcomeError != "" {
+			c.Problems = append(c.Problems, sc.Slug+"/Outcome.md: "+sc.OutcomeError)
+		}
+		for _, b := range sc.Branches {
+			if _, ok := c.Scenario(b); !ok {
+				c.Problems = append(c.Problems, fmt.Sprintf("%s/Outcome.md: branches to %q, which is not a scenario of this campaign", sc.Slug, b))
+			}
+		}
+	}
+}
+
+// MissionNumber is how the campaign names a scenario by number, e.g. "Sortie 001" (Intro.md mission_term, "Scenario" by default).
+func (c *Campaign) MissionNumber(sc Scenario) string { return c.MissionTerm + " " + sc.Number }
+
+// MissionName is a scenario's full name, e.g. "Sortie 001: Pyre Light".
+func (c *Campaign) MissionName(sc Scenario) string { return c.MissionNumber(sc) + ": " + sc.Title }
 
 var (
 	nonSlug     = regexp.MustCompile(`[^a-z0-9]+`)

@@ -1447,3 +1447,8 @@ dialog.abort-dialog { padding: 0; width: min(92vw, 34rem); }
 .abort-choice .button { width: 100%; text-align: center; }
 .abort-inner .form-actions { justify-content: flex-end; margin-top: 1rem; }
 @media (max-width: 640px) { .abort-choice { grid-template-columns: 1fr; } }
+/* Problems in a campaign's files, for its author (see Campaign.Problems). */
+.campaign-problems { margin: 1rem 0; padding: 0.8rem 1rem; border: 1px solid #e5594f; border-left-width: 4px; background: rgba(229, 89, 79, 0.08); }
+.campaign-problems h2 { margin: 0 0 0.4rem; font-size: 1rem; color: #ff5a4d; }
+.campaign-problems ul { margin: 0; padding-left: 1.2rem; }
+.campaign-problems code { white-space: pre-wrap; }

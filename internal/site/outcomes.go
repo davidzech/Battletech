@@ -57,9 +57,6 @@ import (
 // The players enter what happened in the completion dialog, which previews the result by asking the server (POST /api/campaign/scenario-outcome); committing it
 // (POST /api/campaign/scenario-outcome/commit) applies every effect and records the report in one transaction, so a mission can only be completed once.
 
-// mvpBonusSP is the extra SP the mission's MVP earns.
-const mvpBonusSP = 20
-
 // OutcomeInput is something the players report when a mission is completed.
 type OutcomeInput struct {
 	ID    string `yaml:"id" json:"id"`
@@ -261,7 +258,7 @@ type OutcomeEntry struct {
 	PilotID  string         `json:"id"`
 	TookPart bool           `json:"tookPart"` // active; false means benched
 	Killed   bool           `json:"killed"`   // killed in action (only an active pilot can be)
-	MVP      bool           `json:"mvp"`      // the mission's most valuable pilot: an extra mvpBonusSP (at most one, and one who took part and lives)
+	MVP      bool           `json:"mvp"`      // the mission's most valuable pilot: the mission's extra MVP SP (at most one, and one who took part and lives)
 	Values   map[string]any `json:"values"`   // numbers, or true/false for a bool input
 }
 
@@ -398,6 +395,9 @@ func (sc *Scenario) EvaluateOutcome(in OutcomeInputs, names map[string]string) (
 			}
 			if mvps > 1 {
 				return res, errors.New("only one pilot can be the MVP")
+			}
+			if sc.MVPSP <= 0 {
+				return res, errors.New("this mission has no MVP")
 			}
 		}
 		if e.TookPart {
@@ -564,11 +564,11 @@ func (sc *Scenario) EvaluateOutcome(in OutcomeInputs, names map[string]string) (
 	} else if res.Pool > 0 {
 		res.Warchest += res.Pool
 	}
-	// The MVP earns an extra mvpBonusSP, on top of their share and not drawn from the pool.
+	// The MVP earns the mission's extra MVP SP, on top of their share and not drawn from the pool.
 	for i := range res.Pilots {
 		if p := &res.Pilots[i]; p.MVP {
-			p.SP += mvpBonusSP
-			p.Notes = append(p.Notes, fmt.Sprintf("+%d SP (MVP)", mvpBonusSP))
+			p.SP += sc.MVPSP
+			p.Notes = append(p.Notes, fmt.Sprintf("+%d SP (MVP)", sc.MVPSP))
 		}
 	}
 	for i := range res.Pilots {
@@ -784,7 +784,7 @@ func (s *Server) commitOutcome(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Could not save a checkpoint of your hangar in MekBay: "+cerr.Error(), http.StatusBadGateway)
 		return
 	}
-	label := "Completed Sortie " + sc.Number + ": " + sc.Title
+	label := "Completed " + c.MissionName(*sc)
 	switch err := s.store.CompleteWithOutcome(r.Context(), pt.ID, c.Slug, sc.Slug, res); {
 	case errors.Is(err, ErrAlreadyCompleted):
 		http.Error(w, "This mission is already completed.", http.StatusConflict)
