@@ -1335,12 +1335,18 @@ dialog button.deploy-count:disabled, .overview-players button.deploy-count:disab
 .mission-log { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 1rem; margin: 1rem 0; padding: 0.6rem 1rem; background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--line); }
 .mission-log.completed { border-left-color: #5fc47e; }
 .mission-log-label { font: 700 0.75rem var(--display); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
-.mission-log-state { font: 700 1rem var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
+.mission-log-state { display: inline-flex; align-items: center; gap: 0.6rem; font: 700 1rem var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
 .mission-log.completed .mission-log-state { color: #5fc47e; }
 .mission-log.locked .mission-log-state { color: var(--muted); }
-.mission-log .button { margin-left: auto; }
-.mission-log .form-error { flex-basis: 100%; margin: 0; }
-.mission-log .form-error:empty { display: none; }
+.mission-log .outcome-summary { flex-basis: 100%; }
+/* The status LED after the mission log's state: a soft glowing red dot until the mission is completed, then green (gray while the mission is not available). */
+.mission-led { flex: none; width: 0.7rem; height: 0.7rem; border-radius: 50%; background: #e5594f; box-shadow: 0 0 0.35rem 0.1rem rgba(229, 89, 79, 0.65), 0 0 0.9rem 0.25rem rgba(229, 89, 79, 0.25); transition: background 0.3s, box-shadow 0.3s; }
+.mission-log.completed .mission-led { background: #5fc47e; box-shadow: 0 0 0.35rem 0.1rem rgba(95, 196, 126, 0.65), 0 0 0.9rem 0.25rem rgba(95, 196, 126, 0.25); }
+.mission-log.locked .mission-led { background: var(--line); box-shadow: none; }
+/* Completing the mission is the last thing on the page. */
+.mission-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem 1rem; margin: 1.6rem 0 1rem; padding-top: 1rem; border-top: 1px solid var(--line); }
+.mission-actions .form-error { flex-basis: 100%; margin: 0; }
+.mission-actions .form-error:empty { display: none; }
 
 .recruit-note { margin: 0.4rem 0 1rem; font-size: 0.85rem; text-align: right; } /* under the right-aligned Recruit New Pilot button */
 #recruit-cost[hidden] { display: none; }
