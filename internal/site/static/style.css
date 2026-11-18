@@ -165,8 +165,7 @@ details.fold > summary {
   text-transform: uppercase;
   cursor: pointer;
   list-style: none;
-  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%); /* the action button's cut corner, mirrored vertically */
-}
+  }
 details.fold > summary::-webkit-details-marker { display: none; }
 details.fold > summary::before {
   content: "";
