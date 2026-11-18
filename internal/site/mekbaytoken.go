@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"strconv"
 	"strings"
@@ -28,7 +29,12 @@ var mekbayTokenAAD = []byte("battletech mekbay link v1")
 // ErrBadToken means a MekBay link token is malformed, forged or expired.
 var ErrBadToken = errors.New("This MekBay link is not valid or has expired.")
 
-type mekbayTokens struct{ aead cipher.AEAD }
+type mekbayTokens struct {
+	aead cipher.AEAD
+	// sandbox is the shared account a browser with no token acts as (see mekbayproxy.go). It is derived from the key, so it is stable for as
+	// long as the key is, and it is not a secret: everyone who opens the proxy without a link shares it.
+	sandbox string
+}
 
 // newMekBayTokens derives the AES-256 key from any secret string. An empty secret gives a random key, so tokens last only as long as the
 // process (right for development; production sets MEKBAY_TOKEN_KEY so links survive a restart).
@@ -49,7 +55,7 @@ func newMekBayTokens(secret string) *mekbayTokens {
 	if err != nil {
 		panic(err)
 	}
-	return &mekbayTokens{aead: aead}
+	return &mekbayTokens{aead: aead, sandbox: MekBayUID(hex.EncodeToString(key[:]), "sandbox")}
 }
 
 // Issue seals an account UUID into a token valid for ttl.

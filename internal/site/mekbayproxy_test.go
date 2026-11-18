@@ -378,7 +378,6 @@ func TestMekBayRelaySwapsTheIdentity(t *testing.T) {
 func TestMekBayRelayRefusesStrangers(t *testing.T) {
 	p := newProxyFixture(t)
 	for name, c := range map[string]*http.Cookie{
-		"no cookie":      nil,
 		"a bad cookie":   {Name: mekbayCookie, Value: "nope"},
 		"expired cookie": p.cookie(t, testAccount, -time.Minute),
 	} {
@@ -394,6 +393,86 @@ func TestMekBayRelayRefusesStrangers(t *testing.T) {
 	}
 	if n := len(p.fake.sent()); n != 0 {
 		t.Errorf("nothing reached MekBay: %d", n)
+	}
+}
+
+// On a developer's machine (*.localhost, from loopback), a browser with no token acts as one shared sandbox account; anywhere else it is
+// refused, so the deployed site is never an open door to MekBay.
+func TestMekBayRelaySandbox(t *testing.T) {
+	p := newProxyFixture(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	ask := func(conn *websocket.Conn) string {
+		t.Helper()
+		if err := conn.Write(ctx, websocket.MessageText, []byte(`{"action":"register","uuid":"11111111-1111-4111-8111-111111111111"}`)); err != nil {
+			t.Fatal(err)
+		}
+		_, b, err := conn.Read(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var m struct{ UUID string }
+		_ = json.Unmarshal([]byte(strings.TrimPrefix(string(b), "echo:")), &m)
+		return m.UUID
+	}
+	a, _, err := p.dialRelay(t, nil, "")
+	if err != nil {
+		t.Fatalf("a browser with no token is let in on localhost: %v", err)
+	}
+	defer a.CloseNow()
+	b, _, err := p.dialRelay(t, nil, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.CloseNow()
+	sandbox := p.tokens.sandbox
+	if ua, ub := ask(a), ask(b); ua != sandbox || ub != sandbox || sandbox == testAccount || len(sandbox) != 36 {
+		t.Errorf("everyone with no token shares one account (derived from the key): %q %q want %q", ua, ub, sandbox)
+	}
+	if newMekBayTokens("test-key").sandbox != sandbox || newMekBayTokens("another-key").sandbox == sandbox {
+		t.Error("the sandbox account is stable for a key and different for another")
+	}
+	// A token still wins over the sandbox.
+	c, _, err := p.dialRelay(t, p.cookie(t, testAccount, time.Hour), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.CloseNow()
+	if got := ask(c); got != testAccount {
+		t.Errorf("a token acts as its own account: %q", got)
+	}
+
+	// Not on localhost, or not from this machine, there is no sandbox: the host name alone proves nothing.
+	dial := func(host string, extra http.Header) (*http.Response, error) {
+		header := http.Header{"Origin": {"http://" + host + ":" + portOf(p.site.URL)}}
+		for k, v := range extra {
+			header[k] = v
+		}
+		_, resp, err := websocket.Dial(ctx, "ws://"+host+":"+portOf(p.site.URL)+"/ws", &websocket.DialOptions{HTTPClient: p.client, HTTPHeader: header})
+		return resp, err
+	}
+	for name, c := range map[string]struct {
+		host  string
+		extra http.Header
+	}{
+		"a deployed host":       {"mekbay.battletech.zech.io", nil},
+		"a lookalike":           {"mekbay.notlocalhost", nil},
+		"behind a proxy (XFF)":  {"mekbay.localhost", http.Header{"X-Forwarded-For": {"203.0.113.9"}}},
+		"behind a proxy (Fwd)":  {"mekbay.localhost", http.Header{"Forwarded": {"for=203.0.113.9"}}},
+		"behind a proxy (host)": {"mekbay.localhost", http.Header{"X-Forwarded-Host": {"battletech.zech.io"}}},
+	} {
+		if resp, err := dial(c.host, c.extra); err == nil || resp == nil || resp.StatusCode != http.StatusUnauthorized {
+			t.Errorf("%s gets no sandbox: %v %v", name, resp, err)
+		}
+	}
+	if sandboxAllowed(&http.Request{Host: "mekbay.localhost:8080", RemoteAddr: "203.0.113.9:5000", Header: http.Header{}}) {
+		t.Error("a remote client can't claim localhost with its Host header")
+	}
+	if !sandboxAllowed(&http.Request{Host: "mekbay.localhost:8080", RemoteAddr: "[::1]:5000", Header: http.Header{}}) || !sandboxAllowed(&http.Request{Host: "x.mekbay.localhost", RemoteAddr: "127.0.0.1:5000", Header: http.Header{}}) {
+		t.Error("loopback clients on *.localhost are allowed, IPv6 included")
+	}
+	if n := len(p.fake.sent()); n != 3 {
+		t.Errorf("only the three allowed browsers' messages reached MekBay: %d", n)
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -36,7 +37,8 @@ import (
 //     every message the browser sends with the account its token names. The browser still believes it is a random visitor.
 //
 // The identity comes from a link token (mekbaytoken.go): ?t=<token> on any page sets a host-only, HttpOnly cookie and redirects without it.
-// The relay refuses a browser with no valid cookie, so it is never an open door to MekBay. The site's own cookies never reach this host (it
+// A browser with no cookie is refused, except on a developer's machine (sandboxAllowed), where it acts as one shared sandbox account so the
+// proxy host also works when opened directly. A cookie that is present but invalid is always refused. The site's own cookies never reach this host (it
 // is a different origin from the site), which also keeps MekBay's JavaScript away from the site's APIs.
 //
 // This relies on MekBay's unofficial, unpublished protocol and on the WebSocket string surviving its build; Check says whether it does.
@@ -111,6 +113,28 @@ func isMekBayHost(host string) bool {
 		host = host[:i]
 	}
 	return strings.HasPrefix(strings.ToLower(host), "mekbay.")
+}
+
+// sandboxAllowed says whether a browser with no token may use the shared sandbox account: only when the proxy is reached as *.localhost
+// (mekbay.localhost:8080) by a client on the same machine. The Host header alone proves nothing, since a remote client picks its own, so the
+// connection must also come from a loopback address and carry no forwarding header (behind the host's proxy it never does).
+func sandboxAllowed(r *http.Request) bool {
+	host := r.Host
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		host = h
+	}
+	if !strings.HasSuffix(strings.ToLower(host), ".localhost") {
+		return false
+	}
+	if r.Header.Get("X-Forwarded-For") != "" || r.Header.Get("Forwarded") != "" || r.Header.Get("X-Forwarded-Host") != "" {
+		return false
+	}
+	ip, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return false
+	}
+	addr := net.ParseIP(ip)
+	return addr != nil && addr.IsLoopback()
 }
 
 func isHTTPS(r *http.Request) bool {
@@ -263,14 +287,22 @@ func (p *mekbayProxy) download(ctx context.Context, path string) (*proxiedFile, 
 
 // relay passes one browser's WebSocket to mekbay.com, speaking as the account its cookie's token names.
 func (p *mekbayProxy) relay(w http.ResponseWriter, r *http.Request) {
-	c, err := r.Cookie(mekbayCookie)
-	if err != nil {
+	// A browser with a token cookie acts as that account (a cookie that is present but not valid is refused, so nobody believes they are acting
+	// as themselves when they aren't). A browser with none is a visitor who opened the proxy directly: on a developer's machine it acts as
+	// the shared sandbox account, so MekBay works there as an open stomping ground; anywhere else it is refused, so the deployed site is never
+	// an open door to MekBay.
+	var account string
+	if c, err := r.Cookie(mekbayCookie); err == nil {
+		id, _, err := p.tokens.Open(c.Value, p.now())
+		if err != nil {
+			http.Error(w, ErrBadToken.Error(), http.StatusUnauthorized)
+			return
+		}
+		account = id
+	} else if sandboxAllowed(r) {
+		account = p.tokens.sandbox
+	} else {
 		http.Error(w, "Open your MekBay link from the site first.", http.StatusUnauthorized)
-		return
-	}
-	account, _, err := p.tokens.Open(c.Value, p.now())
-	if err != nil {
-		http.Error(w, ErrBadToken.Error(), http.StatusUnauthorized)
 		return
 	}
 	// The default origin check (the page's origin must be this host) stops other sites from using a visitor's cookie.
