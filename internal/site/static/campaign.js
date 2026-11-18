@@ -150,7 +150,7 @@
   function renderPlayersStep() {
     title.textContent = 'How many players?';
     body.textContent = '';
-    body.appendChild(el('p', 'muted', 'This campaign can be played by ' + minPlayers + ' to ' + maxPlayers + ' players sharing one company. The number you choose is what every Deploy starts with; you can still change it for a single deploy.'));
+    body.appendChild(el('p', 'muted', 'This campaign can be played by ' + minPlayers + ' to ' + maxPlayers + ' players sharing one force. The number you choose is what every Deploy starts with; you can still change it for a single deploy.'));
     var pick = el('div', 'deploy-players-pick');
     for (var n = minPlayers; n <= maxPlayers; n++) {
       (function (n) {

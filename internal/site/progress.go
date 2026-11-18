@@ -7,7 +7,7 @@ import (
 	"net/http"
 )
 
-// The campaign log: which of a campaign's scenarios the company has completed. The first scenario (000) is available from the start, and completing a scenario
+// The campaign log: which of a campaign's scenarios the run has completed. The first scenario (000) is available from the start, and completing a scenario
 // makes the ones it branches to available (Scenario.Branches). Locked scenarios are left out of the lists and menus; a "Show all scenarios" box on the campaign page
 // reveals them, and the scenario page's own link still opens any of them.
 

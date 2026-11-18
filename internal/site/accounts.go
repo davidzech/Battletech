@@ -17,7 +17,7 @@ import (
 // purpose its own account), kept so that hangars already copied stay owned by it.
 const SlotHangar = "hangar"
 
-// maxPlayers is how many players a company can have.
+// maxPlayers is the most players a campaign can be played with.
 const maxPlayers = 4
 
 // MekBayUID is the MekBay user ID the site uses for a seed's synthesized account: SHA-256 of a purpose-specific prefix, the slot and the seed, laid out as a

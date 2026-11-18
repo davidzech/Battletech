@@ -96,12 +96,12 @@ type Campaign struct {
 	// StartingPilotSP is the SP each of those pilots allocates, all of it, when the campaign is started (Intro.md
 	// front matter starting_pilot_sp).
 	StartingPilotSP int
-	// StartingBV is the BV of the force a company starts with (Intro.md front matter starting_bv); 0 if not given.
+	// StartingBV is the BV of the force a campaign starts with (Intro.md front matter starting_bv); 0 if not given.
 	StartingBV int
 	// StartingMinMechs is how many mechs the starting hangar must hold at least (Intro.md front matter
 	// starting_min_mechs); 0 if not given.
 	StartingMinMechs int
-	// StartingWarchest is the SP the company's warchest starts the campaign with (Intro.md front matter starting_warchest); 0 if not given.
+	// StartingWarchest is the SP the force's warchest starts the campaign with (Intro.md front matter starting_warchest); 0 if not given.
 	StartingWarchest int
 	// MaxNamedPilots is the most living named pilots the force may have at once (Intro.md max_named_pilots; Refusal War: 4); 0 means the default of four. RecruitCost is
 	// the SP it costs from the warchest to recruit a new named pilot later on (Intro.md recruit_cost; Refusal War: 300); 0 is free. The starting pilots are free.
@@ -237,7 +237,7 @@ func (c *Campaign) resolveBranches() {
 	}
 }
 
-// Available says which scenarios a company can see (and play): the campaign's first, every completed one, and every branch of a completed one. Keys are slugs;
+// Available says which scenarios a run can see (and play): the campaign's first, every completed one, and every branch of a completed one. Keys are slugs;
 // completed is the set of completed slugs.
 func (c *Campaign) Available(completed map[string]bool) map[string]bool {
 	out := map[string]bool{}

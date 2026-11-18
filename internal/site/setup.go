@@ -229,7 +229,7 @@ func (s *Server) startCampaign(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// parseStartingPlayers reads how many players the company plays the campaign with: a whole number within the campaign's range (a campaign that allows only one
+// parseStartingPlayers reads how many players the campaign is played with: a whole number within the campaign's range (a campaign that allows only one
 // count needs none sent). The count is only the Deploy wizard's default, which can be changed for each deploy.
 func parseStartingPlayers(raw string, c *Campaign) (int, error) {
 	lo, hi := playerRange(c)
@@ -255,8 +255,8 @@ func (s *Server) cloneHangar(ctx context.Context, seed string, source Hangar) (H
 }
 
 // setSeed validates a chosen seed, records its playthrough and stores the seed in a cookie. The
-// reply says whether that playthrough's company is already named, so the page knows whether to
-// ask for the company's details.
+// reply says whether that playthrough's account is already named, so the page knows whether to
+// ask for its name.
 func (s *Server) setSeed(w http.ResponseWriter, r *http.Request) {
 	if !sameOrigin(r) {
 		http.Error(w, "cross-origin request refused", http.StatusForbidden)

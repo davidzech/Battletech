@@ -1,4 +1,4 @@
-// Scenario page: the Deploy wizard. The company's mechs (its MekBay hangar) and named pilots are one shared pool, and the players divide it: each takes the mechs
+// Scenario page: the Deploy wizard. The force's mechs (its MekBay hangar) and named pilots are one shared pool, and the players divide it: each takes the mechs
 // and pilots they want from what the players before them left, and the last step reviews the whole plan.
 //
 //   1 player:  one step (pick mechs, assign pilots, Deploy).
@@ -11,8 +11,8 @@
 //
 // The last step, Start battle, sends the whole plan to POST /api/battle/start, which checks it on the server (the same rules, over every player's mechs together), builds a
 // force for each player and one for the OpFor in MekBay, saves the operation that sets them against each other, and answers with the one MekBay link the whole table opens,
-// which the result shows (battlePanel).
-// It does NOT build anything in MekBay yet: that, each player's force in their own MekBay account and the OpFor in the OpFor's, is the next step.
+// which the Operation in progress pane shows (enterOperation), with the battle's live status read every 10 seconds (refreshStatus) and the mission's actions:
+// Complete mission (outcome.js) and Abort mission (roll back, or just close).
 (function () {
   var dialog = document.getElementById('deploy-dialog');
   var openBtn = document.getElementById('deploy-open');
@@ -47,7 +47,7 @@
   var unitLimit = parseInt(dialog.dataset.unitLimit, 10) || 0;      // the most mechs in all (a scenario rule), 0 for none
   var needPilots = dialog.dataset.pilotsRequired === '1';           // every mech taken needs a named pilot (a scenario rule)
   var query = 'campaign=' + encodeURIComponent(dialog.dataset.campaign) + '&scenario=' + encodeURIComponent(dialog.dataset.scenario);
-  var MAX = 4; // the most players a company can have MekBay accounts for
+  var MAX = 4; // the most players a campaign can be played with (maxPlayers on the server)
   var maxPlayers = Math.min(MAX, Math.max(1, parseInt(dialog.dataset.maxPlayers, 10) || 1));
   var minPlayers = Math.min(maxPlayers, Math.max(1, parseInt(dialog.dataset.minPlayers, 10) || 1));
 
@@ -55,7 +55,7 @@
   var provided = false;   // the scenario provides its own mechs in place of the hangar
   var original = {};      // unit ID -> the named pilot the hangar has in it now, if any
   var plans = [];         // per player: { selected: { unitId: true }, crew: { unitId: pilot name } }
-  // The count the company chose when it started the campaign is where every deploy begins (the picker can change it for one deploy); a run from before that was
+  // The count chosen when the campaign was started is where every deploy begins (the picker can change it for one deploy); a run from before that was
   // asked, or a count outside the range, starts at the minimum.
   var defaultPlayers = Math.min(maxPlayers, Math.max(minPlayers, parseInt(dialog.dataset.defaultPlayers, 10) || minPlayers));
   // page is told which are saved, never the IDs). A saved default whose IDs have since been forgotten steps down to what the IDs cover.

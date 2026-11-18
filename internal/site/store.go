@@ -19,13 +19,13 @@ type Store struct {
 	postgres bool
 }
 
-// Playthrough is one company's tracked run through the campaigns, identified by their seed.
+// Playthrough is one account's tracked progress through the campaigns, identified by its seed.
 type Playthrough struct {
 	ID          string // hash of the seed, never the seed itself
-	AccountName string // the company's name in the lore, e.g. "Wolf's Dragoons" ("" until named)
+	AccountName string // the account's name, whatever the player likes to call it ("" until named); stored in the playthroughs.company_name column
 }
 
-// Configured reports whether the company has been named, which is what setting a seed up amounts to.
+// Configured reports whether the account has been named, which is what setting a seed up amounts to.
 func (p Playthrough) Configured() bool { return p.AccountName != "" }
 
 // CampaignRun is a playthrough's run through one campaign. It exists once the campaign has been started, and has
@@ -38,7 +38,7 @@ type CampaignRun struct {
 	Warchest       int    // the force's finances in SP; starts at the campaign's starting_warchest
 	ForceName      string // the campaign's force name, e.g. "Wolf's Dragoons", chosen when the campaign is started and editable on the Manage page ("" on a run from before it was asked)
 	FreeRecruits   int    // recruits that cost no SP (a mission outcome can grant them, e.g. a replacement for a pilot who died)
-	Players        int    // how many players the company plays this campaign with: the Deploy wizard's default count (0 on a run from before it was asked)
+	Players        int    // how many players this campaign is played with: the Deploy wizard's default count (0 on a run from before it was asked)
 }
 
 // ForceLabel is the force's name, or a plain "Your force" for a run from before forces were named.
@@ -395,7 +395,7 @@ func (s *Store) updatePlaythrough(ctx context.Context, query string, args ...any
 	return nil
 }
 
-// SetAccountName stores the company's name.
+// SetAccountName stores the account's name.
 func (s *Store) SetAccountName(ctx context.Context, id, name string) error {
 	return s.updatePlaythrough(ctx, `UPDATE playthroughs SET company_name = ? WHERE id = ?`, name, id)
 }
@@ -467,7 +467,7 @@ func (s *Store) SetForceName(ctx context.Context, playthroughID, campaign, name 
 	return nil
 }
 
-// SetRunPlayers changes how many players the company plays a started campaign with, which is the count the Deploy wizard starts at.
+// SetRunPlayers changes how many players a started campaign is played with, which is the count the Deploy wizard starts at.
 // sql.ErrNoRows if the campaign hasn't been started.
 func (s *Store) SetRunPlayers(ctx context.Context, playthroughID, campaign string, players int) error {
 	res, err := s.db.ExecContext(ctx, s.q(`UPDATE campaign_runs SET players = ? WHERE playthrough_id = ? AND campaign = ?`), players, playthroughID, campaign)
@@ -522,7 +522,7 @@ func (s *Store) StartRunWithPilots(ctx context.Context, playthroughID, campaign 
 }
 
 // DeleteRun removes a started campaign from a playthrough: its named pilots, its saved MekBay operation IDs and the run
-// itself, in one transaction. The company, its other campaigns and anything saved in MekBay are left alone. It reports
+// itself, in one transaction. The account, its other campaigns and anything saved in MekBay are left alone. It reports
 // whether there was a run to delete.
 func (s *Store) DeleteRun(ctx context.Context, playthroughID, campaign string) (bool, error) {
 	tx, err := s.db.BeginTx(ctx, nil)

@@ -8,7 +8,7 @@ import (
 )
 
 // Cloning a hangar. The player does not hand the site their MekBay force: they hand it a link, and the site makes its own copy of that force and owns the copy,
-// under the MekBay identity derived from their seed (accounts.go). Everything the site does to the company's hangar (repairs, rearms, purchases, the crews it
+// under the MekBay identity derived from their seed (accounts.go). Everything the site does to the force's hangar (repairs, rearms, purchases, the crews it
 // assigns) is done to its own copy, so it never needs, or touches, the player's MekBay account, and the player never sees the copy. They can keep arranging
 // their own force in their own MekBay tab and re-import it later.
 //
@@ -17,7 +17,7 @@ import (
 
 // CloneRequest asks MekBay to copy a force into a new force owned by the site's account for the seed.
 type CloneRequest struct {
-	OwnerUID string // the MekBay account that will own the copy (Player 1's, derived from the seed)
+	OwnerUID string // the MekBay account that will own the copy (the one account derived from the seed)
 	Source   string // the instance ID of the force to copy: anyone can read a force by its ID
 	Target   string // the instance ID the copy is saved under
 }
