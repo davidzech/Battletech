@@ -464,17 +464,13 @@
     body.textContent = '';
     if (pilotCount) {
       body.appendChild(el('p', 'muted', 'Your named pilots:'));
-      var list = el('ul', 'wiz-recap');
+      var list = el('div', 'deploy-pilots-list wiz-pilot-cards');
       pilots.forEach(function (p) {
-        var li = el('li');
-        li.appendChild(el('b', null, p.name.trim()));
-        li.appendChild(el('span', 'muted', ' \u2014 '));
-        ladders.forEach(function (l, i) {
-          if (i) li.appendChild(el('span', 'muted', ' \u00b7 '));
-          li.appendChild(el('span', 'muted', l.name + ' '));
-          li.appendChild(el('b', 'recap-num', String(reach(l, p.sp[l.key]).level)));
-        });
-        list.appendChild(li);
+        // The levels this pilot's starting SP reaches, in the compact card the Deploy popup uses (pilotcard.js).
+        var lv = {};
+        ladders.forEach(function (l) { lv[l.key] = reach(l, p.sp[l.key]).level; });
+        var card = { name: p.name.trim(), portraitUrl: p.portrait ? '/portraits/' + p.portrait : '', gunnery: lv.gunnery, piloting: lv.piloting, edgeTokens: lv.edge_tokens, abilities: lv.edge_abilities };
+        list.appendChild(window.PilotCard ? PilotCard.chip(card, wiz.dataset.firstRank || 'Named pilot') : el('p', null, card.name));
       });
       body.appendChild(list);
     }

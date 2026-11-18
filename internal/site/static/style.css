@@ -1458,3 +1458,4 @@ dialog .wiz-modes button.wiz-mode { padding: 0.45rem 0.9rem; border: 0; backgrou
 dialog .wiz-modes button.wiz-mode + button.wiz-mode { border-left: 1px solid var(--line); }
 dialog .wiz-modes button.wiz-mode.active { background: var(--accent); color: var(--accent-ink); }
 dialog .wiz-modes button.wiz-mode:focus-visible { outline: 2px solid var(--text); outline-offset: -2px; }
+.wiz-pilot-cards { margin: 0.2rem 0 0.9rem; }

@@ -178,35 +178,8 @@
     node.addEventListener('dragend', function () { node.classList.remove('dragging'); dialog.classList.remove('dragging-pilot'); });
   }
 
-  // A pilot's four numbers in a compact strip of mini stat boxes (a tiny label over a bold number, like the pilot cards on the Manage page):
-  // Gunnery, Piloting, Edge tokens and Edge abilities. Hovering the pilot shows the full card (pilotcard.js).
-  var STATS = [['gunnery', 'GUN', 'Gunnery'], ['piloting', 'PIL', 'Piloting'], ['edgeTokens', 'EDGE', 'Edge tokens'], ['abilities', 'ABIL', 'Edge abilities']];
-  function statSummary(p) { return STATS.map(function (s) { return s[2] + ' ' + (p[s[0]] || 0); }).join(', '); }
-  function statStrip(p) {
-    var strip = el('span', 'deploy-stats');
-    STATS.forEach(function (s) {
-      var cell = el('span', 'deploy-stat');
-      cell.appendChild(el('span', 'deploy-stat-label', s[1]));
-      cell.appendChild(el('span', 'deploy-stat-value', String(p[s[0]] || 0)));
-      strip.appendChild(cell);
-    });
-    return strip;
-  }
-  function portrait(p) {
-    var img = document.createElement('img');
-    img.className = 'deploy-portrait';
-    img.src = p.portraitUrl; img.alt = ''; img.width = 32; img.height = 32;
-    return img;
-  }
-  function pilotTop(p, sub) {
-    var top = el('span', 'deploy-pilot-top');
-    top.appendChild(portrait(p));
-    var text = el('span', 'deploy-pilot-text');
-    text.appendChild(el('b', null, p.name));
-    text.appendChild(el('small', null, sub));
-    top.appendChild(text);
-    return top;
-  }
+  // The compact pilot card's parts (pilotcard.js): the portrait, name and a line, and the strip of four levels.
+  var statSummary = PilotCard.summary, statStrip = PilotCard.strip, pilotTop = PilotCard.top;
 
   // The tray: the named pilots no other player has taken. One already in this player's mech says which, and can be picked up to move or remove them.
   function renderTray() {

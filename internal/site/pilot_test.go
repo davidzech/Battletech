@@ -1452,3 +1452,16 @@ func TestRecruitStatus(t *testing.T) {
 		}
 	}
 }
+
+// The start wizard shows each starting pilot at the campaign's first rank.
+func TestStartWizardKnowsTheFirstRank(t *testing.T) {
+	srv, _ := newTestServer(t)
+	cookie := post(t, srv, "/api/seed", url.Values{"seed": {"wolfpack2026"}}, nil, "").Cookies()[0]
+	post(t, srv, "/api/account", url.Values{"account": {"Wolf Pack"}}, cookie, srv.URL)
+	if p := body(t, srv, "/refusalwar/", cookie); !strings.Contains(p, `data-first-rank="MechWarrior"`) || !strings.Contains(p, "/static/pilotcard.js") {
+		t.Error("the wizard knows the first rank and loads the compact pilot cards")
+	}
+	if (&Campaign{}).FirstRank() != "" {
+		t.Error("a campaign with no ranks has no first rank")
+	}
+}

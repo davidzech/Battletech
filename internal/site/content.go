@@ -512,6 +512,14 @@ func (c *Campaign) checkScenarios() {
 	}
 }
 
+// FirstRank is the rank every named pilot starts at: the lowest of the campaign's ranks ("" when the campaign has none).
+func (c *Campaign) FirstRank() string {
+	if len(c.Ranks) == 0 {
+		return ""
+	}
+	return c.Ranks[0]
+}
+
 // MissionNumber is how the campaign names a scenario by number, e.g. "Sortie 001" (Intro.md mission_term, "Scenario" by default).
 func (c *Campaign) MissionNumber(sc Scenario) string { return c.MissionTerm + " " + sc.Number }
 

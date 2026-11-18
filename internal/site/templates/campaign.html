@@ -29,7 +29,7 @@
 </ul>
 <p class="downloads"><button type="button" class="button" id="wizard-open">Start campaign</button></p>
 </section>
-<dialog id="start-wizard" class="wizard" aria-labelledby="wiz-title" data-campaign="{{.Campaign.Slug}}" data-max-bv="{{.Campaign.StartingBV}}" data-min-mechs="{{.Campaign.StartingMinMechs}}" data-faction="{{.Campaign.AvailabilityFaction}}" data-era="{{.Campaign.AvailabilityEra}}" data-pilots="{{.Campaign.StartingNamedPilots}}" data-min-players="{{.Campaign.MinPlayers}}" data-max-players="{{.Campaign.MaxPlayers}}" data-sp="{{.Campaign.StartingPilotSP}}" data-ladders="{{.Ladders}}" data-portraits="{{.Portraits}}" data-abilities="{{.Abilities}}">
+<dialog id="start-wizard" class="wizard" aria-labelledby="wiz-title" data-campaign="{{.Campaign.Slug}}" data-first-rank="{{.Campaign.FirstRank}}" data-max-bv="{{.Campaign.StartingBV}}" data-min-mechs="{{.Campaign.StartingMinMechs}}" data-faction="{{.Campaign.AvailabilityFaction}}" data-era="{{.Campaign.AvailabilityEra}}" data-pilots="{{.Campaign.StartingNamedPilots}}" data-min-players="{{.Campaign.MinPlayers}}" data-max-players="{{.Campaign.MaxPlayers}}" data-sp="{{.Campaign.StartingPilotSP}}" data-ladders="{{.Ladders}}" data-portraits="{{.Portraits}}" data-abilities="{{.Abilities}}">
   <form id="wiz-form" autocomplete="off" novalidate>
     <h2 id="wiz-title"></h2>
     <div id="wiz-body"></div>
@@ -50,6 +50,7 @@
 <script src="/static/allocator.js" defer></script>
 <script src="/static/abilitycard.js" defer></script>
 <script src="/static/mechrow.js" defer></script>
+<script src="/static/pilotcard.js" defer></script>
 <script src="/static/unitsearch.js" defer></script>
 <script src="/static/pilotnames.js" defer></script>
 <script src="/static/campaign.js" defer></script>
