@@ -1452,3 +1452,9 @@ dialog.abort-dialog { padding: 0; width: min(92vw, 34rem); }
 .campaign-problems h2 { margin: 0 0 0.4rem; font-size: 1rem; color: #ff5a4d; }
 .campaign-problems ul { margin: 0; padding-left: 1.2rem; }
 .campaign-problems code { white-space: pre-wrap; }
+/* The start wizard's switch between picking mechs and linking a MekBay hangar. */
+.wiz-modes { display: inline-flex; margin: 0.4rem 0 0.8rem; border: 1px solid var(--line); }
+dialog .wiz-modes button.wiz-mode { padding: 0.45rem 0.9rem; border: 0; background: transparent; color: var(--muted); font: 700 0.8rem var(--display); letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer; }
+dialog .wiz-modes button.wiz-mode + button.wiz-mode { border-left: 1px solid var(--line); }
+dialog .wiz-modes button.wiz-mode.active { background: var(--accent); color: var(--accent-ink); }
+dialog .wiz-modes button.wiz-mode:focus-visible { outline: 2px solid var(--text); outline-offset: -2px; }
