@@ -29,7 +29,7 @@ type CommitBattleReport struct {
 }
 
 // commitState copies what a battle recorded on its units (the state: damage, critical hits, ammunition, rule checks) onto the hangar's units with the same ID and
-// design. The hangar keeps its own crew: who pilots a mech is a matter of each sortie, and a pilot's wounds are not carried back.
+// design. The crew is not carried back and the unit's crew is cleared: pilots are assigned during an operation only, so the hangar never holds a named pilot.
 func commitState(hangar map[string]any, battle map[string]map[string]any) CommitBattleReport {
 	var rep CommitBattleReport
 	used := map[string]bool{}
@@ -53,15 +53,7 @@ func commitState(hangar map[string]any, battle map[string]map[string]any) Commit
 			if ns == nil {
 				ns = map[string]any{}
 			}
-			if old, _ := um["state"].(map[string]any); old != nil {
-				if crew, has := old["crew"]; has {
-					ns["crew"] = crew
-				} else {
-					delete(ns, "crew")
-				}
-			} else {
-				delete(ns, "crew")
-			}
+			delete(ns, "crew") // pilots are assigned during an operation only: a unit back in the hangar has the default, unnamed crew
 			um["state"] = ns
 			used[id] = true
 			rep.Matched++
