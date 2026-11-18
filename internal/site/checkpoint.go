@@ -307,22 +307,15 @@ func (c *MekBayClient) CopyForce(ctx context.Context, req CopyRequest) error {
 		return err
 	}
 	defer s.close()
-	raw, err := s.call(ctx, map[string]any{"action": "getForce", "uuid": req.OwnerUID, "instanceId": req.Source, "ownedOnly": false})
+	data, err := s.getForce(ctx, req.Source, false)
 	if err != nil {
 		return err
 	}
-	var reply struct {
-		Data map[string]any `json:"data"`
-	}
-	if err := json.Unmarshal(raw, &reply); err != nil || reply.Data == nil {
+	if data == nil {
 		return errors.New("MekBay has no force to copy")
 	}
-	data := reply.Data
-	delete(data, "owned")
 	data["instanceId"] = req.Target
-	data["timestamp"] = mekbayTime(time.Now())
-	_, err = s.call(ctx, map[string]any{"action": "saveForce", "uuid": req.OwnerUID, "data": data, "savedForceCount": 1})
-	return err
+	return s.saveForce(ctx, data, time.Now())
 }
 
 // DeleteForce deletes forces of the owner's in MekBay (best effort: MekBay does not acknowledge a deletion).

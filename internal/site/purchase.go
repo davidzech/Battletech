@@ -2,7 +2,6 @@ package site
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -70,30 +69,10 @@ func addUnitsToForce(force map[string]any, unitIDs []string, now time.Time) {
 
 // PurchaseUnits adds units to the player's hangar force. It needs the owner's UID, because MekBay only accepts the owner's saves.
 func (c *MekBayClient) PurchaseUnits(ctx context.Context, req PurchaseRequest) error {
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-	s, err := dialMekBay(ctx, c.url(), req.OwnerUID)
-	if err != nil {
-		return err
-	}
-	defer s.close()
-	raw, err := s.call(ctx, map[string]any{"action": "getForce", "uuid": req.OwnerUID, "instanceId": req.Instance, "ownedOnly": false})
-	if err != nil {
-		return err
-	}
-	var reply struct {
-		Data map[string]any `json:"data"`
-	}
-	if err := json.Unmarshal(raw, &reply); err != nil || reply.Data == nil {
-		return errors.New("MekBay has no force for your hangar link; check that the link is saved in MekBay")
-	}
-	force := reply.Data
-	now := time.Now()
-	addUnitsToForce(force, req.Units, now)
-	delete(force, "owned") // set by the server for readers; the app never sends it back
-	force["timestamp"] = mekbayTime(now)
-	_, err = s.call(ctx, map[string]any{"action": "saveForce", "uuid": req.OwnerUID, "data": force, "savedForceCount": 1})
-	return err
+	return c.editForce(ctx, req.OwnerUID, req.Instance, func(force map[string]any, now time.Time) error {
+		addUnitsToForce(force, req.Units, now)
+		return nil
+	})
 }
 
 // purchaseCost is the SP price of a list of units, or an error naming the first one that can't be bought (not in the catalog, or not a mech).

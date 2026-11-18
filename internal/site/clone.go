@@ -86,21 +86,18 @@ func (c *MekBayClient) CloneHangar(ctx context.Context, req CloneRequest) (Hanga
 		return HangarForce{}, err
 	}
 	defer s.close()
-	raw, err := s.call(ctx, map[string]any{"action": "getForce", "uuid": req.OwnerUID, "instanceId": req.Source, "ownedOnly": false})
+	data, err := s.getForce(ctx, req.Source, false)
 	if err != nil {
 		return HangarForce{}, err
 	}
-	var reply struct {
-		Data map[string]any `json:"data"`
-	}
-	if err := json.Unmarshal(raw, &reply); err != nil || reply.Data == nil {
+	if data == nil {
 		return HangarForce{}, errors.New("MekBay has no force for that hangar link; check that the link is saved in MekBay")
 	}
-	force, err := cloneForce(reply.Data, req.Target, time.Now())
+	force, err := cloneForce(data, req.Target, time.Now())
 	if err != nil {
 		return HangarForce{}, err
 	}
-	if _, err := s.call(ctx, map[string]any{"action": "saveForce", "uuid": req.OwnerUID, "data": force, "savedForceCount": 1}); err != nil {
+	if err := s.saveData(ctx, force); err != nil {
 		return HangarForce{}, err
 	}
 	b, err := json.Marshal(map[string]any{"data": force})

@@ -316,6 +316,63 @@ func (s *mekbaySession) call(ctx context.Context, msg map[string]any) (json.RawM
 	}
 }
 
+// errNoHangarForce is what the hangar edits answer when MekBay no longer has the site's copy of the hangar.
+var errNoHangarForce = errors.New("MekBay no longer has the force for your hangar")
+
+// getForce reads one force's saved data (the decoded JSON of its `data`) as the session's account. It returns nil, nil when MekBay has no such force (or, with
+// ownedOnly, when the account doesn't own it).
+func (s *mekbaySession) getForce(ctx context.Context, instance string, ownedOnly bool) (map[string]any, error) {
+	raw, err := s.call(ctx, map[string]any{"action": "getForce", "uuid": s.uuid, "instanceId": instance, "ownedOnly": ownedOnly})
+	if err != nil {
+		return nil, err
+	}
+	var reply struct {
+		Data map[string]any `json:"data"`
+	}
+	if err := json.Unmarshal(raw, &reply); err != nil {
+		return nil, fmt.Errorf("could not read MekBay's reply: %w", err)
+	}
+	return reply.Data, nil
+}
+
+// saveData saves a force (anything that encodes as one) as the session's account; only the account that owns a force may save it.
+func (s *mekbaySession) saveData(ctx context.Context, force any) error {
+	_, err := s.call(ctx, map[string]any{"action": "saveForce", "uuid": s.uuid, "data": force, "savedForceCount": 1})
+	return err
+}
+
+// saveForce saves a force read with getForce after changing it: the "owned" flag MekBay sets for readers is dropped (the app never sends it back) and the
+// timestamp is set to now, so every device that has the force loaded takes the new version.
+func (s *mekbaySession) saveForce(ctx context.Context, force map[string]any, now time.Time) error {
+	delete(force, "owned")
+	force["timestamp"] = mekbayTime(now)
+	return s.saveData(ctx, force)
+}
+
+// editForce reads one of the owner's forces, changes it with edit and saves it, on one connection. It is how every change to the site's copy of a hangar is
+// made (repairs, rearms, purchases, sales, swaps).
+func (c *MekBayClient) editForce(ctx context.Context, owner, instance string, edit func(force map[string]any, now time.Time) error) error {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	s, err := dialMekBay(ctx, c.url(), owner)
+	if err != nil {
+		return err
+	}
+	defer s.close()
+	force, err := s.getForce(ctx, instance, false)
+	if err != nil {
+		return err
+	}
+	if force == nil {
+		return errNoHangarForce
+	}
+	now := time.Now()
+	if err := edit(force, now); err != nil {
+		return err
+	}
+	return s.saveForce(ctx, force, now)
+}
+
 func newID() string {
 	id, err := uuid.NewV7()
 	if err != nil {

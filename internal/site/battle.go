@@ -154,22 +154,9 @@ func (c *MekBayClient) StartBattle(ctx context.Context, req BattleRequest) (Batt
 	}
 	defer s.close()
 	get := func(instance string, ownedOnly bool) (map[string]any, error) {
-		raw, err := s.call(ctx, map[string]any{"action": "getForce", "uuid": req.Account, "instanceId": instance, "ownedOnly": ownedOnly})
-		if err != nil {
-			return nil, err
-		}
-		var got struct {
-			Data map[string]any `json:"data"`
-		}
-		if err := json.Unmarshal(raw, &got); err != nil {
-			return nil, err
-		}
-		return got.Data, nil
+		return s.getForce(ctx, instance, ownedOnly)
 	}
-	save := func(force any) error {
-		_, err := s.call(ctx, map[string]any{"action": "saveForce", "uuid": req.Account, "data": force, "savedForceCount": 1})
-		return err
-	}
+	save := func(force any) error { return s.saveData(ctx, force) }
 
 	// The OpFor's force: the one from an earlier start of this battle, or a fresh one.
 	res := BattleResult{OpForInstance: req.OpFor.Reuse}

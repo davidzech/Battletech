@@ -2,7 +2,6 @@ package site
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -119,32 +118,9 @@ type SwapRequest struct {
 
 // SwapUnit reconfigures a unit in the hangar force. It needs the owner's UID, because MekBay only accepts the owner's saves.
 func (c *MekBayClient) SwapUnit(ctx context.Context, req SwapRequest) error {
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-	s, err := dialMekBay(ctx, c.url(), req.OwnerUID)
-	if err != nil {
-		return err
-	}
-	defer s.close()
-	raw, err := s.call(ctx, map[string]any{"action": "getForce", "uuid": req.OwnerUID, "instanceId": req.Instance, "ownedOnly": false})
-	if err != nil {
-		return err
-	}
-	var reply struct {
-		Data map[string]any `json:"data"`
-	}
-	if err := json.Unmarshal(raw, &reply); err != nil || reply.Data == nil {
-		return errors.New("MekBay has no force for your hangar; try importing it again")
-	}
-	force := reply.Data
-	now := time.Now()
-	if err := swapUnitState(force, req.UnitID, req.To, now); err != nil {
-		return err
-	}
-	delete(force, "owned") // set by the server for readers; the app never sends it back
-	force["timestamp"] = mekbayTime(now)
-	_, err = s.call(ctx, map[string]any{"action": "saveForce", "uuid": req.OwnerUID, "data": force, "savedForceCount": 1})
-	return err
+	return c.editForce(ctx, req.OwnerUID, req.Instance, func(force map[string]any, now time.Time) error {
+		return swapUnitState(force, req.UnitID, req.To, now)
+	})
 }
 
 // swapUnit is POST /api/hangar/swap: reconfigure the hangar unit named by `unit` to the variant `to`. The server works the price out itself, refuses a unit that isn't

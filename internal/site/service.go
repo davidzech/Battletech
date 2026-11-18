@@ -2,7 +2,6 @@ package site
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -267,31 +266,9 @@ func repairState(state map[string]any, crits []any, level string, tons float64) 
 
 // ServiceUnit repairs or rearms a unit in the player's hangar force. It needs the owner's UID, because MekBay only accepts the owner's saves.
 func (c *MekBayClient) ServiceUnit(ctx context.Context, req ServiceRequest) error {
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-	s, err := dialMekBay(ctx, c.url(), req.OwnerUID)
-	if err != nil {
-		return err
-	}
-	defer s.close()
-	raw, err := s.call(ctx, map[string]any{"action": "getForce", "uuid": req.OwnerUID, "instanceId": req.Instance, "ownedOnly": false})
-	if err != nil {
-		return err
-	}
-	var reply struct {
-		Data map[string]any `json:"data"`
-	}
-	if err := json.Unmarshal(raw, &reply); err != nil || reply.Data == nil {
-		return errors.New("MekBay has no force for your hangar link; check that the link is saved in MekBay")
-	}
-	force := reply.Data
-	if err := serviceUnitState(force, req.UnitID, req.Kind, req.Level, req.Tons); err != nil {
-		return err
-	}
-	delete(force, "owned") // set by the server for readers; the app never sends it back
-	force["timestamp"] = mekbayTime(time.Now())
-	_, err = s.call(ctx, map[string]any{"action": "saveForce", "uuid": req.OwnerUID, "data": force, "savedForceCount": 1})
-	return err
+	return c.editForce(ctx, req.OwnerUID, req.Instance, func(force map[string]any, _ time.Time) error {
+		return serviceUnitState(force, req.UnitID, req.Kind, req.Level, req.Tons)
+	})
 }
 
 // serviceUnit is POST /api/hangar/service: repair or rearm one unit of the hangar, paid for from the warchest. It needs modify mode, since
