@@ -410,7 +410,7 @@ func TestDeployFlow(t *testing.T) {
 	if r := get(t, srv, hangar, cookie); r.StatusCode != http.StatusBadRequest {
 		t.Fatalf("hangar before naming the company: %d", r.StatusCode)
 	}
-	if r := post(t, srv, "/api/account", url.Values{"uid_p1": {uidP1}, "account": {"Wolf's Dragoons"}}, cookie, srv.URL); r.StatusCode != http.StatusNoContent {
+	if r := post(t, srv, "/api/account", url.Values{"account": {"Wolf's Dragoons"}}, cookie, srv.URL); r.StatusCode != http.StatusNoContent {
 		t.Fatalf("company: %d", r.StatusCode)
 	}
 	if r := get(t, srv, hangar, cookie); r.StatusCode != http.StatusBadRequest {

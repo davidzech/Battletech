@@ -106,11 +106,6 @@
   var forceName = '';
   var players = minPlayers;
   var total = lead + pilotCount + 1;
-  // Every player takes their own force into the lobby, owned by their own MekBay account, so starting with N players needs Players 1 to N's user IDs saved in the
-  // company settings. The page only knows which are saved (booleans), never the IDs.
-  var playerIds = [];
-  try { playerIds = JSON.parse(wiz.dataset.playerIds || '[]'); } catch (e) { playerIds = []; }
-  function missingId(n) { for (var i = 0; i < n; i++) if (!playerIds[i]) return i + 1; return 0; }
 
   var title = document.getElementById('wiz-title');
   var body = document.getElementById('wiz-body');
@@ -183,7 +178,6 @@
         b.type = 'button';
         b.setAttribute('aria-pressed', n === players ? 'true' : 'false');
         b.setAttribute('aria-label', n + (n === 1 ? ' player' : ' players'));
-        if (missingId(n)) { b.disabled = true; b.title = 'Player ' + missingId(n) + ' needs a MekBay user ID: add it under Account details.'; }
         b.addEventListener('click', function () {
           players = n;
           [].forEach.call(pick.children, function (c, i) { c.setAttribute('aria-pressed', minPlayers + i === players ? 'true' : 'false'); });
@@ -192,7 +186,6 @@
       })(n);
     }
     body.appendChild(pick);
-    if (missingId(maxPlayers)) body.appendChild(el('p', 'muted', 'A count is offered only when each of those players has a MekBay user ID saved. Add the rest under Account details (the company button, top right).'));
   }
 
   function renderPilot(idx) {
@@ -556,8 +549,6 @@
 
   // The problem with the current step, or ''.
   function problem() {
-    var gap = missingId(players);
-    if (gap) return 'Player ' + gap + ' needs a MekBay user ID: add it under Account details.';
     if (step === 0) return forceName.trim() ? '' : 'Name your force.';
     if (asksPlayers && step === 1) return '';
     if (step >= lead + pilotCount) {

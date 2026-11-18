@@ -122,7 +122,7 @@ func TestCampaignLog(t *testing.T) {
 	if !strings.Contains(page, `id="show-all-scenarios"`) || !strings.Contains(page, "Show all Scenarios") || !strings.Contains(page, "/static/scenariolist.js") {
 		t.Error("the campaign page offers a Show all Scenarios checkbox while some are locked")
 	}
-	post(t, srv, "/api/account", url.Values{"account": {"Wolf Pack"}, "uid_p1": {uidP1}}, cookie, srv.URL)
+	post(t, srv, "/api/account", url.Values{"account": {"Wolf Pack"}}, cookie, srv.URL)
 	if got := complete("scenario_000", "1"); got != http.StatusBadRequest {
 		t.Errorf("an unstarted campaign has no log: %d", got)
 	}

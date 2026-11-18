@@ -6,17 +6,17 @@ import (
 )
 
 // The multiplayer lobby operation. A Deploy will end in a MekBay operation the players join as a lobby: one force for each player, owned by that player's own
-// MekBay account so they can run it, and the OpFor's force(s), owned by the site. This file is the backend's plan for it, with no MekBay calls yet: given a
+// derived MekBay account (the player runs it through a MekBay link), and the OpFor's force(s), owned by the OpFor's derived account. This file is the backend's plan for it, with no MekBay calls yet: given a
 // validated deployment plan and the accounts, it says which account owns each force and what goes in it, so the MekBay writer that comes next only has to
 // carry the plan out. It is built (and so checked) by the dry-run POST /api/deploy/plan.
 //
 // Ownership:
 //
-//	each player's force   the player's own MekBay user ID (Player 1 to 4, saved in the company settings)
+//	each player's force   the player's derived account (MekBayUID, SlotPlayer(n))
 //	the OpFor's forces    the synthesized OpFor account (MekBayUID, SlotOpFor)
 //	the hangar            the synthesized hangar account (MekBayUID, SlotHangar): the units stay there, and a player's force is built from the units they took
 //
-// The IDs are secrets. LobbyForce.Owner never leaves the server: it is excluded from JSON and must not be logged.
+// The accounts are secrets. LobbyForce.Owner never leaves the server: it is excluded from JSON and must not be logged.
 
 // LobbyForce is one force of the lobby operation.
 type LobbyForce struct {
@@ -35,32 +35,19 @@ type LobbyPlan struct {
 	OpFor   LobbyForce   `json:"opfor"`
 }
 
-// buildLobbyPlan assigns the accounts for a plan: units[i] and crews[i] are player i+1's mechs and pilot assignments, playerUIDs the saved MekBay user IDs. It
-// refuses a plan whose players lack an ID, and IDs that collide with each other or with the site's own accounts (a player must never own the OpFor).
-func buildLobbyPlan(seed string, playerUIDs [maxPlayers]string, units [][]string, crews [][]CrewAssignment) (LobbyPlan, error) {
+// buildLobbyPlan assigns the accounts for a plan: units[i] and crews[i] are player i+1's mechs and pilot assignments. Every account is derived from the seed, so
+// the plan needs nothing from the player; it refuses only a plan with no seed or a number of players a lobby can't have.
+func buildLobbyPlan(seed string, units [][]string, crews [][]CrewAssignment) (LobbyPlan, error) {
 	n := len(units)
 	if n < 1 || n > maxPlayers {
 		return LobbyPlan{}, fmt.Errorf("a lobby has 1 to %d players", maxPlayers)
-	}
-	var saved [maxPlayers]bool
-	for i, uid := range playerUIDs {
-		saved[i] = uid != ""
-	}
-	if msg := playerIDsProblem(saved, n); msg != "" {
-		return LobbyPlan{}, errors.New(msg)
 	}
 	plan := LobbyPlan{Hangar: accountUID(seed, SlotHangar), OpFor: LobbyForce{Name: "OpFor", Owner: accountUID(seed, SlotOpFor)}}
 	if plan.Hangar == "" || plan.OpFor.Owner == "" {
 		return LobbyPlan{}, errors.New("a lobby needs a seed")
 	}
-	owners := map[string]string{plan.Hangar: "the hangar", plan.OpFor.Owner: "the OpFor"}
 	for i := 0; i < n; i++ {
-		uid := playerUIDs[i]
-		if who, dup := owners[uid]; dup {
-			return LobbyPlan{}, fmt.Errorf("%s's MekBay user ID is the same as %s's, and every force needs its own owner.", playerLabel(i), who)
-		}
-		owners[uid] = playerLabel(i)
-		f := LobbyForce{Name: playerLabel(i), Player: i + 1, Owner: uid, Units: units[i]}
+		f := LobbyForce{Name: playerLabel(i), Player: i + 1, Owner: accountUID(seed, SlotPlayer(i+1)), Units: units[i]}
 		if i < len(crews) {
 			f.Crew = crews[i]
 		}
@@ -72,7 +59,7 @@ func buildLobbyPlan(seed string, playerUIDs [maxPlayers]string, units [][]string
 // lobbyForceView is how a plan describes a force to the page: who it belongs to, never the account.
 type lobbyForceView struct {
 	Name  string `json:"name"`
-	Owner string `json:"owner"` // "player" (their own MekBay account) or "site" (managed by the site)
+	Owner string `json:"owner"` // "player" (the player's derived account) or "site" (the OpFor's)
 	Units int    `json:"units"` // mechs taken from the hangar (0 for the OpFor, whose units come from the scenario)
 }
 

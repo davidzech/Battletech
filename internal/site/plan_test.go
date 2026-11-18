@@ -47,7 +47,7 @@ func TestDeployPlanEndpoint(t *testing.T) {
 	fake := &fakeMekBay{hangar: startingHangar()} // ua Koshi, ub Uller, uc Dasher, ud Grizzly
 	srv, store := newMekBayTestServer(t, fake)
 	cookie := post(t, srv, "/api/seed", url.Values{"seed": {"wolfpack2026"}}, nil, "").Cookies()[0]
-	post(t, srv, "/api/account", url.Values{"uid_p1": {uidP1}, "account": {"Wolf Pack"}}, cookie, srv.URL)
+	post(t, srv, "/api/account", url.Values{"account": {"Wolf Pack"}}, cookie, srv.URL)
 	if r := post(t, srv, "/api/campaign/start", startForm(goodHangar, "Alrek", "Katarina"), cookie, srv.URL); r.StatusCode != http.StatusNoContent {
 		t.Fatalf("start: %d", r.StatusCode)
 	}
@@ -90,11 +90,6 @@ func TestDeployPlanEndpoint(t *testing.T) {
 	if c := one.Players[0].Crew; len(c) != 1 || c[0].Pilot != "Alrek" || c[0].Gunnery != alrek.Gunnery() || c[0].Piloting != alrek.Piloting() || c[0].UnitName == "" {
 		t.Errorf("crew: %+v", one.Players[0].Crew)
 	}
-	// Two players need Player 2's MekBay user ID saved too, since each takes their own force into the lobby.
-	if got := plan("players", "2", "p1_units", "ua", "p2_units", "ub").StatusCode; got != http.StatusBadRequest {
-		t.Errorf("two players without Player 2's ID: %d", got)
-	}
-	post(t, srv, "/api/account", url.Values{"uid_p1": {uidP1}, "uid_p2": {uidP2}, "account": {"Wolf Pack"}}, cookie, srv.URL)
 	// Two players split the mechs and the pilots; the total BV is the two players' together.
 	two := read(plan("players", "2", "p1_units", "ua", "p1_units", "ub", "p1_assign_unit", "ua", "p1_assign_pilot", "Alrek",
 		"p2_units", "uc", "p2_assign_unit", "uc", "p2_assign_pilot", "Katarina"))

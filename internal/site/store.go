@@ -23,8 +23,6 @@ type Store struct {
 type Playthrough struct {
 	ID          string // hash of the seed, never the seed itself
 	AccountName string // the company's name in the lore, e.g. "Wolf's Dragoons" ("" until named)
-	// PlayerIDs says which players (1 to 4) have a saved MekBay user ID. The IDs themselves are secret and never leave the store (see accounts.go).
-	PlayerIDs [maxPlayers]bool
 }
 
 // Configured reports whether the company has been named, which is what setting a seed up amounts to.
@@ -94,12 +92,8 @@ func (s *Store) schemaStatements() []string {
 	hangar_instance TEXT NOT NULL DEFAULT '',
 	PRIMARY KEY (playthrough_id, campaign)
 )`, s.timestampColumn()),
-		`CREATE TABLE IF NOT EXISTS player_accounts (
-	playthrough_id TEXT NOT NULL,
-	slot           TEXT NOT NULL,
-	uid            TEXT NOT NULL,
-	PRIMARY KEY (playthrough_id, slot)
-)`,
+		// The players' own MekBay user IDs are no longer asked for (every player's account is derived from the seed); forget any that were saved.
+		`DROP TABLE IF EXISTS player_accounts`,
 		fmt.Sprintf(`CREATE TABLE IF NOT EXISTS scenario_completions (
 	playthrough_id TEXT NOT NULL REFERENCES playthroughs(id) ON DELETE CASCADE,
 	campaign       TEXT NOT NULL,
@@ -367,9 +361,6 @@ func (s *Store) Playthrough(ctx context.Context, id string) (p Playthrough, ok b
 		return Playthrough{}, false, nil
 	}
 	if err != nil {
-		return p, false, err
-	}
-	if err := s.loadPlayerIDs(ctx, &p); err != nil {
 		return p, false, err
 	}
 	return p, true, nil

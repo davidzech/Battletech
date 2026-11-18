@@ -1304,13 +1304,6 @@ dialog button.deploy-count[aria-pressed="true"] { color: var(--accent-ink); back
 #swap-select option.swap-down, #swap-select.swap-down { color: #e5594f; }
 
 /* The company settings' MekBay user IDs, one row per player. */
-.mekbay-ids { margin: 1rem 0 0; padding: 0; border: 0; min-width: 0; }
-.mekbay-ids legend { padding: 0; font: 700 0.8rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; }
-.mekbay-ids .optional { font-weight: 400; color: var(--muted); letter-spacing: 0.04em; text-transform: none; }
-.mekbay-ids .hint { margin: 0.3rem 0 0.5rem; font-size: 0.85rem; color: var(--muted); }
-.mekbay-id-row { display: grid; grid-template-columns: 5.2rem minmax(0, 1fr) 4.6rem; align-items: center; gap: 0.5rem; margin-top: 0.4rem; }
-.mekbay-id-row > label:first-child { font: 700 0.75rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; }
-.mekbay-id-row input.mekbay-id { margin: 0; }
 
 /* The Manage page's Overview: the default player count, the same segmented picker as the Deploy wizard's. */
 .overview-players { align-content: center; }

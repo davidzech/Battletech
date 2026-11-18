@@ -128,11 +128,6 @@ func (s *Server) deployPlan(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, msg, http.StatusBadRequest)
 		return
 	}
-	// Every player takes their own force into the lobby, owned by their own MekBay account, so each needs a user ID saved.
-	if msg := playerIDsProblem(pt.PlayerIDs, n); msg != "" {
-		http.Error(w, msg, http.StatusBadRequest)
-		return
-	}
 	h, err := s.scenarioHangar(r.Context(), run, sc)
 	if err != nil {
 		log.Printf("read hangar for the plan: %v", err)
@@ -199,12 +194,7 @@ func (s *Server) deployPlan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Build the lobby's plan (who owns each force) now, so a plan the real deploy couldn't carry out is refused here.
-	uids, err := s.store.PlayerUIDs(r.Context(), pt.ID)
-	if err != nil {
-		http.Error(w, "could not load your MekBay user IDs", http.StatusInternalServerError)
-		return
-	}
-	lobby, err := buildLobbyPlan(currentSeed(r), uids, units, crews)
+	lobby, err := buildLobbyPlan(currentSeed(r), units, crews)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return

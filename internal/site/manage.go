@@ -86,14 +86,13 @@ func (s *Server) forceJSON(w http.ResponseWriter, r *http.Request) {
 }
 
 // setPlayers is POST /api/campaign/players: change how many players the company plays a started campaign with (the Manage page's Overview). The count is only the
-// Deploy wizard's default, which can still be changed for each deploy, but it is held to the same rules as at the start: within the campaign's range, with a MekBay
-// user ID saved for each of those players.
+// Deploy wizard's default, which can still be changed for each deploy, but it is held to the same rule as at the start: within the campaign's range.
 func (s *Server) setPlayers(w http.ResponseWriter, r *http.Request) {
 	pt, c, ok := s.pilotRequest(w, r)
 	if !ok {
 		return
 	}
-	n, err := parseStartingPlayers(r.PostFormValue("players"), c, pt.PlayerIDs)
+	n, err := parseStartingPlayers(r.PostFormValue("players"), c)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return

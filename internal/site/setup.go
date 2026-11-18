@@ -106,25 +106,6 @@ func (s *Server) setAccount(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	// Each player's MekBay user ID is optional here: a UUID saves it, a blank field keeps what is saved, and a ticked Forget box forgets it. Every field is checked
-	// before any is saved, and two players can't share an ID (each holds their own force in the lobby).
-	var uids [maxPlayers]string
-	var clear [maxPlayers]bool
-	for i := 0; i < maxPlayers; i++ {
-		uid, err := parsePlayerUID(r.PostFormValue(fmt.Sprintf("uid_p%d", i+1)))
-		if err != nil {
-			http.Error(w, playerLabel(i)+": "+err.Error(), http.StatusBadRequest)
-			return
-		}
-		uids[i] = uid
-		clear[i] = r.PostFormValue(fmt.Sprintf("clear_uid_p%d", i+1)) != ""
-		for j := 0; j < i; j++ {
-			if uid != "" && uid == uids[j] {
-				http.Error(w, playerLabel(j)+" and "+playerLabel(i)+" can't share a MekBay user ID.", http.StatusBadRequest)
-				return
-			}
-		}
-	}
 	id := playthroughID(seed)
 	if _, err := s.store.EnsurePlaythrough(r.Context(), id); err != nil {
 		http.Error(w, "could not save account", http.StatusInternalServerError)
@@ -133,14 +114,6 @@ func (s *Server) setAccount(w http.ResponseWriter, r *http.Request) {
 	if err := s.store.SetAccountName(r.Context(), id, name); err != nil {
 		http.Error(w, "could not save account", http.StatusInternalServerError)
 		return
-	}
-	for i := 0; i < maxPlayers; i++ {
-		if uids[i] != "" || clear[i] {
-			if err := s.store.SetPlayerAccount(r.Context(), id, i, uids[i]); err != nil {
-				http.Error(w, "could not save account", http.StatusInternalServerError)
-				return
-			}
-		}
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -212,7 +185,7 @@ func (s *Server) startCampaign(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	players, err := parseStartingPlayers(r.PostFormValue("players"), c, pt.PlayerIDs)
+	players, err := parseStartingPlayers(r.PostFormValue("players"), c)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -248,20 +221,15 @@ func (s *Server) startCampaign(w http.ResponseWriter, r *http.Request) {
 }
 
 // parseStartingPlayers reads how many players the company plays the campaign with: a whole number within the campaign's range (a campaign that allows only one
-// count needs none sent), and every one of those players must have a MekBay user ID saved. The count is only the Deploy wizard's default, which can be changed
-// for each deploy.
-func parseStartingPlayers(raw string, c *Campaign, saved [maxPlayers]bool) (int, error) {
+// count needs none sent). The count is only the Deploy wizard's default, which can be changed for each deploy.
+func parseStartingPlayers(raw string, c *Campaign) (int, error) {
 	lo, hi := playerRange(c)
-	n := lo
-	if lo != hi {
-		var err error
-		if n, err = strconv.Atoi(strings.TrimSpace(raw)); err != nil || n < lo || n > hi {
-			return 0, fmt.Errorf("Choose how many players, from %d to %d.", lo, hi)
-		}
+	if lo == hi {
+		return lo, nil
 	}
-	// Every player takes their own force into the lobby, owned by their own MekBay account, so each needs a user ID saved first.
-	if msg := playerIDsProblem(saved, n); msg != "" {
-		return 0, errors.New(msg)
+	n, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil || n < lo || n > hi {
+		return 0, fmt.Errorf("Choose how many players, from %d to %d.", lo, hi)
 	}
 	return n, nil
 }

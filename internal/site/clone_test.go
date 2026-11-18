@@ -78,7 +78,7 @@ func TestStartClonesTheHangar(t *testing.T) {
 	srv, store := newMekBayTestServer(t, fake)
 	ctx := context.Background()
 	cookie := post(t, srv, "/api/seed", url.Values{"seed": {"wolfpack2026"}}, nil, "").Cookies()[0]
-	post(t, srv, "/api/account", url.Values{"uid_p1": {uidP1}, "account": {"Wolf Pack"}}, cookie, srv.URL)
+	post(t, srv, "/api/account", url.Values{"account": {"Wolf Pack"}}, cookie, srv.URL)
 	if r := post(t, srv, "/api/campaign/start", startForm(goodHangar+"&sel=abc", "Alrek", "Katarina"), cookie, srv.URL); r.StatusCode != http.StatusNoContent {
 		t.Fatalf("start: %d", r.StatusCode)
 	}
@@ -113,7 +113,7 @@ func TestStartClonesTheHangar(t *testing.T) {
 	fake2 := &fakeMekBay{hangar: startingHangar()}
 	srv2, store2 := newMekBayTestServer(t, fake2)
 	cookie2 := post(t, srv2, "/api/seed", url.Values{"seed": {"wolfpack2027"}}, nil, "").Cookies()[0]
-	post(t, srv2, "/api/account", url.Values{"uid_p1": {uidP1}, "account": {"Wolf Pack"}}, cookie2, srv2.URL)
+	post(t, srv2, "/api/account", url.Values{"account": {"Wolf Pack"}}, cookie2, srv2.URL)
 	fake2.setHangar(startingHangar(), nil)
 	fake2.mu.Lock()
 	fake2.cloneErr = context.DeadlineExceeded
@@ -132,7 +132,7 @@ func TestStartChoosesEdgeAbilities(t *testing.T) {
 	srv, store := newMekBayTestServer(t, fake)
 	ctx := context.Background()
 	cookie := post(t, srv, "/api/seed", url.Values{"seed": {"wolfpack2026"}}, nil, "").Cookies()[0]
-	post(t, srv, "/api/account", url.Values{"uid_p1": {uidP1}, "account": {"Wolf Pack"}}, cookie, srv.URL)
+	post(t, srv, "/api/account", url.Values{"account": {"Wolf Pack"}}, cookie, srv.URL)
 	form := func(abilities ...string) url.Values {
 		v := startForm(goodHangar, "Alrek", "Katarina")
 		v.Set("pilot0_gunnery", "30")

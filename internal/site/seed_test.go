@@ -207,15 +207,15 @@ func TestSeedAndCampaignFlow(t *testing.T) {
 	}
 
 	// Naming the company needs a seed cookie and a sensible name.
-	if r := post(t, srv, "/api/account", url.Values{"uid_p1": {uidP1}, "account": {"Wolf's Dragoons"}}, nil, ""); r.StatusCode != http.StatusBadRequest {
+	if r := post(t, srv, "/api/account", url.Values{"account": {"Wolf's Dragoons"}}, nil, ""); r.StatusCode != http.StatusBadRequest {
 		t.Fatalf("company without a seed: got %d", r.StatusCode)
 	}
 	for _, bad := range []string{"", "   ", "<b>", strings.Repeat("a", 41)} {
-		if r := post(t, srv, "/api/account", url.Values{"uid_p1": {uidP1}, "account": {bad}}, cookie, ""); r.StatusCode != http.StatusBadRequest {
+		if r := post(t, srv, "/api/account", url.Values{"account": {bad}}, cookie, ""); r.StatusCode != http.StatusBadRequest {
 			t.Fatalf("bad company %q: got %d", bad, r.StatusCode)
 		}
 	}
-	if r := post(t, srv, "/api/account", url.Values{"uid_p1": {uidP1}, "account": {"Wolf's Dragoons"}}, cookie, "https://evil.example"); r.StatusCode != http.StatusForbidden {
+	if r := post(t, srv, "/api/account", url.Values{"account": {"Wolf's Dragoons"}}, cookie, "https://evil.example"); r.StatusCode != http.StatusForbidden {
 		t.Fatalf("cross-origin: got %d", r.StatusCode)
 	}
 	if pt, _, _ := store.Playthrough(ctx, id); pt.Configured() {
@@ -228,7 +228,7 @@ func TestSeedAndCampaignFlow(t *testing.T) {
 	}
 
 	// A good name is saved, tidied.
-	if r := post(t, srv, "/api/account", url.Values{"uid_p1": {uidP1}, "account": {"  Wolf's   Dragoons "}}, cookie, srv.URL); r.StatusCode != http.StatusNoContent {
+	if r := post(t, srv, "/api/account", url.Values{"account": {"  Wolf's   Dragoons "}}, cookie, srv.URL); r.StatusCode != http.StatusNoContent {
 		t.Fatalf("good company: got %d", r.StatusCode)
 	}
 	if pt, _, _ := store.Playthrough(ctx, id); !pt.Configured() || pt.AccountName != "Wolf's Dragoons" {
@@ -320,67 +320,25 @@ func TestSeedAndCampaignFlow(t *testing.T) {
 	}
 }
 
-func TestPlayersMekBayIDsInTheCompanySettings(t *testing.T) {
+// The account settings ask for a name and nothing else: no player ever enters a MekBay user ID, and posting one changes nothing.
+func TestAccountSettingsAskForNoMekBayIDs(t *testing.T) {
 	srv, store := newTestServer(t)
-	ctx := context.Background()
 	cookie := post(t, srv, "/api/seed", url.Values{"seed": {"wolfpack2026"}}, nil, "").Cookies()[0]
-	id := playthroughID("wolfpack2026")
-	save := func(kv ...string) int {
-		v := url.Values{"account": {"Wolf's Dragoons"}}
-		for i := 0; i+1 < len(kv); i += 2 {
-			v.Set(kv[i], kv[i+1])
-		}
-		return post(t, srv, "/api/account", v, cookie, srv.URL).StatusCode
-	}
-	// The settings dialog has a field for each of the four players, and none for the OpFor or the hangar, which the site manages.
 	page := body(t, srv, "/", cookie)
-	for _, want := range []string{`name="uid_p1"`, `name="uid_p2"`, `name="uid_p3"`, `name="uid_p4"`} {
-		if !strings.Contains(page, want) {
-			t.Errorf("the company form is missing %s", want)
+	for _, gone := range []string{"uid_p1", "mekbay-id", "MekBay user ID", "clear_uid"} {
+		if strings.Contains(page, gone) {
+			t.Errorf("the account form no longer mentions %q", gone)
 		}
 	}
-	if strings.Contains(page, "uid_p5") || strings.Contains(page, "opfor") {
-		t.Error("only the four players have IDs to enter")
+	if !strings.Contains(page, `name="account"`) {
+		t.Error("the account form still asks for the account name")
 	}
-	if c := save(); c != http.StatusNoContent {
-		t.Fatalf("a name alone: %d", c)
+	if r := post(t, srv, "/api/account", url.Values{"account": {"Wolf's Dragoons"}}, cookie, srv.URL); r.StatusCode != http.StatusNoContent {
+		t.Fatalf("a name, with a stray ID field: %d", r.StatusCode)
 	}
-	if pt, _, _ := store.Playthrough(ctx, id); pt.PlayerIDs != [maxPlayers]bool{} {
-		t.Fatal("no IDs until some are given")
-	}
-	if c := save("uid_p1", "not-a-uid"); c != http.StatusBadRequest {
-		t.Errorf("a malformed ID: %d", c)
-	}
-	if c := save("uid_p1", uidP1, "uid_p2", uidP1); c != http.StatusBadRequest {
-		t.Errorf("two players can't share an ID: %d", c)
-	}
-	if pt, _, _ := store.Playthrough(ctx, id); pt.PlayerIDs != [maxPlayers]bool{} {
-		t.Fatal("a refused request saves nothing, not even the valid half")
-	}
-	if c := save("uid_p1", uidP1, "uid_p2", "  "+strings.ToUpper(uidP2)+" "); c != http.StatusNoContent {
-		t.Fatalf("two IDs: %d", c)
-	}
-	uids, _ := store.PlayerUIDs(ctx, id)
-	if uids != [maxPlayers]string{uidP1, uidP2, "", ""} {
-		t.Fatalf("saved: %+v", uids)
-	}
-	// The page says they are saved but never shows them.
-	page = body(t, srv, "/", cookie)
-	if strings.Contains(page, uidP1) || strings.Contains(page, uidP2) || !strings.Contains(page, "Saved. Leave blank to keep it") || !strings.Contains(page, `name="clear_uid_p1"`) {
-		t.Error("saved IDs are reported, never echoed")
-	}
-	// A blank field keeps what is saved; the Forget box forgets only that player's.
-	if c := save(); c != http.StatusNoContent {
-		t.Fatal(c)
-	}
-	if uids, _ = store.PlayerUIDs(ctx, id); uids[0] != uidP1 || uids[1] != uidP2 {
-		t.Fatalf("a blank field must keep the saved IDs: %+v", uids)
-	}
-	if c := save("clear_uid_p2", "1"); c != http.StatusNoContent {
-		t.Fatal(c)
-	}
-	if uids, _ = store.PlayerUIDs(ctx, id); uids[0] != uidP1 || uids[1] != "" {
-		t.Fatalf("forget: %+v", uids)
+	var n int
+	if err := store.db.QueryRow(`SELECT count(*) FROM sqlite_master WHERE name = 'player_accounts'`).Scan(&n); err != nil || n != 0 {
+		t.Errorf("there is nowhere to keep a player's own ID: %d %v", n, err)
 	}
 }
 

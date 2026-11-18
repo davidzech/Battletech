@@ -36,7 +36,7 @@ func TestStartNeedsAForceNameAndItCanBeRenamed(t *testing.T) {
 	ctx := context.Background()
 	cookie := post(t, srv, "/api/seed", url.Values{"seed": {"wolfpack2026"}}, nil, "").Cookies()[0]
 	id := playthroughID("wolfpack2026")
-	post(t, srv, "/api/account", url.Values{"account": {"My account"}, "uid_p1": {uidP1}}, cookie, srv.URL)
+	post(t, srv, "/api/account", url.Values{"account": {"My account"}}, cookie, srv.URL)
 	start := func(forceName string) int {
 		v := startForm(goodHangar, "Alrek", "Katarina")
 		if forceName == "" {

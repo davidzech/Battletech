@@ -138,7 +138,7 @@ func TestHangarCheckEndpoint(t *testing.T) {
 	if r := check(cookie, goodHangar); r.StatusCode != http.StatusBadRequest {
 		t.Fatalf("no company: %d", r.StatusCode)
 	}
-	post(t, srv, "/api/account", url.Values{"uid_p1": {uidP1}, "account": {"Wolf's Dragoons"}}, cookie, srv.URL)
+	post(t, srv, "/api/account", url.Values{"account": {"Wolf's Dragoons"}}, cookie, srv.URL)
 	if r := check(cookie, "https://evil.example/?instance="+goodInstance); r.StatusCode != http.StatusBadRequest {
 		t.Fatalf("bad link: %d", r.StatusCode)
 	}
@@ -174,7 +174,7 @@ func TestStartingEnforcesTheHangarConditions(t *testing.T) {
 	srv, store := newMekBayTestServer(t, fake)
 	ctx := context.Background()
 	cookie := post(t, srv, "/api/seed", url.Values{"seed": {"wolfpack2026"}}, nil, "").Cookies()[0]
-	post(t, srv, "/api/account", url.Values{"uid_p1": {uidP1}, "account": {"Wolf's Dragoons"}}, cookie, srv.URL)
+	post(t, srv, "/api/account", url.Values{"account": {"Wolf's Dragoons"}}, cookie, srv.URL)
 	id := playthroughID("wolfpack2026")
 	start := func() *http.Response {
 		return post(t, srv, "/api/campaign/start", startForm(goodHangar, "Alrek", "Katarina"), cookie, srv.URL)
