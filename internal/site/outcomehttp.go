@@ -1,0 +1,139 @@
+package site
+
+import (
+	"encoding/json"
+	"errors"
+	"log"
+	"net/http"
+)
+
+// The outcome engine's endpoints: previewing and committing a mission's outcome (see outcomes.go).
+
+// outcomeRequest checks a scenario-outcome request and evaluates it: a same-origin request from a started campaign, for an available scenario with an outcome engine
+// that is not completed yet. It returns what the engine makes of the reported inputs.
+func (s *Server) outcomeRequest(w http.ResponseWriter, r *http.Request) (pt Playthrough, c *Campaign, sc *Scenario, res OutcomeResult, ok bool) {
+	if pt, c, ok = s.pilotRequest(w, r); !ok {
+		return
+	}
+	ok = false
+	sc, found := c.Scenario(r.PostFormValue("scenario"))
+	if !found {
+		http.Error(w, "unknown scenario", http.StatusNotFound)
+		return
+	}
+	if !sc.HasOutcome() {
+		http.Error(w, "This mission has no outcome to report.", http.StatusBadRequest)
+		return
+	}
+	completed, err := s.store.Completions(r.Context(), pt.ID, c.Slug)
+	if err != nil {
+		http.Error(w, "could not load the campaign log", http.StatusInternalServerError)
+		return
+	}
+	if completed[sc.Slug] {
+		http.Error(w, "This mission is already completed.", http.StatusConflict)
+		return
+	}
+	if !c.Available(completed)[sc.Slug] {
+		http.Error(w, "That scenario isn't available yet: complete the one before it first.", http.StatusConflict)
+		return
+	}
+	var in OutcomeInputs
+	if err := json.Unmarshal([]byte(r.PostFormValue("inputs")), &in); err != nil {
+		http.Error(w, "The outcome form could not be read.", http.StatusBadRequest)
+		return
+	}
+	pilots, err := s.store.Pilots(r.Context(), pt.ID, c.Slug)
+	if err != nil {
+		http.Error(w, "could not load your pilots", http.StatusInternalServerError)
+		return
+	}
+	names := map[string]string{}
+	for _, p := range pilots {
+		if !p.Fallen {
+			names[p.ID] = p.Name
+		}
+	}
+	res, err = sc.EvaluateOutcome(in, names)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	return pt, c, sc, res, true
+}
+
+// previewOutcome is POST /api/campaign/scenario-outcome: what the reported inputs would do, without changing anything.
+func (s *Server) previewOutcome(w http.ResponseWriter, r *http.Request) {
+	_, _, _, res, ok := s.outcomeRequest(w, r)
+	if !ok {
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	_ = json.NewEncoder(w).Encode(res)
+}
+
+// commitOutcome completes a scenario that has an outcome engine: the same request as the preview, applied.
+func (s *Server) commitOutcome(w http.ResponseWriter, r *http.Request) {
+	pt, c, sc, res, ok := s.outcomeRequest(w, r)
+	if !ok {
+		return
+	}
+	if !s.writeBackBattle(w, r, pt, c, sc) {
+		return
+	}
+	// Two stages for the hangar: its frozen copy is made now, and the checkpoint that holds it is recorded once the completion is saved.
+	copyID, cerr := "", error(nil)
+	if run, ok, err := s.store.Run(r.Context(), pt.ID, c.Slug); err == nil && ok {
+		copyID, cerr = s.checkpointCopy(r.Context(), currentSeed(r), run)
+	}
+	if cerr != nil {
+		http.Error(w, "Could not save a checkpoint of your hangar in MekBay: "+cerr.Error(), http.StatusBadGateway)
+		return
+	}
+	label := "Completed " + c.MissionName(*sc)
+	switch err := s.store.CompleteWithOutcome(r.Context(), pt.ID, c.Slug, sc.Slug, res); {
+	case errors.Is(err, ErrAlreadyCompleted):
+		http.Error(w, "This mission is already completed.", http.StatusConflict)
+	case errors.Is(err, ErrOutcomePilot):
+		http.Error(w, "One of the pilots is no longer a living named pilot. Reload and report again.", http.StatusConflict)
+	case errors.Is(err, ErrOutcomeFunds):
+		http.Error(w, "That outcome would take the warchest below zero.", http.StatusConflict)
+	case err != nil:
+		http.Error(w, "could not save the outcome", http.StatusInternalServerError)
+	default:
+		s.recordCheckpoint(r.Context(), currentSeed(r), pt.ID, c.Slug, label, copyID)
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if copyID != "" {
+		s.deleteHangars(r.Context(), currentSeed(r), []string{copyID}) // the completion was not saved: the staged copy is not needed
+	}
+}
+
+// writeBackBattle, for a mission fought with the player's own force (not a provided one) that has a battle in progress, writes the battle's units back into the
+// hangar before the mission is completed (see commitbattle.go), so a failure leaves the mission open to try again (writing the same state twice changes nothing). It
+// answers the request itself and returns false when it fails.
+func (s *Server) writeBackBattle(w http.ResponseWriter, r *http.Request, pt Playthrough, c *Campaign, sc *Scenario) bool {
+	if sc.provides() {
+		return true
+	}
+	op, had, err := s.store.MekBayOperation(r.Context(), pt.ID, c.Slug, sc.ID)
+	if err != nil {
+		http.Error(w, "could not load the battle", http.StatusInternalServerError)
+		return false
+	}
+	run, started, err := s.store.Run(r.Context(), pt.ID, c.Slug)
+	if !had || err != nil || !started || !run.Owned() {
+		return true // no battle to write back, or a hangar the site doesn't own
+	}
+	rep, err := s.mekbay.CommitBattle(r.Context(), CommitBattleRequest{OwnerUID: accountUID(currentSeed(r), SlotHangar), HangarInstance: run.HangarInstance, OperationID: op.OperationID})
+	if err != nil {
+		http.Error(w, "Could not write the battle's damage back into your hangar: "+err.Error(), http.StatusBadGateway)
+		return false
+	}
+	if len(rep.Skipped) > 0 {
+		log.Printf("battle write-back: %d units written, no match in the hangar for %v", rep.Matched, rep.Skipped)
+	}
+	return true
+}
