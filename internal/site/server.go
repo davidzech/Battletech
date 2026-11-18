@@ -55,6 +55,7 @@ type Page struct {
 	Cards         []Card
 	HasLocked     bool           // some scenario cards are locked, so the campaign page offers 'Show all scenarios'
 	ScenarioState string         // on a scenario page: completed, available or locked
+	NextScenarios []Scenario     // on a completed scenario's page: the scenarios it leads to, which are now available
 	Ledger        []LedgerEntry  // the keywords the campaign has been granted (on the keywords page)
 	Outcome       *OutcomeResult // on a completed scenario page: the recorded report of its outcome
 	Images        []string       // URLs of the scenario's images
@@ -328,8 +329,17 @@ func (s *Server) scenario(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	var next []Scenario
+	if completed[sc.Slug] {
+		for _, b := range sc.Branches {
+			if n, ok := c.Scenario(b); ok {
+				next = append(next, *n)
+			}
+		}
+	}
 	s.render(w, r, http.StatusOK, "scenario", Page{
 		InProgress:    inProgress,
+		NextScenarios: next,
 		OperationURL:  operationURL,
 		Images:        images,
 		Title:         sc.Title + " | " + c.Label,

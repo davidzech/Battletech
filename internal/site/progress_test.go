@@ -167,6 +167,13 @@ func TestCampaignLog(t *testing.T) {
 	if got := complete("scenario_001", "0"); got != http.StatusNoContent {
 		t.Errorf("unmark 001 for now: %d", got)
 	}
+	// Only a completed scenario's page lists the missions it leads to, one link each.
+	if p := body(t, srv, "/refusalwar/scenario_000/", cookie); !strings.Contains(p, `id="next-missions"`) || !strings.Contains(p, `<li><a href="/refusalwar/scenario_001/">`) {
+		t.Errorf("a completed scenario links to its next missions: %.300s", p)
+	}
+	if p := body(t, srv, "/refusalwar/scenario_001/", cookie); strings.Contains(p, `id="next-missions"`) {
+		t.Error("an uncompleted scenario lists no next missions")
+	}
 	page = cards()
 	if !strings.Contains(page, `<li class="completed"><a class="card completed" href="/refusalwar/scenario_000/">`) || !strings.Contains(page, "Completed &#10003;") || !strings.Contains(page, `<li class="available"><a class="card available" href="/refusalwar/scenario_001/">`) {
 		t.Fatalf("000 is completed (green) and 001 is available: %.1500s", page)

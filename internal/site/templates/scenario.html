@@ -104,4 +104,8 @@
 {{if .Scenario.HasOutcome}}<button type="button" class="button button-outline button-large" id="outcome-open">Complete mission</button>{{else}}<button type="button" class="button button-outline button-large" id="mission-log-toggle">{{if eq .ScenarioState "completed"}}Mark not completed{{else}}Mark completed{{end}}</button>{{end}}
 <p class="form-error" id="mission-log-error" role="alert"></p>
 </section>
-{{end}}{{end}}
+{{end}}{{if and .Run.Started (eq .ScenarioState "completed") .NextScenarios}}<section class="next-missions" id="next-missions">
+<h2>Next missions</h2>
+<ul>{{range .NextScenarios}}<li><a href="/{{$.Campaign.Slug}}/{{.Slug}}/">Sortie {{.Number}}: {{.Title}}</a></li>{{end}}</ul>
+</section>{{end}}
+{{end}}
