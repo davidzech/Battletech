@@ -50,8 +50,15 @@ func TestScenario000Outcomes(t *testing.T) {
 	if res.Pilots[0].Name != "Alrek" || res.Pilots[0].Entered[0] != "Kills: 3" || res.Pilots[0].Notes[0] != "+650 SP" {
 		t.Errorf("the report says what was entered and what follows: %+v", res.Pilots[0])
 	}
-	if !strings.Contains(res.Pilots[1].Notes[0], "permanently removed") {
-		t.Errorf("the rule's own label is the note: %v", res.Pilots[1].Notes)
+	if len(res.Pilots[1].Notes) != 1 || res.Pilots[1].Notes[0] != "Failed Trial of Position with 0 kills. Demoted to Merchant Caste." {
+		t.Errorf("a pilot with no kills fails the Trial: %v", res.Pilots[1].Notes)
+	}
+	// A pilot killed in action reads simply "Killed in Action.", whatever their kills (even none), and each removed pilot earns a free recruit.
+	for _, kills := range []int{0, 2} {
+		res, err := run(entry("a", true, kills, true), entry("b", true, 0, false))
+		if err != nil || len(res.Pilots[0].Notes) != 1 || res.Pilots[0].Notes[0] != "Killed in Action." || !res.Pilots[0].KIA || res.Pilots[0].SP != 0 || res.FreeRecruits != 2 {
+			t.Errorf("killed with %d kills: %+v %v", kills, res, err)
+		}
 	}
 	// A benched pilot is listed but nothing happens to them (Scenario 000 has no pilot SP to share), and nothing else changes.
 	if res, err := run(entry("a", false, 0, false)); err != nil || len(res.Pilots) != 1 || res.Pilots[0].Status != "benched" || res.Pilots[0].Notes[0] != "Benched: no rewards, no losses." || res.FreeRecruits != 0 || res.Warchest != 0 {

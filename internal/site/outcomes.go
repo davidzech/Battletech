@@ -429,7 +429,7 @@ func (sc *Scenario) EvaluateOutcome(in OutcomeInputs, names map[string]string) (
 		}
 		if r.KIA {
 			p.KIA = true
-			notes = append(notes, "Killed in action: removed from the campaign")
+			notes = append(notes, "Killed in Action.")
 		}
 		if r.pool != nil {
 			v, err := r.pool.Number(vars)
@@ -493,7 +493,7 @@ func (sc *Scenario) EvaluateOutcome(in OutcomeInputs, names map[string]string) (
 		p := &res.Pilots[i]
 		if p.Status == "killed" && !p.KIA {
 			p.KIA = true
-			p.Notes = append(p.Notes, "Killed in action: removed from the campaign")
+			p.Notes = append(p.Notes, "Killed in Action.")
 		}
 	}
 	// The pilots' shares come out of the pool: the pilot SP to each active pilot, half to each benched one, nothing to a pilot who was killed. What is left goes to

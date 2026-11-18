@@ -139,7 +139,7 @@
       (res.notes || []).forEach(function (n) { lines.push(n); });
       if (res.warchest && !res.pool) lines.push((res.warchest > 0 ? '+' : '') + res.warchest + ' SP to the warchest');
       if (res.keywords && res.keywords.length) lines.push('Keywords: ' + res.keywords.join(', '));
-      if (res.freeRecruits) lines.push(res.freeRecruits + ' free recruit' + (res.freeRecruits === 1 ? '' : 's'));
+      if (res.freeRecruits) lines.push(res.freeRecruits === 1 ? '1 free recruit: a replacement pilot can be recruited for free.' : res.freeRecruits + ' free recruits: replacement pilots can be recruited for free.');
     }
     total.hidden = !lines.length;
     total.textContent = lines.join(' · ');

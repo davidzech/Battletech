@@ -14,10 +14,14 @@ outcomes:
     sp: 650
   - when: kills >= 4 and not killed
     sp: 900
-  - when: killed or kills == 0
+  - when: killed
     kia: true
     free_recruits: 1
-    label: "Dies or fails to kill: permanently removed. A replacement pilot can be recruited free."
+    label: "Killed in Action."
+  - when: kills == 0 and not killed
+    kia: true
+    free_recruits: 1
+    label: "Failed Trial of Position with 0 kills. Demoted to Merchant Caste."
 ---
 
 # Scenario 000: Trial of Position - Outcome
