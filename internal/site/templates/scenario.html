@@ -18,7 +18,6 @@
 {{if and .Scenario.HasOutcome (ne .ScenarioState "locked") (ne .ScenarioState "completed")}}<dialog id="outcome-dialog" class="wizard outcome" aria-labelledby="outcome-title" data-in-battle="{{if .InProgress}}1{{end}}" data-warchest="{{.Run.Warchest}}" data-campaign="{{.Campaign.Slug}}" data-scenario="{{.Scenario.Slug}}" data-inputs="{{.OutcomeInputsJSON}}" data-pilots="{{.OutcomePilotsJSON}}">
   <form id="outcome-form" autocomplete="off" novalidate>
     <h2 id="outcome-title">Complete mission</h2>
-    <section class="outcome-rules" id="outcome-rules">{{.Scenario.OutcomeHTML}}</section>
     <div id="outcome-body"></div>
     <p id="outcome-total" class="repair-cost" hidden></p>
     <p id="outcome-error" class="form-error" role="alert"></p>

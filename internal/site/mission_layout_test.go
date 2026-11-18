@@ -23,10 +23,10 @@ func TestMissionLogLayout(t *testing.T) {
 	if !strings.Contains(page, `<details class="op-abort" id="op-abort"><summary>More options</summary>`) || !strings.Contains(page, `class="button button-outline button-large danger" id="abort-open">Abort mission</button>`) {
 		t.Error("Abort mission is hidden under More options and is the same button in red")
 	}
-	// The outcome text is in the dialog instead of an Outcome dropdown on the page.
+	// The dialog does not repeat the Victory & Rewards text; the Outcome dropdown comes back once the mission is completed.
 	dlg := strings.Index(page, `id="outcome-dialog"`)
-	if strings.Contains(page, "<summary>Outcome</summary>") || dlg < 0 || !strings.Contains(page[dlg:], `id="outcome-rules"`) || !strings.Contains(page[dlg:], "Victory &amp; Rewards") || !strings.Contains(page[dlg:], "<td>900</td>") {
-		t.Error("a mission with a completion dialog shows its outcome text there, not in a dropdown")
+	if strings.Contains(page, "<summary>Outcome</summary>") || dlg < 0 || strings.Contains(page[dlg:], `id="outcome-rules"`) || strings.Contains(page[dlg:], "Victory &amp; Rewards") {
+		t.Error("a mission with a completion dialog has no Outcome dropdown and does not repeat its rewards text in the dialog")
 	}
 	if strings.Contains(page, "Report how the mission went") {
 		t.Error("the dialog's intro paragraph is replaced by the outcome text")
