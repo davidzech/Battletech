@@ -180,7 +180,7 @@ func TestCampaignLog(t *testing.T) {
 		t.Errorf("unmark 001 for now: %d", got)
 	}
 	// Only a completed scenario's page lists the missions it leads to, one link each.
-	if p := body(t, srv, "/refusalwar/scenario_000/", cookie); !strings.Contains(p, `id="next-missions"`) || !strings.Contains(p, `<li><a href="/refusalwar/scenario_001/">`) {
+	if p := body(t, srv, "/refusalwar/scenario_000/", cookie); !strings.Contains(p, `id="next-missions"`) || !strings.Contains(p, "<h2>Next mission</h2>") || !strings.Contains(p, `<li><a class="button" href="/refusalwar/scenario_001/">`) {
 		t.Errorf("a completed scenario links to its next missions: %.300s", p)
 	}
 	if p := body(t, srv, "/refusalwar/scenario_001/", cookie); strings.Contains(p, `id="next-missions"`) {

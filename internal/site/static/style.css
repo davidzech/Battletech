@@ -1427,5 +1427,5 @@ dialog.qr-dialog { padding: 0; max-width: min(92vw, 24rem); }
 #deploy-open:disabled { opacity: 0.4; cursor: not-allowed; filter: grayscale(1); }
 .next-missions { margin-top: 2.5rem; }
 .next-missions ul { list-style: none; margin: 0.6rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; align-items: flex-start; }
-.next-missions a { color: var(--accent); font: 700 1.1rem var(--display); letter-spacing: 0.06em; text-transform: uppercase; text-decoration: none; }
-.next-missions a:hover { text-decoration: underline; }
+.next-missions h2 { margin: 0; font: 0.85rem var(--display); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+.next-missions li { display: block; }
