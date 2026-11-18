@@ -287,6 +287,12 @@ type fakeMekBay struct {
 	swaps      []SwapRequest
 	cloneErr   error
 	serviceErr error
+	// battles records Start battle requests; battleErr makes them fail.
+	battles   []BattleRequest
+	battleErr error
+	status    BattleStatus // what ReadBattle answers
+	statusErr error
+	statusOps []string // the operations ReadBattle was asked for
 }
 
 func (f *fakeMekBay) ReadHangar(context.Context, string) (HangarForce, error) {
@@ -303,6 +309,33 @@ func (f *fakeMekBay) CloneHangar(_ context.Context, req CloneRequest) (HangarFor
 		return HangarForce{}, f.cloneErr
 	}
 	return f.hangar, f.err
+}
+
+func (f *fakeMekBay) StartBattle(_ context.Context, req BattleRequest) (BattleResult, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.battles = append(f.battles, req)
+	if f.battleErr != nil {
+		return BattleResult{}, f.battleErr
+	}
+	res := BattleResult{OperationID: req.OperationID, OpForInstance: req.OpFor.Reuse}
+	if res.OperationID == "" {
+		res.OperationID = newID()
+	}
+	if res.OpForInstance == "" {
+		res.OpForInstance = newID()
+	}
+	for range req.Players {
+		res.PlayerInstances = append(res.PlayerInstances, newID())
+	}
+	return res, nil
+}
+
+func (f *fakeMekBay) ReadBattle(_ context.Context, operationID string) (BattleStatus, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.statusOps = append(f.statusOps, operationID)
+	return f.status, f.statusErr
 }
 
 func (f *fakeMekBay) SellUnit(_ context.Context, req SellRequest) error {
@@ -509,8 +542,8 @@ func TestDeployFlow(t *testing.T) {
 	if op, ok, _ := store.MekBayOperation(ctx, id, "refusalwar", "scenario_001"); !ok || op.OperationID == "" || op.OpForInstance == "" {
 		t.Fatalf("operation not remembered: %+v", op)
 	}
-	if p := body(t, srv, page, cookie); !strings.Contains(p, `href="https://mekbay.com/?operation=op-`+goodInstance[:8]+`"`) {
-		t.Fatalf("page should link to the operation: %.900s", p)
+	if p := body(t, srv, page, cookie); !strings.Contains(p, `id="deploy-open">View operation</button>`) || strings.Contains(p, "Open in MekBay") {
+		t.Fatalf("the page shows the battle in progress: %.900s", p)
 	}
 	r = get(t, srv, hangar, cookie)
 	view.HasOperation = false

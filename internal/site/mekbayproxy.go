@@ -463,9 +463,12 @@ func statusOf(f *proxiedFile) int {
 	return f.status
 }
 
+const tableLabel = "table"
+
 // mekbayLink is the link that opens MekBay acting as account (the link for this playthrough's campaign and label, made on first use and the
-// same ever after), with the given force loaded when instance is set.
-func (s *Server) mekbayLink(r *http.Request, playthroughID, campaign, label, account, instance string) (string, error) {
+// same ever after), with the given query: ?instance=<force> loads a force and ?operation=<id> an operation.
+// tableLabel is the label of the link the whole table shares.
+func (s *Server) mekbayLink(r *http.Request, playthroughID, campaign, label, account string, query url.Values) (string, error) {
 	id, err := s.store.EnsureMekBayLink(r.Context(), playthroughID, campaign, label, account, s.proxy.vault, mekbayLinkTTL, s.proxy.now())
 	if err != nil {
 		return "", err
@@ -475,8 +478,8 @@ func (s *Server) mekbayLink(r *http.Request, playthroughID, campaign, label, acc
 		scheme = "https"
 	}
 	link := scheme + "://" + mekbayLinkPrefix + id + "." + siteHost(r.Host) + "/"
-	if instance != "" {
-		link += "?" + url.Values{"instance": {instance}}.Encode()
+	if len(query) > 0 {
+		link += "?" + query.Encode()
 	}
 	return link, nil
 }

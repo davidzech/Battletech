@@ -9,7 +9,9 @@
 // assign them (or click the pilot, then the slot, which also works by keyboard and on touch screens). A pilot drives one mech, so assigning them again moves them;
 // dropping a pilot on the tray, or the x on a slot, takes them off. A mech another player took is not offered, and neither is a pilot they took.
 //
-// Deploy sends the whole plan to POST /api/deploy/plan, which checks it on the server (the same rules, over every player's mechs together) and describes it back.
+// The last step, Start battle, sends the whole plan to POST /api/battle/start, which checks it on the server (the same rules, over every player's mechs together), builds a
+// force for each player and one for the OpFor in MekBay, saves the operation that sets them against each other, and answers with the one MekBay link the whole table opens,
+// which the result shows (battlePanel).
 // It does NOT build anything in MekBay yet: that, each player's force in their own MekBay account and the OpFor in the OpFor's, is the next step.
 (function () {
   var dialog = document.getElementById('deploy-dialog');
@@ -55,7 +57,18 @@
   // page is told which are saved, never the IDs). A saved default whose IDs have since been forgotten steps down to what the IDs cover.
   var playerCount = defaultPlayers;
   var step = 0;
-  var finished = null;    // the server's answer once the plan has been checked
+  var finished = null;    // the server's answer once the battle has been started: the link the table opens
+  var title = document.getElementById('deploy-title');
+  var operationUrl = dialog.dataset.operationUrl || ''; // the table's link, known from the page, so it shows before anything is read from MekBay
+  var inProgress = dialog.dataset.inProgress === '1'; // the scenario has a battle going: the dialog opens on its Operation in progress view
+  var opActions = document.getElementById('op-actions');
+  var abortOpen = document.getElementById('abort-open');
+  var statusData = null;  // the battle's live status as the server last read it from MekBay: { url, operation, forces: [{ name, alignment, units }], updatedAt }
+  var statusBusy = false;
+  var statusTimer = null;
+  var REFRESH_ICON = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>';
+  var QR_ICON = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3h-3zM20 14v.01M14 20h.01M17 20h4v-3"/></svg>';
+  var POLL_MS = 10000;    // how often an open Operation in progress view asks again
   var touched = false;    // the player has changed something, so a fresh read of the hangar must not undo it
   var busy = false;
   var held = '';          // a pilot picked up by clicking, waiting to be put in a mech
@@ -395,6 +408,187 @@
     return out;
   }
 
+  // Puts text on the clipboard, falling back to selecting it for Ctrl+C where the clipboard is not available.
+  function copyLink(text, button, urlEl) {
+    function done() {
+      button.textContent = 'Copied';
+      setTimeout(function () { button.textContent = 'Copy'; }, 1600);
+    }
+    function select() {
+      var range = document.createRange();
+      range.selectNodeContents(urlEl);
+      var sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+      var ok = false;
+      try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+      if (ok) done(); else button.textContent = 'Press Ctrl+C';
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, select);
+    else select();
+  }
+
+  // The QR code of a link as an SVG: dark modules on a white square with the four-module quiet zone scanners need, whatever the page's theme. Only numbers go
+  // into the markup.
+  function qrSvg(text) {
+    var qr = qrcode(0, 'M'); // the smallest version that fits, with the medium error correction
+    qr.addData(text);
+    qr.make();
+    var n = qr.getModuleCount(), border = 4, size = n + border * 2, d = '';
+    for (var r = 0; r < n; r++) {
+      for (var c = 0; c < n; c++) if (qr.isDark(r, c)) d += 'M' + (c + border) + ',' + (r + border) + 'h1v1h-1z';
+    }
+    return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + size + ' ' + size + '" shape-rendering="crispEdges" role="img" aria-label="QR code of the table link">' +
+      '<rect width="' + size + '" height="' + size + '" fill="#fff"/><path d="' + d + '" fill="#000"/></svg>';
+  }
+
+  // The QR code in a dialog of its own, on top of this one, for a phone to scan. It closes with its button, with Escape, or by a click outside the code.
+  var qrDialog = null;
+  function showQr(url) {
+    if (typeof qrcode === 'undefined') { error.textContent = 'The QR code could not be made: its script did not load.'; return; }
+    if (!qrDialog) {
+      qrDialog = el('dialog', 'qr-dialog');
+      qrDialog.setAttribute('aria-labelledby', 'qr-title');
+      var inner = el('div', 'qr-inner');
+      var h = el('h2', null, 'Scan to open');
+      h.id = 'qr-title';
+      inner.appendChild(h);
+      inner.appendChild(el('div', 'qr-box'));
+      var actions = el('div', 'form-actions');
+      var close = el('button', null, 'Close');
+      close.type = 'button';
+      close.addEventListener('click', function () { qrDialog.close(); });
+      actions.appendChild(close);
+      inner.appendChild(actions);
+      qrDialog.appendChild(inner);
+      qrDialog.addEventListener('click', function (e) { if (e.target === qrDialog) qrDialog.close(); }); // the backdrop
+      document.body.appendChild(qrDialog);
+    }
+    qrDialog.querySelector('.qr-box').innerHTML = qrSvg(url);
+    qrDialog.showModal();
+  }
+
+  // The link the whole table opens. It opens in a new tab, and its text can be selected for copying (the anchor is not draggable, so a drag selects the
+  // text instead of carrying the link away, and a click that leaves text selected does not open it).
+  function linkPanel(url) {
+    var box = el('div', 'battle-links');
+    var ul = el('ul', 'battle-link-list');
+    var li = el('li', 'battle-link');
+    var a = el('a', 'battle-link-url', url);
+    if (/^https?:\/\//.test(url)) a.href = url;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.draggable = false;
+    a.addEventListener('click', function (e) {
+      var sel = window.getSelection();
+      if (sel && !sel.isCollapsed && sel.toString().length > 0 && a.contains(sel.anchorNode)) e.preventDefault();
+    });
+    li.appendChild(a);
+    var q = el('button', 'op-icon op-qr');
+    q.type = 'button';
+    q.title = 'Show a QR code';
+    q.setAttribute('aria-label', 'Show a QR code');
+    q.innerHTML = QR_ICON;
+    q.addEventListener('click', function () { showQr(url); });
+    li.appendChild(q);
+    var b = el('button', 'mr-action battle-copy', 'Copy');
+    b.type = 'button';
+    b.addEventListener('click', function () { copyLink(url, b, a); });
+    li.appendChild(b);
+    ul.appendChild(li);
+    box.appendChild(ul);
+    box.appendChild(el('p', 'muted battle-links-note', 'Everyone at the table opens MekBay from this one link. It shows every player\u2019s force against the OpFor, and each of you can edit any of them; a change made on one device appears on the others as it is saved. Anyone with the link can edit everything in it, so send it only to your table. It stays valid for two weeks and is extended whenever it is used.'));
+    return box;
+  }
+
+  // The Operation in progress view: the link, and how the battle stands, with each mech's live condition as MekBay has it (armor and structure lost, critical hits,
+  // ammunition used), refreshed every few seconds and on demand.
+  function renderOperation() {
+    review.textContent = '';
+    var box = el('div', 'op-view');
+    if (statusData && statusData.url) box.appendChild(linkPanel(statusData.url));
+    var bar = el('div', 'op-status-bar');
+    var stamp = statusBusy ? 'Updating' : statusData && statusData.updatedAt ? 'Updated ' + new Date(statusData.updatedAt * 1000).toLocaleTimeString() : 'Reading the battle from MekBay';
+    bar.appendChild(el('span', 'op-updated', stamp));
+    var refresh = el('button', 'op-icon op-refresh' + (statusBusy ? ' spinning' : ''));
+    refresh.type = 'button';
+    refresh.title = 'Refresh the status';
+    refresh.setAttribute('aria-label', 'Refresh the status');
+    refresh.innerHTML = REFRESH_ICON; // the circle arrow, the same icon as the hangar link check
+    refresh.disabled = statusBusy;
+    refresh.addEventListener('click', function () { refreshStatus(); });
+    bar.appendChild(refresh);
+    box.appendChild(bar);
+    // Until the first read has come back there are no forces to show yet: say so rather than leave the pane bare.
+    if (!(statusData && statusData.updatedAt)) box.appendChild(el('p', 'muted op-reading', 'Reading the battle from MekBay'));
+    ((statusData && statusData.forces) || []).forEach(function (f) {
+      var sec = el('section', 'deploy-review-player op-force');
+      var h = el('h3', null, f.name || 'Force');
+      h.appendChild(el('span', null, f.units.length + (f.units.length === 1 ? ' mech' : ' mechs')));
+      sec.appendChild(h);
+      var ul = el('ul', 'deploy-review-list');
+      f.units.forEach(function (u) {
+        // A mech crewed by a named pilot shows them to the right, as the pilot slots do (the card of the pilot, with their levels, on hover); any other crew keeps
+        // the plain Gunnery/Piloting chip on the row.
+        var named = u.pilot && pilotNamed(u.pilot);
+        var li = el('li', 'deploy-unit review' + (named ? ' has-slot' : ''));
+        li.appendChild(MechRow.build(named ? viewOf(u) : u));
+        if (named) {
+          var slot = staticPilot(u.pilot);
+          // A pilot the record sheet shows dead is stamped K.I.A. over their card, as the Memorial does.
+          if (u.pilotDead) { slot.classList.add('kia'); slot.appendChild(el('span', 'kia-stamp', 'K.I.A.')); }
+          li.appendChild(slot);
+        }
+        ul.appendChild(li);
+      });
+      sec.appendChild(ul);
+      box.appendChild(sec);
+    });
+    review.appendChild(box);
+  }
+
+  function refreshStatus() {
+    if (statusBusy || !finished) return;
+    statusBusy = true;
+    renderOperation();
+    fetch('/api/battle/status?' + query, { credentials: 'same-origin' }).then(function (res) {
+      if (res.status === 404) { location.reload(); return null; } // the battle ended elsewhere (completed or aborted)
+      if (!res.ok) return res.text().then(function (t) { throw new Error(t.trim() || 'Could not read the battle.'); });
+      return res.json();
+    }).then(function (data) {
+      statusBusy = false;
+      if (!data) return;
+      statusData = data;
+      error.textContent = '';
+      if (finished) renderOperation();
+    }, function (err) {
+      statusBusy = false;
+      error.textContent = (err && err.message ? err.message + ' ' : '') + (statusData ? 'Showing the last known status.' : '');
+      if (finished) renderOperation();
+    });
+  }
+
+  function stopPolling() {
+    if (statusTimer) clearInterval(statusTimer);
+    statusTimer = null;
+  }
+
+  function startPolling() {
+    stopPolling();
+    statusTimer = setInterval(function () { if (!document.hidden && dialog.open) refreshStatus(); }, POLL_MS);
+  }
+
+  // Opens the Operation in progress view, for a battle just started or one that was already going.
+  function enterOperation(initial) {
+    finished = {};
+    inProgress = true;
+    if (initial) statusData = { url: initial.url, operation: initial.operation, forces: [], updatedAt: 0 };
+    else if (!statusData) statusData = { url: operationUrl, forces: [], updatedAt: 0 };
+    render();
+    refreshStatus();
+    startPolling();
+  }
+
   function renderFooter() {
     var multi = playerCount > 1;
     var last = !multi || isReview();
@@ -402,6 +596,7 @@
     next.hidden = last || !!finished;
     go.hidden = !last || !!finished;
     cancel.textContent = finished ? 'Close' : 'Cancel';
+    go.textContent = busy ? 'Starting' : 'Start battle';
     progress.hidden = !multi || !!finished;
     if (!multi) count.textContent = '';
     if (multi) {
@@ -422,20 +617,15 @@
     list.textContent = '';
     review.hidden = true;
     stepTitle.hidden = true;
+    opActions.hidden = !finished;
     if (finished) {
       meter.hidden = true;
       list.hidden = true;
       resetRow.hidden = true;
+      status.hidden = true;
       review.hidden = false;
-      var note = el('div', 'deploy-note good');
-      note.appendChild(el('b', null, 'Your plan is valid. '));
-      note.appendChild(document.createTextNode('Nothing has been sent to MekBay yet: building each player’s force in their own MekBay account, and the OpFor in the OpFor’s, comes next.'));
-      var notes = [note];
-      renderSummary((finished.players || []).map(function (pl) {
-        var crew = {};
-        (pl.crew || []).forEach(function (c) { crew[c.unit] = c.pilot; });
-        return { player: pl.player, units: pl.units, crew: crew, bv: pl.bv };
-      }), notes);
+      title.textContent = 'Operation in progress';
+      renderOperation();
       renderTray();
       renderFooter();
       return;
@@ -508,6 +698,8 @@
     reset.checked = false;
     touched = false;
     finished = null;
+    stopPolling();
+    title.textContent = 'Deploy your force';
     busy = false;
     held = '';
     step = 0;
@@ -533,13 +725,37 @@
 
   openBtn.addEventListener('click', function () {
     dialog.showModal();
-    load();
+    if (inProgress) enterOperation(null);
+    else load();
   });
+  dialog.addEventListener('close', stopPolling);
+  // One Escape can be taken for both dialogs when the QR code was opened without a click in between; the one under it stays.
+  dialog.addEventListener('cancel', function (e) { if (qrDialog && qrDialog.open) e.preventDefault(); });
   cancel.addEventListener('click', function () { dialog.close(); });
   next.addEventListener('click', function () { if (!next.disabled && step < stepCount() - 1) { step++; held = ''; error.textContent = ''; render(); } });
   back.addEventListener('click', function () { if (step > 0) { step--; held = ''; error.textContent = ''; render(); } });
 
-  // Deploy: the whole plan goes to the server to be checked. Every mech that has a named pilot is sent with them (so skills are current), and any mech that had
+  // Abort mission: give the battle up after a confirmation. The scenario goes back to not started, with no rewards.
+  if (abortOpen) abortOpen.addEventListener('click', function () {
+    var ask = typeof Confirm !== 'undefined' ? Confirm.ask({
+      title: 'Abort mission',
+      message: 'The battle is given up and the mission goes back to not started, with no rewards. The forces stay in MekBay, but this site forgets the operation.',
+      confirmLabel: 'Abort mission',
+      cancelLabel: 'Keep playing',
+      danger: true
+    }) : Promise.resolve(true);
+    ask.then(function (yes) {
+      if (!yes) return;
+      fetch('/api/battle/abort', {
+        method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: query, credentials: 'same-origin'
+      }).then(function (res) {
+        if (res.ok || res.status === 404) { location.reload(); return; }
+        return res.text().then(function (t) { error.textContent = t.trim() || 'Could not abort the battle.'; });
+      }, function () { error.textContent = 'Could not reach the server.'; });
+    });
+  });
+
+  // Start battle: the whole plan goes to the server, which checks it and then builds the battle in MekBay. Every mech that has a named pilot is sent with them (so skills are current), and any mech that had
   // one and no longer does is sent with an empty pilot.
   go.addEventListener('click', function () {
     if (go.disabled) return;
@@ -560,16 +776,16 @@
       });
     }
     if (reset.checked) body += '&reset_opfor=1';
-    fetch('/api/deploy/plan', {
+    fetch('/api/battle/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: body,
       credentials: 'same-origin'
     }).then(function (res) {
       busy = false;
-      if (res.ok) return res.json().then(function (data) { finished = data; render(); });
+      if (res.ok) return res.json().then(function (data) { enterOperation(data); });
       renderFooter();
-      return res.text().then(function (t) { error.textContent = t.trim() || 'Could not check the plan.'; });
+      return res.text().then(function (t) { error.textContent = t.trim() || 'Could not start the battle.'; });
     }, function () { busy = false; renderFooter(); error.textContent = 'Could not reach the server.'; });
   });
 })();

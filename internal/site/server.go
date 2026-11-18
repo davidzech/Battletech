@@ -8,6 +8,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"net/url"
 	"path"
 	"path/filepath"
 	"time"
@@ -73,7 +74,8 @@ type Page struct {
 	Ladders      string   // the pilot improvement ladders as JSON, for the pilot builder's live preview
 	Abilities    string   // the Edge ability catalog as JSON, for the ability picker
 	Portraits    string   // the portrait list as JSON, for the portrait picker
-	MekBayOp     string   // link to the scenario's MekBay operation, once created ("" until then)
+	InProgress   bool     // the scenario has a battle in progress (an operation that is neither completed nor aborted)
+	OperationURL string   // the table's link to that battle, so the Operation in progress view can show it before anything is read from MekBay
 	Commit       string   // git commit the server was built from, short form ("dev" if unknown)
 }
 
@@ -151,6 +153,9 @@ func NewHandler(contentRoot string, store *Store, opts ...Option) http.Handler {
 	mux.HandleFunc("POST /api/hangar/sell", s.sellUnit)
 	mux.HandleFunc("POST /api/hangar/swap", s.swapUnit)
 	mux.HandleFunc("POST /api/deploy/plan", s.deployPlan)
+	mux.HandleFunc("POST /api/battle/start", s.startBattle)
+	mux.HandleFunc("GET /api/battle/status", s.battleStatus)
+	mux.HandleFunc("POST /api/battle/abort", s.abortBattle)
 	mux.HandleFunc("GET /api/units/search", s.searchUnitsHandler)
 	mux.HandleFunc("POST /api/pilots/delete", s.deletePilot)
 	mux.HandleFunc("POST /api/pilots/portrait", s.setPortrait)
@@ -310,16 +315,22 @@ func (s *Server) scenario(w http.ResponseWriter, r *http.Request) {
 	for _, img := range sc.Images {
 		images = append(images, "/"+c.Slug+"/"+sc.Slug+"/images/"+path.Base(img))
 	}
-	var opLink string
-	if seed := currentSeed(r); seed != "" && len(sc.Forces) > 0 {
+	inProgress, operationURL := false, ""
+	if seed := currentSeed(r); seed != "" && len(sc.Forces) > 0 && !completed[sc.Slug] {
 		if op, ok, err := s.store.MekBayOperation(r.Context(), playthroughID(seed), c.Slug, sc.ID); err != nil {
 			log.Printf("load mekbay operation: %v", err)
 		} else if ok {
-			opLink = OperationURL(op.OperationID)
+			inProgress = true
+			if link, err := s.mekbayLink(r, playthroughID(seed), c.Slug, tableLabel, accountUID(seed, SlotHangar), url.Values{"operation": {op.OperationID}}); err != nil {
+				log.Printf("link to the operation: %v", err)
+			} else {
+				operationURL = link
+			}
 		}
 	}
 	s.render(w, r, http.StatusOK, "scenario", Page{
-		MekBayOp:      opLink,
+		InProgress:    inProgress,
+		OperationURL:  operationURL,
 		Images:        images,
 		Title:         sc.Title + " | " + c.Label,
 		Crumbs:        []Crumb{{Label: c.Label, URL: "/" + c.Slug + "/"}, scenarioCrumb(c, sc, available)},

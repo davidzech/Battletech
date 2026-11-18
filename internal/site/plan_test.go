@@ -99,10 +99,6 @@ func TestDeployPlanEndpoint(t *testing.T) {
 	if two.Players[1].Crew[0].Pilot != "Katarina" || two.Players[1].Units[0].ID != "uc" {
 		t.Errorf("player 2: %+v", two.Players[1])
 	}
-	// The plan says who will own each force in the lobby, never the accounts.
-	if len(two.Lobby) != 3 || two.Lobby[0] != (lobbyForceView{"Player 1", "player", 2}) || two.Lobby[1] != (lobbyForceView{"Player 2", "player", 1}) || two.Lobby[2] != (lobbyForceView{"OpFor", "site", 0}) {
-		t.Errorf("lobby: %+v", two.Lobby)
-	}
 	// Nothing is saved or sent to MekBay.
 	if len(fake.reqs) != 0 || len(fake.services) != 0 || len(fake.purchases) != 0 {
 		t.Errorf("a plan must not touch MekBay: %+v", fake.reqs)

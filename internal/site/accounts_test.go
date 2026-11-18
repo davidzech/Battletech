@@ -16,9 +16,6 @@ func TestMekBayUID(t *testing.T) {
 	if a != MekBayUID("ironfalcon417", SlotHangar) {
 		t.Error("the same seed and slot must always give the same ID")
 	}
-	if MekBayUID("ironfalcon417", SlotOpFor) == a {
-		t.Error("the hangar and the OpFor are different accounts")
-	}
 	if MekBayUID("wolfhound512", SlotHangar) == a {
 		t.Error("different seeds must give different IDs")
 	}
@@ -34,27 +31,14 @@ func TestMekBayUID(t *testing.T) {
 	}
 }
 
-// Every account the site uses is derived from the seed, so no player ever holds, pastes or loses a MekBay user ID.
-func TestPlayerAccountsAreDerived(t *testing.T) {
+// A seed has one MekBay account, derived from it, so no player ever holds, pastes or loses a MekBay user ID.
+func TestOneAccountPerSeed(t *testing.T) {
 	const seed = "ironfalcon417"
-	if SlotPlayer(1) != "player1" || SlotPlayer(4) != "player4" {
-		t.Errorf("slots: %q %q", SlotPlayer(1), SlotPlayer(4))
+	id := accountUID(seed, SlotHangar)
+	if !uuidPattern.MatchString(id) || id != MekBayUID(seed, SlotHangar) || id == accountUID("wolfhound512", SlotHangar) {
+		t.Errorf("the seed's account is a stable MekBay user ID of its own: %q", id)
 	}
-	seen := map[string]string{MekBayUID(seed, SlotHangar): "the hangar", MekBayUID(seed, SlotOpFor): "the OpFor"}
-	for n := 1; n <= maxPlayers; n++ {
-		id := MekBayUID(seed, SlotPlayer(n))
-		if !uuidPattern.MatchString(id) || id != accountUID(seed, SlotPlayer(n)) || id != MekBayUID(seed, SlotPlayer(n)) {
-			t.Errorf("player %d's account is a stable MekBay user ID: %q", n, id)
-		}
-		if who, dup := seen[id]; dup {
-			t.Errorf("player %d's account is the same as %s's", n, who)
-		}
-		seen[id] = playerLabel(n - 1)
-		if MekBayUID("wolfhound512", SlotPlayer(n)) == id {
-			t.Errorf("player %d: another seed must give another account", n)
-		}
-	}
-	if accountUID("", SlotPlayer(1)) != "" {
+	if accountUID("", SlotHangar) != "" {
 		t.Error("no seed gives no account")
 	}
 }

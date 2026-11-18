@@ -34,8 +34,11 @@ func (s *Store) SetScenarioCompleted(ctx context.Context, playthroughID, campaig
 		_, err := s.db.ExecContext(ctx, s.q(`DELETE FROM scenario_completions WHERE playthrough_id = ? AND campaign = ? AND scenario_id = ?`), playthroughID, campaign, scenario)
 		return err
 	}
-	_, err := s.db.ExecContext(ctx, s.q(`INSERT INTO scenario_completions (playthrough_id, campaign, scenario_id) VALUES (?, ?, ?)
-		ON CONFLICT (playthrough_id, campaign, scenario_id) DO NOTHING`), playthroughID, campaign, scenario)
+	if _, err := s.db.ExecContext(ctx, s.q(`INSERT INTO scenario_completions (playthrough_id, campaign, scenario_id) VALUES (?, ?, ?)
+		ON CONFLICT (playthrough_id, campaign, scenario_id) DO NOTHING`), playthroughID, campaign, scenario); err != nil {
+		return err
+	}
+	_, err := s.DeleteMekBayOperation(ctx, playthroughID, campaign, scenario) // a completed mission has no battle in progress
 	return err
 }
 

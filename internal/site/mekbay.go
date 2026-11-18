@@ -65,6 +65,7 @@ type HangarUnit struct {
 	Pilot     string
 	Gunnery   int
 	Piloting  int
+	PilotDead bool // the record sheet shows the pilot dead (see crewIsDead)
 	Damaged   bool // has recorded armor/structure damage, critical hits or spent ammo
 	Destroyed bool
 	// The raw damage MekBay records, from which conditionOf works out the unit's state (see condition.go).
@@ -124,6 +125,10 @@ type MekBay interface {
 	SellUnit(ctx context.Context, req SellRequest) error
 	// SwapUnit reconfigures an omnimech of the player's hangar force to another variant.
 	SwapUnit(ctx context.Context, req SwapRequest) error
+	// StartBattle builds the players' forces and the OpFor's, starts a multiplayer lobby and seats everyone in it (see battle.go).
+	StartBattle(ctx context.Context, req BattleRequest) (BattleResult, error)
+	// ReadBattle reads an operation and every force in it, anonymously, for the battle's live status.
+	ReadBattle(ctx context.Context, operationID string) (BattleStatus, error)
 }
 
 // MekBayClient is the real implementation, speaking to MekBay's WebSocket server.
@@ -239,29 +244,10 @@ func (c *MekBayClient) SyncOperation(ctx context.Context, req OperationRequest) 
 			{"instanceId": opforID, "alignment": "enemy", "timestamp": opforTS},
 		},
 	}
-	if err := s.send(ctx, map[string]any{"action": "saveOperation", "data": op}); err != nil {
+	if err := s.saveOperation(ctx, op, opID); err != nil {
 		return OperationResult{}, err
 	}
-	for attempt := 0; attempt < 6; attempt++ {
-		select {
-		case <-ctx.Done():
-			return OperationResult{}, ctx.Err()
-		case <-time.After(400 * time.Millisecond):
-		}
-		got, err := s.call(ctx, map[string]any{"action": "getOperation", "operationId": opID})
-		if err != nil {
-			return OperationResult{}, err
-		}
-		var back struct {
-			Data *struct {
-				Owned bool `json:"owned"`
-			} `json:"data"`
-		}
-		if json.Unmarshal(got, &back) == nil && back.Data != nil {
-			return OperationResult{OpForInstance: opforID, OperationID: opID}, nil
-		}
-	}
-	return OperationResult{}, errors.New("MekBay did not confirm the operation was saved")
+	return OperationResult{OpForInstance: opforID, OperationID: opID}, nil
 }
 
 // mekbayTime formats a time the way MekBay writes force timestamps.
@@ -295,6 +281,8 @@ func parseHangarForce(raw json.RawMessage) (HangarForce, error) {
 							Name     string `json:"name"`
 							Gunnery  int    `json:"gunnerySkill"`
 							Piloting int    `json:"pilotingSkill"`
+							Hits     int    `json:"hits"`
+							State    int    `json:"state"`
 						} `json:"crew"`
 						RuleChecks map[string]struct {
 							Status string `json:"status"`
@@ -317,6 +305,7 @@ func parseHangarForce(raw json.RawMessage) (HangarForce, error) {
 			if len(u.State.Crew) > 0 {
 				c := u.State.Crew[0]
 				hu.Pilot, hu.Gunnery, hu.Piloting = c.Name, c.Gunnery, c.Piloting
+				hu.PilotDead = crewIsDead(c.State, c.Hits)
 			}
 			hu.Damaged = len(u.State.Locations) > 0
 			for k, l := range u.State.Locations {
@@ -502,3 +491,7 @@ func buildForce(instanceID string, now time.Time, d ForceDraft) serializedForce 
 	}
 	return f
 }
+
+// crewIsDead says whether MekBay's record of a crew member shows them dead: its stored state is dead (2) or killed (4), or they have taken the six hits that kill.
+// (The other states are healthy 0, unconscious 1, ejected 3 and stunned 5.)
+func crewIsDead(state, hits int) bool { return state == 2 || state == 4 || hits >= 6 }

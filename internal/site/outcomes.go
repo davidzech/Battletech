@@ -623,6 +623,10 @@ func (s *Store) CompleteWithOutcome(ctx context.Context, playthroughID, campaign
 	if _, err := tx.ExecContext(ctx, s.q(`INSERT INTO scenario_completions (playthrough_id, campaign, scenario_id, outcome) VALUES (?, ?, ?, ?)`), playthroughID, campaign, scenario, string(record)); err != nil {
 		return err
 	}
+	// The battle is over: the scenario has no operation in progress any more.
+	if _, err := tx.ExecContext(ctx, s.q(`DELETE FROM mekbay_operations WHERE playthrough_id = ? AND campaign = ? AND scenario_id = ?`), playthroughID, campaign, scenario); err != nil {
+		return err
+	}
 	return tx.Commit()
 }
 

@@ -15,9 +15,13 @@ func TestMissionLogLayout(t *testing.T) {
 	if state < 0 || !strings.Contains(page, `class="mission-log available"`) {
 		t.Fatalf("the status is followed by its LED: %.400s", page)
 	}
-	button := strings.Index(page, `id="outcome-open"`)
-	if button < 0 || button < strings.Index(page, `id="mekbay-op"`) {
-		t.Errorf("Complete mission is at the bottom of the page, after the sections above it (button at %d)", button)
+	// Scenario 000 has an OpFor to deploy against, so Complete mission lives in the Deploy dialog's Operation in progress view, with Abort mission tucked under it.
+	button, actions, abort := strings.Index(page, `id="outcome-open"`), strings.Index(page, `id="op-actions"`), strings.Index(page, `id="abort-open"`)
+	if actions < 0 || button < actions || abort < button || strings.Index(page, `id="deploy-dialog"`) > actions {
+		t.Errorf("Complete mission and then Abort mission are in the operation view of the Deploy dialog (%d %d %d)", actions, button, abort)
+	}
+	if !strings.Contains(page, `<details class="op-abort" id="op-abort"><summary>More options</summary>`) || !strings.Contains(page, `class="button button-outline button-large danger" id="abort-open">Abort mission</button>`) {
+		t.Error("Abort mission is hidden under More options and is the same button in red")
 	}
 	// The outcome text is in the dialog instead of an Outcome dropdown on the page.
 	dlg := strings.Index(page, `id="outcome-dialog"`)
@@ -27,8 +31,8 @@ func TestMissionLogLayout(t *testing.T) {
 	if strings.Contains(page, "Report how the mission went") {
 		t.Error("the dialog's intro paragraph is replaced by the outcome text")
 	}
-	if !strings.Contains(page, `<section class="mission-actions" id="mission-actions">`) || strings.Index(page, `id="mission-log-error"`) < strings.Index(page, `id="mission-actions"`) {
-		t.Error("the button and its error live in the bottom actions section")
+	if strings.Contains(page, `id="mission-actions"`) {
+		t.Error("a scenario with a Deploy section has no actions at the bottom of the page")
 	}
 	if i := strings.Index(page, `id="mission-log"`); i < 0 || strings.Contains(page[i:i+1200], `id="outcome-open"`) {
 		t.Error("the top bar no longer holds the button")

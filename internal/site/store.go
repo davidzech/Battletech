@@ -480,6 +480,16 @@ func (s *Store) MekBayOperation(ctx context.Context, playthroughID, campaign, sc
 	return op, err == nil, err
 }
 
+// DeleteMekBayOperation forgets a scenario's operation: the battle is over (the mission was completed or aborted). Nothing is deleted in MekBay.
+func (s *Store) DeleteMekBayOperation(ctx context.Context, playthroughID, campaign, scenarioID string) (bool, error) {
+	res, err := s.db.ExecContext(ctx, s.q(`DELETE FROM mekbay_operations WHERE playthrough_id = ? AND campaign = ? AND scenario_id = ?`), playthroughID, campaign, scenarioID)
+	if err != nil {
+		return false, err
+	}
+	n, _ := res.RowsAffected()
+	return n > 0, nil
+}
+
 // SaveMekBayOperation stores (or replaces) the operation for a scenario of a campaign run.
 func (s *Store) SaveMekBayOperation(ctx context.Context, playthroughID, campaign, scenarioID string, op MekBayOperation) error {
 	_, err := s.db.ExecContext(ctx,

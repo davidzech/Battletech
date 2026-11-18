@@ -3,38 +3,26 @@ package site
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"fmt"
 )
 
 // MekBay accounts. MekBay identifiers are implicit: there is no registration, and any UUID a client presents is an account, which owns what it saves (only
-// its owner may change a force). The site gives every account it needs a **synthesized** one, derived from the seed so nobody has to hold, paste or keep a
-// MekBay user ID: MekBayUID is a salted SHA-256 of the seed laid out as a v4 UUID (what MekBay's own clients use for user IDs), a stable 1:1 projection of seed
-// to site-managed ID, one per purpose, recomputed from the seed whenever needed and never shown to anyone but the seed's holder. They are secrets, like a
-// password for that account's forces: whoever has one can change them. There is one for the **hangar** (the site's clean copy of the campaign's force), one for
-// the **OpFor**, and one for each **player** (Player 1 to 4), which owns that player's force in the multiplayer lobby a Deploy builds. A browser acts as one of
-// them through a MekBay link (mekbaylinks.go), which seals the account into a host name of its own, so a player opens their force from a link and never sees an ID.
+// its owner may change a force). A seed has exactly one MekBay account, **synthesized** from the seed so nobody has to hold, paste or keep a MekBay user ID:
+// MekBayUID is a salted SHA-256 of the seed laid out as a v4 UUID (what MekBay's own clients use for user IDs), a stable 1:1 projection of seed to site-managed
+// ID, recomputed from the seed whenever needed and never shown to anyone but the seed's holder. It is a secret, like a password for that account's forces:
+// whoever has it can change them. Everything the site keeps in MekBay for the seed is owned by it: the campaign's hangar copy, the OpFor, each player's force
+// in a battle, and the battle's operation, so everyone at the table can edit all of it. A browser acts as the account through a MekBay link (mekbaylinks.go),
+// which seals it into a host name of its own, so a player opens MekBay from a link and never sees an ID.
 
-// Account slots of the synthesized accounts.
-const (
-	// SlotHangar derives the account that owns the company's hangar copy. Its derivation salt is "p1" for historical reasons (it was once Player 1's slot), so
-	// hangars already copied keep working.
-	SlotHangar = "hangar"
-	// SlotOpFor derives the account that owns the OpFor forces.
-	SlotOpFor = "opfor"
-)
-
-// SlotPlayer derives the account that owns player n's (1 to 4) force in the lobby.
-func SlotPlayer(n int) string { return fmt.Sprintf("player%d", n) }
+// SlotHangar derives the seed's account (see above). The name and the derivation salt "p1" are historical (it was the hangar's owner when the site gave each
+// purpose its own account), kept so that hangars already copied stay owned by it.
+const SlotHangar = "hangar"
 
 // maxPlayers is how many players a company can have.
 const maxPlayers = 4
 
-// playerLabel is the name of the nth player (0-based).
-func playerLabel(n int) string { return fmt.Sprintf("Player %d", n+1) }
-
-// MekBayUID is the MekBay user ID the site uses for a seed's synthesized account (SlotHangar or SlotOpFor): SHA-256 of a purpose-specific prefix, the slot and the
-// seed, laid out as a version 4 UUID (which is what MekBay's own clients use for user IDs). The same seed and slot always give the same ID, and different slots or
-// seeds give different ones.
+// MekBayUID is the MekBay user ID the site uses for a seed's synthesized account: SHA-256 of a purpose-specific prefix, the slot and the seed, laid out as a
+// version 4 UUID (which is what MekBay's own clients use for user IDs). The same seed and slot always give the same ID, and different slots or seeds give different
+// ones.
 func MekBayUID(seed, slot string) string {
 	salt := slot
 	if slot == SlotHangar {

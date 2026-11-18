@@ -104,14 +104,14 @@ func (p Page) PilotsJSON() string {
 func (p Page) DeployJSON() string {
 	if p.Scenario != nil && p.Scenario.provides() {
 		// The scenario's own mechs need no read from MekBay, so the popup can show them at once.
-		data := deployData(providedForce(p.Scenario), p.Scenario.BVLimit, p.Run.Owned(), p.MekBayOp != "")
+		data := deployData(providedForce(p.Scenario), p.Scenario.BVLimit, p.Run.Owned(), p.InProgress)
 		data["provided"] = true
 		return cachedJSON(data, time.Now())
 	}
 	if p.CachedHangar == nil || p.Scenario == nil {
 		return ""
 	}
-	return cachedJSON(deployData(*p.CachedHangar, p.Scenario.BVLimit, p.Run.Owned(), p.MekBayOp != ""), p.CachedAt)
+	return cachedJSON(deployData(*p.CachedHangar, p.Scenario.BVLimit, p.Run.Owned(), p.InProgress), p.CachedAt)
 }
 
 // cacheHangar saves a hangar that was just read live. A failure only costs the cache, so it is logged and otherwise ignored.

@@ -628,7 +628,7 @@ func TestMekBayLinkBuilder(t *testing.T) {
 		if c.proto != "" {
 			r.Header.Set("X-Forwarded-Proto", c.proto)
 		}
-		link, err := s.mekbayLink(r, "pt", "camp", "player-1", testAccount, "force-1")
+		link, err := s.mekbayLink(r, "pt", "camp", "player-1", testAccount, url.Values{"instance": {"force-1"}})
 		m := re.FindStringSubmatch(link)
 		if err != nil || m == nil || m[1] != c.wantScheme || m[3] != c.wantSite {
 			t.Fatalf("%s: %q %v", c.host, link, err)
@@ -638,17 +638,17 @@ func TestMekBayLinkBuilder(t *testing.T) {
 			t.Errorf("the link opens the force and never shows the account: %q", link)
 		}
 		// Asking again for the same label gives the very same link.
-		if again, _ := s.mekbayLink(r, "pt", "camp", "player-1", testAccount, "force-1"); again != link {
+		if again, _ := s.mekbayLink(r, "pt", "camp", "player-1", testAccount, url.Values{"instance": {"force-1"}}); again != link {
 			t.Errorf("a link is stable: %q vs %q", again, link)
 		}
 		if sealed, ok, _ := store.MekBayLink(context.Background(), m[2], time.Now()); !ok || sealed == "" {
 			t.Errorf("the link is in the table")
 		}
 	}
-	if link, _ := s.mekbayLink(httptest.NewRequest("GET", "/", nil), "pt", "camp", "opfor", otherAccount, ""); strings.Contains(link, "instance=") || !strings.HasSuffix(link, "/") {
+	if link, _ := s.mekbayLink(httptest.NewRequest("GET", "/", nil), "pt", "camp", "opfor", otherAccount, nil); strings.Contains(link, "instance=") || !strings.HasSuffix(link, "/") {
 		t.Errorf("no force, no instance: %q", link)
 	}
-	if _, err := s.mekbayLink(httptest.NewRequest("GET", "/", nil), "pt", "camp", "bad", "nope", ""); err == nil {
+	if _, err := s.mekbayLink(httptest.NewRequest("GET", "/", nil), "pt", "camp", "bad", "nope", nil); err == nil {
 		t.Error("only a real account gets a link")
 	}
 }
