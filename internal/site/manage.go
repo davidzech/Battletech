@@ -49,6 +49,7 @@ func (s *Server) manage(w http.ResponseWriter, r *http.Request) {
 		p.BackURL = back + sc.Slug + "/"
 		p.BackLabel = "Back to Sortie " + sc.Number + ": " + sc.Title
 	}
+	p.OnManagePage = true
 	s.render(w, r, http.StatusOK, "manage", p)
 }
 

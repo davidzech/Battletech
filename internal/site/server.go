@@ -51,6 +51,7 @@ type Page struct {
 	MekBayEditURL string
 	Crumbs        []Crumb
 	Campaign      *Campaign
+	OnManagePage  bool // the Manage force page itself, which has no Manage force button in its header
 	Scenario      *Scenario
 	Cards         []Card
 	HasLocked     bool           // some scenario cards are locked, so the campaign page offers 'Show all scenarios'

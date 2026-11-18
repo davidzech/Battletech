@@ -154,6 +154,18 @@ func TestCampaignLog(t *testing.T) {
 		t.Error("the menu should not list a locked scenario")
 	}
 
+	// A started campaign's pages have a Manage Force button in the header, except the Manage page itself.
+	for _, path := range []string{"/refusalwar/", "/refusalwar/scenario_000/"} {
+		if p := body(t, srv, path, cookie); !strings.Contains(p, `class="chip manage-chip" href="/refusalwar/manage/">Manage Force</a>`) {
+			t.Errorf("%s: no Manage Force button in the header", path)
+		}
+	}
+	if p := body(t, srv, "/refusalwar/manage/", cookie); strings.Contains(p, "manage-chip") {
+		t.Error("the Manage page has no Manage Force button")
+	}
+	if p := body(t, srv, "/", cookie); strings.Contains(p, "manage-chip") {
+		t.Error("outside a campaign there is no Manage Force button")
+	}
 	// Completing 000 turns its card green and opens 001.
 	if got := complete("scenario_000", "1"); got != http.StatusNoContent {
 		t.Fatalf("complete 000: %d", got)
