@@ -124,6 +124,8 @@ func (s *Store) schemaStatements() []string {
 	scenario_id    TEXT NOT NULL,
 	opfor_instance TEXT NOT NULL,
 	operation_id   TEXT NOT NULL,
+	status_json    TEXT NOT NULL DEFAULT '',
+	status_at      INTEGER NOT NULL DEFAULT 0,
 	PRIMARY KEY (playthrough_id, campaign, scenario_id)
 )`,
 		`CREATE TABLE IF NOT EXISTS mekbay_links (
@@ -218,6 +220,12 @@ func (s *Store) init() error {
 	}
 	// Columns added after a table first shipped. CREATE TABLE IF NOT EXISTS leaves an existing table as it was, so they
 	// are added here (neither database has ADD COLUMN IF NOT EXISTS in common).
+	if err := s.ensureColumn("mekbay_operations", "status_json", "TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
+	if err := s.ensureColumn("mekbay_operations", "status_at", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
 	if err := s.ensureColumn("campaign_runs", "warchest", "INTEGER NOT NULL DEFAULT 0"); err != nil {
 		return err
 	}
@@ -490,11 +498,27 @@ func (s *Store) DeleteMekBayOperation(ctx context.Context, playthroughID, campai
 	return n > 0, nil
 }
 
+// SaveBattleStatus keeps the last status read of a battle (the players' forces, as JSON), so the Operation in progress view can show it at once on the next visit
+// while a fresh read is made (see the hangar cache, which does the same for the hangar). It does nothing if the battle is gone.
+func (s *Store) SaveBattleStatus(ctx context.Context, playthroughID, campaign, scenarioID, forcesJSON string, at int64) error {
+	_, err := s.db.ExecContext(ctx, s.q(`UPDATE mekbay_operations SET status_json = ?, status_at = ? WHERE playthrough_id = ? AND campaign = ? AND scenario_id = ?`), forcesJSON, at, playthroughID, campaign, scenarioID)
+	return err
+}
+
+// BattleStatusCache returns what SaveBattleStatus kept: the forces as JSON and when they were read (zero and empty if never).
+func (s *Store) BattleStatusCache(ctx context.Context, playthroughID, campaign, scenarioID string) (forcesJSON string, at int64, err error) {
+	err = s.db.QueryRowContext(ctx, s.q(`SELECT status_json, status_at FROM mekbay_operations WHERE playthrough_id = ? AND campaign = ? AND scenario_id = ?`), playthroughID, campaign, scenarioID).Scan(&forcesJSON, &at)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", 0, nil
+	}
+	return forcesJSON, at, err
+}
+
 // SaveMekBayOperation stores (or replaces) the operation for a scenario of a campaign run.
 func (s *Store) SaveMekBayOperation(ctx context.Context, playthroughID, campaign, scenarioID string, op MekBayOperation) error {
 	_, err := s.db.ExecContext(ctx,
 		s.q(`INSERT INTO mekbay_operations (playthrough_id, campaign, scenario_id, opfor_instance, operation_id) VALUES (?, ?, ?, ?, ?)
-		     ON CONFLICT (playthrough_id, campaign, scenario_id) DO UPDATE SET opfor_instance = excluded.opfor_instance, operation_id = excluded.operation_id`),
+		     ON CONFLICT (playthrough_id, campaign, scenario_id) DO UPDATE SET opfor_instance = excluded.opfor_instance, operation_id = excluded.operation_id, status_json = '', status_at = 0`),
 		playthroughID, campaign, scenarioID, op.OpForInstance, op.OperationID)
 	return err
 }

@@ -258,6 +258,14 @@ func TestBattleStatusAndAbort(t *testing.T) {
 	if f := got.Forces[1]; f.Alignment != "friendly" || f.Name != "Wolf Pack - Player 2" || len(f.Units) != 1 || f.Units[0].Damaged {
 		t.Errorf("Player 2's force: %+v", f)
 	}
+	// The status read is kept, so the next visit to the page carries it (and paints at once): never the link, which is built from the request.
+	page := body(t, srv, "/refusalwar/scenario_001/", cookie)
+	if !strings.Contains(page, `data-cached-status="`) || !strings.Contains(page, "Wolf Pack - Player 1") || !strings.Contains(page, "&#34;updatedAt&#34;:") {
+		t.Errorf("the page carries the last status read: %.200s", page)
+	}
+	if forces, at, err := store.BattleStatusCache(ctx, id, "refusalwar", "scenario_001"); err != nil || at == 0 || strings.Contains(forces, "mekbay-") {
+		t.Errorf("the cache holds the forces and no link: %q %d %v", forces, at, err)
+	}
 	if len(fake.statusOps) != 1 || fake.statusOps[0] != start.Operation {
 		t.Errorf("MekBay was asked about the scenario's operation: %v", fake.statusOps)
 	}

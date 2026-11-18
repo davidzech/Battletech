@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"path"
 	"path/filepath"
+	"strconv"
 	"time"
 )
 
@@ -78,6 +79,7 @@ type Page struct {
 	Portraits    string   // the portrait list as JSON, for the portrait picker
 	InProgress   bool     // the scenario has a battle in progress (an operation that is neither completed nor aborted)
 	OperationURL string   // the table's link to that battle, so the Operation in progress view can show it before anything is read from MekBay
+	BattleCache  string   // the last status read of that battle as JSON ({forces, updatedAt}), so the view paints it at once while a fresh read is made
 	Commit       string   // git commit the server was built from, short form ("dev" if unknown)
 }
 
@@ -317,12 +319,17 @@ func (s *Server) scenario(w http.ResponseWriter, r *http.Request) {
 	for _, img := range sc.Images {
 		images = append(images, "/"+c.Slug+"/"+sc.Slug+"/images/"+path.Base(img))
 	}
-	inProgress, operationURL := false, ""
+	inProgress, operationURL, battleCache := false, "", ""
 	if seed := currentSeed(r); seed != "" && len(sc.Forces) > 0 && !completed[sc.Slug] {
 		if op, ok, err := s.store.MekBayOperation(r.Context(), playthroughID(seed), c.Slug, sc.ID); err != nil {
 			log.Printf("load mekbay operation: %v", err)
 		} else if ok {
 			inProgress = true
+			if forces, at, err := s.store.BattleStatusCache(r.Context(), playthroughID(seed), c.Slug, sc.ID); err != nil {
+				log.Printf("load the battle status cache: %v", err)
+			} else if forces != "" {
+				battleCache = `{"forces":` + forces + `,"updatedAt":` + strconv.FormatInt(at, 10) + `}`
+			}
 			if link, err := s.mekbayLink(r, playthroughID(seed), c.Slug, tableLabel, accountUID(seed, SlotHangar), url.Values{"operation": {op.OperationID}}); err != nil {
 				log.Printf("link to the operation: %v", err)
 			} else {
@@ -342,6 +349,7 @@ func (s *Server) scenario(w http.ResponseWriter, r *http.Request) {
 		InProgress:    inProgress,
 		NextScenarios: next,
 		OperationURL:  operationURL,
+		BattleCache:   battleCache,
 		Images:        images,
 		Title:         sc.Title + " | " + c.Label,
 		Crumbs:        []Crumb{{Label: c.Label, URL: "/" + c.Slug + "/"}, scenarioCrumb(c, sc, available)},

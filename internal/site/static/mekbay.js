@@ -63,6 +63,8 @@
   var step = 0;
   var finished = null;    // the server's answer once the battle has been started: the link the table opens
   var title = document.getElementById('deploy-title');
+  var cachedStatus = null; // the last status read of the battle, embedded by the page: it paints at once while a fresh read is made
+  try { cachedStatus = dialog.dataset.cachedStatus ? JSON.parse(dialog.dataset.cachedStatus) : null; } catch (e) { cachedStatus = null; }
   var operationUrl = dialog.dataset.operationUrl || ''; // the table's link, known from the page, so it shows before anything is read from MekBay
   var inProgress = dialog.dataset.inProgress === '1'; // the scenario has a battle going: the dialog opens on its Operation in progress view
   var opActions = document.getElementById('op-actions');
@@ -588,7 +590,7 @@
     finished = {};
     inProgress = true;
     if (initial) statusData = { url: initial.url, operation: initial.operation, forces: [], updatedAt: 0 };
-    else if (!statusData) statusData = { url: operationUrl, forces: [], updatedAt: 0 };
+    else if (!statusData) statusData = { url: operationUrl, forces: cachedStatus && cachedStatus.forces || [], updatedAt: cachedStatus && cachedStatus.updatedAt || 0 };
     render();
     refreshStatus();
     startPolling();

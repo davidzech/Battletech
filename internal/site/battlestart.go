@@ -163,6 +163,11 @@ func (s *Server) battleStatus(w http.ResponseWriter, r *http.Request) {
 	for _, f := range got.Forces {
 		out.Forces = append(out.Forces, statusForce{Name: f.Force.Name, Alignment: f.Alignment, Units: hangarViews(f.Force)})
 	}
+	if b, err := json.Marshal(out.Forces); err == nil { // kept so the next visit paints at once (the link is never stored: it is built from the request)
+		if err := s.store.SaveBattleStatus(r.Context(), pt.ID, c.Slug, sc.ID, string(b), out.UpdatedAt); err != nil {
+			log.Printf("keep the battle status: %v", err)
+		}
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	_ = json.NewEncoder(w).Encode(out)
