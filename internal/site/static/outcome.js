@@ -11,7 +11,7 @@
   var total = document.getElementById('outcome-total');
   var error = document.getElementById('outcome-error');
   var commit = document.getElementById('outcome-commit');
-  var state = null;   // { pilots: { id: { tookPart, values } }, mission: { id: value } }
+  var state = null;   // { pilots: { id: { tookPart, killed, values } }, mission: { id: value } }
   var results = {};   // pilot id -> the preview's lines, and the mission's
   var seq = 0, timer = null, valid = false;
 
@@ -29,14 +29,16 @@
   }
 
   // One input: a number box or a themed checkbox.
-  function field(input, values, onChange) {
+  function field(input, values, onChange, key) {
+    key = key || input.id;
     var wrap = el('label', 'outcome-field' + (input.type === 'bool' ? ' check themed-check' : ''));
     var box = document.createElement('input');
     if (input.type === 'bool') {
-      box.type = 'checkbox'; box.className = 'themed-box'; box.checked = !!values[input.id];
-      box.addEventListener('change', function () { values[input.id] = box.checked; onChange(); });
+      box.type = 'checkbox'; box.className = 'themed-box'; box.checked = !!values[key];
+      box.addEventListener('change', function () { values[key] = box.checked; onChange(); });
       wrap.appendChild(box);
       wrap.appendChild(el('span', null, input.label));
+      if (input.help) wrap.appendChild(el('span', 'muted outcome-help', input.help));
     } else {
       wrap.appendChild(el('span', 'outcome-label', input.label));
       box.type = 'number'; box.min = input.min; box.max = input.max; box.step = 1; box.inputMode = 'numeric'; box.value = values[input.id];
@@ -54,7 +56,7 @@
     var pilotInputs = byScope('pilot');
     if (!pilots.length) body.appendChild(el('p', 'muted', 'You have no living named pilots to report on.'));
     pilots.forEach(function (p) {
-      var st = state.pilots[p.id] = { tookPart: true, values: blank(pilotInputs) };
+      var st = state.pilots[p.id] = { tookPart: true, killed: false, values: blank(pilotInputs) };
       var card = el('div', 'outcome-pilot');
       var head = el('div', 'outcome-pilot-head');
       var img = document.createElement('img');
@@ -65,18 +67,21 @@
       if (p.rank) who.appendChild(el('span', 'muted', p.rank));
       head.appendChild(who);
       var took = el('label', 'outcome-field check themed-check');
+      took.title = 'Untick if the pilot sat this one out (benched): they get half the pilot SP, if the mission gives any.';
       var tb = document.createElement('input');
       tb.type = 'checkbox'; tb.className = 'themed-box'; tb.checked = true;
-      took.appendChild(tb); took.appendChild(el('span', null, 'Took part'));
+      took.appendChild(tb); took.appendChild(el('span', null, 'Active'));
       head.appendChild(took);
       card.appendChild(head);
       var fields = el('div', 'outcome-fields');
       pilotInputs.forEach(function (i) { fields.appendChild(field(i, st.values, changed)); });
+      // Every pilot can be killed in action, whatever the scenario asks: a pilot killed gets nothing and is removed from the campaign.
+      fields.appendChild(field({ id: 'killed', label: 'Killed in action', type: 'bool' }, st, changed, 'killed'));
       card.appendChild(fields);
       var preview = el('ul', 'outcome-preview');
       preview.id = 'outcome-preview-' + p.id;
       card.appendChild(preview);
-      tb.addEventListener('change', function () { st.tookPart = tb.checked; fields.hidden = !tb.checked; changed(); });
+      tb.addEventListener('change', function () { st.tookPart = tb.checked; if (!tb.checked) st.killed = false; fields.hidden = !tb.checked; changed(); });
       body.appendChild(card);
     });
     var mission = byScope('mission');
@@ -104,7 +109,7 @@
     }
     pilots.forEach(function (p) {
       var st = state.pilots[p.id];
-      out.pilots.push({ id: p.id, tookPart: st.tookPart, values: st.tookPart ? clean(byScope('pilot'), st.values) : {} });
+      out.pilots.push({ id: p.id, tookPart: st.tookPart, killed: st.tookPart && st.killed, values: st.tookPart ? clean(byScope('pilot'), st.values) : {} });
     });
     out.mission = clean(byScope('mission'), state.mission);
     return ok ? out : null;
@@ -125,16 +130,16 @@
       var ul = document.getElementById('outcome-preview-' + p.id);
       if (!ul) return;
       ul.textContent = '';
-      if (!state.pilots[p.id].tookPart) { ul.appendChild(el('li', 'muted', 'Did not take part: no rewards, no losses.')); return; }
       var r = res && res.pilots.filter(function (x) { return x.id === p.id; })[0];
       if (!r) return;
-      if (!r.notes.length) ul.appendChild(el('li', 'muted', 'No effect.'));
-      r.notes.forEach(function (n) { ul.appendChild(el('li', r.kia ? 'outcome-bad' : 'outcome-good', n)); });
+      r.notes.forEach(function (n) { ul.appendChild(el('li', r.kia ? 'outcome-bad' : r.status === 'benched' ? 'muted' : 'outcome-good', n)); });
     });
     var lines = [];
     if (res) {
-      if (res.warchest) lines.push((res.warchest > 0 ? '+' : '') + res.warchest + ' SP to the warchest');
       (res.notes || []).forEach(function (n) { lines.push(n); });
+      if (res.warchest && !res.pool) lines.push((res.warchest > 0 ? '+' : '') + res.warchest + ' SP to the warchest');
+      if (res.keywords && res.keywords.length) lines.push('Keywords: ' + res.keywords.join(', '));
+      if (res.freeRecruits) lines.push(res.freeRecruits + ' free recruit' + (res.freeRecruits === 1 ? '' : 's'));
     }
     total.hidden = !lines.length;
     total.textContent = lines.join(' · ');

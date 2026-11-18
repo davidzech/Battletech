@@ -8,34 +8,53 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"regexp"
 	"strings"
 )
 
-// The outcome engine. A scenario's Outcome.md says, in its front matter, what the players report when the mission is over (`inputs`) and what follows from it
-// (`outcomes`, a list of rules). Scenario 000 is the model: each named pilot reports how many kills they got and whether they were killed, and the rules turn that
-// into SP, a removed pilot and a free replacement.
+// The outcome engine. A scenario's Outcome.md says, in its front matter, what the players report when the mission is over and what follows from it. Most scenarios
+// follow the BattleTech: Aces model:
+//
+//  1. SP are granted to the force for the objectives that were met: the mission's POOL.
+//  2. The mission gives a flat amount of SP to each active pilot (`pilot_sp`); a benched pilot (one who did not take part) gets half, and a pilot killed gets none and
+//     is killed in action. These shares are drawn from the pool.
+//  3. What is left of the pool goes to the warchest.
+//  4. Objectives met (or missed) grant KEYWORDS, which go into the campaign's ledger (Keywords.md is the registry).
+//
+// Say the objectives met total 600 SP and the mission gives each pilot 80. Four pilots, two active: (80 + 80) + (40 + 40) = 240 come out of the pool and go to the
+// pilots, and the other 360 go to the warchest. If an active pilot was killed instead, they get nothing and do not draw: 80 + 0 + 40 + 40 = 160, and 440 are left.
+// (A pool too small to pay every share in full is split between the pilots in proportion to what they were due.)
+//
+//	pilot_sp: 80                       # the flat share of each active pilot (a number or an expression over the mission inputs)
+//	objectives:                        # shorthand for a yes/no mission input, and a rule adding its SP to the pool
+//	  - id: depot_destroyed
+//	    label: Destroy the depot
+//	    sp: 400
+//	    grants: [depot_gone]           # keywords granted when it is met
+//	    unmet_grants: [depot_standing] # ... and when it is not
+//
+// A scenario that is not like that, such as the bootstrap mission Scenario 000, can say what it needs with `inputs` and `outcomes` (a list of rules) instead, and
+// grant SP straight to a pilot rather than from a pool:
 //
 //	inputs:
 //	  - id: kills            # a number (the default type), asked for each named pilot (the default scope)
 //	    label: Kills
 //	    max: 4
-//	  - id: killed
-//	    label: Killed in action
-//	    type: bool
 //	outcomes:
 //	  - when: kills == 2 and not killed
-//	    sp: 400              # SP the pilot earns: a number or an expression (see expr.go)
-//	  - when: killed or kills == 0
+//	    sp: 400              # SP the pilot earns, directly: a number or an expression (see expr.go)
+//	  - when: kills == 0
 //	    kia: true            # the pilot is killed in action
 //	    free_recruits: 1     # one free recruit (no SP cost) for the replacement
 //
-// An input has a `scope`: `pilot` (one value for each named pilot that took part) or `mission` (one value for the whole mission). A rule is a pilot rule when it gives
-// SP or kills the pilot or reads a pilot input: it is tried for each pilot that took part. Any other rule is a mission rule and is tried once. `when` is optional
-// (always true). The effects are `sp` and `kia` (pilot rules only), and `warchest` (SP added to the warchest) and `free_recruits` (recruits that cost no SP), which
-// add up over every rule and pilot that matches. A `label` replaces the rule's automatic note in the report.
+// Every pilot has two built-in inputs, `Active` (unticked, the pilot is benched) and `killed` (a bool, true if they were killed in action). An input has a `scope`:
+// `pilot` (one value for each active named pilot) or `mission` (one value for the whole mission). A rule is a pilot rule when it gives SP or kills the pilot or reads
+// a pilot input (`killed` is one): it is tried for each active pilot. Any other rule is a mission rule and is tried once. `when` is optional (always true). Pilot rules
+// may give `sp` (straight to the pilot) and `kia`; mission rules may give `pool` (SP into the pool) and `grants` (keywords); either may give `warchest` (SP added to
+// the warchest) and `free_recruits` (recruits that cost no SP), which add up over every rule that matches. A `label` replaces the rule's automatic note in the report.
 //
-// The players enter the inputs in the completion dialog, which previews the result by asking the server (POST /api/campaign/scenario-outcome); committing it
-// (POST /api/campaign/scenario-complete) applies every effect and records the report in one transaction, so a mission can only be completed once.
+// The players enter what happened in the completion dialog, which previews the result by asking the server (POST /api/campaign/scenario-outcome); committing it
+// (POST /api/campaign/scenario-outcome/commit) applies every effect and records the report in one transaction, so a mission can only be completed once.
 
 // OutcomeInput is something the players report when a mission is completed.
 type OutcomeInput struct {
@@ -48,28 +67,62 @@ type OutcomeInput struct {
 	Help  string `yaml:"help" json:"help,omitempty"`
 }
 
+// OutcomeObjective is the shorthand for an objective of the mission: a yes/no mission input, and what meeting it (or missing it) grants.
+type OutcomeObjective struct {
+	ID          string   `yaml:"id"`
+	Label       string   `yaml:"label"`
+	SP          any      `yaml:"sp"`           // SP added to the pool when the objective is met
+	Grants      []string `yaml:"grants"`       // keywords granted when it is met
+	UnmetGrants []string `yaml:"unmet_grants"` // keywords granted when it is not
+}
+
 // OutcomeRule is one rule of a scenario's outcomes.
 type OutcomeRule struct {
-	When         string `yaml:"when"`
-	Label        string `yaml:"label"`
-	SP           any    `yaml:"sp"`
-	Warchest     any    `yaml:"warchest"`
-	KIA          bool   `yaml:"kia"`
-	FreeRecruits int    `yaml:"free_recruits"`
+	When         string   `yaml:"when"`
+	Label        string   `yaml:"label"`
+	SP           any      `yaml:"sp"`
+	Pool         any      `yaml:"pool"`
+	Warchest     any      `yaml:"warchest"`
+	KIA          bool     `yaml:"kia"`
+	FreeRecruits int      `yaml:"free_recruits"`
+	Grants       []string `yaml:"grants"`
 
-	when, sp, warchest *Expr
-	pilot              bool
+	when, sp, pool, warchest *Expr
+	pilot                    bool
 }
 
-// HasOutcome reports whether the scenario has an outcome engine (inputs to report and rules to apply).
+// HasOutcome reports whether the scenario has an outcome engine (something to report and rules to apply).
 func (sc *Scenario) HasOutcome() bool {
-	return sc != nil && len(sc.OutcomeRules) > 0 && sc.OutcomeError == ""
+	return sc != nil && sc.OutcomeError == "" && (len(sc.OutcomeRules) > 0 || sc.pilotShare != nil)
 }
 
-// compileOutcomes fills in the input defaults and parses every rule; a mistake in the front matter is kept in OutcomeError (and the scenario then has no engine).
+// keywordID is a keyword's ID: lowercase snake_case.
+var keywordID = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
+
+// compileOutcomes turns the objectives into inputs and rules, fills in the input defaults and compiles every expression; a mistake in the front matter is kept in
+// OutcomeError (and the scenario then has no engine).
 func (sc *Scenario) compileOutcomes() {
 	fail := func(format string, args ...any) { sc.OutcomeError = fmt.Sprintf(format, args...) }
-	scope := map[string]string{}
+	for _, o := range sc.OutcomeObjectives {
+		if o.ID == "" {
+			fail("an objective has no id")
+			return
+		}
+		in := OutcomeInput{ID: o.ID, Label: o.Label, Scope: "mission", Type: "bool"}
+		if o.Label == "" {
+			in.Label = o.ID
+		}
+		if n, ok := o.SP.(int); ok {
+			in.Help = fmt.Sprintf("%d SP", n)
+		}
+		sc.OutcomeInputs = append(sc.OutcomeInputs, in)
+		sc.OutcomeRules = append(sc.OutcomeRules, OutcomeRule{When: o.ID, Pool: o.SP, Grants: o.Grants})
+		if len(o.UnmetGrants) > 0 {
+			sc.OutcomeRules = append(sc.OutcomeRules, OutcomeRule{When: "not " + o.ID, Grants: o.UnmetGrants})
+		}
+	}
+	sc.OutcomeObjectives = nil // expanded
+	scope := map[string]string{"killed": "pilot"}
 	for i := range sc.OutcomeInputs {
 		in := &sc.OutcomeInputs[i]
 		if in.ID == "" {
@@ -77,7 +130,7 @@ func (sc *Scenario) compileOutcomes() {
 			return
 		}
 		if _, dup := scope[in.ID]; dup {
-			fail("input %q is listed twice", in.ID)
+			fail("input %q is listed twice (or is a built-in)", in.ID)
 			return
 		}
 		if in.Scope == "" {
@@ -109,13 +162,27 @@ func (sc *Scenario) compileOutcomes() {
 		scope[in.ID] = in.Scope
 	}
 	// Expressions are type-checked against the inputs: a number input is an int, a bool input a bool.
-	env := map[string]any{}
+	env := map[string]any{"killed": false}
 	for _, in := range sc.OutcomeInputs {
 		if in.Type == "bool" {
 			env[in.ID] = false
 		} else {
 			env[in.ID] = 0
 		}
+	}
+	if sc.OutcomePilotSP != nil {
+		e, err := CompileAmount(fmt.Sprint(sc.OutcomePilotSP), env)
+		if err != nil {
+			fail("pilot_sp: %v", err)
+			return
+		}
+		for _, name := range e.Names() {
+			if scope[name] != "mission" {
+				fail("pilot_sp uses %q, which is not a mission input", name)
+				return
+			}
+		}
+		sc.pilotShare = e
 	}
 	for i := range sc.OutcomeRules {
 		r := &sc.OutcomeRules[i]
@@ -126,20 +193,27 @@ func (sc *Scenario) compileOutcomes() {
 				return
 			}
 		}
-		if r.SP != nil {
-			if r.sp, err = CompileAmount(fmt.Sprint(r.SP), env); err != nil {
-				fail("outcome %d: sp: %v", i+1, err)
+		for _, amount := range []struct {
+			name string
+			src  any
+			dst  **Expr
+		}{{"sp", r.SP, &r.sp}, {"pool", r.Pool, &r.pool}, {"warchest", r.Warchest, &r.warchest}} {
+			if amount.src == nil {
+				continue
+			}
+			if *amount.dst, err = CompileAmount(fmt.Sprint(amount.src), env); err != nil {
+				fail("outcome %d: %s: %v", i+1, amount.name, err)
 				return
 			}
 		}
-		if r.Warchest != nil {
-			if r.warchest, err = CompileAmount(fmt.Sprint(r.Warchest), env); err != nil {
-				fail("outcome %d: warchest: %v", i+1, err)
+		for _, g := range r.Grants {
+			if !keywordID.MatchString(g) {
+				fail("outcome %d: %q is not a keyword ID (lowercase snake_case)", i+1, g)
 				return
 			}
 		}
 		r.pilot = r.sp != nil || r.KIA
-		for _, e := range []*Expr{r.when, r.sp, r.warchest} {
+		for _, e := range []*Expr{r.when, r.sp, r.pool, r.warchest} {
 			if e == nil {
 				continue
 			}
@@ -152,7 +226,20 @@ func (sc *Scenario) compileOutcomes() {
 				r.pilot = r.pilot || s == "pilot"
 			}
 		}
+		if r.pilot && (r.pool != nil || len(r.Grants) > 0) {
+			fail("outcome %d: pool and grants belong to the mission as a whole, but this rule is tried for each pilot (it gives SP, kills a pilot or reads a pilot input)", i+1)
+			return
+		}
 	}
+}
+
+// GrantedKeywords lists every keyword the scenario's outcome can grant.
+func (sc *Scenario) GrantedKeywords() []string {
+	var out []string
+	for _, r := range sc.OutcomeRules {
+		out = append(out, r.Grants...)
+	}
+	return out
 }
 
 func b2f(b bool) float64 {
@@ -165,8 +252,9 @@ func b2f(b bool) float64 {
 // OutcomeEntry is what the players reported for one named pilot.
 type OutcomeEntry struct {
 	PilotID  string         `json:"id"`
-	TookPart bool           `json:"tookPart"`
-	Values   map[string]any `json:"values"` // numbers, or true/false for a bool input
+	TookPart bool           `json:"tookPart"` // active; false means benched
+	Killed   bool           `json:"killed"`   // killed in action (only an active pilot can be)
+	Values   map[string]any `json:"values"`   // numbers, or true/false for a bool input
 }
 
 // OutcomeInputs is everything the players reported.
@@ -175,12 +263,13 @@ type OutcomeInputs struct {
 	Mission map[string]any `json:"mission"`
 }
 
-// PilotOutcome is what a mission's outcome does to one named pilot who took part.
+// PilotOutcome is what a mission's outcome does to one named pilot.
 type PilotOutcome struct {
 	PilotID string   `json:"id"`
 	Name    string   `json:"name"`
+	Status  string   `json:"status"`  // active, benched or killed
 	Entered []string `json:"entered"` // what was reported, as text ("Kills: 2")
-	SP      int      `json:"sp"`      // SP the pilot earns
+	SP      int      `json:"sp"`      // SP the pilot earns in all
 	KIA     bool     `json:"kia"`     // killed in action: removed from the campaign
 	Notes   []string `json:"notes"`
 }
@@ -188,8 +277,10 @@ type PilotOutcome struct {
 // OutcomeResult is the full outcome of a mission: what it does to each pilot and to the force.
 type OutcomeResult struct {
 	Pilots       []PilotOutcome `json:"pilots"`
-	Warchest     int            `json:"warchest"`     // SP added to the warchest
+	Pool         int            `json:"pool"`         // SP granted for the objectives met, before the pilots take their shares
+	Warchest     int            `json:"warchest"`     // SP added to the warchest: what is left of the pool, and any direct grants
 	FreeRecruits int            `json:"freeRecruits"` // recruits that cost no SP
+	Keywords     []string       `json:"keywords"`     // keywords added to the campaign ledger
 	Notes        []string       `json:"notes"`        // notes about the mission as a whole
 }
 
@@ -260,9 +351,9 @@ func (sc *Scenario) entered(values map[string]any, scope string) []string {
 }
 
 // EvaluateOutcome applies the scenario's rules to what the players reported. names maps a living named pilot's ID to their name; an entry for any other pilot is
-// refused. Pilots who did not take part are left out of the result.
+// refused. Every pilot listed is in the result: active ones go through the rules, benched ones get their half share of the pilot SP, killed ones nothing.
 func (sc *Scenario) EvaluateOutcome(in OutcomeInputs, names map[string]string) (OutcomeResult, error) {
-	res := OutcomeResult{Pilots: []PilotOutcome{}, Notes: []string{}}
+	res := OutcomeResult{Pilots: []PilotOutcome{}, Keywords: []string{}, Notes: []string{}}
 	mission, err := sc.inputValues("mission", in.Mission)
 	if err != nil {
 		return res, err
@@ -272,7 +363,7 @@ func (sc *Scenario) EvaluateOutcome(in OutcomeInputs, names map[string]string) (
 		out  *PilotOutcome
 		vars map[string]any
 	}
-	var took []taken
+	var active []taken
 	for _, e := range in.Pilots {
 		name, ok := names[e.PilotID]
 		if !ok {
@@ -282,26 +373,42 @@ func (sc *Scenario) EvaluateOutcome(in OutcomeInputs, names map[string]string) (
 			return res, fmt.Errorf("%s is listed twice", name)
 		}
 		seen[e.PilotID] = true
-		if !e.TookPart {
+		po := PilotOutcome{PilotID: e.PilotID, Name: name, Status: "benched", Entered: []string{}, Notes: []string{}}
+		if e.Killed && !e.TookPart {
+			return res, fmt.Errorf("%s was benched, so they cannot have been killed", name)
+		}
+		if e.TookPart {
+			vals, err := sc.inputValues("pilot", e.Values)
+			if err != nil {
+				return res, fmt.Errorf("%s: %v", name, err)
+			}
+			po.Status = "active"
+			if e.Killed {
+				po.Status = "killed"
+			}
+			po.Entered = sc.entered(vals, "pilot")
+			vars := map[string]any{"killed": e.Killed}
+			for k, v := range mission {
+				vars[k] = v
+			}
+			for k, v := range vals {
+				vars[k] = v
+			}
+			res.Pilots = append(res.Pilots, po)
+			active = append(active, taken{vars: vars})
 			continue
 		}
-		vals, err := sc.inputValues("pilot", e.Values)
-		if err != nil {
-			return res, fmt.Errorf("%s: %v", name, err)
-		}
-		vars := map[string]any{}
-		for k, v := range mission {
-			vars[k] = v
-		}
-		for k, v := range vals {
-			vars[k] = v
-		}
-		res.Pilots = append(res.Pilots, PilotOutcome{PilotID: e.PilotID, Name: name, Entered: sc.entered(vals, "pilot"), Notes: []string{}})
-		took = append(took, taken{vars: vars})
+		res.Pilots = append(res.Pilots, po)
 	}
-	for i := range took {
-		took[i].out = &res.Pilots[i]
+	// res.Pilots may have been reallocated while appending, so the pointers are taken now.
+	idx := 0
+	for i := range res.Pilots {
+		if res.Pilots[i].Status != "benched" {
+			active[idx].out = &res.Pilots[i]
+			idx++
+		}
 	}
+	granted := map[string]bool{}
 	add := func(r *OutcomeRule, vars map[string]any, p *PilotOutcome) error {
 		if r.when != nil {
 			ok, err := r.when.Holds(vars)
@@ -324,6 +431,16 @@ func (sc *Scenario) EvaluateOutcome(in OutcomeInputs, names map[string]string) (
 			p.KIA = true
 			notes = append(notes, "Killed in action: removed from the campaign")
 		}
+		if r.pool != nil {
+			v, err := r.pool.Number(vars)
+			if err != nil {
+				return err
+			}
+			if n := max(0, roundInt(v)); n > 0 {
+				res.Pool += n
+				notes = append(notes, fmt.Sprintf("+%d SP to the pool", n))
+			}
+		}
 		if r.warchest != nil {
 			v, err := r.warchest.Number(vars)
 			if err != nil {
@@ -336,8 +453,17 @@ func (sc *Scenario) EvaluateOutcome(in OutcomeInputs, names map[string]string) (
 			res.FreeRecruits += r.FreeRecruits
 			notes = append(notes, fmt.Sprintf("%d free recruit(s)", r.FreeRecruits))
 		}
+		for _, g := range r.Grants {
+			if !granted[g] {
+				granted[g] = true
+				res.Keywords = append(res.Keywords, g)
+			}
+			notes = append(notes, "Keyword: "+g)
+		}
 		if r.Label != "" {
 			notes = []string{r.Label}
+		} else if p == nil {
+			notes = nil // a mission rule's effects show in the totals (pool, warchest, keywords); only a label of its own is a note
 		}
 		if p != nil {
 			p.Notes = append(p.Notes, notes...)
@@ -346,20 +472,85 @@ func (sc *Scenario) EvaluateOutcome(in OutcomeInputs, names map[string]string) (
 		}
 		return nil
 	}
+	// Mission rules first (they settle the pool), then each active pilot's own rules.
 	for i := range sc.OutcomeRules {
-		r := &sc.OutcomeRules[i]
-		if r.pilot {
-			for _, t := range took {
+		if r := &sc.OutcomeRules[i]; !r.pilot {
+			if err := add(r, mission, nil); err != nil {
+				return res, fmt.Errorf("outcome %d: %v", i+1, err)
+			}
+		}
+	}
+	for i := range sc.OutcomeRules {
+		if r := &sc.OutcomeRules[i]; r.pilot {
+			for _, t := range active {
 				if err := add(r, t.vars, t.out); err != nil {
 					return res, fmt.Errorf("outcome %d: %v", i+1, err)
 				}
 			}
-		} else if err := add(r, mission, nil); err != nil {
-			return res, fmt.Errorf("outcome %d: %v", i+1, err)
 		}
 	}
-	if len(res.Notes) == 0 {
-		res.Notes = []string{}
+	for i := range res.Pilots {
+		p := &res.Pilots[i]
+		if p.Status == "killed" && !p.KIA {
+			p.KIA = true
+			p.Notes = append(p.Notes, "Killed in action: removed from the campaign")
+		}
+	}
+	// The pilots' shares come out of the pool: the pilot SP to each active pilot, half to each benched one, nothing to a pilot who was killed. What is left goes to
+	// the warchest. A pool that can't pay every share in full is split in proportion to the shares.
+	if sc.pilotShare != nil {
+		v, err := sc.pilotShare.Number(mission)
+		if err != nil {
+			return res, fmt.Errorf("pilot_sp: %v", err)
+		}
+		share := max(0, roundInt(v))
+		due := make([]int, len(res.Pilots))
+		total := 0
+		for i, p := range res.Pilots {
+			switch p.Status {
+			case "active":
+				due[i] = share
+			case "benched":
+				due[i] = share / 2
+			}
+			total += due[i]
+		}
+		for i := range res.Pilots {
+			p := &res.Pilots[i]
+			pay := due[i]
+			if total > res.Pool && total > 0 {
+				pay = due[i] * res.Pool / total
+			}
+			if pay > 0 {
+				p.SP += pay
+				if p.Status == "benched" {
+					p.Notes = append(p.Notes, fmt.Sprintf("+%d SP (benched: half)", pay))
+				} else {
+					p.Notes = append(p.Notes, fmt.Sprintf("+%d SP", pay))
+				}
+			}
+			due[i] = pay
+		}
+		paid := 0
+		for _, d := range due {
+			paid += d
+		}
+		res.Warchest += res.Pool - paid
+		if res.Pool > 0 {
+			res.Notes = append(res.Notes, fmt.Sprintf("Pool: %d SP. %d to the pilots, %d to the warchest.", res.Pool, paid, res.Pool-paid))
+		}
+	} else if res.Pool > 0 {
+		res.Warchest += res.Pool
+		res.Notes = append(res.Notes, fmt.Sprintf("Pool: %d SP, all to the warchest.", res.Pool))
+	}
+	for i := range res.Pilots {
+		if p := &res.Pilots[i]; len(p.Notes) == 0 {
+			if p.Status == "benched" {
+				p.Notes = append(p.Notes, "Benched: no rewards, no losses.")
+			} else {
+				p.Notes = append(p.Notes, "No effect.")
+			}
+		}
 	}
 	return res, nil
 }
@@ -376,7 +567,7 @@ var ErrOutcomePilot = errors.New("a pilot in the outcome is no longer a living n
 var ErrOutcomeFunds = errors.New("the outcome would take the warchest below zero")
 
 // CompleteWithOutcome applies a mission's outcome and records the mission as completed, all in one transaction: SP to the pilots who earned it, pilots killed in
-// action, the warchest and the free recruits, and the completion row holding the report. It fails with ErrAlreadyCompleted if the mission was already completed, so
+// action, the warchest and the free recruits, the keywords granted (into the campaign ledger), and the completion row holding the report. It fails with ErrAlreadyCompleted if the mission was already completed, so
 // the rewards can never be given twice.
 func (s *Store) CompleteWithOutcome(ctx context.Context, playthroughID, campaign, scenario string, res OutcomeResult) error {
 	record, err := json.Marshal(res)
@@ -422,6 +613,11 @@ func (s *Store) CompleteWithOutcome(ctx context.Context, playthroughID, campaign
 		}
 		if c, _ := r.RowsAffected(); c == 0 {
 			return ErrOutcomeFunds
+		}
+	}
+	for _, k := range res.Keywords {
+		if _, err := tx.ExecContext(ctx, s.q(`INSERT INTO campaign_keywords (playthrough_id, campaign, keyword, scenario_id) VALUES (?, ?, ?, ?) ON CONFLICT (playthrough_id, campaign, keyword) DO NOTHING`), playthroughID, campaign, k, scenario); err != nil {
+			return err
 		}
 	}
 	if _, err := tx.ExecContext(ctx, s.q(`INSERT INTO scenario_completions (playthrough_id, campaign, scenario_id, outcome) VALUES (?, ?, ?, ?)`), playthroughID, campaign, scenario, string(record)); err != nil {
@@ -556,4 +752,28 @@ func (s *Server) commitOutcome(w http.ResponseWriter, r *http.Request) {
 	default:
 		w.WriteHeader(http.StatusNoContent)
 	}
+}
+
+// LedgerEntry is a keyword in the campaign's ledger: which scenario granted it.
+type LedgerEntry struct {
+	Keyword  string
+	Scenario string
+}
+
+// Ledger returns the keywords a playthrough's campaign has been granted, oldest first. Keywords belong to the campaign as a whole, not to any pilot.
+func (s *Store) Ledger(ctx context.Context, playthroughID, campaign string) ([]LedgerEntry, error) {
+	rows, err := s.db.QueryContext(ctx, s.q(`SELECT keyword, scenario_id FROM campaign_keywords WHERE playthrough_id = ? AND campaign = ? ORDER BY granted_at, keyword`), playthroughID, campaign)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []LedgerEntry
+	for rows.Next() {
+		var e LedgerEntry
+		if err := rows.Scan(&e.Keyword, &e.Scenario); err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
 }

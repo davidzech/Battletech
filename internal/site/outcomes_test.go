@@ -19,7 +19,7 @@ func scenario000(t *testing.T) *Scenario {
 }
 
 func entry(id string, took bool, kills int, killed bool) OutcomeEntry {
-	return OutcomeEntry{PilotID: id, TookPart: took, Values: map[string]any{"kills": float64(kills), "killed": killed}}
+	return OutcomeEntry{PilotID: id, TookPart: took, Killed: killed, Values: map[string]any{"kills": float64(kills)}}
 }
 
 func TestScenario000Outcomes(t *testing.T) {
@@ -43,31 +43,32 @@ func TestScenario000Outcomes(t *testing.T) {
 		}
 	}
 	// Two pilots are judged separately, and one who did not take part is left out entirely.
-	res, err := run(entry("a", true, 3, false), entry("b", true, 0, false), entry("c", false, 0, true))
-	if err != nil || len(res.Pilots) != 2 || res.Pilots[0].SP != 650 || !res.Pilots[1].KIA || res.FreeRecruits != 1 {
+	res, err := run(entry("a", true, 3, false), entry("b", true, 0, false), entry("c", false, 0, false))
+	if err != nil || len(res.Pilots) != 3 || res.Pilots[0].SP != 650 || !res.Pilots[1].KIA || res.FreeRecruits != 1 || res.Pilots[2].Status != "benched" || res.Pilots[2].SP != 0 || res.Pilots[2].KIA {
 		t.Fatalf("two pilots: %+v %v", res, err)
 	}
-	if res.Pilots[0].Name != "Alrek" || res.Pilots[0].Entered[0] != "Kills: 3" || res.Pilots[0].Entered[1] != "Killed in action: no" || res.Pilots[0].Notes[0] != "+650 SP" {
+	if res.Pilots[0].Name != "Alrek" || res.Pilots[0].Entered[0] != "Kills: 3" || res.Pilots[0].Notes[0] != "+650 SP" {
 		t.Errorf("the report says what was entered and what follows: %+v", res.Pilots[0])
 	}
 	if !strings.Contains(res.Pilots[1].Notes[0], "permanently removed") {
 		t.Errorf("the rule's own label is the note: %v", res.Pilots[1].Notes)
 	}
-	// Nobody took part: nothing happens.
-	if res, err := run(entry("a", false, 0, false)); err != nil || len(res.Pilots) != 0 || res.FreeRecruits != 0 || res.Warchest != 0 {
+	// A benched pilot is listed but nothing happens to them (Scenario 000 has no pilot SP to share), and nothing else changes.
+	if res, err := run(entry("a", false, 0, false)); err != nil || len(res.Pilots) != 1 || res.Pilots[0].Status != "benched" || res.Pilots[0].Notes[0] != "Benched: no rewards, no losses." || res.FreeRecruits != 0 || res.Warchest != 0 {
 		t.Errorf("nobody took part: %+v %v", res, err)
 	}
 	// Bad reports are refused.
 	for name, in := range map[string]OutcomeInputs{
-		"too many kills":    {Pilots: []OutcomeEntry{entry("a", true, 5, false)}},
-		"negative kills":    {Pilots: []OutcomeEntry{entry("a", true, -1, false)}},
-		"half a kill":       {Pilots: []OutcomeEntry{{PilotID: "a", TookPart: true, Values: map[string]any{"kills": 1.5}}}},
-		"a word for kills":  {Pilots: []OutcomeEntry{{PilotID: "a", TookPart: true, Values: map[string]any{"kills": "two"}}}},
-		"an unknown input":  {Pilots: []OutcomeEntry{{PilotID: "a", TookPart: true, Values: map[string]any{"kills": 1.0, "bogus": 1.0}}}},
-		"an unknown pilot":  {Pilots: []OutcomeEntry{entry("zz", true, 1, false)}},
-		"the same pilot":    {Pilots: []OutcomeEntry{entry("a", true, 1, false), entry("a", true, 2, false)}},
-		"a mission input":   {Pilots: []OutcomeEntry{entry("a", true, 1, false)}, Mission: map[string]any{"bonus": 1.0}},
-		"killed as a count": {Pilots: []OutcomeEntry{{PilotID: "a", TookPart: true, Values: map[string]any{"kills": 1.0, "killed": 2.0}}}},
+		"too many kills":         {Pilots: []OutcomeEntry{entry("a", true, 5, false)}},
+		"negative kills":         {Pilots: []OutcomeEntry{entry("a", true, -1, false)}},
+		"half a kill":            {Pilots: []OutcomeEntry{{PilotID: "a", TookPart: true, Values: map[string]any{"kills": 1.5}}}},
+		"a word for kills":       {Pilots: []OutcomeEntry{{PilotID: "a", TookPart: true, Values: map[string]any{"kills": "two"}}}},
+		"an unknown input":       {Pilots: []OutcomeEntry{{PilotID: "a", TookPart: true, Values: map[string]any{"kills": 1.0, "bogus": 1.0}}}},
+		"an unknown pilot":       {Pilots: []OutcomeEntry{entry("zz", true, 1, false)}},
+		"the same pilot":         {Pilots: []OutcomeEntry{entry("a", true, 1, false), entry("a", true, 2, false)}},
+		"a mission input":        {Pilots: []OutcomeEntry{entry("a", true, 1, false)}, Mission: map[string]any{"bonus": 1.0}},
+		"a benched pilot killed": {Pilots: []OutcomeEntry{{PilotID: "a", TookPart: false, Killed: true}}},
+		"killed as a count":      {Pilots: []OutcomeEntry{{PilotID: "a", TookPart: true, Values: map[string]any{"kills": 1.0, "killed": 2.0}}}},
 	} {
 		if _, err := sc.EvaluateOutcome(in, names); err == nil {
 			t.Errorf("%s should be refused", name)
@@ -101,7 +102,7 @@ func TestOutcomeRulesCompile(t *testing.T) {
 		Pilots:  []OutcomeEntry{{PilotID: "a", TookPart: true, Values: map[string]any{"kills": 2.0}}, {PilotID: "b", TookPart: true, Values: map[string]any{"kills": 1.0}}},
 		Mission: map[string]any{"won": true, "salvage": 100.0},
 	}, map[string]string{"a": "A", "b": "B"})
-	if err != nil || res.Pilots[0].SP != 200 || res.Pilots[1].SP != 100 || res.Warchest != 250 || len(res.Notes) != 2 || res.Notes[0] != "Victory salvage" {
+	if err != nil || res.Pilots[0].SP != 200 || res.Pilots[1].SP != 100 || res.Warchest != 250 || len(res.Notes) != 1 || res.Notes[0] != "Victory salvage" {
 		t.Errorf("a mission with a mission input: %+v %v", res, err)
 	}
 	for name, sc := range map[string]*Scenario{

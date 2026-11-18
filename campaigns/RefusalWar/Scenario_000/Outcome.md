@@ -5,9 +5,6 @@ inputs:
   - id: kills
     label: Kills
     max: 4
-  - id: killed
-    label: Killed in action
-    type: bool
 outcomes:
   - when: kills == 1 and not killed
     sp: 150

@@ -53,6 +53,7 @@ type Page struct {
 	Cards              []Card
 	HasLocked          bool           // some scenario cards are locked, so the campaign page offers 'Show all scenarios'
 	ScenarioState      string         // on a scenario page: completed, available or locked
+	Ledger             []LedgerEntry  // the keywords the campaign has been granted (on the keywords page)
 	Outcome            *OutcomeResult // on a completed scenario page: the recorded report of its outcome
 	Images             []string       // URLs of the scenario's images
 	Seed               string         // the visitor's seed ("" if none chosen yet)
@@ -258,11 +259,19 @@ func (s *Server) keywords(w http.ResponseWriter, r *http.Request) {
 		s.notFound(w, r)
 		return
 	}
-	s.render(w, r, http.StatusOK, "keywords", Page{
+	p := Page{
 		Title:    "Keywords | " + c.Label,
 		Crumbs:   []Crumb{{Label: c.Label, URL: "/" + c.Slug + "/"}, {Label: "Keywords", URL: "/" + c.Slug + "/keywords/"}},
 		Campaign: c,
-	})
+	}
+	if seed := currentSeed(r); seed != "" {
+		if ledger, err := s.store.Ledger(r.Context(), playthroughID(seed), c.Slug); err != nil {
+			log.Printf("load the campaign ledger: %v", err)
+		} else {
+			p.Ledger = ledger
+		}
+	}
+	s.render(w, r, http.StatusOK, "keywords", p)
 }
 
 func (s *Server) scenario(w http.ResponseWriter, r *http.Request) {
