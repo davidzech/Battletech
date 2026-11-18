@@ -1,4 +1,4 @@
-// Manage page: "Purchase new unit". A popup with the shared unit search (unitsearch.js, which loads after mechrow.js and before this), laid out like a shop. Clicking a result
+// Manage page: "Purchase New Units". A popup with the shared unit search (unitsearch.js, which loads after mechrow.js and before this), laid out like a shop. Clicking a result
 // row puts it in "Your cart" below (the row is tinted and badged "In cart"); clicking it again takes it back out. A Buy button commits the purchase
 // (POST /api/hangar/purchase). Both lists are the
 // same mech rows as the hangar (mechrow.js, which must load first). BV is SP: each unit costs its base BV, shown against the warchest. Names go

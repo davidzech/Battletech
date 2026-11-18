@@ -577,7 +577,7 @@ func TestManageAndOverview(t *testing.T) {
 	}
 	// The manage page holds all of them.
 	man := body(t, srv, "/refusalwar/manage/", cookie)
-	for _, want := range []string{`id="delete-dialog"`, `id="sp-dialog"`, `class="button pilot-sp"`, "Purchase new unit"} {
+	for _, want := range []string{`id="delete-dialog"`, `id="sp-dialog"`, `class="button pilot-sp"`, "Purchase New Units"} {
 		if !strings.Contains(man, want) {
 			t.Errorf("manage page is missing %q", want)
 		}
