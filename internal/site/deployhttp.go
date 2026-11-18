@@ -27,25 +27,8 @@ func (s *Server) mekbayRequest(w http.ResponseWriter, r *http.Request) (pt Playt
 		http.Error(w, "unknown scenario, or it has no OpFor to deploy against", http.StatusNotFound)
 		return
 	}
-	pt, found, err := s.store.Playthrough(r.Context(), playthroughID(seed))
-	if err != nil {
-		http.Error(w, "could not load playthrough", http.StatusInternalServerError)
-		return
-	}
-	if !found || !pt.Configured() {
-		http.Error(w, "Name your account first.", http.StatusBadRequest)
-		return
-	}
-	run, started, err := s.store.Run(r.Context(), pt.ID, c.Slug)
-	if err != nil {
-		http.Error(w, "could not load campaign", http.StatusInternalServerError)
-		return
-	}
-	if !started {
-		http.Error(w, "Start this campaign first.", http.StatusBadRequest)
-		return
-	}
-	return pt, run, c, sc, true
+	pt, run, ok = s.startedRun(w, r, seed, c)
+	return pt, run, c, sc, ok
 }
 
 // hangarJSON lists the player's hangar for the deploy popup, with the scenario's BV limit.

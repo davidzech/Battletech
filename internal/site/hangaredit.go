@@ -32,6 +32,13 @@ func (s *Server) runRequest(w http.ResponseWriter, r *http.Request) (pt Playthro
 		http.Error(w, "unknown campaign", http.StatusNotFound)
 		return
 	}
+	pt, run, ok = s.startedRun(w, r, seed, c)
+	return pt, c, run, ok
+}
+
+// startedRun loads the seed's account, which must be named, and its run of the campaign, which must be started: what every campaign endpoint needs. It
+// answers the request itself and reports ok=false.
+func (s *Server) startedRun(w http.ResponseWriter, r *http.Request, seed string, c *Campaign) (pt Playthrough, run CampaignRun, ok bool) {
 	pt, found, err := s.store.Playthrough(r.Context(), playthroughID(seed))
 	if err != nil {
 		http.Error(w, "could not load playthrough", http.StatusInternalServerError)
@@ -50,7 +57,7 @@ func (s *Server) runRequest(w http.ResponseWriter, r *http.Request) (pt Playthro
 		http.Error(w, "Start this campaign first.", http.StatusBadRequest)
 		return
 	}
-	return pt, c, run, true
+	return pt, run, true
 }
 
 // hangarRequest is runRequest for a change to the hangar: the run's hangar must be a copy the site owns, since MekBay only takes the owner's saves.
