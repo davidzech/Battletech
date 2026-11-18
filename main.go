@@ -2,11 +2,13 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"log"
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/davidzech/Battletech/internal/site"
 )
@@ -44,6 +46,19 @@ func main() {
 		log.Fatal(err)
 	}
 	defer store.Close()
+
+	if *mekbayKey == "" {
+		log.Printf("warning: no MEKBAY_LINK_KEY is set, so MekBay links stop working whenever the server restarts")
+	}
+	go func() { // a MekBay release that changes what the proxy relies on shows here, not as a player's broken table link
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		if err := site.CheckMekBay(ctx); err != nil {
+			log.Printf("warning: the MekBay proxy may not work with the current mekbay.com: %v", err)
+		} else {
+			log.Printf("MekBay proxy check: ok")
+		}
+	}()
 
 	log.Printf("serving %q on %s (database: %s)", *content, *addr, desc)
 	log.Fatal(http.ListenAndServe(*addr, site.NewHandler(*content, store, site.WithMekBayLinkKey(*mekbayKey))))

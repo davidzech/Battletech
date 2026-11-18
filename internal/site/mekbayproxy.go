@@ -413,6 +413,12 @@ func swapUUID(b []byte, account string) []byte {
 	return out
 }
 
+// CheckMekBay runs the proxy's Check against the live mekbay.com (see Check). main runs it once at startup, so a MekBay release that breaks the proxy shows in the
+// server's log.
+func CheckMekBay(ctx context.Context) error {
+	return newMekBayProxy(newMekBayVault(""), nil).Check(ctx)
+}
+
 var scriptAsset = regexp.MustCompile(`^/[A-Za-z0-9._-]+\.js$`)
 
 // Check says whether the proxy can still do its job against the live MekBay: its asset list is readable and at least one of its
