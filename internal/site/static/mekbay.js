@@ -87,13 +87,8 @@
   try { pilots = JSON.parse(dialog.dataset.pilots || '[]') || []; } catch (e) { pilots = []; }
   if (typeof AbilityCard !== 'undefined') { try { AbilityCard.setCatalog(JSON.parse(dialog.dataset.abilities || '[]')); } catch (e) { /* no catalog: the chips just won't explain themselves */ } }
 
-  function fmt(n) { return Number(n).toLocaleString('en-US'); }
-  function el(tag, cls, text) {
-    var e = document.createElement(tag);
-    if (cls) e.className = cls;
-    if (text !== undefined) e.textContent = text;
-    return e;
-  }
+  var fmt = Dom.commas;
+  var el = Dom.el;
 
   // ---- The plan
   function plan(i) { if (!plans[i]) plans[i] = { selected: {}, crew: {} }; return plans[i]; }

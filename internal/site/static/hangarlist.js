@@ -9,19 +9,14 @@
   var summary = document.getElementById('hangar-units-summary');
   if (!section || !list || typeof MechRow === 'undefined') return;
 
-  function el(tag, cls, text) {
-    var e = document.createElement(tag);
-    if (cls) e.className = cls;
-    if (text !== undefined) e.textContent = text;
-    return e;
-  }
+  var el = Dom.el;
   // The count and total BV as big yellow numbers with labels; the rows underneath carry the per-unit detail, so no icons here.
   var hangarLink = section.dataset.hangarUrl || ''; // the player's MekBay hangar, which a row click opens with that unit selected
 
   var canModify = section.dataset.canModify === '1';
   var warchest = parseInt(section.dataset.warchest, 10) || 0;
   var NO_UID = 'This hangar is from before the site kept its own copy. Delete the campaign and start it again to import your hangar.';
-  function commas(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+  var commas = Dom.commas;
   function fullName(u) { return (u.name + (u.model ? ' ' + u.model : '')).trim(); }
 
   // Posts a service (repair or rearm) for one unit; resolves with the server's answer or a message.

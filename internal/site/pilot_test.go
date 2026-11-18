@@ -1465,3 +1465,16 @@ func TestStartWizardKnowsTheFirstRank(t *testing.T) {
 		t.Error("a campaign with no ranks has no first rank")
 	}
 }
+
+// Every page loads the shared helpers (static/dom.js) before any script of its own, since those scripts use Dom.el and Dom.commas.
+func TestPagesLoadTheSharedHelpersFirst(t *testing.T) {
+	srv, _, cookie := startedCompany(t)
+	for _, path := range []string{"/", "/refusalwar/", "/refusalwar/manage/", "/refusalwar/scenario_001/", "/refusalwar/keywords/"} {
+		p := body(t, srv, path, cookie)
+		dom := strings.Index(p, `<script src="/static/dom.js"></script>`)
+		first := strings.Index(p, `<script src="/static/`)
+		if dom < 0 || dom != first {
+			t.Errorf("%s: dom.js is the first script (at %d, first at %d)", path, dom, first)
+		}
+	}
+}

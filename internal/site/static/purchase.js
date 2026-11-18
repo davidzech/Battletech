@@ -26,13 +26,8 @@
   var errEl = document.getElementById('purchase-error');
   var buyBtn = document.getElementById('purchase-buy');
 
-  function el(tag, cls, text) {
-    var e = document.createElement(tag);
-    if (cls) e.className = cls;
-    if (text !== undefined) e.textContent = text;
-    return e;
-  }
-  function commas(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+  var el = Dom.el;
+  var commas = Dom.commas;
   var plain = UnitSearch.plain;
   function total() { return staged.reduce(function (sum, s) { return sum + (Number(s.unit.bv) || 0); }, 0); }
   function countOf(id) { return staged.filter(function (s) { return s.unit.unit === id; }).length; }

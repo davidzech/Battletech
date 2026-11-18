@@ -17,12 +17,7 @@
   var results = {};   // pilot id -> the preview's lines, and the mission's
   var seq = 0, timer = null, valid = false;
 
-  function el(tag, cls, text) {
-    var e = document.createElement(tag);
-    if (cls) e.className = cls;
-    if (text !== undefined) e.textContent = text;
-    return e;
-  }
+  var el = Dom.el;
   function byScope(scope) { return inputs.filter(function (i) { return i.scope === scope; }); }
   function blank(list) {
     var v = {};

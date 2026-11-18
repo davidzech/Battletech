@@ -18,12 +18,7 @@
 // A unit is { unit: <MekBay unit ID, e.g. BMMadCat_H>, name, model, icon, role, class, tons, bv, mekbayUrl }. Replies to older text are ignored, and typing
 // waits a moment before searching. Names go in as text, never HTML.
 (function () {
-  function el(tag, cls, text) {
-    var e = document.createElement(tag);
-    if (cls) e.className = cls;
-    if (text !== undefined) e.textContent = text;
-    return e;
-  }
+  var el = Dom.el;
   var ICON = '<svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>';
   var ids = 0;
 

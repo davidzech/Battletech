@@ -7,13 +7,8 @@
 (function () {
   var CAP = 8; // icons shown; more would crowd the row, the rest are only counted
 
-  function el(tag, cls, text) {
-    var e = document.createElement(tag);
-    if (cls) e.className = cls;
-    if (text !== undefined) e.textContent = text;
-    return e;
-  }
-  function commas(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+  var el = Dom.el;
+  var commas = Dom.commas;
 
   // ---- The hover card: one floating element for the page, filled with the unit under the pointer (or focused with the keyboard).
   var tip = null;

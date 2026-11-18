@@ -52,12 +52,7 @@
     return input.value;
   }
 
-  function el(tag, cls, text) {
-    var e = document.createElement(tag);
-    if (cls) e.className = cls;
-    if (text !== undefined) e.textContent = text;
-    return e;
-  }
+  var el = Dom.el;
 
   function post(body) {
     return fetch('/api/campaign/start', {
@@ -301,7 +296,7 @@
   var checkSeq = 0;
   var statusBox = null;
 
-  function number(n) { return Number(n).toLocaleString('en-US'); }
+  var number = Dom.commas;
 
   // Reads the hangar behind the link and checks it against the campaign's starting conditions. A reply for a link
   // the player has since changed is ignored.

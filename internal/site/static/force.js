@@ -5,12 +5,7 @@
   var root = document.getElementById('force-overview');
   if (!box || !root) return;
 
-  function el(tag, cls, text) {
-    var e = document.createElement(tag);
-    if (cls) e.className = cls;
-    if (text !== undefined) e.textContent = text;
-    return e;
-  }
+  var el = Dom.el;
 
   function fail(message) {
     box.textContent = '';
