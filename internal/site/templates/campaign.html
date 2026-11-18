@@ -25,7 +25,7 @@
 {{if or .Campaign.StartingMinMechs .Campaign.StartingBV}}<li>Your hangar holds {{if .Campaign.StartingMinMechs}}<b>at least {{.Campaign.StartingMinMechs}} mechs</b>{{end}}{{if and .Campaign.StartingMinMechs .Campaign.StartingBV}}, totalling {{end}}{{if .Campaign.StartingBV}}<b>up to {{.Campaign.StartingBVText}} BV</b>{{end}} (base BV, whatever the pilots&rsquo; skills).</li>
 {{end}}{{if .Campaign.StartingNamedPilots}}<li>You create <b>{{.Campaign.StartingNamedPilots}} named pilots</b>, each allocating <b>{{.Campaign.StartingPilotSP}} SP</b>.</li>
 {{end}}{{if .Campaign.StartingWarchest}}<li>Your warchest starts at <b>{{.Campaign.StartingWarchestText}} SP</b>.</li>
-{{end}}<li>You name your force, then link a MekBay force holding the mechs it fields; the site copies it and manages the copy.</li>
+{{end}}<li>You name your force, then pick the mechs it fields from the unit list (or link a force you already built in MekBay, which the site copies).</li>
 </ul>
 <p class="downloads"><button type="button" class="button" id="wizard-open">Start campaign</button></p>
 </section>
