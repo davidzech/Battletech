@@ -1374,3 +1374,13 @@ dialog.outcome { width: min(46rem, calc(100vw - 2rem)); }
 .outcome-summary li { margin: 0.25rem 0; }
 .outcome-summary .outcome-note { margin-left: 0.5rem; font: 700 0.85rem var(--display); letter-spacing: 0.05em; text-transform: uppercase; color: #5fc47e; }
 .outcome-summary li:has(.outcome-note) .outcome-note:not(:first-of-type) { color: var(--muted); }
+
+/* The scenario's outcome text (victory conditions and rewards) at the top of the completion dialog. */
+.outcome-rules { margin: 0.4rem 0 1rem; padding: 0.7rem 0.9rem; font-size: 0.9rem; background: var(--bg); border: 1px solid var(--line); border-left: 3px solid var(--line); }
+.outcome-rules > :first-child { margin-top: 0; }
+.outcome-rules > :last-child { margin-bottom: 0; }
+.outcome-rules h2, .outcome-rules h3 { margin: 0.2rem 0 0.5rem; font: 700 0.85rem var(--display); letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); }
+.outcome-rules p { margin: 0.5rem 0; }
+.outcome-rules table { width: 100%; border-collapse: collapse; margin: 0.5rem 0; font-size: 0.85rem; }
+.outcome-rules th, .outcome-rules td { padding: 0.25rem 0.6rem; text-align: left; border-bottom: 1px solid var(--line); }
+.outcome-rules th { font: 700 0.7rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }

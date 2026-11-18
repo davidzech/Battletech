@@ -18,7 +18,7 @@
 {{if and .Scenario.HasOutcome (ne .ScenarioState "locked") (ne .ScenarioState "completed")}}<dialog id="outcome-dialog" class="wizard outcome" aria-labelledby="outcome-title" data-campaign="{{.Campaign.Slug}}" data-scenario="{{.Scenario.Slug}}" data-inputs="{{.OutcomeInputsJSON}}" data-pilots="{{.OutcomePilotsJSON}}">
   <form id="outcome-form" autocomplete="off" novalidate>
     <h2 id="outcome-title">Complete mission</h2>
-    <p class="muted">Report how the mission went: which pilots were active (the others are benched and get half the pilot SP), who was killed, and the objectives met. The result is shown as you enter it, and nothing changes until you commit it. A completed mission cannot be undone.</p>
+    <section class="outcome-rules" id="outcome-rules">{{.Scenario.OutcomeHTML}}</section>
     <div id="outcome-body"></div>
     <p id="outcome-total" class="repair-cost" hidden></p>
     <p id="outcome-error" class="form-error" role="alert"></p>
@@ -89,11 +89,11 @@
 <p class="downloads">{{range .Scenario.Forces}}<a class="button" href="/{{$.Campaign.Slug}}/{{$.Scenario.Slug}}/forces/{{.File}}" download>Download {{.Label}} (.mul)</a>{{end}}</p></div>
 </details>
 {{end}}
-*/}}<details class="fold">
+*/}}{{if not (and .Run.Started .Scenario.HasOutcome (ne .ScenarioState "locked") (ne .ScenarioState "completed"))}}<details class="fold">
 <summary>Outcome</summary>
 <div class="fold-body"><section class="panel">{{.Scenario.OutcomeHTML}}</section></div>
 </details>
-{{if and .Run.Started (ne .ScenarioState "locked")}}{{if or (not .Scenario.HasOutcome) (ne .ScenarioState "completed")}}<section class="mission-actions" id="mission-actions">
+{{end}}{{if and .Run.Started (ne .ScenarioState "locked")}}{{if or (not .Scenario.HasOutcome) (ne .ScenarioState "completed")}}<section class="mission-actions" id="mission-actions">
 {{if ne .ScenarioState "locked"}}{{if .Scenario.HasOutcome}}{{if ne .ScenarioState "completed"}}<button type="button" class="button" id="outcome-open">Complete mission&hellip;</button>{{end}}{{else}}<button type="button" class="button" id="mission-log-toggle">{{if eq .ScenarioState "completed"}}Mark not completed{{else}}Mark completed{{end}}</button>{{end}}{{end}}
 <p class="form-error" id="mission-log-error" role="alert"></p>
 </section>
