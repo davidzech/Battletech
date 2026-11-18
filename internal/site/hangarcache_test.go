@@ -131,10 +131,10 @@ func TestHangarCachePullThrough(t *testing.T) {
 		t.Errorf("the scenario page should carry the cached hangar for the popup: %.300s", sattr)
 	}
 
-	// Changing the hangar link makes the old copy meaningless: it is not shown for the new link.
-	other := "https://mekbay.com/?instance=01a12f98-8a21-7d12-b43d-52bb70872376"
-	if r := post(t, srv, "/api/campaign/start", url.Values{"campaign": {"refusalwar"}, "hangar": {other}}, cookie, srv.URL); r.StatusCode != http.StatusNoContent {
-		t.Fatalf("change link: %d", r.StatusCode)
+	// A run pointing at another hangar force (as a rollback past a re-made hangar would) makes the old copy meaningless: it is not shown for the new one.
+	other := "01a12f98-8a21-7d12-b43d-52bb70872376"
+	if err := store.StartRun(ctx, id, "refusalwar", Hangar{URL: "https://mekbay.com/?instance=" + other, Instance: other, Source: "https://mekbay.com/?instance=" + other}); err != nil {
+		t.Fatal(err)
 	}
 	if attr := cachedAttr(body(t, srv, "/refusalwar/", cookie)); attr != "" {
 		t.Errorf("a changed hangar link must not show the old copy: %.200s", attr)

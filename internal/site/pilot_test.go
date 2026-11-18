@@ -434,16 +434,13 @@ func TestStartWizardSubmission(t *testing.T) {
 		t.Fatalf("a started campaign shows its pilots and no change-link dialog: %.3000s", c)
 	}
 
-	// Submitting the wizard again only re-imports the hangar: no duplicate pilots.
+	// Submitting the wizard again is refused, and duplicates nothing.
 	other := "https://mekbay.com/?instance=01a12f98-8a21-7d12-b43d-52bb70872376"
-	if r := post(t, srv, "/api/campaign/start", startForm(other, "Alrek", "Katarina"), cookie, srv.URL); r.StatusCode != http.StatusNoContent {
+	if r := post(t, srv, "/api/campaign/start", startForm(other, "Alrek", "Katarina"), cookie, srv.URL); r.StatusCode != http.StatusConflict {
 		t.Fatalf("second submit: %d", r.StatusCode)
 	}
 	if ps, _ := store.Pilots(ctx, id, "refusalwar"); len(ps) != 2 {
 		t.Fatalf("a second submit must not duplicate pilots: %+v", ps)
-	}
-	if run, _, _ := store.Run(ctx, id, "refusalwar"); run.SourceURL != other || run.HangarInstance == "" || run.HangarInstance == goodInstance {
-		t.Fatalf("the second submit should copy the new link into a fresh hangar: %+v", run)
 	}
 }
 

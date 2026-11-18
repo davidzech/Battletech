@@ -169,22 +169,10 @@ func (s *Server) startCampaign(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not load campaign", http.StatusInternalServerError)
 		return
 	}
-	if started && units != nil {
-		http.Error(w, "This campaign has already been started.", http.StatusConflict)
-		return
-	}
 	if started {
-		hangar, _, err := s.cloneHangar(r.Context(), seed, source)
-		if err != nil {
-			log.Printf("clone hangar for %s: %v", c.Slug, err)
-			http.Error(w, err.Error(), http.StatusBadGateway)
-			return
-		}
-		if err := s.store.StartRun(r.Context(), id, c.Slug, hangar); err != nil {
-			http.Error(w, "could not save the hangar link", http.StatusInternalServerError)
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
+		// A started campaign's hangar is never replaced from here: what has happened to it since (repairs, battles, checkpoints) would be lost. To start over,
+		// delete the campaign (or roll it back to its start).
+		http.Error(w, "This campaign has already been started.", http.StatusConflict)
 		return
 	}
 	pilots, err := parseStartingPilots(r, c)
