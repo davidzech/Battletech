@@ -10,46 +10,11 @@ import (
 	"strings"
 )
 
-// pilotRequest is what every named-pilot endpoint needs first: a same-origin request from a seed whose company is
-// named and which has started the campaign the request names. It writes the error response itself and reports
-// ok=false.
+// pilotRequest checks what every endpoint that changes a campaign needs (see runRequest) and returns the playthrough and the campaign. It writes the error
+// response itself and reports ok=false.
 func (s *Server) pilotRequest(w http.ResponseWriter, r *http.Request) (pt Playthrough, c *Campaign, ok bool) {
-	if !sameOrigin(r) {
-		http.Error(w, "cross-origin request refused", http.StatusForbidden)
-		return
-	}
-	seed := currentSeed(r)
-	if seed == "" {
-		http.Error(w, "Choose a seed first.", http.StatusBadRequest)
-		return
-	}
-	r.Body = http.MaxBytesReader(w, r.Body, 4096)
-	if err := r.ParseForm(); err != nil {
-		http.Error(w, "bad request", http.StatusBadRequest)
-		return
-	}
-	c, found := s.lib.Campaign(r.PostFormValue("campaign"))
-	if !found {
-		http.Error(w, "unknown campaign", http.StatusNotFound)
-		return
-	}
-	pt, found, err := s.store.Playthrough(r.Context(), playthroughID(seed))
-	if err != nil {
-		http.Error(w, "could not load playthrough", http.StatusInternalServerError)
-		return
-	}
-	if !found || !pt.Configured() {
-		http.Error(w, "Name your account first.", http.StatusBadRequest)
-		return
-	}
-	if _, started, err := s.store.Run(r.Context(), pt.ID, c.Slug); err != nil {
-		http.Error(w, "could not load campaign", http.StatusInternalServerError)
-		return
-	} else if !started {
-		http.Error(w, "Start this campaign first.", http.StatusBadRequest)
-		return
-	}
-	return pt, c, true
+	pt, c, _, ok = s.runRequest(w, r)
+	return pt, c, ok
 }
 
 // addPilot names a new named pilot for the campaign. They start with no SP: SP is earned, then allocated.

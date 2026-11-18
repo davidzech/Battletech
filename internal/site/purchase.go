@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -97,17 +96,8 @@ func purchaseCost(ids []string) (int, error) {
 // purchaseUnits is POST /api/hangar/purchase: buy the units named by repeated `unit` fields, paid from the warchest at their base BV, and add
 // them to the hangar in MekBay. It needs modify mode. The warchest is charged first and refunded if MekBay fails.
 func (s *Server) purchaseUnits(w http.ResponseWriter, r *http.Request) {
-	pt, c, ok := s.pilotRequest(w, r)
+	pt, c, run, ok := s.hangarRequest(w, r)
 	if !ok {
-		return
-	}
-	run, started, err := s.store.Run(r.Context(), pt.ID, c.Slug)
-	if err != nil || !started {
-		http.Error(w, "Start this campaign first.", http.StatusBadRequest)
-		return
-	}
-	if !run.Owned() {
-		http.Error(w, notOwnedMessage, http.StatusConflict)
 		return
 	}
 	ids := r.PostForm["unit"]
@@ -116,21 +106,7 @@ func (s *Server) purchaseUnits(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if err := s.store.SpendWarchest(r.Context(), pt.ID, c.Slug, cost); errors.Is(err, ErrInsufficientFunds) {
-		http.Error(w, fmt.Sprintf("Not enough in the warchest: that costs %d SP and you have %d.", cost, run.Warchest), http.StatusConflict)
-		return
-	} else if err != nil {
-		http.Error(w, "could not charge the warchest", http.StatusInternalServerError)
-		return
-	}
-	if err := s.mekbay.PurchaseUnits(r.Context(), PurchaseRequest{OwnerUID: accountUID(currentSeed(r), SlotHangar), Instance: run.HangarInstance, Units: ids}); err != nil {
-		log.Printf("buy units in MekBay: %v", err) // never log the owner UID
-		if rerr := s.store.RefundWarchest(r.Context(), pt.ID, c.Slug, cost); rerr != nil {
-			log.Printf("could not refund %d SP: %v", cost, rerr)
-		}
-		http.Error(w, err.Error(), http.StatusBadGateway)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	fmt.Fprintf(w, `{"cost":%d,"warchest":%d}`, cost, run.Warchest-cost)
+	s.payForHangarChange(w, r, pt, c, run, cost, "buy units", func() error {
+		return s.mekbay.PurchaseUnits(r.Context(), PurchaseRequest{OwnerUID: accountUID(currentSeed(r), SlotHangar), Instance: run.HangarInstance, Units: ids})
+	})
 }

@@ -275,17 +275,8 @@ func (c *MekBayClient) ServiceUnit(ctx context.Context, req ServiceRequest) erro
 // the change is made in MekBay. The server works out the unit's condition and the price itself; a repair names the level the page showed, and
 // is refused if the unit has changed since.
 func (s *Server) serviceUnit(w http.ResponseWriter, r *http.Request) {
-	pt, c, ok := s.pilotRequest(w, r)
+	pt, c, run, ok := s.hangarRequest(w, r)
 	if !ok {
-		return
-	}
-	run, started, err := s.store.Run(r.Context(), pt.ID, c.Slug)
-	if err != nil || !started {
-		http.Error(w, "Start this campaign first.", http.StatusBadRequest)
-		return
-	}
-	if !run.Owned() {
-		http.Error(w, notOwnedMessage, http.StatusConflict)
 		return
 	}
 	kind := r.PostFormValue("kind")
@@ -349,21 +340,7 @@ func (s *Server) serviceUnit(w http.ResponseWriter, r *http.Request) {
 		}
 		cost = rearmCost(hu.AmmoBins)
 	}
-	if err := s.store.SpendWarchest(r.Context(), pt.ID, c.Slug, cost); errors.Is(err, ErrInsufficientFunds) {
-		http.Error(w, fmt.Sprintf("Not enough in the warchest: that costs %d SP and you have %d.", cost, run.Warchest), http.StatusConflict)
-		return
-	} else if err != nil {
-		http.Error(w, "could not charge the warchest", http.StatusInternalServerError)
-		return
-	}
-	if err := s.mekbay.ServiceUnit(r.Context(), ServiceRequest{OwnerUID: accountUID(currentSeed(r), SlotHangar), Instance: run.HangarInstance, UnitID: hu.ID, Kind: kind, Level: level, Tons: cat.Tons}); err != nil {
-		log.Printf("%s a unit in MekBay: %v", kind, err) // never log the owner UID
-		if rerr := s.store.RefundWarchest(r.Context(), pt.ID, c.Slug, cost); rerr != nil {
-			log.Printf("could not refund %d SP: %v", cost, rerr)
-		}
-		http.Error(w, err.Error(), http.StatusBadGateway)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	fmt.Fprintf(w, `{"cost":%d,"warchest":%d}`, cost, run.Warchest-cost)
+	s.payForHangarChange(w, r, pt, c, run, cost, kind+" a unit", func() error {
+		return s.mekbay.ServiceUnit(r.Context(), ServiceRequest{OwnerUID: accountUID(currentSeed(r), SlotHangar), Instance: run.HangarInstance, UnitID: hu.ID, Kind: kind, Level: level, Tons: cat.Tons})
+	})
 }

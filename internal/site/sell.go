@@ -64,17 +64,8 @@ func (c *MekBayClient) SellUnit(ctx context.Context, req SellRequest) error {
 // sellUnit is POST /api/hangar/sell: sell the hangar unit named by `unit`. The server works out the price itself from the unit's state. The unit is taken out of
 // the hangar first and the warchest paid after, so a failure in MekBay never pays for a unit the player still has.
 func (s *Server) sellUnit(w http.ResponseWriter, r *http.Request) {
-	pt, c, ok := s.pilotRequest(w, r)
+	pt, c, run, ok := s.hangarRequest(w, r)
 	if !ok {
-		return
-	}
-	run, started, err := s.store.Run(r.Context(), pt.ID, c.Slug)
-	if err != nil || !started {
-		http.Error(w, "Start this campaign first.", http.StatusBadRequest)
-		return
-	}
-	if !run.Owned() {
-		http.Error(w, notOwnedMessage, http.StatusConflict)
 		return
 	}
 	h, err := s.mekbay.ReadHangar(r.Context(), run.HangarInstance)

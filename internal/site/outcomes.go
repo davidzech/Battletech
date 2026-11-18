@@ -699,16 +699,10 @@ func (s *Store) RestoreFreeRecruit(ctx context.Context, playthroughID, campaign 
 // outcomeRequest checks a scenario-outcome request and evaluates it: a same-origin request from a started campaign, for an available scenario with an outcome engine
 // that is not completed yet. It returns what the engine makes of the reported inputs.
 func (s *Server) outcomeRequest(w http.ResponseWriter, r *http.Request) (pt Playthrough, c *Campaign, sc *Scenario, res OutcomeResult, ok bool) {
-	pt, c, ok = s.pilotRequest(w, r)
-	if !ok {
+	if pt, c, ok = s.pilotRequest(w, r); !ok {
 		return
 	}
 	ok = false
-	run, started, err := s.store.Run(r.Context(), pt.ID, c.Slug)
-	if err != nil || !started || !run.Started() {
-		http.Error(w, "Start this campaign first.", http.StatusBadRequest)
-		return
-	}
 	sc, found := c.Scenario(r.PostFormValue("scenario"))
 	if !found {
 		http.Error(w, "unknown scenario", http.StatusNotFound)

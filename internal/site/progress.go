@@ -75,11 +75,6 @@ func (s *Server) setScenarioCompleted(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	run, started, err := s.store.Run(r.Context(), pt.ID, c.Slug)
-	if err != nil || !started || !run.Started() {
-		http.Error(w, "Start this campaign first.", http.StatusBadRequest)
-		return
-	}
 	sc, found := c.Scenario(r.PostFormValue("scenario"))
 	if !found {
 		http.Error(w, "unknown scenario", http.StatusNotFound)

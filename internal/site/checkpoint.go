@@ -449,10 +449,6 @@ func (s *Server) rollbackCampaign(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if _, started, err := s.store.Run(r.Context(), pt.ID, c.Slug); err != nil || !started {
-		http.Error(w, "Start this campaign first.", http.StatusBadRequest)
-		return
-	}
 	seq, err := strconv.Atoi(r.PostFormValue("checkpoint"))
 	if err != nil {
 		http.Error(w, "Choose a checkpoint.", http.StatusBadRequest)
