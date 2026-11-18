@@ -263,31 +263,6 @@ func (s *Server) deleteCampaign(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// earnSP records SP a pilot has earned (for instance from a scenario). It is unallocated until spent with allocateSP.
-func (s *Server) earnSP(w http.ResponseWriter, r *http.Request) {
-	pt, c, ok := s.pilotRequest(w, r)
-	if !ok {
-		return
-	}
-	n, err := parseSP(r.PostFormValue("sp"))
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	if n == 0 {
-		http.Error(w, "Enter how much SP the pilot earned.", http.StatusBadRequest)
-		return
-	}
-	if err := s.store.EarnSP(r.Context(), pt.ID, c.Slug, r.PostFormValue("pilot"), n); errors.Is(err, sql.ErrNoRows) {
-		http.Error(w, "No such living pilot.", http.StatusNotFound)
-		return
-	} else if err != nil {
-		http.Error(w, "could not save the SP", http.StatusInternalServerError)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
-}
-
 // allocateSP spends a pilot's unallocated SP across their four columns. The form holds the SP to add to each column,
 // not their new totals, and optionally `earned`, SP to add to the pilot's total in the same step (the Manage SP dialog
 // stages it, then commits it together with the allocation); the server refuses more than the pilot would then have

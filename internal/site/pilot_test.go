@@ -318,7 +318,7 @@ func TestNamedPilotsFlow(t *testing.T) {
 		t.Fatalf("alrek = %+v", alrek)
 	}
 
-	// SP earned and allocated (the earn and allocate endpoints, with their validation, are covered by TestSPEndpoints).
+	// SP earned and allocated (the allocate endpoint, with its validation, is covered by TestSPEndpoints).
 	if err := store.AwardSP(ctx, id, "refusalwar", alrek.ID, SPAllocation{Gunnery: 300, EdgeTokens: 60}); err != nil {
 		t.Fatalf("award: %v", err)
 	}
@@ -338,7 +338,7 @@ func TestNamedPilotsFlow(t *testing.T) {
 	if r := post(t, srv, "/api/pilots/fallen", pilots("pilot", ps[1].ID), cookie, srv.URL); r.StatusCode != http.StatusNotFound {
 		t.Fatalf("already fallen: %d", r.StatusCode)
 	}
-	if got := post(t, srv, "/api/pilots/earn", pilots("pilot", ps[1].ID, "sp", "100"), cookie, srv.URL).StatusCode; got != http.StatusNotFound {
+	if got := post(t, srv, "/api/pilots/allocate", pilots("pilot", ps[1].ID, "earned", "100"), cookie, srv.URL).StatusCode; got != http.StatusNotFound {
 		t.Errorf("SP earned by the fallen: %d", got)
 	}
 	if c := body(t, srv, "/refusalwar/manage/", cookie); !strings.Contains(c, "Killed in Action") || !strings.Contains(c, `class="rec-revive"`) || strings.Contains(c, `id="pilot-add"`) {
@@ -741,16 +741,16 @@ func TestSPEndpoints(t *testing.T) {
 		v      url.Values
 		status int
 	}{
-		"earn nothing":        {"/api/pilots/earn", form(), http.StatusBadRequest},
-		"earn negative":       {"/api/pilots/earn", form("sp", "-5"), http.StatusBadRequest},
-		"earn text":           {"/api/pilots/earn", form("sp", "lots"), http.StatusBadRequest},
-		"allocate with none":  {"/api/pilots/allocate", form("gunnery", "10"), http.StatusBadRequest},
-		"allocate zero":       {"/api/pilots/allocate", form("gunnery", "0"), http.StatusBadRequest},
-		"earn for a stranger": {"/api/pilots/earn", form("pilot", "nobody", "sp", "10"), http.StatusNotFound},
-		"cross-origin earn":   {"/api/pilots/earn", form("sp", "10"), http.StatusForbidden},
+		"earned SP, nothing":        {"/api/pilots/allocate", form(), http.StatusBadRequest},
+		"earned SP, negative":       {"/api/pilots/allocate", form("earned", "-5"), http.StatusBadRequest},
+		"earned SP, text":           {"/api/pilots/allocate", form("earned", "lots"), http.StatusBadRequest},
+		"allocate with none":        {"/api/pilots/allocate", form("gunnery", "10"), http.StatusBadRequest},
+		"allocate zero":             {"/api/pilots/allocate", form("gunnery", "0"), http.StatusBadRequest},
+		"earned SP, for a stranger": {"/api/pilots/allocate", form("pilot", "nobody", "earned", "10"), http.StatusNotFound},
+		"cross-origin earned SP":    {"/api/pilots/allocate", form("earned", "10"), http.StatusForbidden},
 	} {
 		var got int
-		if name == "cross-origin earn" {
+		if name == "cross-origin earned SP" {
 			got = post(t, srv, c.path, c.v, cookie, "https://evil.example").StatusCode
 		} else {
 			got = status(c.path, c.v)
@@ -759,7 +759,7 @@ func TestSPEndpoints(t *testing.T) {
 			t.Errorf("%s: got %d, want %d", name, got, c.status)
 		}
 	}
-	if got := status("/api/pilots/earn", form("sp", "300")); got != http.StatusNoContent {
+	if got := status("/api/pilots/allocate", form("earned", "300")); got != http.StatusNoContent {
 		t.Fatalf("earn: %d", got)
 	}
 	if got := status("/api/pilots/allocate", form("gunnery", "200", "piloting", "101")); got != http.StatusBadRequest {
