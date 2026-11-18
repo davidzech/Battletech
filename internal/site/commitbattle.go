@@ -144,7 +144,7 @@ func resetCrew(state map[string]any) {
 	crew, _ := state["crew"].([]any)
 	for _, c := range crew {
 		if cm, ok := c.(map[string]any); ok {
-			cm["name"], cm["gunnerySkill"], cm["pilotingSkill"], cm["hits"], cm["state"] = "", float64(4), float64(5), float64(0), float64(0)
+			cm["name"], cm["gunnerySkill"], cm["pilotingSkill"], cm["hits"], cm["state"] = "", defaultGunnery, defaultPiloting, 0, 0
 		}
 	}
 }

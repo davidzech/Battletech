@@ -27,11 +27,22 @@ func crewIsUnnamed(state map[string]any) bool {
 	}
 	for _, c := range crew {
 		cm, _ := c.(map[string]any)
-		if cm["name"] != "" || cm["gunnerySkill"] != float64(4) || cm["pilotingSkill"] != float64(5) || cm["hits"] != float64(0) {
+		if cm["name"] != "" || num(cm["gunnerySkill"]) != defaultGunnery || num(cm["pilotingSkill"]) != defaultPiloting || num(cm["hits"]) != 0 {
 			return false
 		}
 	}
 	return true
+}
+
+// num reads a JSON-ish number, whichever Go type it has (a force decoded from JSON has float64s; one changed in Go may have ints).
+func num(v any) int {
+	switch n := v.(type) {
+	case int:
+		return n
+	case float64:
+		return int(n)
+	}
+	return -1
 }
 
 func stateOf(h map[string]any, id string) map[string]any {

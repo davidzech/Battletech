@@ -190,7 +190,7 @@ func parseHangarForce(raw json.RawMessage) (HangarForce, error) {
 	h := HangarForce{Name: reply.Data.Name, Timestamp: reply.Data.Timestamp}
 	for _, g := range reply.Data.Groups {
 		for _, u := range g.Units {
-			hu := HangarUnit{ID: u.ID, Unit: u.Unit, Group: g.Name, Destroyed: u.State.Destroyed, Gunnery: 4, Piloting: 5}
+			hu := HangarUnit{ID: u.ID, Unit: u.Unit, Group: g.Name, Destroyed: u.State.Destroyed, Gunnery: defaultGunnery, Piloting: defaultPiloting}
 			if len(u.State.Crew) > 0 {
 				c := u.State.Crew[0]
 				hu.Pilot, hu.Gunnery, hu.Piloting = c.Name, c.Gunnery, c.Piloting
