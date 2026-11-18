@@ -173,14 +173,28 @@
       r.notes.forEach(function (n) { ul.appendChild(el('li', r.kia ? 'outcome-bad' : r.status === 'benched' ? 'muted' : 'outcome-good', n)); });
     });
     var lines = [];
+    var money = function (label, text) { return { label: label, text: text }; };
     if (res) {
-      (res.notes || []).forEach(function (n) { lines.push(n); });
-      if (res.warchest && !res.pool) lines.push((res.warchest > 0 ? '+' : '') + res.warchest + ' SP to the warchest');
-      if (res.keywords && res.keywords.length) lines.push('Keywords: ' + res.keywords.join(', '));
-      if (res.freeRecruits) lines.push(res.freeRecruits === 1 ? '1 free recruit: a replacement pilot can be recruited for free.' : res.freeRecruits + ' free recruits: replacement pilots can be recruited for free.');
+      (res.notes || []).forEach(function (n) { lines.push({ text: n }); });
+      var before = parseInt(dialog.dataset.warchest, 10);
+      if (res.pool) {
+        // The breakdown of the pool: what the mission awarded, what the pilots take of it, and what the warchest ends with.
+        lines.push(money('Awarded', res.pool + ' SP'));
+        lines.push(money('Assigned to pilots', (res.paid || 0) + ' SP'));
+      }
+      if (res.warchest) {
+        lines.push(money('Warchest', isNaN(before) ? (res.warchest > 0 ? '+' : '') + res.warchest + ' SP' : before + ' \u2192 ' + (before + res.warchest) + ' SP'));
+      }
+      if (res.keywords && res.keywords.length) lines.push({ text: 'Keywords: ' + res.keywords.join(', ') });
+      if (res.freeRecruits) lines.push({ text: res.freeRecruits === 1 ? '1 free recruit: a replacement pilot can be recruited for free.' : res.freeRecruits + ' free recruits: replacement pilots can be recruited for free.' });
     }
     total.hidden = !lines.length;
-    total.textContent = lines.join(' · ');
+    total.textContent = '';
+    lines.forEach(function (l) {
+      var row = el('div', 'outcome-total-row');
+      if (l.label) { row.appendChild(el('span', 'muted', l.label)); row.appendChild(el('b', null, l.text)); } else row.textContent = l.text;
+      total.appendChild(row);
+    });
   }
 
   function changed() {

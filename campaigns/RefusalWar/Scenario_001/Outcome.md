@@ -26,7 +26,6 @@ inputs:
     help: 200 SP each
 outcomes:
   - pool: falcon_mechs * 200
-    label: "Jade Falcon mechs crippled or destroyed"
 ---
 
 # Scenario 001: Pyre Light - Outcome

@@ -142,7 +142,7 @@ outcomes:
 		t.Errorf("the keywords are in the ledger: %+v", ledger)
 	}
 	page = body(t, srv, "/refusalwar/scenario_000/", cookie)
-	for _, want := range []string{`id="outcome-summary"`, "<b>Jarek</b>", "<b>Sybille</b>", "benched", "&#43;40 SP (benched: half)", "Pool: 600 SP. 200 to the pilots, 400 to the warchest.", "Keywords granted:", "<code>depot_gone</code>", "Killed in Action."} {
+	for _, want := range []string{`id="outcome-summary"`, "<b>Jarek</b>", "<b>Sybille</b>", "benched", "&#43;40 SP (benched: half)", "Awarded: 600 SP", "Assigned to pilots: 200 SP", "Warchest: +400 SP", "Keywords granted:", "<code>depot_gone</code>", "Killed in Action."} {
 		if !strings.Contains(page, want) {
 			t.Errorf("the report on the page is missing %q", want)
 		}

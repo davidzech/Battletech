@@ -284,6 +284,7 @@ type PilotOutcome struct {
 type OutcomeResult struct {
 	Pilots       []PilotOutcome `json:"pilots"`
 	Pool         int            `json:"pool"`         // SP granted for the objectives met, before the pilots take their shares
+	Paid         int            `json:"paid"`         // SP of the pool the pilots took as their shares (the rest of the pool went to the warchest)
 	Warchest     int            `json:"warchest"`     // SP added to the warchest: what is left of the pool, and any direct grants
 	FreeRecruits int            `json:"freeRecruits"` // recruits that cost no SP
 	Keywords     []string       `json:"keywords"`     // keywords added to the campaign ledger
@@ -553,12 +554,9 @@ func (sc *Scenario) EvaluateOutcome(in OutcomeInputs, names map[string]string) (
 			paid += d
 		}
 		res.Warchest += res.Pool - paid
-		if res.Pool > 0 {
-			res.Notes = append(res.Notes, fmt.Sprintf("Pool: %d SP. %d to the pilots, %d to the warchest.", res.Pool, paid, res.Pool-paid))
-		}
+		res.Paid = paid
 	} else if res.Pool > 0 {
 		res.Warchest += res.Pool
-		res.Notes = append(res.Notes, fmt.Sprintf("Pool: %d SP, all to the warchest.", res.Pool))
 	}
 	// The MVP earns an extra mvpBonusSP, on top of their share and not drawn from the pool.
 	for i := range res.Pilots {
