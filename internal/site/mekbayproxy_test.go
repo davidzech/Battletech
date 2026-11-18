@@ -18,8 +18,8 @@ import (
 )
 
 const (
-	testAccount = "0f1e2d3c-4b5a-4968-8776-655443322110"
-	testHost    = "mekbay.localhost"
+	testAccount  = "0f1e2d3c-4b5a-4968-8776-655443322110"
+	otherAccount = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
 )
 
 // fakeUpstream is a stand-in for mekbay.com: a static page and script naming the WebSocket the way the real build does, a manifest, and a
@@ -37,7 +37,7 @@ func newFakeUpstream(t *testing.T) *fakeUpstream {
 	t.Helper()
 	f := &fakeUpstream{hits: map[string]int{}, scripts: "var M=class{ws=null;wsUrl=`wss://mekbay.com/ws`;x=1};"}
 	mux := http.NewServeMux()
-	count := func(w http.ResponseWriter, path string) {
+	count := func(path string) {
 		f.mu.Lock()
 		f.hits[path]++
 		f.mu.Unlock()
@@ -65,16 +65,16 @@ func newFakeUpstream(t *testing.T) *fakeUpstream {
 		}
 	})
 	mux.HandleFunc("/ngsw.json", func(w http.ResponseWriter, r *http.Request) {
-		count(w, r.URL.Path)
+		count(r.URL.Path)
 		_, _ = io.WriteString(w, `{"assetGroups":[{"name":"app","urls":["/index.html","/main-1.js","/chunk-abc.js","/styles.css"]}]}`)
 	})
 	mux.HandleFunc("/main-1.js", func(w http.ResponseWriter, r *http.Request) {
-		count(w, r.URL.Path)
+		count(r.URL.Path)
 		w.Header().Set("Content-Type", "text/javascript")
 		_, _ = io.WriteString(w, "console.log('main');")
 	})
 	mux.HandleFunc("/chunk-abc.js", func(w http.ResponseWriter, r *http.Request) {
-		count(w, r.URL.Path)
+		count(r.URL.Path)
 		w.Header().Set("Content-Type", "text/javascript")
 		f.mu.Lock()
 		s := f.scripts
@@ -83,12 +83,12 @@ func newFakeUpstream(t *testing.T) *fakeUpstream {
 	})
 	mux.HandleFunc("/ngsw-worker.js", func(w http.ResponseWriter, r *http.Request) { _, _ = io.WriteString(w, "REAL WORKER") })
 	mux.HandleFunc("/assets/data.json", func(w http.ResponseWriter, r *http.Request) {
-		count(w, r.URL.Path)
+		count(r.URL.Path)
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, `{"ok":true}`)
 	})
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { // the SPA page, also the fallback for every other path
-		count(w, "/")
+		count("/")
 		w.Header().Set("Content-Type", "text/html")
 		_, _ = io.WriteString(w, `<html><base href="/"><script src="main-1.js"></script></html>`)
 	})
@@ -103,13 +103,15 @@ func (f *fakeUpstream) sent() []string {
 	return append([]string(nil), f.received...)
 }
 
-// proxyFixture is the site with its MekBay proxy pointed at a fake MekBay, and a client that reaches it as mekbay.localhost.
+// proxyFixture is the site with its MekBay proxy pointed at a fake MekBay, and a client that reaches any host name as this machine.
 type proxyFixture struct {
 	fake   *fakeUpstream
 	site   *httptest.Server
 	proxy  *mekbayProxy
-	tokens *mekbayTokens
+	vault  *mekbayVault
+	store  *Store
 	client *http.Client
+	port   string
 }
 
 func newProxyFixture(t *testing.T) *proxyFixture {
@@ -120,36 +122,38 @@ func newProxyFixture(t *testing.T) *proxyFixture {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { store.Close() })
+	if _, err := store.EnsurePlaythrough(context.Background(), "pt"); err != nil {
+		t.Fatal(err)
+	}
 	var proxy *mekbayProxy
-	h := NewHandler(t.TempDir(), store, WithMekBayTokenKey("test-key"),
+	site := httptest.NewServer(NewHandler(t.TempDir(), store, WithMekBayLinkKey("test-key"),
 		withMekBayUpstream(fake.URL, "ws"+strings.TrimPrefix(fake.URL, "http")+"/ws", "https://mekbay.com"),
-		withMekBayProxyHook(func(p *mekbayProxy) { proxy = p }))
-	site := httptest.NewServer(h)
+		withMekBayProxyHook(func(p *mekbayProxy) { proxy = p })))
 	t.Cleanup(site.Close)
 	addr := strings.TrimPrefix(site.URL, "http://")
-	dial := func(ctx context.Context, network, _ string) (net.Conn, error) {
-		return (&net.Dialer{}).DialContext(ctx, network, addr)
-	}
+	_, port, _ := net.SplitHostPort(addr)
 	client := &http.Client{
-		Transport:     &http.Transport{DialContext: dial},
+		Transport: &http.Transport{DialContext: func(ctx context.Context, network, _ string) (net.Conn, error) {
+			return (&net.Dialer{}).DialContext(ctx, network, addr)
+		}},
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}
-	return &proxyFixture{fake: fake, site: site, proxy: proxy, tokens: newMekBayTokens("test-key"), client: client}
+	return &proxyFixture{fake: fake, site: site, proxy: proxy, vault: newMekBayVault("test-key"), store: store, client: client, port: port}
 }
 
-func (p *proxyFixture) base() string { return "http://" + testHost + ":" + portOf(p.site.URL) }
-
-func portOf(u string) string {
-	_, port, _ := net.SplitHostPort(strings.TrimPrefix(u, "http://"))
-	return port
-}
-
-func (p *proxyFixture) get(t *testing.T, path string, cookie *http.Cookie) (*http.Response, string) {
+// link makes (or finds) the link for account under a label and returns its host name, such as mekbay-<id>.localhost.
+func (p *proxyFixture) link(t *testing.T, label, account string) string {
 	t.Helper()
-	req, _ := http.NewRequest("GET", p.base()+path, nil)
-	if cookie != nil {
-		req.AddCookie(cookie)
+	id, err := p.store.EnsureMekBayLink(context.Background(), "pt", "camp", label, account, p.vault, time.Hour, time.Now())
+	if err != nil {
+		t.Fatal(err)
 	}
+	return mekbayLinkPrefix + id + ".localhost"
+}
+
+func (p *proxyFixture) get(t *testing.T, host, path string) (*http.Response, string) {
+	t.Helper()
+	req, _ := http.NewRequest("GET", "http://"+host+":"+p.port+path, nil)
 	resp, err := p.client.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -159,66 +163,116 @@ func (p *proxyFixture) get(t *testing.T, path string, cookie *http.Cookie) (*htt
 	return resp, string(b)
 }
 
-func (p *proxyFixture) cookie(t *testing.T, account string, ttl time.Duration) *http.Cookie {
+func (p *proxyFixture) dial(t *testing.T, host string, extra http.Header) (*websocket.Conn, *http.Response, error) {
 	t.Helper()
-	tok, err := p.tokens.Issue(account, ttl, time.Now())
+	header := http.Header{"Origin": {"http://" + host + ":" + p.port}}
+	for k, v := range extra {
+		header[k] = v
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	t.Cleanup(cancel)
+	return websocket.Dial(ctx, "ws://"+host+":"+p.port+"/ws", &websocket.DialOptions{HTTPClient: p.client, HTTPHeader: header})
+}
+
+// who sends a register message carrying a made-up identity and reports the account that reached MekBay.
+func whoIs(t *testing.T, conn *websocket.Conn) string {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := conn.Write(ctx, websocket.MessageText, []byte(`{"action":"register","uuid":"11111111-1111-4111-8111-111111111111"}`)); err != nil {
+		t.Fatal(err)
+	}
+	_, b, err := conn.Read(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &http.Cookie{Name: mekbayCookie, Value: tok}
+	var m struct{ UUID string }
+	_ = json.Unmarshal([]byte(strings.TrimPrefix(string(b), "echo:")), &m)
+	return m.UUID
 }
 
-func (p *proxyFixture) dialRelay(t *testing.T, cookie *http.Cookie, origin string) (*websocket.Conn, *http.Response, error) {
-	t.Helper()
-	header := http.Header{}
-	if cookie != nil {
-		header.Set("Cookie", cookie.String())
-	}
-	if origin == "" {
-		origin = p.base()
-	}
-	header.Set("Origin", origin)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	t.Cleanup(cancel)
-	return websocket.Dial(ctx, "ws://"+testHost+":"+portOf(p.site.URL)+"/ws", &websocket.DialOptions{HTTPClient: p.client, HTTPHeader: header})
-}
-
-func TestMekBayHostRouting(t *testing.T) {
-	for host, want := range map[string]bool{
-		"mekbay.battletech.zech.io": true, "mekbay.localhost:8080": true, "MekBay.Example.com": true,
-		"battletech.zech.io": false, "localhost:8080": false, "notmekbay.example.com": false, "mekbay": false,
+func TestMekBayHostParsing(t *testing.T) {
+	id := newMekBayLinkID()
+	for _, c := range []struct {
+		host string
+		id   string
+		kind mekbayHostKind
+	}{
+		{"mekbay-" + id + ".battletech.zech.io", id, linkHost},
+		{"mekbay-" + id + ".localhost:8080", id, linkHost},
+		{"MekBay-" + strings.ToUpper(id) + ".Example.com", id, linkHost},
+		{"mekbay-short.battletech.zech.io", "", linkHost},
+		{"mekbay-" + id + "x.battletech.zech.io", "", linkHost},
+		{"mekbay-" + strings.ReplaceAll(id, id[:1], "1") + ".x.io", "", linkHost}, // 1 is not a base32 character here
+		{"mekbay.localhost:8080", "", sandboxHost},
+		{"mekbay.battletech.zech.io", "", sandboxHost},
+		{"battletech.zech.io", "", notMekBayHost},
+		{"localhost:8080", "", notMekBayHost},
+		{"notmekbay.example.com", "", notMekBayHost},
+		{"x.mekbay.example.com", "", notMekBayHost},
+		{"mekbayfoo.example.com", "", notMekBayHost},
 	} {
-		if got := isMekBayHost(host); got != want {
-			t.Errorf("isMekBayHost(%q) = %v, want %v", host, got, want)
+		if gid, kind := parseMekBayHost(c.host); gid != c.id || kind != c.kind {
+			t.Errorf("parseMekBayHost(%q) = %q, %v; want %q, %v", c.host, gid, kind, c.id, c.kind)
+		}
+	}
+	if !isMekBayHost("mekbay.localhost") || isMekBayHost("battletech.zech.io") {
+		t.Error("isMekBayHost follows the kind")
+	}
+	for host, want := range map[string]string{
+		"mekbay-" + id + ".battletech.zech.io": "battletech.zech.io",
+		"mekbay.localhost:8080":                "localhost:8080",
+		"battletech.zech.io":                   "battletech.zech.io",
+		"localhost:8080":                       "localhost:8080",
+	} {
+		if got := siteHost(host); got != want {
+			t.Errorf("siteHost(%q) = %q, want %q", host, got, want)
 		}
 	}
 }
 
 func TestMekBayProxyServesAndRewrites(t *testing.T) {
 	p := newProxyFixture(t)
+	host := p.link(t, "player-2", testAccount)
 
-	resp, body := p.get(t, "/", nil)
+	resp, body := p.get(t, host, "/")
 	if resp.StatusCode != 200 || !strings.Contains(body, `<base href="/">`) || !strings.HasPrefix(resp.Header.Get("Content-Type"), "text/html") {
-		t.Fatalf("the page is MekBay's own: %d %q", resp.StatusCode, body)
+		t.Fatalf("a valid link serves MekBay's own page: %d %q", resp.StatusCode, body)
 	}
-	// An unknown path falls back to the page, as MekBay does.
-	if _, body := p.get(t, "/some/route", nil); !strings.Contains(body, "main-1.js") {
+	// An unknown route falls back to the page, as MekBay does.
+	if _, body := p.get(t, host, "/some/route"); !strings.Contains(body, "main-1.js") {
 		t.Errorf("an unknown path serves the page: %q", body)
 	}
 
-	// The script that names the WebSocket now names ours; the rest of it is untouched.
-	_, js := p.get(t, "/chunk-abc.js", nil)
-	if want := "var M=class{ws=null;wsUrl=`ws://" + testHost + ":" + portOf(p.site.URL) + "/ws`;x=1};"; js != want {
+	// Every response keeps the host name to itself.
+	for _, path := range []string{"/", "/chunk-abc.js", "/assets/data.json", "/ngsw-worker.js"} {
+		r, _ := p.get(t, host, path)
+		if r.Header.Get("Referrer-Policy") != "no-referrer" || r.Header.Get("X-Robots-Tag") != "noindex" || r.Header.Get("X-Content-Type-Options") != "nosniff" {
+			t.Errorf("%s: the headers keep the host name from leaking: %v", path, r.Header)
+		}
+	}
+	if r, _ := p.get(t, host, "/"); r.Header.Get("Cache-Control") != "no-store" {
+		t.Error("the page is not cached")
+	}
+
+	// The script that names the WebSocket now names this host's relay; the rest of it is untouched.
+	_, js := p.get(t, host, "/chunk-abc.js")
+	if want := "var M=class{ws=null;wsUrl=`ws://" + host + ":" + p.port + "/ws`;x=1};"; js != want {
 		t.Errorf("the WebSocket address is replaced:\n got %q\nwant %q", js, want)
 	}
 	if strings.Contains(js, "mekbay.com") {
 		t.Error("nothing still names mekbay.com")
 	}
-	if _, js := p.get(t, "/main-1.js", nil); js != "console.log('main');" {
+	// ...and a different link's host gets its own address.
+	other := p.link(t, "opfor", otherAccount)
+	if _, js := p.get(t, other, "/chunk-abc.js"); !strings.Contains(js, "ws://"+other+":"+p.port+"/ws") || strings.Contains(js, host) {
+		t.Errorf("each host's script names that host: %q", js)
+	}
+	if _, js := p.get(t, host, "/main-1.js"); js != "console.log('main');" {
 		t.Errorf("a script without the address is untouched: %q", js)
 	}
 	// Behind TLS (X-Forwarded-Proto) the address is wss.
-	req, _ := http.NewRequest("GET", p.base()+"/chunk-abc.js", nil)
+	req, _ := http.NewRequest("GET", "http://"+host+":"+p.port+"/chunk-abc.js", nil)
 	req.Header.Set("X-Forwarded-Proto", "https")
 	resp2, err := p.client.Do(req)
 	if err != nil {
@@ -226,36 +280,77 @@ func TestMekBayProxyServesAndRewrites(t *testing.T) {
 	}
 	b, _ := io.ReadAll(resp2.Body)
 	resp2.Body.Close()
-	if !strings.Contains(string(b), "`wss://"+testHost) {
+	if !strings.Contains(string(b), "`wss://"+host) {
 		t.Errorf("behind https the address is wss: %q", b)
 	}
-	// Data files pass through.
-	if _, body := p.get(t, "/assets/data.json", nil); body != `{"ok":true}` {
+	if _, body := p.get(t, host, "/assets/data.json"); body != `{"ok":true}` {
 		t.Errorf("data passes through: %q", body)
 	}
 
 	// The service workers are stubs that unregister themselves, and the manifest that would feed them is gone.
 	for _, path := range []string{"/ngsw-worker.js", "/safety-worker.js"} {
-		resp, body := p.get(t, path, nil)
+		resp, body := p.get(t, host, path)
 		if resp.StatusCode != 200 || !strings.Contains(body, "unregister()") || strings.Contains(body, "REAL WORKER") {
 			t.Errorf("%s is the stub: %d %q", path, resp.StatusCode, body)
 		}
 	}
-	if resp, _ := p.get(t, "/ngsw.json", nil); resp.StatusCode != 404 {
+	if resp, _ := p.get(t, host, "/ngsw.json"); resp.StatusCode != 404 {
 		t.Errorf("the service worker manifest is gone: %d", resp.StatusCode)
 	}
-
 	// Only reading is allowed.
-	req, _ = http.NewRequest("POST", p.base()+"/", strings.NewReader("x"))
-	if resp, err := p.client.Do(req); err != nil || resp.StatusCode != 405 {
+	post, _ := http.NewRequest("POST", "http://"+host+":"+p.port+"/", strings.NewReader("x"))
+	if resp, err := p.client.Do(post); err != nil || resp.StatusCode != 405 {
 		t.Errorf("POST is refused: %v %v", resp, err)
+	}
+}
+
+// A host whose link isn't good gets no pages (the files are MekBay's own public ones, so they are not secret).
+func TestMekBayProxyRefusesBadLinks(t *testing.T) {
+	p := newProxyFixture(t)
+	expired, err := p.store.EnsureMekBayLink(context.Background(), "pt", "camp", "old", testAccount, p.vault, -time.Minute, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	revoked := p.link(t, "gone", otherAccount)
+	if ok, err := p.store.RevokeMekBayLink(context.Background(), "pt", "camp", "gone"); err != nil || !ok {
+		t.Fatal(ok, err)
+	}
+	rekeyed := func() string {
+		id, _ := p.store.EnsureMekBayLink(context.Background(), "pt", "camp", "rekeyed", testAccount, newMekBayVault("another key"), time.Hour, time.Now())
+		return mekbayLinkPrefix + id + ".localhost"
+	}()
+	for name, host := range map[string]string{
+		"an unknown id":      mekbayLinkPrefix + newMekBayLinkID() + ".localhost",
+		"a malformed id":     "mekbay-nope.localhost",
+		"an expired link":    mekbayLinkPrefix + expired + ".localhost",
+		"a revoked link":     revoked,
+		"another server key": rekeyed,
+	} {
+		resp, body := p.get(t, host, "/")
+		if resp.StatusCode != http.StatusForbidden || strings.Contains(body, "base href") || !strings.Contains(body, "not valid or has expired") {
+			t.Errorf("%s gets no page: %d %q", name, resp.StatusCode, body)
+		}
+		if resp.Header.Get("Referrer-Policy") != "no-referrer" || resp.Header.Get("Cache-Control") != "no-store" {
+			t.Errorf("%s: the refusal keeps its headers: %v", name, resp.Header)
+		}
+		if _, resp, err := p.dial(t, host, nil); err == nil || resp == nil || resp.StatusCode != http.StatusUnauthorized {
+			t.Errorf("%s gets no relay: %v %v", name, resp, err)
+		}
+		// Files are public MekBay files, so they are not refused.
+		if r, _ := p.get(t, host, "/assets/data.json"); r.StatusCode != 200 {
+			t.Errorf("%s: a public file is still served: %d", name, r.StatusCode)
+		}
+	}
+	if n := len(p.fake.sent()); n != 0 {
+		t.Errorf("nothing reached MekBay: %d", n)
 	}
 }
 
 func TestMekBayProxyCachesAndSurvivesAnOutage(t *testing.T) {
 	p := newProxyFixture(t)
+	host := p.link(t, "player-1", testAccount)
 	for i := 0; i < 3; i++ {
-		p.get(t, "/assets/data.json", nil)
+		p.get(t, host, "/assets/data.json")
 	}
 	if n := p.fake.hits["/assets/data.json"]; n != 1 {
 		t.Errorf("a fresh file is fetched once, not %d times", n)
@@ -263,62 +358,19 @@ func TestMekBayProxyCachesAndSurvivesAnOutage(t *testing.T) {
 	// Let the copy go stale and take MekBay down: the old copy is served instead of an error.
 	p.proxy.now = func() time.Time { return time.Now().Add(3 * time.Hour) }
 	p.fake.Close()
-	resp, body := p.get(t, "/assets/data.json", nil)
+	resp, body := p.get(t, host, "/assets/data.json")
 	if resp.StatusCode != 200 || body != `{"ok":true}` {
 		t.Errorf("the last copy is served while MekBay is down: %d %q", resp.StatusCode, body)
 	}
-	if resp, _ := p.get(t, "/never-seen.js", nil); resp.StatusCode != 502 {
+	if resp, _ := p.get(t, host, "/never-seen.js"); resp.StatusCode != 502 {
 		t.Errorf("a file never seen is a 502 while MekBay is down: %d", resp.StatusCode)
-	}
-}
-
-func TestMekBayProxyTokenCookie(t *testing.T) {
-	p := newProxyFixture(t)
-	tok := p.cookie(t, testAccount, time.Hour).Value
-
-	resp, _ := p.get(t, "/?instance=abc&t="+url.QueryEscape(tok)+"&sel=xyz", nil)
-	if resp.StatusCode != http.StatusSeeOther {
-		t.Fatalf("a link with a token redirects: %d", resp.StatusCode)
-	}
-	if loc := resp.Header.Get("Location"); loc != "/?instance=abc&sel=xyz" {
-		t.Errorf("the redirect drops the token and keeps the rest: %q", loc)
-	}
-	var c *http.Cookie
-	for _, k := range resp.Cookies() {
-		if k.Name == mekbayCookie {
-			c = k
-		}
-	}
-	if c == nil || !c.HttpOnly || c.Value != tok || c.Path != "/" || c.SameSite != http.SameSiteLaxMode || c.Secure {
-		t.Errorf("the token is kept in a host-only HttpOnly cookie (Secure only over https): %+v", c)
-	}
-	if strings.Contains(resp.Header.Get("Location"), tok) || resp.Header.Get("Cache-Control") != "no-store" {
-		t.Error("the token isn't left in the URL or cached")
-	}
-
-	// Over https the cookie is Secure.
-	req, _ := http.NewRequest("GET", p.base()+"/?t="+url.QueryEscape(tok), nil)
-	req.Header.Set("X-Forwarded-Proto", "https")
-	r2, _ := p.client.Do(req)
-	r2.Body.Close()
-	if cs := r2.Cookies(); len(cs) != 1 || !cs[0].Secure {
-		t.Errorf("the cookie is Secure behind https: %+v", cs)
-	}
-
-	for name, bad := range map[string]string{"garbage": "not-a-token", "expired": p.cookie(t, testAccount, -time.Minute).Value, "other key": func() string {
-		s, _ := newMekBayTokens("other").Issue(testAccount, time.Hour, time.Now())
-		return s
-	}()} {
-		resp, _ := p.get(t, "/?t="+url.QueryEscape(bad), nil)
-		if resp.StatusCode != http.StatusForbidden || len(resp.Cookies()) != 0 {
-			t.Errorf("a %s token is refused with no cookie set: %d", name, resp.StatusCode)
-		}
 	}
 }
 
 func TestMekBayRelaySwapsTheIdentity(t *testing.T) {
 	p := newProxyFixture(t)
-	conn, _, err := p.dialRelay(t, p.cookie(t, testAccount, time.Hour), "")
+	host := p.link(t, "player-1", testAccount)
+	conn, _, err := p.dial(t, host, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -375,82 +427,90 @@ func TestMekBayRelaySwapsTheIdentity(t *testing.T) {
 	}
 }
 
-func TestMekBayRelayRefusesStrangers(t *testing.T) {
+// Every link is its own host, so one person can hold two accounts at once, and a link keeps working after its connection closes.
+func TestMekBayRelayTwoLinksTwoAccounts(t *testing.T) {
 	p := newProxyFixture(t)
-	for name, c := range map[string]*http.Cookie{
-		"a bad cookie":   {Name: mekbayCookie, Value: "nope"},
-		"expired cookie": p.cookie(t, testAccount, -time.Minute),
-	} {
-		_, resp, err := p.dialRelay(t, c, "")
-		if err == nil || resp == nil || resp.StatusCode != http.StatusUnauthorized {
-			t.Errorf("%s is refused with 401: %v %v", name, resp, err)
-		}
+	player, opfor := p.link(t, "player-1", testAccount), p.link(t, "opfor", otherAccount)
+	if player == opfor {
+		t.Fatal("different labels are different links")
 	}
-	// Another site can't use a visitor's cookie.
-	_, resp, err := p.dialRelay(t, p.cookie(t, testAccount, time.Hour), "https://evil.example")
-	if err == nil || resp == nil || resp.StatusCode != http.StatusForbidden {
-		t.Errorf("a page from another origin is refused: %v %v", resp, err)
-	}
-	if n := len(p.fake.sent()); n != 0 {
-		t.Errorf("nothing reached MekBay: %d", n)
-	}
-}
-
-// On a developer's machine (*.localhost, from loopback), a browser with no token acts as one shared sandbox account; anywhere else it is
-// refused, so the deployed site is never an open door to MekBay.
-func TestMekBayRelaySandbox(t *testing.T) {
-	p := newProxyFixture(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	ask := func(conn *websocket.Conn) string {
-		t.Helper()
-		if err := conn.Write(ctx, websocket.MessageText, []byte(`{"action":"register","uuid":"11111111-1111-4111-8111-111111111111"}`)); err != nil {
-			t.Fatal(err)
-		}
-		_, b, err := conn.Read(ctx)
-		if err != nil {
-			t.Fatal(err)
-		}
-		var m struct{ UUID string }
-		_ = json.Unmarshal([]byte(strings.TrimPrefix(string(b), "echo:")), &m)
-		return m.UUID
-	}
-	a, _, err := p.dialRelay(t, nil, "")
+	a, _, err := p.dial(t, player, nil)
 	if err != nil {
-		t.Fatalf("a browser with no token is let in on localhost: %v", err)
+		t.Fatal(err)
 	}
-	defer a.CloseNow()
-	b, _, err := p.dialRelay(t, nil, "")
+	b, _, err := p.dial(t, opfor, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer b.CloseNow()
-	sandbox := p.tokens.sandbox
-	if ua, ub := ask(a), ask(b); ua != sandbox || ub != sandbox || sandbox == testAccount || len(sandbox) != 36 {
-		t.Errorf("everyone with no token shares one account (derived from the key): %q %q want %q", ua, ub, sandbox)
+	if got, want := whoIs(t, a), testAccount; got != want {
+		t.Errorf("the player link acts as the player: %q", got)
 	}
-	if newMekBayTokens("test-key").sandbox != sandbox || newMekBayTokens("another-key").sandbox == sandbox {
+	if got := whoIs(t, b); got != otherAccount {
+		t.Errorf("the OpFor link acts as the OpFor while the other is open: %q", got)
+	}
+	a.CloseNow()
+	// "Closing the tab and opening the same address again": a new connection to the same host is the same account.
+	again, _, err := p.dial(t, player, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer again.CloseNow()
+	if got := whoIs(t, again); got != testAccount {
+		t.Errorf("the same address is the same account after reconnecting: %q", got)
+	}
+	// Revoking a link stops it at once; asking again makes a new host.
+	if ok, err := p.store.RevokeMekBayLink(context.Background(), "pt", "camp", "player-1"); err != nil || !ok {
+		t.Fatal(ok, err)
+	}
+	if _, resp, err := p.dial(t, player, nil); err == nil || resp == nil || resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("a revoked link no longer connects: %v %v", resp, err)
+	}
+	if fresh := p.link(t, "player-1", testAccount); fresh == player {
+		t.Error("a revoked label gets a new link")
+	}
+	// A page from another origin can't use a link's host through a visitor's browser.
+	_, resp, err := p.dial(t, opfor, http.Header{"Origin": {"https://evil.example"}})
+	if err == nil || resp == nil || resp.StatusCode != http.StatusForbidden {
+		t.Errorf("a page from another origin is refused: %v %v", resp, err)
+	}
+}
+
+// On a developer's machine (the bare mekbay.localhost, from loopback), a browser acts as one shared sandbox account; anywhere else the bare
+// host gets no relay, so the deployed site is never an open door to MekBay.
+func TestMekBayRelaySandbox(t *testing.T) {
+	p := newProxyFixture(t)
+	a, _, err := p.dial(t, "mekbay.localhost", nil)
+	if err != nil {
+		t.Fatalf("the bare localhost host is let in: %v", err)
+	}
+	defer a.CloseNow()
+	b, _, err := p.dial(t, "mekbay.localhost", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer b.CloseNow()
+	sandbox := p.vault.sandbox
+	if ua, ub := whoIs(t, a), whoIs(t, b); ua != sandbox || ub != sandbox || sandbox == testAccount || len(sandbox) != 36 {
+		t.Errorf("everyone on the bare host shares one account (derived from the key): %q %q want %q", ua, ub, sandbox)
+	}
+	if newMekBayVault("test-key").sandbox != sandbox || newMekBayVault("another-key").sandbox == sandbox {
 		t.Error("the sandbox account is stable for a key and different for another")
 	}
-	// A token still wins over the sandbox.
-	c, _, err := p.dialRelay(t, p.cookie(t, testAccount, time.Hour), "")
+	// A link still wins on its own host, and the sandbox isn't offered on link hosts that don't work.
+	c, _, err := p.dial(t, p.link(t, "player-1", testAccount), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer c.CloseNow()
-	if got := ask(c); got != testAccount {
-		t.Errorf("a token acts as its own account: %q", got)
+	if got := whoIs(t, c); got != testAccount {
+		t.Errorf("a link acts as its own account: %q", got)
+	}
+	if _, resp, err := p.dial(t, "mekbay-nope.localhost", nil); err == nil || resp == nil || resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("a broken link host gets no sandbox: %v %v", resp, err)
 	}
 
 	// Not on localhost, or not from this machine, there is no sandbox: the host name alone proves nothing.
-	dial := func(host string, extra http.Header) (*http.Response, error) {
-		header := http.Header{"Origin": {"http://" + host + ":" + portOf(p.site.URL)}}
-		for k, v := range extra {
-			header[k] = v
-		}
-		_, resp, err := websocket.Dial(ctx, "ws://"+host+":"+portOf(p.site.URL)+"/ws", &websocket.DialOptions{HTTPClient: p.client, HTTPHeader: header})
-		return resp, err
-	}
 	for name, c := range map[string]struct {
 		host  string
 		extra http.Header
@@ -461,24 +521,24 @@ func TestMekBayRelaySandbox(t *testing.T) {
 		"behind a proxy (Fwd)":  {"mekbay.localhost", http.Header{"Forwarded": {"for=203.0.113.9"}}},
 		"behind a proxy (host)": {"mekbay.localhost", http.Header{"X-Forwarded-Host": {"battletech.zech.io"}}},
 	} {
-		if resp, err := dial(c.host, c.extra); err == nil || resp == nil || resp.StatusCode != http.StatusUnauthorized {
+		if _, resp, err := p.dial(t, c.host, c.extra); err == nil || resp == nil || resp.StatusCode != http.StatusUnauthorized {
 			t.Errorf("%s gets no sandbox: %v %v", name, resp, err)
 		}
 	}
 	if sandboxAllowed(&http.Request{Host: "mekbay.localhost:8080", RemoteAddr: "203.0.113.9:5000", Header: http.Header{}}) {
 		t.Error("a remote client can't claim localhost with its Host header")
 	}
-	if !sandboxAllowed(&http.Request{Host: "mekbay.localhost:8080", RemoteAddr: "[::1]:5000", Header: http.Header{}}) || !sandboxAllowed(&http.Request{Host: "x.mekbay.localhost", RemoteAddr: "127.0.0.1:5000", Header: http.Header{}}) {
+	if !sandboxAllowed(&http.Request{Host: "mekbay.localhost:8080", RemoteAddr: "[::1]:5000", Header: http.Header{}}) || !sandboxAllowed(&http.Request{Host: "mekbay-x.localhost", RemoteAddr: "127.0.0.1:5000", Header: http.Header{}}) {
 		t.Error("loopback clients on *.localhost are allowed, IPv6 included")
 	}
 	if n := len(p.fake.sent()); n != 3 {
-		t.Errorf("only the three allowed browsers' messages reached MekBay: %d", n)
+		t.Errorf("only the allowed browsers' messages reached MekBay: %d", n)
 	}
 }
 
 func TestMekBayCheck(t *testing.T) {
 	p := newProxyFixture(t)
-	pr := newMekBayProxy(newMekBayTokens("k"))
+	pr := newMekBayProxy(newMekBayVault("k"), p.store)
 	pr.web = p.fake.URL
 	if err := pr.Check(context.Background()); err != nil {
 		t.Errorf("a MekBay that names its WebSocket the expected way passes: %v", err)
@@ -511,83 +571,84 @@ func TestSwapUUID(t *testing.T) {
 	}
 }
 
-func TestMekBayTokens(t *testing.T) {
-	now := time.Date(2026, 11, 18, 12, 0, 0, 0, time.UTC)
-	tk := newMekBayTokens("secret")
-	tok, err := tk.Issue(strings.ToUpper(testAccount), time.Hour, now)
+func TestMekBayVault(t *testing.T) {
+	v := newMekBayVault("secret")
+	sealed, err := v.Seal(strings.ToUpper(testAccount))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(tok, testAccount) || strings.ContainsAny(tok, "+/=") {
-		t.Errorf("a token hides the account and is URL-safe: %q", tok)
+	if strings.Contains(sealed, testAccount) || strings.ContainsAny(sealed, "+/=") {
+		t.Errorf("a sealed account hides it and is URL-safe: %q", sealed)
 	}
-	if id, exp, err := tk.Open(tok, now.Add(59*time.Minute)); err != nil || id != testAccount || !exp.Equal(now.Add(time.Hour)) {
-		t.Errorf("a token opens to its account until it expires: %q %v %v", id, exp, err)
+	if got, err := v.Open(sealed); err != nil || got != testAccount {
+		t.Errorf("it opens to the account: %q %v", got, err)
 	}
-	if _, _, err := tk.Open(tok, now.Add(time.Hour)); err != ErrBadToken {
-		t.Errorf("a token expires: %v", err)
-	}
-	if _, _, err := newMekBayTokens("other").Open(tok, now); err != ErrBadToken {
+	if _, err := newMekBayVault("other").Open(sealed); err != ErrBadLink {
 		t.Errorf("another key can't open it: %v", err)
 	}
-	flipped := []byte(tok)
+	flipped := []byte(sealed)
 	flipped[len(flipped)/2] ^= 1
 	for name, bad := range map[string]string{"altered": string(flipped), "empty": "", "short": "abc", "not base64": "%%%"} {
-		if _, _, err := tk.Open(bad, now); err != ErrBadToken {
-			t.Errorf("%s token: %v", name, err)
+		if _, err := v.Open(bad); err != ErrBadLink {
+			t.Errorf("%s: %v", name, err)
 		}
 	}
-	if _, err := tk.Issue("not-a-uuid", time.Hour, now); err == nil {
+	if _, err := v.Seal("not-a-uuid"); err == nil {
 		t.Error("only a MekBay user ID can be sealed")
 	}
-	a, _ := tk.Issue(testAccount, time.Hour, now)
-	b, _ := tk.Issue(testAccount, time.Hour, now)
+	a, _ := v.Seal(testAccount)
+	b, _ := v.Seal(testAccount)
 	if a == b {
-		t.Error("each token is sealed with a fresh nonce")
+		t.Error("each seal uses a fresh nonce")
 	}
-	if _, err := MekBayLinkToken("", testAccount, time.Hour); err == nil {
-		t.Error("tokens need a configured key")
-	}
-	link, err := MekBayLinkToken("secret", testAccount, time.Hour)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if id, _, err := tk.Open(link, time.Now()); err != nil || id != testAccount {
-		t.Errorf("the exported helper makes tokens the proxy accepts: %q %v", id, err)
+	if r1, r2 := newMekBayVault(""), newMekBayVault(""); r1.sandbox == r2.sandbox {
+		t.Error("with no key set each vault gets its own random key")
 	}
 }
 
 func TestMekBayLinkBuilder(t *testing.T) {
-	s := &Server{proxy: newMekBayProxy(newMekBayTokens("k"))}
-	for _, c := range []struct{ host, proto, wantPrefix string }{
-		{"battletech.zech.io", "https", "https://mekbay.battletech.zech.io/?"},
-		{"localhost:8080", "", "http://mekbay.localhost:8080/?"},
-		{"mekbay.localhost:8080", "", "http://mekbay.localhost:8080/?"},
+	store, err := OpenSQLite(t.TempDir() + "/builder.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	if _, err := store.EnsurePlaythrough(context.Background(), "pt"); err != nil {
+		t.Fatal(err)
+	}
+	s := &Server{store: store}
+	s.proxy = newMekBayProxy(newMekBayVault("k"), store)
+	re := regexp.MustCompile(`^(https?)://mekbay-([a-z2-7]{32})\.(.+?)/(\?.*)?$`)
+	for _, c := range []struct{ host, proto, wantScheme, wantSite string }{
+		{"battletech.zech.io", "https", "https", "battletech.zech.io"},
+		{"localhost:8080", "", "http", "localhost:8080"},
+		{"mekbay.localhost:8080", "", "http", "localhost:8080"},
 	} {
 		r := httptest.NewRequest("GET", "/", nil)
 		r.Host = c.host
 		if c.proto != "" {
 			r.Header.Set("X-Forwarded-Proto", c.proto)
 		}
-		link, err := s.mekbayLink(r, testAccount, "force-1", time.Hour)
-		if err != nil || !strings.HasPrefix(link, c.wantPrefix) {
+		link, err := s.mekbayLink(r, "pt", "camp", "player-1", testAccount, "force-1")
+		m := re.FindStringSubmatch(link)
+		if err != nil || m == nil || m[1] != c.wantScheme || m[3] != c.wantSite {
 			t.Fatalf("%s: %q %v", c.host, link, err)
 		}
 		u, _ := url.Parse(link)
-		if u.Query().Get("instance") != "force-1" {
-			t.Errorf("the link opens the force: %q", link)
+		if u.Query().Get("instance") != "force-1" || strings.Contains(link, testAccount) {
+			t.Errorf("the link opens the force and never shows the account: %q", link)
 		}
-		if id, _, err := s.proxy.tokens.Open(u.Query().Get("t"), time.Now()); err != nil || id != testAccount {
-			t.Errorf("the link's token names the account: %q %v", id, err)
+		// Asking again for the same label gives the very same link.
+		if again, _ := s.mekbayLink(r, "pt", "camp", "player-1", testAccount, "force-1"); again != link {
+			t.Errorf("a link is stable: %q vs %q", again, link)
 		}
-		if strings.Contains(link, testAccount) {
-			t.Errorf("the account never appears in the link: %q", link)
+		if sealed, ok, _ := store.MekBayLink(context.Background(), m[2], time.Now()); !ok || sealed == "" {
+			t.Errorf("the link is in the table")
 		}
 	}
-	if link, _ := s.mekbayLink(httptest.NewRequest("GET", "/", nil), testAccount, "", time.Hour); strings.Contains(link, "instance=") {
+	if link, _ := s.mekbayLink(httptest.NewRequest("GET", "/", nil), "pt", "camp", "opfor", otherAccount, ""); strings.Contains(link, "instance=") || !strings.HasSuffix(link, "/") {
 		t.Errorf("no force, no instance: %q", link)
 	}
-	if _, err := s.mekbayLink(httptest.NewRequest("GET", "/", nil), "nope", "", time.Hour); err == nil {
+	if _, err := s.mekbayLink(httptest.NewRequest("GET", "/", nil), "pt", "camp", "bad", "nope", ""); err == nil {
 		t.Error("only a real account gets a link")
 	}
 }
@@ -596,33 +657,35 @@ func TestMekBayLinkBuilder(t *testing.T) {
 func TestManagePageOpensTheHangarEditable(t *testing.T) {
 	srv, store, cookie := startedCompany(t)
 	page := body(t, srv, "/refusalwar/manage/", cookie)
-	m := regexp.MustCompile(`href="(http://mekbay\.[^"]+)"[^>]*>open it editable`).FindStringSubmatch(page)
+	m := regexp.MustCompile(`href="(http://mekbay-([a-z2-7]{32})\.[^"]+)"[^>]*>open it editable`).FindStringSubmatch(page)
 	if m == nil {
 		t.Fatalf("the advanced note links to the editable hangar: %.300s", page)
 	}
 	link, _ := url.Parse(strings.ReplaceAll(m[1], "&amp;", "&"))
-	run, _, _ := store.Run(context.Background(), playthroughID("wolfpack2026"), "refusalwar")
-	if link.Query().Get("instance") != run.HangarInstance || link.Query().Get("t") == "" || strings.Contains(m[1], accountUID("wolfpack2026", SlotHangar)) {
+	ctx := context.Background()
+	run, _, _ := store.Run(ctx, playthroughID("wolfpack2026"), "refusalwar")
+	if link.Query().Get("instance") != run.HangarInstance || strings.Contains(m[1], accountUID("wolfpack2026", SlotHangar)) {
 		t.Errorf("the link opens the site's copy without showing the account: %q", m[1])
 	}
-	// Following it makes this server's proxy remember the account, and strips the token from the address.
-	addr := strings.TrimPrefix(srv.URL, "http://")
-	client := &http.Client{
-		Transport: &http.Transport{DialContext: func(ctx context.Context, n, _ string) (net.Conn, error) {
-			return (&net.Dialer{}).DialContext(ctx, n, addr)
-		}},
-		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	if _, ok, err := store.MekBayLink(ctx, m[2], time.Now()); err != nil || !ok {
+		t.Errorf("the link is live in the table: %v %v", ok, err)
 	}
-	resp, err := client.Get(link.String())
-	if err != nil {
-		t.Fatal(err)
+	// Reloading the page gives the very same link, so it can be bookmarked.
+	if again := regexp.MustCompile(`href="(http://mekbay-[^"]+)"[^>]*>open it editable`).FindStringSubmatch(body(t, srv, "/refusalwar/manage/", cookie)); again == nil || again[1] != m[1] {
+		t.Errorf("the link is stable across page loads: %v", again)
 	}
-	resp.Body.Close()
-	if resp.StatusCode != http.StatusSeeOther || strings.Contains(resp.Header.Get("Location"), "t=") || len(resp.Cookies()) != 1 || resp.Cookies()[0].Name != mekbayCookie {
-		t.Errorf("the token is accepted by the same server: %d %q %v", resp.StatusCode, resp.Header.Get("Location"), resp.Cookies())
+	// Deleting the campaign takes its links with it.
+	if r := post(t, srv, "/api/campaign/delete", url.Values{"campaign": {"refusalwar"}}, cookie, srv.URL); r.StatusCode != http.StatusNoContent {
+		t.Fatalf("delete: %d", r.StatusCode)
 	}
-	// A run from before the site copied hangars has nothing to open.
-	_, _ = store.db.Exec(`UPDATE campaign_runs SET source_url = ''`)
+	if _, ok, _ := store.MekBayLink(ctx, m[2], time.Now()); ok {
+		t.Error("deleting the campaign revokes its links")
+	}
+}
+
+func TestManagePageHasNoEditableLinkWithoutASiteHangar(t *testing.T) {
+	srv, store, cookie := startedCompany(t)
+	_, _ = store.db.Exec(`UPDATE campaign_runs SET source_url = ''`) // a run from before the site copied hangars
 	if page := body(t, srv, "/refusalwar/manage/", cookie); strings.Contains(page, "open it editable") {
 		t.Error("without a site-owned hangar there is nothing to open editable")
 	}

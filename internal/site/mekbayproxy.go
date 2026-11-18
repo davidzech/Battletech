@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"path"
 	"regexp"
 	"strconv"
 	"strings"
@@ -21,7 +22,7 @@ import (
 	"github.com/coder/websocket"
 )
 
-// The MekBay proxy: MekBay's own web app, served from a host of ours (mekbay.<our host>), acting as the MekBay account a link names.
+// The MekBay proxy: MekBay's own web app, served from host names of ours, each one acting as the MekBay account its link names.
 //
 // Why: MekBay keeps a visitor's identity (a UUID) in the browser's IndexedDB, and an account owns its forces. A force owned by an account
 // nobody holds (the site's OpFor, a player's derived account) would be read-only in a stock browser. The proxy lets the site hand a player
@@ -30,16 +31,20 @@ import (
 // How: two parts, both in this program (MekBay's server is closed source and its front end is a stack we don't want to host or fork):
 //
 //   - The web app. MekBay's prebuilt static files are fetched from mekbay.com on demand, cached and served unchanged except for two things:
-//     the one JavaScript string that names its WebSocket (wss://mekbay.com/ws), which now names our relay, and the service workers
-//     (ngsw-worker.js, safety-worker.js), which become stubs that unregister themselves, because a rewritten file would fail the worker's own
-//     hash checks. Everything else is untouched, so the app is always MekBay's current build and stays in step with its server.
+//     the one JavaScript string that names its WebSocket (wss://mekbay.com/ws), which now names our relay on the same host, and the service
+//     workers (ngsw-worker.js, safety-worker.js), which become stubs that unregister themselves, because a rewritten file would fail the
+//     worker's own hash checks. Everything else is untouched, so the app is always MekBay's current build and stays in step with its server.
 //   - The relay (/ws). It accepts the browser's WebSocket, opens one to mekbay.com and passes the messages through, replacing the "uuid" of
-//     every message the browser sends with the account its token names. The browser still believes it is a random visitor.
+//     every message the browser sends with the account of the link the browser was reached through. The browser still believes it is a random
+//     visitor.
 //
-// The identity comes from a link token (mekbaytoken.go): ?t=<token> on any page sets a host-only, HttpOnly cookie and redirects without it.
-// A browser with no cookie is refused, except on a developer's machine (sandboxAllowed), where it acts as one shared sandbox account so the
-// proxy host also works when opened directly. A cookie that is present but invalid is always refused. The site's own cookies never reach this host (it
-// is a different origin from the site), which also keeps MekBay's JavaScript away from the site's APIs.
+// The identity is the host name (mekbaylinks.go): https://mekbay-<id>.<site host>/. Every link is its own origin, so two links open in two tabs
+// of one browser are two accounts with separate cookies, IndexedDB and tabs, and a link keeps working when its tab is closed and reopened. The
+// site's own cookies never reach these hosts, and MekBay's JavaScript is cross-origin to the site's APIs. Every response carries
+// Referrer-Policy: no-referrer, so following a link out of MekBay never leaks the host name.
+//
+// A link host that isn't valid gets no pages and no relay. The one exception to "no link, no relay" is a developer's machine: reached as
+// mekbay.localhost from the same machine (sandboxAllowed), the relay acts as one shared sandbox account, so MekBay works when opened directly.
 //
 // This relies on MekBay's unofficial, unpublished protocol and on the WebSocket string surviving its build; Check says whether it does.
 
@@ -47,7 +52,6 @@ const (
 	mekbayWebURL    = "https://mekbay.com"
 	mekbayWSURL     = "wss://mekbay.com/ws"
 	mekbayOriginURL = "https://mekbay.com"
-	mekbayCookie    = "mekbay_id"
 
 	// mekbayWSLiteral is the string in MekBay's compiled JavaScript that the proxy replaces.
 	mekbayWSLiteral = "wss://mekbay.com/ws"
@@ -69,10 +73,16 @@ self.addEventListener('activate', function (e) {
 });
 `
 
+// linkStore is where the proxy looks links up (the Store; tests may use another).
+type linkStore interface {
+	MekBayLink(ctx context.Context, id string, now time.Time) (sealed string, ok bool, err error)
+}
+
 type mekbayProxy struct {
 	web, ws, origin string
 	client          *http.Client
-	tokens          *mekbayTokens
+	vault           *mekbayVault
+	links           linkStore
 	now             func() time.Time
 
 	mu    sync.Mutex
@@ -88,35 +98,68 @@ type proxiedFile struct {
 	fetched     time.Time
 }
 
-func newMekBayProxy(tokens *mekbayTokens) *mekbayProxy {
+func newMekBayProxy(vault *mekbayVault, links linkStore) *mekbayProxy {
 	return &mekbayProxy{
 		web: mekbayWebURL, ws: mekbayWSURL, origin: mekbayOriginURL,
 		client: &http.Client{Timeout: 30 * time.Second},
-		tokens: tokens,
+		vault:  vault,
+		links:  links,
 		now:    time.Now,
 		cache:  map[string]*proxiedFile{},
 	}
 }
 
-// MekBayLinkToken seals a MekBay account into a link token under the server's secret (MEKBAY_TOKEN_KEY), for building the links the site
-// hands out: https://mekbay.<host>/?t=<token>&instance=<force>.
-func MekBayLinkToken(secret, account string, ttl time.Duration) (string, error) {
-	if secret == "" {
-		return "", errors.New("no MekBay token key is set")
+// What a request's host name says about the proxy.
+type mekbayHostKind int
+
+const (
+	notMekBayHost mekbayHostKind = iota
+	// sandboxHost is the bare mekbay.<site host>, which has no link in it.
+	sandboxHost
+	// linkHost is mekbay-<something>.<site host>; the something may not be a well-formed id.
+	linkHost
+)
+
+// parseMekBayHost reads a Host header (with or without a port). For a link host it also returns the link id, or "" when what follows
+// "mekbay-" is not shaped like one.
+func parseMekBayHost(host string) (id string, kind mekbayHostKind) {
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		host = h
 	}
-	return newMekBayTokens(secret).Issue(account, ttl, time.Now())
+	first, _, _ := strings.Cut(strings.ToLower(host), ".")
+	switch {
+	case first == "mekbay":
+		return "", sandboxHost
+	case strings.HasPrefix(first, mekbayLinkPrefix):
+		if id := strings.TrimPrefix(first, mekbayLinkPrefix); validMekBayLinkID(id) {
+			return id, linkHost
+		}
+		return "", linkHost
+	}
+	return "", notMekBayHost
 }
 
-// isMekBayHost reports whether a request's host is the MekBay proxy's (mekbay.<anything>, with or without a port).
+// isMekBayHost reports whether a request's host is one the proxy answers.
 func isMekBayHost(host string) bool {
-	if i := strings.LastIndex(host, ":"); i >= 0 && !strings.Contains(host[i:], "]") {
-		host = host[:i]
-	}
-	return strings.HasPrefix(strings.ToLower(host), "mekbay.")
+	_, kind := parseMekBayHost(host)
+	return kind != notMekBayHost
 }
 
-// sandboxAllowed says whether a browser with no token may use the shared sandbox account: only when the proxy is reached as *.localhost
-// (mekbay.localhost:8080) by a client on the same machine. The Host header alone proves nothing, since a remote client picks its own, so the
+// siteHost is the site's own host for a request that came to a proxy host (the host without its mekbay label), or the host itself.
+func siteHost(host string) string {
+	if !isMekBayHost(host) {
+		return host
+	}
+	_, rest, _ := strings.Cut(host, ".")
+	return rest
+}
+
+func isHTTPS(r *http.Request) bool {
+	return r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
+}
+
+// sandboxAllowed says whether a browser reached through the bare mekbay.<host> may act as the shared sandbox account: only when the proxy is
+// reached as *.localhost by a client on the same machine. The Host header alone proves nothing, since a remote client picks its own, so the
 // connection must also come from a loopback address and carry no forwarding header (behind the host's proxy it never does).
 func sandboxAllowed(r *http.Request) bool {
 	host := r.Host
@@ -137,18 +180,46 @@ func sandboxAllowed(r *http.Request) bool {
 	return addr != nil && addr.IsLoopback()
 }
 
-func isHTTPS(r *http.Request) bool {
-	return r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
+// account says which MekBay account a request acts as: the account of the link in its host name, or, on a developer's machine reached through
+// the bare mekbay.localhost, the shared sandbox. status is 0 when there is one, else the HTTP status to refuse with.
+func (p *mekbayProxy) account(r *http.Request) (account string, status int, msg string) {
+	id, kind := parseMekBayHost(r.Host)
+	switch {
+	case kind == linkHost:
+		if id == "" {
+			return "", http.StatusForbidden, ErrBadLink.Error()
+		}
+		sealed, ok, err := p.links.MekBayLink(r.Context(), id, p.now())
+		if err != nil {
+			log.Printf("mekbay proxy: link lookup: %v", err)
+			return "", http.StatusInternalServerError, "Could not look the link up."
+		}
+		if !ok {
+			return "", http.StatusForbidden, ErrBadLink.Error()
+		}
+		acct, err := p.vault.Open(sealed)
+		if err != nil { // sealed under another key: the server's key was changed
+			return "", http.StatusForbidden, ErrBadLink.Error()
+		}
+		return acct, 0, ""
+	case kind == sandboxHost && sandboxAllowed(r):
+		return p.vault.sandbox, 0, ""
+	}
+	return "", http.StatusForbidden, "Open your MekBay link from the site first."
 }
 
 func (p *mekbayProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	h := w.Header()
+	h.Set("Referrer-Policy", "no-referrer") // following a link out of MekBay must never reveal this host name
+	h.Set("X-Robots-Tag", "noindex")
+	h.Set("X-Content-Type-Options", "nosniff")
 	switch r.URL.Path {
 	case "/ws":
 		p.relay(w, r)
 		return
 	case "/ngsw-worker.js", "/safety-worker.js":
-		w.Header().Set("Content-Type", "application/javascript")
-		w.Header().Set("Cache-Control", "no-store")
+		h.Set("Content-Type", "application/javascript")
+		h.Set("Cache-Control", "no-store")
 		_, _ = io.WriteString(w, mekbayWorkerStub)
 		return
 	case "/ngsw.json":
@@ -159,9 +230,13 @@ func (p *mekbayProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if tok := r.URL.Query().Get("t"); tok != "" {
-		p.acceptToken(w, r, tok)
-		return
+	// The pages (anything that isn't a file) are only for a valid link; the files themselves are public MekBay files.
+	if _, kind := parseMekBayHost(r.Host); kind == linkHost && !strings.Contains(path.Base(r.URL.Path), ".") {
+		if _, status, msg := p.account(r); status != 0 {
+			h.Set("Cache-Control", "no-store")
+			http.Error(w, msg, status)
+			return
+		}
 	}
 	f, err := p.file(r.Context(), r.URL.Path)
 	if err != nil {
@@ -174,10 +249,9 @@ func (p *mekbayProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		body = bytes.ReplaceAll(body, []byte(mekbayWSLiteral), []byte(relayURL(r)))
 		p.rewrites.Add(1)
 	}
-	h := w.Header()
 	h.Set("Content-Type", f.contentType)
 	if strings.HasPrefix(f.contentType, "text/html") {
-		h.Set("Cache-Control", "no-cache")
+		h.Set("Cache-Control", "no-store")
 	} else {
 		h.Set("Cache-Control", "public, max-age=3600")
 	}
@@ -202,24 +276,6 @@ func relayURL(r *http.Request) string {
 
 func isJavaScript(contentType string) bool {
 	return strings.Contains(contentType, "javascript")
-}
-
-// acceptToken stores a link's token in a host-only cookie and redirects to the same page without it.
-func (p *mekbayProxy) acceptToken(w http.ResponseWriter, r *http.Request, tok string) {
-	_, expires, err := p.tokens.Open(tok, p.now())
-	w.Header().Set("Cache-Control", "no-store")
-	if err != nil {
-		http.Error(w, ErrBadToken.Error(), http.StatusForbidden)
-		return
-	}
-	http.SetCookie(w, &http.Cookie{
-		Name: mekbayCookie, Value: tok, Path: "/", Expires: expires,
-		HttpOnly: true, Secure: isHTTPS(r), SameSite: http.SameSiteLaxMode,
-	})
-	q := r.URL.Query()
-	q.Del("t")
-	u := url.URL{Path: r.URL.Path, RawQuery: q.Encode()}
-	http.Redirect(w, r, u.String(), http.StatusSeeOther)
 }
 
 // file returns an upstream file, from the cache when it is fresh and from the last copy when MekBay can't be reached.
@@ -285,27 +341,14 @@ func (p *mekbayProxy) download(ctx context.Context, path string) (*proxiedFile, 
 	return &proxiedFile{status: resp.StatusCode, contentType: ct, body: body, fetched: p.now()}, nil
 }
 
-// relay passes one browser's WebSocket to mekbay.com, speaking as the account its cookie's token names.
+// relay passes one browser's WebSocket to mekbay.com, speaking as the account of the link the browser was reached through.
 func (p *mekbayProxy) relay(w http.ResponseWriter, r *http.Request) {
-	// A browser with a token cookie acts as that account (a cookie that is present but not valid is refused, so nobody believes they are acting
-	// as themselves when they aren't). A browser with none is a visitor who opened the proxy directly: on a developer's machine it acts as
-	// the shared sandbox account, so MekBay works there as an open stomping ground; anywhere else it is refused, so the deployed site is never
-	// an open door to MekBay.
-	var account string
-	if c, err := r.Cookie(mekbayCookie); err == nil {
-		id, _, err := p.tokens.Open(c.Value, p.now())
-		if err != nil {
-			http.Error(w, ErrBadToken.Error(), http.StatusUnauthorized)
-			return
-		}
-		account = id
-	} else if sandboxAllowed(r) {
-		account = p.tokens.sandbox
-	} else {
-		http.Error(w, "Open your MekBay link from the site first.", http.StatusUnauthorized)
+	account, status, msg := p.account(r)
+	if status != 0 {
+		http.Error(w, msg, http.StatusUnauthorized)
 		return
 	}
-	// The default origin check (the page's origin must be this host) stops other sites from using a visitor's cookie.
+	// The default origin check (the page's origin must be this host) stops another page from using a link's host through a visitor's browser.
 	browser, err := websocket.Accept(w, r, nil)
 	if err != nil {
 		return // Accept has already answered
@@ -420,8 +463,27 @@ func statusOf(f *proxiedFile) int {
 	return f.status
 }
 
-// WithMekBayTokenKey sets the secret that link tokens are sealed under (MEKBAY_TOKEN_KEY). Without one the key is random per process.
-func WithMekBayTokenKey(secret string) Option { return func(s *Server) { s.tokenKey = secret } }
+// mekbayLink is the link that opens MekBay acting as account (the link for this playthrough's campaign and label, made on first use and the
+// same ever after), with the given force loaded when instance is set.
+func (s *Server) mekbayLink(r *http.Request, playthroughID, campaign, label, account, instance string) (string, error) {
+	id, err := s.store.EnsureMekBayLink(r.Context(), playthroughID, campaign, label, account, s.proxy.vault, mekbayLinkTTL, s.proxy.now())
+	if err != nil {
+		return "", err
+	}
+	scheme := "http"
+	if isHTTPS(r) {
+		scheme = "https"
+	}
+	link := scheme + "://" + mekbayLinkPrefix + id + "." + siteHost(r.Host) + "/"
+	if instance != "" {
+		link += "?" + url.Values{"instance": {instance}}.Encode()
+	}
+	return link, nil
+}
+
+// WithMekBayLinkKey sets the secret that MekBay link accounts are sealed under (MEKBAY_LINK_KEY). Without one the key is random per process,
+// so links made before a restart stop working.
+func WithMekBayLinkKey(secret string) Option { return func(s *Server) { s.linkKey = secret } }
 
 // withMekBayUpstream points the proxy at another MekBay (tests use a fake).
 func withMekBayUpstream(web, ws, origin string) Option {
@@ -430,25 +492,3 @@ func withMekBayUpstream(web, ws, origin string) Option {
 
 // withMekBayProxyHook hands the proxy to a test once it is built.
 func withMekBayProxyHook(f func(*mekbayProxy)) Option { return func(s *Server) { s.onProxy = f } }
-
-// mekbayLink is a link that opens MekBay (the proxy on mekbay.<this host>) acting as account, with the given force loaded when instance is
-// set. It carries a fresh token valid for ttl.
-func (s *Server) mekbayLink(r *http.Request, account, instance string, ttl time.Duration) (string, error) {
-	tok, err := s.proxy.tokens.Issue(account, ttl, s.proxy.now())
-	if err != nil {
-		return "", err
-	}
-	scheme := "http"
-	if isHTTPS(r) {
-		scheme = "https"
-	}
-	host := r.Host
-	if !isMekBayHost(host) {
-		host = "mekbay." + host
-	}
-	q := url.Values{"t": {tok}}
-	if instance != "" {
-		q.Set("instance", instance)
-	}
-	return scheme + "://" + host + "/?" + q.Encode(), nil
-}

@@ -3,6 +3,7 @@ package site
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -16,8 +17,8 @@ import (
 
 // TestMekBayProxyLive runs the proxy against the real mekbay.com with throwaway accounts (random UUIDs, one tiny force). It only runs when
 // MEKBAY_LIVE_PROXY is set. It checks the things the design stands on: the WebSocket string is still there to replace, and a browser that
-// believes it is a random visitor but carries the owner's link token can read, change and own the owner's force, while a browser with
-// someone else's token can't touch it.
+// believes it is a random visitor but is reached through the owner's link can read, change and own the owner's force, while a browser on
+// someone else's link can't touch it.
 func TestMekBayProxyLive(t *testing.T) {
 	if os.Getenv("MEKBAY_LIVE_PROXY") == "" {
 		t.Skip("set MEKBAY_LIVE_PROXY=1 to run the proxy against mekbay.com")
@@ -30,49 +31,55 @@ func TestMekBayProxyLive(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer store.Close()
+	if _, err := store.EnsurePlaythrough(ctx, "pt"); err != nil {
+		t.Fatal(err)
+	}
 	var proxy *mekbayProxy
-	site := httptest.NewServer(NewHandler(t.TempDir(), store, WithMekBayTokenKey("live-test"), withMekBayProxyHook(func(p *mekbayProxy) { proxy = p })))
+	site := httptest.NewServer(NewHandler(t.TempDir(), store, WithMekBayLinkKey("live-test"), withMekBayProxyHook(func(p *mekbayProxy) { proxy = p })))
 	defer site.Close()
+	vault := newMekBayVault("live-test")
 	addr := strings.TrimPrefix(site.URL, "http://")
 	_, port, _ := net.SplitHostPort(addr)
 	client := &http.Client{Transport: &http.Transport{DialContext: func(ctx context.Context, network, _ string) (net.Conn, error) {
 		return (&net.Dialer{}).DialContext(ctx, network, addr)
 	}}, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-	origin := "http://" + testHost + ":" + port
+
+	owner, stranger, browserID := newID(), newID(), newID() // browserID is the random identity the page itself believes it has
+	// linkHost is the host name of the link for an account, as the site would hand it out.
+	linkHost := func(label, account string) string {
+		t.Helper()
+		id, err := store.EnsureMekBayLink(ctx, "pt", "camp", label, account, vault, time.Hour, time.Now())
+		if err != nil {
+			t.Fatal(err)
+		}
+		return mekbayLinkPrefix + id + ".localhost"
+	}
+	ownerHost, strangerHost := linkHost("owner", owner), linkHost("stranger", stranger)
 
 	// 1. The real MekBay still names its WebSocket the way the proxy expects.
 	if err := proxy.Check(ctx); err != nil {
 		t.Fatalf("MekBay's build no longer matches what the proxy rewrites: %v", err)
 	}
 
-	// 2. The real page is served, and the script that opens the socket points at us.
-	get := func(path string) string {
-		req, _ := http.NewRequestWithContext(ctx, "GET", origin+path, nil)
+	// 2. The real page is served on the owner's link, and the script that opens the socket points at that host.
+	get := func(host, path string) string {
+		req, _ := http.NewRequestWithContext(ctx, "GET", "http://"+host+":"+port+path, nil)
 		resp, err := client.Do(req)
 		if err != nil {
 			t.Fatal(err)
 		}
 		defer resp.Body.Close()
-		var sb strings.Builder
-		buf := make([]byte, 1<<16)
-		for {
-			n, err := resp.Body.Read(buf)
-			sb.Write(buf[:n])
-			if err != nil {
-				break
-			}
-		}
+		b, _ := io.ReadAll(resp.Body)
 		if resp.StatusCode != 200 {
-			t.Fatalf("GET %s: %d", path, resp.StatusCode)
+			t.Fatalf("GET %s%s: %d", host, path, resp.StatusCode)
 		}
-		return sb.String()
+		return string(b)
 	}
-	if page := get("/"); !strings.Contains(page, "<app-root") && !strings.Contains(page, "main-") {
+	if page := get(ownerHost, "/"); !strings.Contains(page, "<app-root") && !strings.Contains(page, "main-") {
 		t.Fatalf("the MekBay page was not served: %.200s", page)
 	}
 
 	// 3. A throwaway owner saves a tiny force, directly.
-	owner, stranger, browserID := newID(), newID(), newID() // browserID is the random identity the page itself believes it has
 	instance := newID()
 	own, err := dialMekBay(ctx, mekbayWSURL, owner)
 	if err != nil {
@@ -84,16 +91,12 @@ func TestMekBayProxyLive(t *testing.T) {
 		t.Fatalf("could not create the test force: %v", err)
 	}
 
-	// browser opens the proxy's relay with a link token for account, and registers as the random identity the page generated.
-	browser := func(account string) *mekbaySession {
+	// browser opens the relay on a link's host and registers as the random identity the page generated.
+	browser := func(host string) *mekbaySession {
 		t.Helper()
-		tok, err := MekBayLinkToken("live-test", account, time.Hour)
-		if err != nil {
-			t.Fatal(err)
-		}
-		conn, _, err := websocket.Dial(ctx, "ws://"+testHost+":"+port+"/ws", &websocket.DialOptions{
+		conn, _, err := websocket.Dial(ctx, "ws://"+host+":"+port+"/ws", &websocket.DialOptions{
 			HTTPClient: client,
-			HTTPHeader: http.Header{"Cookie": {mekbayCookie + "=" + tok}, "Origin": {origin}},
+			HTTPHeader: http.Header{"Origin": {"http://" + host + ":" + port}},
 		})
 		if err != nil {
 			t.Fatalf("could not open the relay: %v", err)
@@ -107,7 +110,7 @@ func TestMekBayProxyLive(t *testing.T) {
 	}
 
 	// 4. The owner's browser, though it presents itself as someone else, is treated as the owner: ownedOnly only answers the owner.
-	ob := browser(owner)
+	ob := browser(ownerHost)
 	defer ob.close()
 	reply, err := ob.call(ctx, map[string]any{"action": "getForce", "uuid": browserID, "instanceId": instance, "ownedOnly": true})
 	if err != nil {
@@ -133,8 +136,8 @@ func TestMekBayProxyLive(t *testing.T) {
 		t.Fatalf("the edit reached MekBay: %q %v", read.Name, err)
 	}
 
-	// 6. A browser carrying someone else's token can neither read it as its own nor change it.
-	sb := browser(stranger)
+	// 6. A browser on someone else's link can neither read it as its own nor change it.
+	sb := browser(strangerHost)
 	defer sb.close()
 	if reply, err := sb.call(ctx, map[string]any{"action": "getForce", "uuid": browserID, "instanceId": instance, "ownedOnly": true}); err == nil {
 		var g struct {

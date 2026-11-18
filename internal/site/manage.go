@@ -6,7 +6,6 @@ import (
 	"errors"
 	"log"
 	"net/http"
-	"time"
 )
 
 // manage serves /<campaign>/manage/, the page for managing a started campaign's force: hangar link, named pilots and
@@ -41,7 +40,7 @@ func (s *Server) manage(w http.ResponseWriter, r *http.Request) {
 		Campaign: c,
 	}
 	if run.Owned() { // the site's copy of the hangar belongs to the account derived from the seed: open it in MekBay as that account
-		if link, err := s.mekbayLink(r, accountUID(seed, SlotHangar), run.HangarInstance, 12*time.Hour); err == nil {
+		if link, err := s.mekbayLink(r, playthroughID(seed), c.Slug, "hangar", accountUID(seed, SlotHangar), run.HangarInstance); err == nil {
 			p.MekBayEditURL = link
 		}
 	}

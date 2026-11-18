@@ -132,6 +132,16 @@ func (s *Store) schemaStatements() []string {
 	operation_id   TEXT NOT NULL,
 	PRIMARY KEY (playthrough_id, campaign, scenario_id)
 )`,
+		`CREATE TABLE IF NOT EXISTS mekbay_links (
+	id             TEXT PRIMARY KEY,
+	playthrough_id TEXT NOT NULL REFERENCES playthroughs(id) ON DELETE CASCADE,
+	campaign       TEXT NOT NULL,
+	label          TEXT NOT NULL,
+	sealed         TEXT NOT NULL,
+	ttl_seconds    BIGINT NOT NULL,
+	expires_at     BIGINT NOT NULL,
+	UNIQUE (playthrough_id, campaign, label)
+)`,
 		fmt.Sprintf(`CREATE TABLE IF NOT EXISTS named_pilots (
 	id               TEXT PRIMARY KEY,
 	playthrough_id   TEXT NOT NULL REFERENCES playthroughs(id) ON DELETE CASCADE,
@@ -763,7 +773,7 @@ func (s *Store) DeleteRun(ctx context.Context, playthroughID, campaign string) (
 		playthroughID, campaign); err != nil {
 		return false, err
 	}
-	for _, table := range []string{"named_pilots", "mekbay_operations", "hangar_cache", "scenario_completions", "campaign_keywords"} {
+	for _, table := range []string{"named_pilots", "mekbay_operations", "mekbay_links", "hangar_cache", "scenario_completions", "campaign_keywords"} {
 		if _, err := tx.ExecContext(ctx, s.q("DELETE FROM "+table+" WHERE playthrough_id = ? AND campaign = ?"), playthroughID, campaign); err != nil {
 			return false, err
 		}

@@ -87,8 +87,8 @@ type Server struct {
 	pages  map[string]*template.Template
 	mekbay MekBay
 
-	// The MekBay proxy (mekbayproxy.go), served on the host mekbay.<site host>.
-	tokenKey string
+	// The MekBay proxy (mekbayproxy.go), served on the hosts mekbay-<link id>.<site host> (and mekbay.localhost).
+	linkKey  string
 	upstream *[3]string // web, WebSocket and Origin of the MekBay to proxy; tests replace it
 	proxy    *mekbayProxy
 	onProxy  func(*mekbayProxy) // tests take hold of the proxy here
@@ -101,7 +101,7 @@ func NewHandler(contentRoot string, store *Store, opts ...Option) http.Handler {
 	for _, o := range opts {
 		o(s)
 	}
-	s.proxy = newMekBayProxy(newMekBayTokens(s.tokenKey))
+	s.proxy = newMekBayProxy(newMekBayVault(s.linkKey), store)
 	if s.upstream != nil {
 		s.proxy.web, s.proxy.ws, s.proxy.origin = s.upstream[0], s.upstream[1], s.upstream[2]
 	}
