@@ -75,13 +75,12 @@ self.addEventListener('activate', function (e) {
 
 // linkStore is where the proxy looks links up (the Store; tests may use another).
 type linkStore interface {
-	MekBayLink(ctx context.Context, id string, now time.Time) (sealed string, ok bool, err error)
+	MekBayLink(ctx context.Context, id string, now time.Time) (account string, ok bool, err error)
 }
 
 type mekbayProxy struct {
 	web, ws, origin string
 	client          *http.Client
-	vault           *mekbayVault
 	links           linkStore
 	now             func() time.Time
 
@@ -98,11 +97,10 @@ type proxiedFile struct {
 	fetched     time.Time
 }
 
-func newMekBayProxy(vault *mekbayVault, links linkStore) *mekbayProxy {
+func newMekBayProxy(links linkStore) *mekbayProxy {
 	return &mekbayProxy{
 		web: mekbayWebURL, ws: mekbayWSURL, origin: mekbayOriginURL,
 		client: &http.Client{Timeout: 30 * time.Second},
-		vault:  vault,
 		links:  links,
 		now:    time.Now,
 		cache:  map[string]*proxiedFile{},
@@ -189,7 +187,7 @@ func (p *mekbayProxy) account(r *http.Request) (account string, status int, msg 
 		if id == "" {
 			return "", http.StatusForbidden, ErrBadLink.Error()
 		}
-		sealed, ok, err := p.links.MekBayLink(r.Context(), id, p.now())
+		acct, ok, err := p.links.MekBayLink(r.Context(), id, p.now())
 		if err != nil {
 			log.Printf("mekbay proxy: link lookup: %v", err)
 			return "", http.StatusInternalServerError, "Could not look the link up."
@@ -197,13 +195,9 @@ func (p *mekbayProxy) account(r *http.Request) (account string, status int, msg 
 		if !ok {
 			return "", http.StatusForbidden, ErrBadLink.Error()
 		}
-		acct, err := p.vault.Open(sealed)
-		if err != nil { // sealed under another key: the server's key was changed
-			return "", http.StatusForbidden, ErrBadLink.Error()
-		}
 		return acct, 0, ""
 	case kind == sandboxHost && sandboxAllowed(r):
-		return p.vault.sandbox, 0, ""
+		return sandboxAccount, 0, ""
 	}
 	return "", http.StatusForbidden, "Open your MekBay link from the site first."
 }
@@ -416,7 +410,7 @@ func swapUUID(b []byte, account string) []byte {
 // CheckMekBay runs the proxy's Check against the live mekbay.com (see Check). main runs it once at startup, so a MekBay release that breaks the proxy shows in the
 // server's log.
 func CheckMekBay(ctx context.Context) error {
-	return newMekBayProxy(newMekBayVault(""), nil).Check(ctx)
+	return newMekBayProxy(nil).Check(ctx)
 }
 
 var scriptAsset = regexp.MustCompile(`^/[A-Za-z0-9._-]+\.js$`)
@@ -475,7 +469,7 @@ const tableLabel = "table"
 // same ever after), with the given query: ?instance=<force> loads a force and ?operation=<id> an operation.
 // tableLabel is the label of the link the whole table shares.
 func (s *Server) mekbayLink(r *http.Request, playthroughID, campaign, label, account string, query url.Values) (string, error) {
-	id, err := s.store.EnsureMekBayLink(r.Context(), playthroughID, campaign, label, account, s.proxy.vault, mekbayLinkTTL, s.proxy.now())
+	id, err := s.store.EnsureMekBayLink(r.Context(), playthroughID, campaign, label, account, mekbayLinkTTL, s.proxy.now())
 	if err != nil {
 		return "", err
 	}
@@ -489,10 +483,6 @@ func (s *Server) mekbayLink(r *http.Request, playthroughID, campaign, label, acc
 	}
 	return link, nil
 }
-
-// WithMekBayLinkKey sets the secret that MekBay link accounts are sealed under (MEKBAY_LINK_KEY). Without one the key is random per process,
-// so links made before a restart stop working.
-func WithMekBayLinkKey(secret string) Option { return func(s *Server) { s.linkKey = secret } }
 
 // withMekBayUpstream points the proxy at another MekBay (tests use a fake).
 func withMekBayUpstream(web, ws, origin string) Option {

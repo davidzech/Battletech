@@ -35,9 +35,8 @@ func TestMekBayProxyLive(t *testing.T) {
 		t.Fatal(err)
 	}
 	var proxy *mekbayProxy
-	site := httptest.NewServer(NewHandler(t.TempDir(), store, WithMekBayLinkKey("live-test"), withMekBayProxyHook(func(p *mekbayProxy) { proxy = p })))
+	site := httptest.NewServer(NewHandler(t.TempDir(), store, withMekBayProxyHook(func(p *mekbayProxy) { proxy = p })))
 	defer site.Close()
-	vault := newMekBayVault("live-test")
 	addr := strings.TrimPrefix(site.URL, "http://")
 	_, port, _ := net.SplitHostPort(addr)
 	client := &http.Client{Transport: &http.Transport{DialContext: func(ctx context.Context, network, _ string) (net.Conn, error) {
@@ -48,7 +47,7 @@ func TestMekBayProxyLive(t *testing.T) {
 	// linkHost is the host name of the link for an account, as the site would hand it out.
 	linkHost := func(label, account string) string {
 		t.Helper()
-		id, err := store.EnsureMekBayLink(ctx, "pt", "camp", label, account, vault, time.Hour, time.Now())
+		id, err := store.EnsureMekBayLink(ctx, "pt", "camp", label, account, time.Hour, time.Now())
 		if err != nil {
 			t.Fatal(err)
 		}

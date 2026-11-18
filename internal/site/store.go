@@ -143,7 +143,7 @@ func (s *Store) schemaStatements() []string {
 	playthrough_id TEXT NOT NULL REFERENCES playthroughs(id) ON DELETE CASCADE,
 	campaign       TEXT NOT NULL,
 	label          TEXT NOT NULL,
-	sealed         TEXT NOT NULL,
+	account        TEXT NOT NULL,
 	ttl_seconds    BIGINT NOT NULL,
 	expires_at     BIGINT NOT NULL,
 	UNIQUE (playthrough_id, campaign, label)
@@ -222,6 +222,14 @@ func (s *Store) migrateLegacy() error {
 func (s *Store) init() error {
 	if err := s.migrateLegacy(); err != nil {
 		return fmt.Errorf("migrate schema: %w", err)
+	}
+	// The links table once held its accounts sealed under a server key. Links are made again whenever a page asks for them, so an old table is simply dropped.
+	if sealed, err := s.columnExists("mekbay_links", "sealed"); err != nil {
+		return err
+	} else if sealed {
+		if _, err := s.db.Exec(`DROP TABLE mekbay_links`); err != nil {
+			return fmt.Errorf("drop the old links table: %w", err)
+		}
 	}
 	for _, stmt := range s.schemaStatements() {
 		if _, err := s.db.Exec(stmt); err != nil {
