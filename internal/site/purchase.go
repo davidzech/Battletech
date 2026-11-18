@@ -2,13 +2,20 @@ package site
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
+	"strings"
 	"time"
 )
+
+// hangarGroup is the name of the group a hangar force's units sit in, where a purchase adds new units.
+const hangarGroup = "Hangar"
+
+// sameGroupName compares group names the way the site reads them: ignoring case and surrounding space.
+func sameGroupName(name, want string) bool {
+	return strings.EqualFold(strings.TrimSpace(name), want)
+}
 
 // Buying new units for the hangar. The price is the unit's base BV in SP (this campaign counts BV as SP, Hot Spots: Draconis Reach, SP Activity
 // Cost Table: Purchase Unit = Battle Value). A purchase adds each unit, undamaged and with a standard 4/5 pilot, to the "Hangar" group of the
@@ -61,30 +68,10 @@ func addUnitsToForce(force map[string]any, unitIDs []string, now time.Time) {
 
 // PurchaseUnits adds units to the player's hangar force. It needs the owner's UID, because MekBay only accepts the owner's saves.
 func (c *MekBayClient) PurchaseUnits(ctx context.Context, req PurchaseRequest) error {
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-	s, err := dialMekBay(ctx, c.url(), req.OwnerUID)
-	if err != nil {
-		return err
-	}
-	defer s.close()
-	raw, err := s.call(ctx, map[string]any{"action": "getForce", "uuid": req.OwnerUID, "instanceId": req.Instance, "ownedOnly": false})
-	if err != nil {
-		return err
-	}
-	var reply struct {
-		Data map[string]any `json:"data"`
-	}
-	if err := json.Unmarshal(raw, &reply); err != nil || reply.Data == nil {
-		return errors.New("MekBay has no force for your hangar link; check that the link is saved in MekBay")
-	}
-	force := reply.Data
-	now := time.Now()
-	addUnitsToForce(force, req.Units, now)
-	delete(force, "owned") // set by the server for readers; the app never sends it back
-	force["timestamp"] = mekbayTime(now)
-	_, err = s.call(ctx, map[string]any{"action": "saveForce", "uuid": req.OwnerUID, "data": force, "savedForceCount": 1})
-	return err
+	return c.editForce(ctx, req.OwnerUID, req.Instance, func(force map[string]any, now time.Time) error {
+		addUnitsToForce(force, req.Units, now)
+		return nil
+	})
 }
 
 // purchaseCost is the SP price of a list of units, or an error naming the first one that can't be bought (not in the catalog, or not a mech).
@@ -109,17 +96,8 @@ func purchaseCost(ids []string) (int, error) {
 // purchaseUnits is POST /api/hangar/purchase: buy the units named by repeated `unit` fields, paid from the warchest at their base BV, and add
 // them to the hangar in MekBay. It needs modify mode. The warchest is charged first and refunded if MekBay fails.
 func (s *Server) purchaseUnits(w http.ResponseWriter, r *http.Request) {
-	pt, c, ok := s.pilotRequest(w, r)
+	pt, c, run, ok := s.hangarRequest(w, r)
 	if !ok {
-		return
-	}
-	run, started, err := s.store.Run(r.Context(), pt.ID, c.Slug)
-	if err != nil || !started {
-		http.Error(w, "Start this campaign first.", http.StatusBadRequest)
-		return
-	}
-	if !run.Owned() {
-		http.Error(w, notOwnedMessage, http.StatusConflict)
 		return
 	}
 	ids := r.PostForm["unit"]
@@ -128,21 +106,7 @@ func (s *Server) purchaseUnits(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if err := s.store.SpendWarchest(r.Context(), pt.ID, c.Slug, cost); errors.Is(err, ErrInsufficientFunds) {
-		http.Error(w, fmt.Sprintf("Not enough in the warchest: that costs %d SP and you have %d.", cost, run.Warchest), http.StatusConflict)
-		return
-	} else if err != nil {
-		http.Error(w, "could not charge the warchest", http.StatusInternalServerError)
-		return
-	}
-	if err := s.mekbay.PurchaseUnits(r.Context(), PurchaseRequest{OwnerUID: accountUID(currentSeed(r), SlotHangar), Instance: run.HangarInstance, Units: ids}); err != nil {
-		log.Printf("buy units in MekBay: %v", err) // never log the owner UID
-		if rerr := s.store.RefundWarchest(r.Context(), pt.ID, c.Slug, cost); rerr != nil {
-			log.Printf("could not refund %d SP: %v", cost, rerr)
-		}
-		http.Error(w, err.Error(), http.StatusBadGateway)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	fmt.Fprintf(w, `{"cost":%d,"warchest":%d}`, cost, run.Warchest-cost)
+	s.payForHangarChange(w, r, pt, c, run, cost, "buy units", func() error {
+		return s.mekbay.PurchaseUnits(r.Context(), PurchaseRequest{OwnerUID: accountUID(currentSeed(r), SlotHangar), Instance: run.HangarInstance, Units: ids})
+	})
 }

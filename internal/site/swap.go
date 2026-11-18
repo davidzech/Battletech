@@ -2,9 +2,7 @@ package site
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"fmt"
 	"log"
 	"math"
 	"net/http"
@@ -119,48 +117,16 @@ type SwapRequest struct {
 
 // SwapUnit reconfigures a unit in the hangar force. It needs the owner's UID, because MekBay only accepts the owner's saves.
 func (c *MekBayClient) SwapUnit(ctx context.Context, req SwapRequest) error {
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-	s, err := dialMekBay(ctx, c.url(), req.OwnerUID)
-	if err != nil {
-		return err
-	}
-	defer s.close()
-	raw, err := s.call(ctx, map[string]any{"action": "getForce", "uuid": req.OwnerUID, "instanceId": req.Instance, "ownedOnly": false})
-	if err != nil {
-		return err
-	}
-	var reply struct {
-		Data map[string]any `json:"data"`
-	}
-	if err := json.Unmarshal(raw, &reply); err != nil || reply.Data == nil {
-		return errors.New("MekBay has no force for your hangar; try importing it again")
-	}
-	force := reply.Data
-	now := time.Now()
-	if err := swapUnitState(force, req.UnitID, req.To, now); err != nil {
-		return err
-	}
-	delete(force, "owned") // set by the server for readers; the app never sends it back
-	force["timestamp"] = mekbayTime(now)
-	_, err = s.call(ctx, map[string]any{"action": "saveForce", "uuid": req.OwnerUID, "data": force, "savedForceCount": 1})
-	return err
+	return c.editForce(ctx, req.OwnerUID, req.Instance, func(force map[string]any, now time.Time) error {
+		return swapUnitState(force, req.UnitID, req.To, now)
+	})
 }
 
 // swapUnit is POST /api/hangar/swap: reconfigure the hangar unit named by `unit` to the variant `to`. The server works the price out itself, refuses a unit that isn't
 // fully repaired and rearmed or a variant that isn't one of its chassis's, and charges the warchest first (refunded if MekBay fails).
 func (s *Server) swapUnit(w http.ResponseWriter, r *http.Request) {
-	pt, c, ok := s.pilotRequest(w, r)
+	pt, c, run, ok := s.hangarRequest(w, r)
 	if !ok {
-		return
-	}
-	run, started, err := s.store.Run(r.Context(), pt.ID, c.Slug)
-	if err != nil || !started {
-		http.Error(w, "Start this campaign first.", http.StatusBadRequest)
-		return
-	}
-	if !run.Owned() {
-		http.Error(w, notOwnedMessage, http.StatusConflict)
 		return
 	}
 	h, err := s.mekbay.ReadHangar(r.Context(), run.HangarInstance)
@@ -202,21 +168,7 @@ func (s *Server) swapUnit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cost := option.Cost
-	if err := s.store.SpendWarchest(r.Context(), pt.ID, c.Slug, cost); errors.Is(err, ErrInsufficientFunds) {
-		http.Error(w, fmt.Sprintf("Not enough in the warchest: that costs %d SP and you have %d.", cost, run.Warchest), http.StatusConflict)
-		return
-	} else if err != nil {
-		http.Error(w, "could not charge the warchest", http.StatusInternalServerError)
-		return
-	}
-	if err := s.mekbay.SwapUnit(r.Context(), SwapRequest{OwnerUID: accountUID(currentSeed(r), SlotHangar), Instance: run.HangarInstance, UnitID: hu.ID, To: to}); err != nil {
-		log.Printf("swap a unit in MekBay: %v", err) // never log the owner UID
-		if rerr := s.store.RefundWarchest(r.Context(), pt.ID, c.Slug, cost); rerr != nil {
-			log.Printf("could not refund %d SP: %v", cost, rerr)
-		}
-		http.Error(w, err.Error(), http.StatusBadGateway)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	fmt.Fprintf(w, `{"cost":%d,"warchest":%d}`, cost, run.Warchest-cost)
+	s.payForHangarChange(w, r, pt, c, run, cost, "swap a unit", func() error {
+		return s.mekbay.SwapUnit(r.Context(), SwapRequest{OwnerUID: accountUID(currentSeed(r), SlotHangar), Instance: run.HangarInstance, UnitID: hu.ID, To: to})
+	})
 }

@@ -6,12 +6,7 @@
   var error = document.getElementById('pilot-error');
   var STEP = 10; // the sliders and the number boxes' arrows both move this many SP at a time
 
-  function el(tag, cls, text) {
-    var e = document.createElement(tag);
-    if (cls) e.className = cls;
-    if (text !== undefined) e.textContent = text;
-    return e;
-  }
+  var el = Dom.el;
 
   function post(url, body) {
     return fetch(url, {
@@ -328,7 +323,7 @@
     var rCost = parseInt(recruit.dataset.cost, 10) || 0;          // what recruiting takes from the warchest
     var rWarchest = parseInt(recruit.dataset.warchest, 10) || 0;
     var rCostText = document.getElementById('recruit-cost');
-    function commas(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+    var commas = Dom.commas;
     var rSP = {};
     ladders.forEach(function (l) { rSP[l.key] = 0; });
     var rPilot = { sp: rSP };

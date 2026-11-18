@@ -2,7 +2,6 @@ package site
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -54,47 +53,19 @@ type SellRequest struct {
 
 // SellUnit removes a unit from the hangar force. It needs the owner's UID, because MekBay only accepts the owner's saves.
 func (c *MekBayClient) SellUnit(ctx context.Context, req SellRequest) error {
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-	s, err := dialMekBay(ctx, c.url(), req.OwnerUID)
-	if err != nil {
-		return err
-	}
-	defer s.close()
-	raw, err := s.call(ctx, map[string]any{"action": "getForce", "uuid": req.OwnerUID, "instanceId": req.Instance, "ownedOnly": false})
-	if err != nil {
-		return err
-	}
-	var reply struct {
-		Data map[string]any `json:"data"`
-	}
-	if err := json.Unmarshal(raw, &reply); err != nil || reply.Data == nil {
-		return errors.New("MekBay has no force for your hangar; try importing it again")
-	}
-	force := reply.Data
-	if !removeUnitFromForce(force, req.UnitID) {
-		return errors.New("that unit is no longer in your hangar force")
-	}
-	delete(force, "owned") // set by the server for readers; the app never sends it back
-	force["timestamp"] = mekbayTime(time.Now())
-	_, err = s.call(ctx, map[string]any{"action": "saveForce", "uuid": req.OwnerUID, "data": force, "savedForceCount": 1})
-	return err
+	return c.editForce(ctx, req.OwnerUID, req.Instance, func(force map[string]any, _ time.Time) error {
+		if !removeUnitFromForce(force, req.UnitID) {
+			return errors.New("that unit is no longer in your hangar force")
+		}
+		return nil
+	})
 }
 
 // sellUnit is POST /api/hangar/sell: sell the hangar unit named by `unit`. The server works out the price itself from the unit's state. The unit is taken out of
 // the hangar first and the warchest paid after, so a failure in MekBay never pays for a unit the player still has.
 func (s *Server) sellUnit(w http.ResponseWriter, r *http.Request) {
-	pt, c, ok := s.pilotRequest(w, r)
+	pt, c, run, ok := s.hangarRequest(w, r)
 	if !ok {
-		return
-	}
-	run, started, err := s.store.Run(r.Context(), pt.ID, c.Slug)
-	if err != nil || !started {
-		http.Error(w, "Start this campaign first.", http.StatusBadRequest)
-		return
-	}
-	if !run.Owned() {
-		http.Error(w, notOwnedMessage, http.StatusConflict)
 		return
 	}
 	h, err := s.mekbay.ReadHangar(r.Context(), run.HangarInstance)

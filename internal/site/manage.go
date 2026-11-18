@@ -9,7 +9,7 @@ import (
 )
 
 // manage serves /<campaign>/manage/, the page for managing a started campaign's force: hangar link, named pilots and
-// deleting the campaign. A campaign that isn't started (or a visitor with no company) is sent back to the campaign page,
+// deleting the campaign. A campaign that isn't started (or a visitor whose account isn't named) is sent back to the campaign page,
 // where it is started.
 func (s *Server) manage(w http.ResponseWriter, r *http.Request) {
 	c, ok := s.lib.Campaign(r.PathValue("campaign"))
@@ -41,7 +41,7 @@ func (s *Server) manage(w http.ResponseWriter, r *http.Request) {
 	}
 	if sc, ok := c.Scenario(r.URL.Query().Get("back")); ok {
 		p.BackURL = back + sc.Slug + "/"
-		p.BackLabel = "Back to Sortie " + sc.Number + ": " + sc.Title
+		p.BackLabel = "Back to " + c.MissionName(*sc)
 	}
 	if cps, err := s.store.Checkpoints(r.Context(), playthroughID(seed), c.Slug); err == nil {
 		p.Checkpoints = checkpointViews(cps)
@@ -84,7 +84,7 @@ func (s *Server) forceJSON(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(forceData(h))
 }
 
-// setPlayers is POST /api/campaign/players: change how many players the company plays a started campaign with (the Manage page's Overview). The count is only the
+// setPlayers is POST /api/campaign/players: change how many players a started campaign is played with (the Manage page's Overview). The count is only the
 // Deploy wizard's default, which can still be changed for each deploy, but it is held to the same rule as at the start: within the campaign's range.
 func (s *Server) setPlayers(w http.ResponseWriter, r *http.Request) {
 	pt, c, ok := s.pilotRequest(w, r)

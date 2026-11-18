@@ -5,17 +5,15 @@
 //
 //   PilotCard.build(p)         the card's content
 //   PilotCard.attach(node, p)  shows it after half a second of hovering node (or at once on keyboard focus)
+//   PilotCard.chip(p, sub)     the compact card (portrait, name, a line under it, and the GUN/PIL/EDGE/ABIL strip) the Deploy popup's tray and slots and
+//                              the start wizard use; p needs only name, portraitUrl and the levels gunnery, piloting, edgeTokens, abilities
+//   PilotCard.top(p, sub), PilotCard.strip(p), PilotCard.summary(p)  its parts, and the four levels as a sentence (for an aria-label)
 //
 // p is { name, rank, portraitUrl, earned, columns: [{ label, level, sp, hasNext, nextAt, nextLvl, percent }], learned: [{ id, name }] }, as Page.PilotsJSON sends it.
 (function () {
   var ARROW = '<svg viewBox="0 0 16 10" width="16" height="10" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 5h13M10 1l4 4-4 4"/></svg>';
 
-  function el(tag, cls, text) {
-    var e = document.createElement(tag);
-    if (cls) e.className = cls;
-    if (text !== undefined) e.textContent = text;
-    return e;
-  }
+  var el = Dom.el;
 
   // One of the Manage page's stat boxes: the level, the next level, SP progress and its bar (same classes, so the same look).
   function statBox(c) {
@@ -82,5 +80,39 @@
     }
   }
 
-  window.PilotCard = { build: build, attach: attach };
+  // ---- The compact card: a pilot's four levels in a strip of mini stat boxes (a tiny label over a bold number), under the portrait, name and a line of text.
+  var STATS = [['gunnery', 'GUN', 'Gunnery'], ['piloting', 'PIL', 'Piloting'], ['edgeTokens', 'EDGE', 'Edge tokens'], ['abilities', 'ABIL', 'Edge abilities']];
+  function summary(p) { return STATS.map(function (s) { return s[2] + ' ' + (p[s[0]] || 0); }).join(', '); }
+  function strip(p) {
+    var box = el('span', 'deploy-stats');
+    STATS.forEach(function (s) {
+      var cell = el('span', 'deploy-stat');
+      cell.appendChild(el('span', 'deploy-stat-label', s[1]));
+      cell.appendChild(el('span', 'deploy-stat-value', String(p[s[0]] || 0)));
+      box.appendChild(cell);
+    });
+    return box;
+  }
+  function top(p, sub) {
+    var t = el('span', 'deploy-pilot-top');
+    var img = document.createElement('img');
+    img.className = 'deploy-portrait';
+    img.src = p.portraitUrl; img.alt = ''; img.width = 32; img.height = 32;
+    t.appendChild(img);
+    var text = el('span', 'deploy-pilot-text');
+    text.appendChild(el('b', null, p.name));
+    text.appendChild(el('small', null, sub));
+    t.appendChild(text);
+    return t;
+  }
+  // The compact card on its own (not a drag source, not a button): a filled slot's look.
+  function chip(p, sub) {
+    var box = el('div', 'deploy-slot static filled');
+    box.appendChild(top(p, sub));
+    box.appendChild(strip(p));
+    box.setAttribute('aria-label', p.name + ', ' + summary(p));
+    return box;
+  }
+
+  window.PilotCard = { build: build, attach: attach, chip: chip, top: top, strip: strip, summary: summary };
 })();

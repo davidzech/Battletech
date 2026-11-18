@@ -131,7 +131,7 @@ func (s *Server) startCampaign(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Choose a seed first.", http.StatusBadRequest)
 		return
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, 8192)
+	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
@@ -151,10 +151,18 @@ func (s *Server) startCampaign(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Name your account first.", http.StatusBadRequest)
 		return
 	}
-	source, err := parseHangar(r.PostFormValue("hangar"))
+	// The starting hangar is either built from mechs picked on the site (repeated `unit` fields) or copied from a MekBay link (`hangar`).
+	units, err := parseStartingUnits(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
+	}
+	var source Hangar
+	if units == nil {
+		if source, err = parseHangar(r.PostFormValue("hangar")); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 	}
 	_, started, err := s.store.Run(r.Context(), id, c.Slug)
 	if err != nil {
@@ -162,17 +170,9 @@ func (s *Server) startCampaign(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if started {
-		hangar, _, err := s.cloneHangar(r.Context(), seed, source)
-		if err != nil {
-			log.Printf("clone hangar for %s: %v", c.Slug, err)
-			http.Error(w, err.Error(), http.StatusBadGateway)
-			return
-		}
-		if err := s.store.StartRun(r.Context(), id, c.Slug, hangar); err != nil {
-			http.Error(w, "could not save the hangar link", http.StatusInternalServerError)
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
+		// A started campaign's hangar is never replaced from here: what has happened to it since (repairs, battles, checkpoints) would be lost. To start over,
+		// delete the campaign (or roll it back to its start).
+		http.Error(w, "This campaign has already been started.", http.StatusConflict)
 		return
 	}
 	pilots, err := parseStartingPilots(r, c)
@@ -191,7 +191,19 @@ func (s *Server) startCampaign(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// The hangar must meet the campaign's starting conditions (enough mechs, within the starting BV).
-	if c.StartingBV > 0 || c.StartingMinMechs > 0 {
+	var hangar Hangar
+	var made HangarForce
+	if units != nil {
+		if check := checkStartingHangar(draftHangar(units), c); !check.OK {
+			http.Error(w, strings.Join(check.Problems, " "), http.StatusBadRequest)
+			return
+		}
+		if hangar, made, err = s.buildHangar(r.Context(), seed, forceName, units); err != nil {
+			log.Printf("build the starting hangar for %s: %v", c.Slug, err)
+			http.Error(w, err.Error(), http.StatusBadGateway)
+			return
+		}
+	} else if c.StartingBV > 0 || c.StartingMinMechs > 0 {
 		h, err := s.mekbay.ReadHangar(r.Context(), source.Instance)
 		if err != nil {
 			log.Printf("read hangar to start %s: %v", c.Slug, err)
@@ -203,11 +215,12 @@ func (s *Server) startCampaign(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	hangar, cloned, err := s.cloneHangar(r.Context(), seed, source)
-	if err != nil {
-		log.Printf("clone hangar for %s: %v", c.Slug, err)
-		http.Error(w, err.Error(), http.StatusBadGateway)
-		return
+	if units == nil {
+		if hangar, made, err = s.cloneHangar(r.Context(), seed, source); err != nil {
+			log.Printf("clone hangar for %s: %v", c.Slug, err)
+			http.Error(w, err.Error(), http.StatusBadGateway)
+			return
+		}
 	}
 	if err := s.store.StartRunWithPilots(r.Context(), id, c.Slug, hangar, pilots, c.StartingWarchest, players, forceName); errors.Is(err, ErrAlreadyStarted) {
 		http.Error(w, "This campaign has already been started.", http.StatusConflict)
@@ -216,7 +229,7 @@ func (s *Server) startCampaign(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not start the campaign", http.StatusInternalServerError)
 		return
 	}
-	s.cacheHangar(r.Context(), id, c.Slug, hangar.Instance, cloned) // the copy is the run's first cached hangar
+	s.cacheHangar(r.Context(), id, c.Slug, hangar.Instance, made) // the new hangar is the run's first cached one
 	// The first checkpoint: the campaign as it starts, which aborting the first mission rolls back to.
 	if run, ok, err := s.store.Run(r.Context(), id, c.Slug); err == nil && ok {
 		copyID, err := s.checkpointCopy(r.Context(), currentSeed(r), run)
@@ -229,7 +242,7 @@ func (s *Server) startCampaign(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// parseStartingPlayers reads how many players the company plays the campaign with: a whole number within the campaign's range (a campaign that allows only one
+// parseStartingPlayers reads how many players the campaign is played with: a whole number within the campaign's range (a campaign that allows only one
 // count needs none sent). The count is only the Deploy wizard's default, which can be changed for each deploy.
 func parseStartingPlayers(raw string, c *Campaign) (int, error) {
 	lo, hi := playerRange(c)
@@ -255,8 +268,8 @@ func (s *Server) cloneHangar(ctx context.Context, seed string, source Hangar) (H
 }
 
 // setSeed validates a chosen seed, records its playthrough and stores the seed in a cookie. The
-// reply says whether that playthrough's company is already named, so the page knows whether to
-// ask for the company's details.
+// reply says whether that playthrough's account is already named, so the page knows whether to
+// ask for its name.
 func (s *Server) setSeed(w http.ResponseWriter, r *http.Request) {
 	if !sameOrigin(r) {
 		http.Error(w, "cross-origin request refused", http.StatusForbidden)

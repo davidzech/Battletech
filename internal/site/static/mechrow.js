@@ -142,12 +142,7 @@
     pill.addEventListener('dragstart', hide);
   }
 
-  function el(tag, cls, text) {
-    var e = document.createElement(tag);
-    if (cls) e.className = cls;
-    if (text !== undefined) e.textContent = text;
-    return e;
-  }
+  var el = Dom.el;
 
   function chip(cls, text, svg) {
     var c = el('span', 'mr-chip' + (cls ? ' ' + cls : ''));

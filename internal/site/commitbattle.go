@@ -97,17 +97,11 @@ func (c *MekBayClient) CommitBattle(ctx context.Context, req CommitBattleRequest
 		return CommitBattleReport{}, errors.New("MekBay has no such operation any more")
 	}
 	read := func(instance string) (map[string]any, error) {
-		got, err := s.call(ctx, map[string]any{"action": "getForce", "uuid": req.OwnerUID, "instanceId": instance, "ownedOnly": false})
-		if err != nil {
-			return nil, err
+		f, err := s.getForce(ctx, instance, false)
+		if err == nil && f == nil {
+			err = fmt.Errorf("MekBay has no force %s", instance)
 		}
-		var reply struct {
-			Data map[string]any `json:"data"`
-		}
-		if err := json.Unmarshal(got, &reply); err != nil || reply.Data == nil {
-			return nil, fmt.Errorf("MekBay has no force %s", instance)
-		}
-		return reply.Data, nil
+		return f, err
 	}
 	battle := map[string]map[string]any{}
 	for _, f := range op.Data.Forces {
@@ -142,12 +136,7 @@ func (c *MekBayClient) CommitBattle(ctx context.Context, req CommitBattleRequest
 	if rep.Matched == 0 {
 		return rep, nil
 	}
-	delete(hangar, "owned")
-	hangar["timestamp"] = mekbayTime(time.Now())
-	if _, err := s.call(ctx, map[string]any{"action": "saveForce", "uuid": req.OwnerUID, "data": hangar, "savedForceCount": 1}); err != nil {
-		return rep, err
-	}
-	return rep, nil
+	return rep, s.saveForce(ctx, hangar, time.Now())
 }
 
 // resetCrew turns every crew member of a unit's state into the default one: no name, Gunnery 4, Piloting 5, unhurt (a 4/5 pilot is what MekBay gives a new unit).
@@ -155,7 +144,7 @@ func resetCrew(state map[string]any) {
 	crew, _ := state["crew"].([]any)
 	for _, c := range crew {
 		if cm, ok := c.(map[string]any); ok {
-			cm["name"], cm["gunnerySkill"], cm["pilotingSkill"], cm["hits"], cm["state"] = "", float64(4), float64(5), float64(0), float64(0)
+			cm["name"], cm["gunnerySkill"], cm["pilotingSkill"], cm["hits"], cm["state"] = "", defaultGunnery, defaultPiloting, 0, 0
 		}
 	}
 }

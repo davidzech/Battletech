@@ -68,7 +68,7 @@ func TestCheckpointsAndRollback(t *testing.T) {
 
 	// Change things: the warchest, a pilot's SP, a pilot killed in action. None of it makes a checkpoint.
 	post(t, srv, "/api/warchest", form("funds", "777"), cookie, srv.URL)
-	post(t, srv, "/api/pilots/earn", form("pilot", pilotID["Alrek"], "sp", "90"), cookie, srv.URL)
+	post(t, srv, "/api/pilots/allocate", form("pilot", pilotID["Alrek"], "earned", "90"), cookie, srv.URL)
 	post(t, srv, "/api/pilots/fallen", form("pilot", pilotID["Katarina"]), cookie, srv.URL)
 	if run, sp, fallen := state(); run.Warchest != 777 || sp["Alrek"] != sp0["Alrek"]+90 || !fallen["Katarina"] || len(checkpoints()) != 1 {
 		t.Fatalf("the changes took: %+v %v %v", run, sp, fallen)
@@ -97,7 +97,7 @@ func TestCheckpointsAndRollback(t *testing.T) {
 	after000, _, _ := state()
 
 	// Between missions, things change (a pilot's SP, the funds), and a battle starts for the next mission.
-	post(t, srv, "/api/pilots/earn", form("pilot", pilotID["Alrek"], "sp", "40"), cookie, srv.URL)
+	post(t, srv, "/api/pilots/allocate", form("pilot", pilotID["Alrek"], "earned", "40"), cookie, srv.URL)
 	post(t, srv, "/api/warchest", form("funds", "1"), cookie, srv.URL)
 	if err := store.SaveMekBayOperation(ctx, id, "refusalwar", "scenario_001", MekBayOperation{OpForInstance: "opfor", OperationID: "op-1"}); err != nil {
 		t.Fatal(err)

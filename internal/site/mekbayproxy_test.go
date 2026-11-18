@@ -108,7 +108,6 @@ type proxyFixture struct {
 	fake   *fakeUpstream
 	site   *httptest.Server
 	proxy  *mekbayProxy
-	vault  *mekbayVault
 	store  *Store
 	client *http.Client
 	port   string
@@ -126,7 +125,7 @@ func newProxyFixture(t *testing.T) *proxyFixture {
 		t.Fatal(err)
 	}
 	var proxy *mekbayProxy
-	site := httptest.NewServer(NewHandler(t.TempDir(), store, WithMekBayLinkKey("test-key"),
+	site := httptest.NewServer(NewHandler(t.TempDir(), store,
 		withMekBayUpstream(fake.URL, "ws"+strings.TrimPrefix(fake.URL, "http")+"/ws", "https://mekbay.com"),
 		withMekBayProxyHook(func(p *mekbayProxy) { proxy = p })))
 	t.Cleanup(site.Close)
@@ -138,13 +137,13 @@ func newProxyFixture(t *testing.T) *proxyFixture {
 		}},
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}
-	return &proxyFixture{fake: fake, site: site, proxy: proxy, vault: newMekBayVault("test-key"), store: store, client: client, port: port}
+	return &proxyFixture{fake: fake, site: site, proxy: proxy, store: store, client: client, port: port}
 }
 
 // link makes (or finds) the link for account under a label and returns its host name, such as mekbay-<id>.localhost.
 func (p *proxyFixture) link(t *testing.T, label, account string) string {
 	t.Helper()
-	id, err := p.store.EnsureMekBayLink(context.Background(), "pt", "camp", label, account, p.vault, time.Hour, time.Now())
+	id, err := p.store.EnsureMekBayLink(context.Background(), "pt", "camp", label, account, time.Hour, time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -307,7 +306,7 @@ func TestMekBayProxyServesAndRewrites(t *testing.T) {
 // A host whose link isn't good gets no pages (the files are MekBay's own public ones, so they are not secret).
 func TestMekBayProxyRefusesBadLinks(t *testing.T) {
 	p := newProxyFixture(t)
-	expired, err := p.store.EnsureMekBayLink(context.Background(), "pt", "camp", "old", testAccount, p.vault, -time.Minute, time.Now())
+	expired, err := p.store.EnsureMekBayLink(context.Background(), "pt", "camp", "old", testAccount, -time.Minute, time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -315,16 +314,11 @@ func TestMekBayProxyRefusesBadLinks(t *testing.T) {
 	if ok, err := p.store.RevokeMekBayLink(context.Background(), "pt", "camp", "gone"); err != nil || !ok {
 		t.Fatal(ok, err)
 	}
-	rekeyed := func() string {
-		id, _ := p.store.EnsureMekBayLink(context.Background(), "pt", "camp", "rekeyed", testAccount, newMekBayVault("another key"), time.Hour, time.Now())
-		return mekbayLinkPrefix + id + ".localhost"
-	}()
 	for name, host := range map[string]string{
-		"an unknown id":      mekbayLinkPrefix + newMekBayLinkID() + ".localhost",
-		"a malformed id":     "mekbay-nope.localhost",
-		"an expired link":    mekbayLinkPrefix + expired + ".localhost",
-		"a revoked link":     revoked,
-		"another server key": rekeyed,
+		"an unknown id":   mekbayLinkPrefix + newMekBayLinkID() + ".localhost",
+		"a malformed id":  "mekbay-nope.localhost",
+		"an expired link": mekbayLinkPrefix + expired + ".localhost",
+		"a revoked link":  revoked,
 	} {
 		resp, body := p.get(t, host, "/")
 		if resp.StatusCode != http.StatusForbidden || strings.Contains(body, "base href") || !strings.Contains(body, "not valid or has expired") {
@@ -490,12 +484,9 @@ func TestMekBayRelaySandbox(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer b.CloseNow()
-	sandbox := p.vault.sandbox
+	sandbox := sandboxAccount
 	if ua, ub := whoIs(t, a), whoIs(t, b); ua != sandbox || ub != sandbox || sandbox == testAccount || len(sandbox) != 36 {
-		t.Errorf("everyone on the bare host shares one account (derived from the key): %q %q want %q", ua, ub, sandbox)
-	}
-	if newMekBayVault("test-key").sandbox != sandbox || newMekBayVault("another-key").sandbox == sandbox {
-		t.Error("the sandbox account is stable for a key and different for another")
+		t.Errorf("everyone on the bare host shares one account: %q %q want %q", ua, ub, sandbox)
 	}
 	// A link still wins on its own host, and the sandbox isn't offered on link hosts that don't work.
 	c, _, err := p.dial(t, p.link(t, "player-1", testAccount), nil)
@@ -538,7 +529,7 @@ func TestMekBayRelaySandbox(t *testing.T) {
 
 func TestMekBayCheck(t *testing.T) {
 	p := newProxyFixture(t)
-	pr := newMekBayProxy(newMekBayVault("k"), p.store)
+	pr := newMekBayProxy(p.store)
 	pr.web = p.fake.URL
 	if err := pr.Check(context.Background()); err != nil {
 		t.Errorf("a MekBay that names its WebSocket the expected way passes: %v", err)
@@ -571,41 +562,6 @@ func TestSwapUUID(t *testing.T) {
 	}
 }
 
-func TestMekBayVault(t *testing.T) {
-	v := newMekBayVault("secret")
-	sealed, err := v.Seal(strings.ToUpper(testAccount))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(sealed, testAccount) || strings.ContainsAny(sealed, "+/=") {
-		t.Errorf("a sealed account hides it and is URL-safe: %q", sealed)
-	}
-	if got, err := v.Open(sealed); err != nil || got != testAccount {
-		t.Errorf("it opens to the account: %q %v", got, err)
-	}
-	if _, err := newMekBayVault("other").Open(sealed); err != ErrBadLink {
-		t.Errorf("another key can't open it: %v", err)
-	}
-	flipped := []byte(sealed)
-	flipped[len(flipped)/2] ^= 1
-	for name, bad := range map[string]string{"altered": string(flipped), "empty": "", "short": "abc", "not base64": "%%%"} {
-		if _, err := v.Open(bad); err != ErrBadLink {
-			t.Errorf("%s: %v", name, err)
-		}
-	}
-	if _, err := v.Seal("not-a-uuid"); err == nil {
-		t.Error("only a MekBay user ID can be sealed")
-	}
-	a, _ := v.Seal(testAccount)
-	b, _ := v.Seal(testAccount)
-	if a == b {
-		t.Error("each seal uses a fresh nonce")
-	}
-	if r1, r2 := newMekBayVault(""), newMekBayVault(""); r1.sandbox == r2.sandbox {
-		t.Error("with no key set each vault gets its own random key")
-	}
-}
-
 func TestMekBayLinkBuilder(t *testing.T) {
 	store, err := OpenSQLite(t.TempDir() + "/builder.db")
 	if err != nil {
@@ -616,7 +572,7 @@ func TestMekBayLinkBuilder(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := &Server{store: store}
-	s.proxy = newMekBayProxy(newMekBayVault("k"), store)
+	s.proxy = newMekBayProxy(store)
 	re := regexp.MustCompile(`^(https?)://mekbay-([a-z2-7]{32})\.(.+?)/(\?.*)?$`)
 	for _, c := range []struct{ host, proto, wantScheme, wantSite string }{
 		{"battletech.zech.io", "https", "https", "battletech.zech.io"},
@@ -641,7 +597,7 @@ func TestMekBayLinkBuilder(t *testing.T) {
 		if again, _ := s.mekbayLink(r, "pt", "camp", "player-1", testAccount, url.Values{"instance": {"force-1"}}); again != link {
 			t.Errorf("a link is stable: %q vs %q", again, link)
 		}
-		if sealed, ok, _ := store.MekBayLink(context.Background(), m[2], time.Now()); !ok || sealed == "" {
+		if acct, ok, _ := store.MekBayLink(context.Background(), m[2], time.Now()); !ok || acct != testAccount {
 			t.Errorf("the link is in the table")
 		}
 	}
@@ -657,7 +613,7 @@ func TestMekBayLinkBuilder(t *testing.T) {
 func TestDeletingTheCampaignRevokesItsLinks(t *testing.T) {
 	srv, store, cookie := startedCompany(t)
 	ctx := context.Background()
-	id, err := store.EnsureMekBayLink(ctx, playthroughID("wolfpack2026"), "refusalwar", tableLabel, accountUID("wolfpack2026", SlotHangar), newMekBayVault("k"), time.Hour, time.Now())
+	id, err := store.EnsureMekBayLink(ctx, playthroughID("wolfpack2026"), "refusalwar", tableLabel, accountUID("wolfpack2026", SlotHangar), time.Hour, time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -13,12 +13,7 @@
   var dialog = null, titleEl = null, messageEl = null, itemsEl = null, detailEl = null, okBtn = null, cancelBtn = null;
   var settle = null; // resolves the question that is open
 
-  function el(tag, cls, text) {
-    var e = document.createElement(tag);
-    if (cls) e.className = cls;
-    if (text !== undefined) e.textContent = text;
-    return e;
-  }
+  var el = Dom.el;
 
   function build() {
     dialog = el('dialog', 'confirm-dialog');

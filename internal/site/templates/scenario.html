@@ -1,4 +1,4 @@
-{{define "content"}}<p class="kicker">Scenario {{.Scenario.Number}}{{if .Scenario.Planet}} &middot; {{.Scenario.Planet}}{{end}}{{if .Scenario.Map}} &middot; {{.Scenario.Map}}{{end}}</p>
+{{define "content"}}<p class="kicker">{{.Campaign.MissionNumber .Scenario}}{{if .Scenario.Planet}} &middot; {{.Scenario.Planet}}{{end}}{{if .Scenario.Map}} &middot; {{.Scenario.Map}}{{end}}</p>
 <h1 class="bt-title">{{.Scenario.Title}}</h1>
 {{range $i, $img := .Images}}<figure class="scenario-art"><img src="{{$img}}" alt="">{{if and (eq $i 0) $.Scenario.Readout}}
 <div class="readout">
@@ -105,6 +105,6 @@
 </section>
 {{end}}{{if and .Run.Started (eq .ScenarioState "completed") .NextScenarios}}<section class="next-missions" id="next-missions">
 <h2>{{if eq (len .NextScenarios) 1}}Next mission{{else}}Next missions{{end}}</h2>
-<ul>{{range .NextScenarios}}<li><a class="button" href="/{{$.Campaign.Slug}}/{{.Slug}}/">Sortie {{.Number}}: {{.Title}}</a></li>{{end}}</ul>
+<ul>{{range .NextScenarios}}<li><a class="button" href="/{{$.Campaign.Slug}}/{{.Slug}}/">{{$.Campaign.MissionName .}}</a></li>{{end}}</ul>
 </section>{{end}}
 {{end}}

@@ -1,9 +1,7 @@
 package site
 
 import (
-	"context"
 	"encoding/json"
-	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
@@ -126,62 +124,6 @@ func TestParseCrew(t *testing.T) {
 	}
 }
 
-func TestDeployCarriesPilotAssignments(t *testing.T) {
-	fake := &fakeMekBay{hangar: startingHangar()}
-	srv, store := newMekBayTestServer(t, fake)
-	ctx := context.Background()
-	cookie := post(t, srv, "/api/seed", url.Values{"seed": {"wolfpack2026"}}, nil, "").Cookies()[0]
-	post(t, srv, "/api/account", url.Values{"account": {"Wolf Pack"}}, cookie, srv.URL)
-	if r := post(t, srv, "/api/campaign/start", startForm(goodHangar, "Alrek", "Katarina"), cookie, srv.URL); r.StatusCode != http.StatusNoContent {
-		t.Fatalf("start: %d", r.StatusCode)
-	}
-	pilots, _ := store.Pilots(ctx, playthroughID("wolfpack2026"), "refusalwar")
-	var alrek NamedPilot
-	for _, p := range pilots {
-		if p.Name == "Alrek" {
-			alrek = p
-		}
-	}
-	deploy := func(extra url.Values) *http.Response {
-		v := url.Values{"campaign": {"refusalwar"}, "scenario": {"scenario_001"}, "units": {"ua", "ub"}}
-		for k, vs := range extra {
-			v[k] = vs
-		}
-		return post(t, srv, "/api/mekbay/deploy", v, cookie, srv.URL)
-	}
-	// The scenario page carries the living pilots for the popup's tray.
-	page := body(t, srv, "/refusalwar/scenario_001/", cookie)
-	if !strings.Contains(page, `data-pilots="`) || !strings.Contains(page, "Alrek") || !strings.Contains(page, "Katarina") || !strings.Contains(page, "edgeTokens") || !strings.Contains(page, "abilities") {
-		t.Error("the deploy popup should carry the named pilots")
-	}
-	if r := deploy(url.Values{"assign_unit": {"ua", "ub"}, "assign_pilot": {"alrek", ""}}); r.StatusCode != http.StatusOK {
-		t.Fatalf("deploy with assignments: %d", r.StatusCode)
-	}
-	got := fake.reqs[len(fake.reqs)-1].Crew
-	if len(got) != 2 || got[0] != (CrewAssignment{UnitID: "ua", Name: "Alrek", Gunnery: alrek.Gunnery(), Piloting: alrek.Piloting()}) || got[1] != (CrewAssignment{UnitID: "ub"}) {
-		t.Errorf("MekBay was asked to crew: %+v", got)
-	}
-	// Bad assignments are refused before anything is saved.
-	n := len(fake.reqs)
-	for name, extra := range map[string]url.Values{
-		"unknown pilot": {"assign_unit": {"ua"}, "assign_pilot": {"Nobody"}},
-		"unknown unit":  {"assign_unit": {"zz"}, "assign_pilot": {"Alrek"}},
-		"unpaired":      {"assign_unit": {"ua"}},
-	} {
-		if r := deploy(extra); r.StatusCode != http.StatusBadRequest {
-			t.Errorf("%s: %d", name, r.StatusCode)
-		}
-	}
-	if len(fake.reqs) != n {
-		t.Error("a refused deploy must not reach MekBay")
-	}
-	// A deploy with no assignments leaves the crews alone.
-	if r := deploy(nil); r.StatusCode != http.StatusOK || len(fake.reqs[len(fake.reqs)-1].Crew) != 0 {
-		t.Errorf("no assignments: %d", r.StatusCode)
-	}
-}
-
-// The campaign overview carries the pilots and the ability catalog for the hover card on each pilot in "Your force".
 func TestOverviewCarriesPilotCards(t *testing.T) {
 	srv, _, cookie := startedCompany(t)
 	page := body(t, srv, "/refusalwar/", cookie)

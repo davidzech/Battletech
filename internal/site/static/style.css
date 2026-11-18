@@ -1066,7 +1066,7 @@ dialog button.rec-skills-reset:disabled { opacity: 0.4; cursor: not-allowed; }
 .hangar-stat.warn .hangar-stat-value { color: #ff9a4d; }
 .hangar-stat.bad .hangar-stat-value { color: #ff7a59; }
 .hangar-units-summary:empty { display: none; }
-.mech-list { display: grid; gap: 0.4rem; margin-top: 0.6rem; }
+.mech-list { display: grid; grid-auto-rows: max-content; gap: 0.4rem; margin-top: 0.6rem; } /* each row as tall as its content: in a fixed-height scrolling list, auto rows could be held to the rows' min-height and the content spill into the next row */
 /* The Hangar list has a little more room than the compact rows in the popup and the wizard: about 5.2rem tall, with the icon, name and chips
    sized between the two. */
 .mech-list .mech-row { grid-template-columns: 1.7rem 4.4rem minmax(0, 1fr); min-height: 5.2rem; }
@@ -1447,3 +1447,15 @@ dialog.abort-dialog { padding: 0; width: min(92vw, 34rem); }
 .abort-choice .button { width: 100%; text-align: center; }
 .abort-inner .form-actions { justify-content: flex-end; margin-top: 1rem; }
 @media (max-width: 640px) { .abort-choice { grid-template-columns: 1fr; } }
+/* Problems in a campaign's files, for its author (see Campaign.Problems). */
+.campaign-problems { margin: 1rem 0; padding: 0.8rem 1rem; border: 1px solid #e5594f; border-left-width: 4px; background: rgba(229, 89, 79, 0.08); }
+.campaign-problems h2 { margin: 0 0 0.4rem; font-size: 1rem; color: #ff5a4d; }
+.campaign-problems ul { margin: 0; padding-left: 1.2rem; }
+.campaign-problems code { white-space: pre-wrap; }
+/* The start wizard's switch between picking mechs and linking a MekBay hangar. */
+.wiz-modes { display: inline-flex; margin: 0.4rem 0 0.8rem; border: 1px solid var(--line); }
+dialog .wiz-modes button.wiz-mode { padding: 0.45rem 0.9rem; border: 0; background: transparent; color: var(--muted); font: 700 0.8rem var(--display); letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer; }
+dialog .wiz-modes button.wiz-mode + button.wiz-mode { border-left: 1px solid var(--line); }
+dialog .wiz-modes button.wiz-mode.active { background: var(--accent); color: var(--accent-ink); }
+dialog .wiz-modes button.wiz-mode:focus-visible { outline: 2px solid var(--text); outline-offset: -2px; }
+.wiz-pilot-cards { margin: 0.2rem 0 0.9rem; }

@@ -10,12 +10,7 @@
   var error = document.getElementById('overview-error');
   var busy = false;
 
-  function el(tag, cls, text) {
-    var e = document.createElement(tag);
-    if (cls) e.className = cls;
-    if (text !== undefined) e.textContent = text;
-    return e;
-  }
+  var el = Dom.el;
   function render() {
     pick.textContent = '';
     for (var n = min; n <= max; n++) {

@@ -102,7 +102,7 @@
 <div class="hangar-units-summary" id="hangar-units-summary"></div>
 <p class="muted">{{.Run.ForceLabel}}&rsquo;s hangar holds your mechs, and scenarios deploy from it.</p>
 <div class="mech-list" id="hangar-units-list"><p class="muted">Reading your hangar&hellip;</p></div>
-<p class="downloads" id="campaign-run" data-campaign="{{.Campaign.Slug}}"><button type="button" class="button" id="purchase-open">Purchase new unit</button></p>
+<p class="recruit" id="campaign-run" data-campaign="{{.Campaign.Slug}}"><button type="button" class="button" id="purchase-open">Purchase New Units</button></p>
 </section>
 <dialog id="rollback-dialog" class="rollback" aria-labelledby="rollback-title" data-campaign="{{.Campaign.Slug}}">
   <h2 id="rollback-title">Rollback</h2>
@@ -119,7 +119,7 @@
 <p class="danger-action"><button type="button" class="button" id="records-open">Advanced Management</button></p>
 <p class="muted">The campaign is saved when it starts and each time a mission is completed. Rollback puts the pilots, SP, warchest, completed missions and hangar back as they were at one of those points, and forgets everything after it. Aborting a mission rolls back to the latest one.</p>
 <p class="danger-action"><button type="button" class="button" id="rollback-open">Rollback</button></p>
-<p class="muted">Deleting this campaign removes {{.Run.ForceLabel}}&rsquo;s progress in it: its named pilots and the site&rsquo;s copy of its hangar. Your company and anything saved in MekBay are not touched.</p>
+<p class="muted">Deleting this campaign removes {{.Run.ForceLabel}}&rsquo;s progress in it: its named pilots and the site&rsquo;s copy of its hangar. Your account, its other campaigns and anything saved in MekBay are not touched.</p>
 <button type="button" class="button danger" id="delete-open">Delete campaign</button>
 </div>
 </details>
@@ -137,15 +137,9 @@
 </section>
 <dialog id="purchase-dialog" class="wizard purchase" aria-labelledby="purchase-title" data-faction="{{.Campaign.AvailabilityFaction}}" data-era="{{.Campaign.AvailabilityEra}}">
   <form id="purchase-form" autocomplete="off">
-    <h2 id="purchase-title">Purchase new unit</h2>
+    <h2 id="purchase-title">Purchase new units</h2>
     <p class="muted">Search MekBay&rsquo;s unit list and click a unit to add it to your cart, and click it again to take it out. Each costs its base BV in SP, paid from the warchest, and joins your hangar.</p>
-    <div class="search-field">
-      <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-      <input type="search" id="purchase-search" placeholder="Search units, e.g. Timber Wolf" autocomplete="off" aria-label="Search units" aria-describedby="purchase-results">
-      <button type="button" class="search-clear" id="purchase-clear" aria-label="Clear search" hidden>&times;</button>
-    </div>
-    {{if and .Campaign.AvailabilityFaction .Campaign.AvailabilityEra}}<label class="themed-check"><input type="checkbox" id="purchase-available" checked><span>Only units {{.Campaign.AvailabilityFaction}} fields in the {{.Campaign.AvailabilityEra}} era</span></label>{{end}}
-    <div class="purchase-results" id="purchase-results" aria-live="polite"></div>
+    <div id="purchase-search-box"></div>
     <p class="purchase-staged-head" id="purchase-staged-head">Your cart</p>
     <div class="mech-list purchase-staged" id="purchase-staged"></div>
     <p id="purchase-cost" class="repair-cost"></p>
@@ -209,6 +203,7 @@
 <script src="/static/mechrow.js" defer></script>
 <script src="/static/forcesummary.js" defer></script>
 <script src="/static/hangarlist.js" defer></script>
+<script src="/static/unitsearch.js" defer></script>
 <script src="/static/purchase.js" defer></script>
 <script src="/static/portraitpicker.js" defer></script>
 <script src="/static/allocator.js" defer></script>

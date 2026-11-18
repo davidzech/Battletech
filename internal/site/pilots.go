@@ -10,46 +10,11 @@ import (
 	"strings"
 )
 
-// pilotRequest is what every named-pilot endpoint needs first: a same-origin request from a seed whose company is
-// named and which has started the campaign the request names. It writes the error response itself and reports
-// ok=false.
+// pilotRequest checks what every endpoint that changes a campaign needs (see runRequest) and returns the playthrough and the campaign. It writes the error
+// response itself and reports ok=false.
 func (s *Server) pilotRequest(w http.ResponseWriter, r *http.Request) (pt Playthrough, c *Campaign, ok bool) {
-	if !sameOrigin(r) {
-		http.Error(w, "cross-origin request refused", http.StatusForbidden)
-		return
-	}
-	seed := currentSeed(r)
-	if seed == "" {
-		http.Error(w, "Choose a seed first.", http.StatusBadRequest)
-		return
-	}
-	r.Body = http.MaxBytesReader(w, r.Body, 4096)
-	if err := r.ParseForm(); err != nil {
-		http.Error(w, "bad request", http.StatusBadRequest)
-		return
-	}
-	c, found := s.lib.Campaign(r.PostFormValue("campaign"))
-	if !found {
-		http.Error(w, "unknown campaign", http.StatusNotFound)
-		return
-	}
-	pt, found, err := s.store.Playthrough(r.Context(), playthroughID(seed))
-	if err != nil {
-		http.Error(w, "could not load playthrough", http.StatusInternalServerError)
-		return
-	}
-	if !found || !pt.Configured() {
-		http.Error(w, "Name your account first.", http.StatusBadRequest)
-		return
-	}
-	if _, started, err := s.store.Run(r.Context(), pt.ID, c.Slug); err != nil {
-		http.Error(w, "could not load campaign", http.StatusInternalServerError)
-		return
-	} else if !started {
-		http.Error(w, "Start this campaign first.", http.StatusBadRequest)
-		return
-	}
-	return pt, c, true
+	pt, c, _, ok = s.runRequest(w, r)
+	return pt, c, ok
 }
 
 // addPilot names a new named pilot for the campaign. They start with no SP: SP is earned, then allocated.
@@ -164,38 +129,6 @@ func parseSP(raw string) (int, error) {
 		return 0, fmt.Errorf("SP must be a whole number from 0 to %d.", maxSPAward)
 	}
 	return n, nil
-}
-
-// awardSP gives a pilot SP, allocated across their columns as the player chooses. (The book caps a pilot at 100 SP
-// per track, but campaigns set their own rewards, e.g. Refusal War's trial pays up to 900, so no cap is enforced.)
-func (s *Server) awardSP(w http.ResponseWriter, r *http.Request) {
-	pt, c, ok := s.pilotRequest(w, r)
-	if !ok {
-		return
-	}
-	var a SPAllocation
-	for field, dst := range map[string]*int{
-		"gunnery": &a.Gunnery, "piloting": &a.Piloting, "edge_tokens": &a.EdgeTokens, "edge_abilities": &a.EdgeAbilities,
-	} {
-		n, err := parseSP(r.PostFormValue(field))
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		*dst = n
-	}
-	if a.Total() == 0 {
-		http.Error(w, "Give the pilot some SP to allocate.", http.StatusBadRequest)
-		return
-	}
-	if err := s.store.AwardSP(r.Context(), pt.ID, c.Slug, r.PostFormValue("pilot"), a); errors.Is(err, sql.ErrNoRows) {
-		http.Error(w, "No such living pilot.", http.StatusNotFound)
-		return
-	} else if err != nil {
-		http.Error(w, "could not save the SP", http.StatusInternalServerError)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
 }
 
 // pilotFallen records that a named pilot died. They are permanently removed from the campaign.
@@ -325,31 +258,6 @@ func (s *Server) deleteCampaign(w http.ResponseWriter, r *http.Request) {
 	}
 	if _, err := s.store.DeleteRun(r.Context(), pt.ID, c.Slug); err != nil {
 		http.Error(w, "could not delete the campaign", http.StatusInternalServerError)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
-}
-
-// earnSP records SP a pilot has earned (for instance from a scenario). It is unallocated until spent with allocateSP.
-func (s *Server) earnSP(w http.ResponseWriter, r *http.Request) {
-	pt, c, ok := s.pilotRequest(w, r)
-	if !ok {
-		return
-	}
-	n, err := parseSP(r.PostFormValue("sp"))
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	if n == 0 {
-		http.Error(w, "Enter how much SP the pilot earned.", http.StatusBadRequest)
-		return
-	}
-	if err := s.store.EarnSP(r.Context(), pt.ID, c.Slug, r.PostFormValue("pilot"), n); errors.Is(err, sql.ErrNoRows) {
-		http.Error(w, "No such living pilot.", http.StatusNotFound)
-		return
-	} else if err != nil {
-		http.Error(w, "could not save the SP", http.StatusInternalServerError)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -587,4 +495,22 @@ func (s *Server) resetEdgeAbilities(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// recruitStatus says whether the command can recruit a named pilot now, and the brief note shown under the Recruit button: why not (a full command, too little in
+// the warchest), or what it costs.
+func recruitStatus(c *Campaign, run CampaignRun, alive int) (can bool, note string) {
+	limit, cost, free := c.PilotLimit(), c.RecruitCost, run.FreeRecruits > 0
+	can = alive < limit && (free || run.Warchest >= cost)
+	switch {
+	case alive >= limit:
+		note = fmt.Sprintf("Your command is full: %d of %d pilots.", alive, limit)
+	case free:
+		note = "A replacement pilot is free: recruiting costs no SP."
+	case run.Warchest < cost:
+		note = fmt.Sprintf("Recruiting costs %s SP (warchest: %s).", withCommas(cost), withCommas(run.Warchest))
+	case cost > 0:
+		note = fmt.Sprintf("Recruiting costs %s SP.", withCommas(cost))
+	}
+	return can, note
 }

@@ -318,38 +318,9 @@ func TestNamedPilotsFlow(t *testing.T) {
 		t.Fatalf("alrek = %+v", alrek)
 	}
 
-	// Awarding SP.
-	award := func(pilot string, kv ...string) int {
-		v := pilots("pilot", pilot)
-		for i := 0; i+1 < len(kv); i += 2 {
-			v.Set(kv[i], kv[i+1])
-		}
-		return post(t, srv, "/api/pilots/sp", v, cookie, srv.URL).StatusCode
-	}
-	for name, c := range map[string]struct {
-		status int
-		kv     []string
-	}{
-		"nothing":       {http.StatusBadRequest, nil},
-		"all zero":      {http.StatusBadRequest, []string{"gunnery", "0"}},
-		"negative":      {http.StatusBadRequest, []string{"gunnery", "-5"}},
-		"not a number":  {http.StatusBadRequest, []string{"gunnery", "lots"}},
-		"absurd":        {http.StatusBadRequest, []string{"gunnery", "99999999"}},
-		"one bad field": {http.StatusBadRequest, []string{"gunnery", "100", "piloting", "x"}},
-	} {
-		if got := award(alrek.ID, c.kv...); got != c.status {
-			t.Errorf("award %s: got %d, want %d", name, got, c.status)
-		}
-	}
-	if got := award("no-such-pilot", "gunnery", "100"); got != http.StatusNotFound {
-		t.Errorf("unknown pilot: %d", got)
-	}
-	if ps, _ := store.Pilots(ctx, id, "refusalwar"); ps[0].Earned() != 150 || ps[0].SP.Total() != 0 {
-		t.Fatalf("refused awards changed the pilot: %+v", ps[0])
-	}
-	// The trial pays 150 to 900 SP, so there is no per-award cap below the typo guard.
-	if got := award(alrek.ID, "gunnery", "300", "edge_tokens", "60", "edge_abilities", ""); got != http.StatusNoContent {
-		t.Fatalf("award: %d", got)
+	// SP earned and allocated (the allocate endpoint, with its validation, is covered by TestSPEndpoints).
+	if err := store.AwardSP(ctx, id, "refusalwar", alrek.ID, SPAllocation{Gunnery: 300, EdgeTokens: 60}); err != nil {
+		t.Fatalf("award: %v", err)
 	}
 	ps, _ = store.Pilots(ctx, id, "refusalwar")
 	if ps[0].SP != (SPAllocation{Gunnery: 300, EdgeTokens: 60}) {
@@ -367,8 +338,8 @@ func TestNamedPilotsFlow(t *testing.T) {
 	if r := post(t, srv, "/api/pilots/fallen", pilots("pilot", ps[1].ID), cookie, srv.URL); r.StatusCode != http.StatusNotFound {
 		t.Fatalf("already fallen: %d", r.StatusCode)
 	}
-	if got := award(ps[1].ID, "gunnery", "100"); got != http.StatusNotFound {
-		t.Errorf("award to the fallen: %d", got)
+	if got := post(t, srv, "/api/pilots/allocate", pilots("pilot", ps[1].ID, "earned", "100"), cookie, srv.URL).StatusCode; got != http.StatusNotFound {
+		t.Errorf("SP earned by the fallen: %d", got)
 	}
 	if c := body(t, srv, "/refusalwar/manage/", cookie); !strings.Contains(c, "Killed in Action") || !strings.Contains(c, `class="rec-revive"`) || strings.Contains(c, `id="pilot-add"`) {
 		t.Fatalf("a fallen pilot should show, and free a place: %.3000s", c)
@@ -396,7 +367,7 @@ func TestStartWizardSubmission(t *testing.T) {
 		t.Error("an unstarted campaign has no change-hangar dialog")
 	}
 	// The starting rules are a short bulleted list, not one dense sentence.
-	for _, want := range []string{`class="start-rules"`, `<li>Your hangar holds <b>at least 5 mechs</b>, totalling <b>up to 10,000 BV</b> (base BV, whatever the pilots&rsquo; skills).</li>`, `<li>You create <b>2 named pilots</b>, each allocating <b>150 SP</b>.</li>`, `<li>You name your force, then link a MekBay force holding the mechs it fields`} {
+	for _, want := range []string{`class="start-rules"`, `<li>Your hangar holds <b>at least 5 mechs</b>, totalling <b>up to 10,000 BV</b> (base BV, whatever the pilots&rsquo; skills).</li>`, `<li>You create <b>2 named pilots</b>, each allocating <b>150 SP</b>.</li>`, `<li>You name your force, then pick the mechs it fields from the unit list`} {
 		if !strings.Contains(page, want) {
 			t.Errorf("starting rules are missing %s", want)
 		}
@@ -463,16 +434,13 @@ func TestStartWizardSubmission(t *testing.T) {
 		t.Fatalf("a started campaign shows its pilots and no change-link dialog: %.3000s", c)
 	}
 
-	// Submitting the wizard again only re-imports the hangar: no duplicate pilots.
+	// Submitting the wizard again is refused, and duplicates nothing.
 	other := "https://mekbay.com/?instance=01a12f98-8a21-7d12-b43d-52bb70872376"
-	if r := post(t, srv, "/api/campaign/start", startForm(other, "Alrek", "Katarina"), cookie, srv.URL); r.StatusCode != http.StatusNoContent {
+	if r := post(t, srv, "/api/campaign/start", startForm(other, "Alrek", "Katarina"), cookie, srv.URL); r.StatusCode != http.StatusConflict {
 		t.Fatalf("second submit: %d", r.StatusCode)
 	}
 	if ps, _ := store.Pilots(ctx, id, "refusalwar"); len(ps) != 2 {
 		t.Fatalf("a second submit must not duplicate pilots: %+v", ps)
-	}
-	if run, _, _ := store.Run(ctx, id, "refusalwar"); run.SourceURL != other || run.HangarInstance == "" || run.HangarInstance == goodInstance {
-		t.Fatalf("the second submit should copy the new link into a fresh hangar: %+v", run)
 	}
 }
 
@@ -606,7 +574,7 @@ func TestManageAndOverview(t *testing.T) {
 	}
 	// The manage page holds all of them.
 	man := body(t, srv, "/refusalwar/manage/", cookie)
-	for _, want := range []string{`id="delete-dialog"`, `id="sp-dialog"`, `class="button pilot-sp"`, "Purchase new unit"} {
+	for _, want := range []string{`id="delete-dialog"`, `id="sp-dialog"`, `class="button pilot-sp"`, "Purchase New Units"} {
 		if !strings.Contains(man, want) {
 			t.Errorf("manage page is missing %q", want)
 		}
@@ -773,16 +741,16 @@ func TestSPEndpoints(t *testing.T) {
 		v      url.Values
 		status int
 	}{
-		"earn nothing":        {"/api/pilots/earn", form(), http.StatusBadRequest},
-		"earn negative":       {"/api/pilots/earn", form("sp", "-5"), http.StatusBadRequest},
-		"earn text":           {"/api/pilots/earn", form("sp", "lots"), http.StatusBadRequest},
-		"allocate with none":  {"/api/pilots/allocate", form("gunnery", "10"), http.StatusBadRequest},
-		"allocate zero":       {"/api/pilots/allocate", form("gunnery", "0"), http.StatusBadRequest},
-		"earn for a stranger": {"/api/pilots/earn", form("pilot", "nobody", "sp", "10"), http.StatusNotFound},
-		"cross-origin earn":   {"/api/pilots/earn", form("sp", "10"), http.StatusForbidden},
+		"earned SP, nothing":        {"/api/pilots/allocate", form(), http.StatusBadRequest},
+		"earned SP, negative":       {"/api/pilots/allocate", form("earned", "-5"), http.StatusBadRequest},
+		"earned SP, text":           {"/api/pilots/allocate", form("earned", "lots"), http.StatusBadRequest},
+		"allocate with none":        {"/api/pilots/allocate", form("gunnery", "10"), http.StatusBadRequest},
+		"allocate zero":             {"/api/pilots/allocate", form("gunnery", "0"), http.StatusBadRequest},
+		"earned SP, for a stranger": {"/api/pilots/allocate", form("pilot", "nobody", "earned", "10"), http.StatusNotFound},
+		"cross-origin earned SP":    {"/api/pilots/allocate", form("earned", "10"), http.StatusForbidden},
 	} {
 		var got int
-		if name == "cross-origin earn" {
+		if name == "cross-origin earned SP" {
 			got = post(t, srv, c.path, c.v, cookie, "https://evil.example").StatusCode
 		} else {
 			got = status(c.path, c.v)
@@ -791,7 +759,7 @@ func TestSPEndpoints(t *testing.T) {
 			t.Errorf("%s: got %d, want %d", name, got, c.status)
 		}
 	}
-	if got := status("/api/pilots/earn", form("sp", "300")); got != http.StatusNoContent {
+	if got := status("/api/pilots/allocate", form("earned", "300")); got != http.StatusNoContent {
 		t.Fatalf("earn: %d", got)
 	}
 	if got := status("/api/pilots/allocate", form("gunnery", "200", "piloting", "101")); got != http.StatusBadRequest {
@@ -1459,6 +1427,51 @@ func TestSetWarchest(t *testing.T) {
 	for _, want := range []string{`id="warchest-form"`, `value="1234"`, "1,234 SP"} {
 		if !strings.Contains(page, want) {
 			t.Errorf("the Manage page is missing %q", want)
+		}
+	}
+}
+
+func TestRecruitStatus(t *testing.T) {
+	c := &Campaign{MaxNamedPilots: 4, RecruitCost: 300}
+	for _, tc := range []struct {
+		warchest, free, alive int
+		can                   bool
+		note                  string
+	}{
+		{1000, 0, 2, true, "Recruiting costs 300 SP."},
+		{120, 0, 2, false, "Recruiting costs 300 SP (warchest: 120)."},
+		{0, 1, 2, true, "A replacement pilot is free: recruiting costs no SP."},
+		{1000, 1, 4, false, "Your command is full: 4 of 4 pilots."},
+	} {
+		can, note := recruitStatus(c, CampaignRun{Warchest: tc.warchest, FreeRecruits: tc.free}, tc.alive)
+		if can != tc.can || note != tc.note {
+			t.Errorf("%+v: %v %q", tc, can, note)
+		}
+	}
+}
+
+// The start wizard shows each starting pilot at the campaign's first rank.
+func TestStartWizardKnowsTheFirstRank(t *testing.T) {
+	srv, _ := newTestServer(t)
+	cookie := post(t, srv, "/api/seed", url.Values{"seed": {"wolfpack2026"}}, nil, "").Cookies()[0]
+	post(t, srv, "/api/account", url.Values{"account": {"Wolf Pack"}}, cookie, srv.URL)
+	if p := body(t, srv, "/refusalwar/", cookie); !strings.Contains(p, `data-first-rank="MechWarrior"`) || !strings.Contains(p, "/static/pilotcard.js") {
+		t.Error("the wizard knows the first rank and loads the compact pilot cards")
+	}
+	if (&Campaign{}).FirstRank() != "" {
+		t.Error("a campaign with no ranks has no first rank")
+	}
+}
+
+// Every page loads the shared helpers (static/dom.js) before any script of its own, since those scripts use Dom.el and Dom.commas.
+func TestPagesLoadTheSharedHelpersFirst(t *testing.T) {
+	srv, _, cookie := startedCompany(t)
+	for _, path := range []string{"/", "/refusalwar/", "/refusalwar/manage/", "/refusalwar/scenario_001/", "/refusalwar/keywords/"} {
+		p := body(t, srv, path, cookie)
+		dom := strings.Index(p, `<script src="/static/dom.js"></script>`)
+		first := strings.Index(p, `<script src="/static/`)
+		if dom < 0 || dom != first {
+			t.Errorf("%s: dom.js is the first script (at %d, first at %d)", path, dom, first)
 		}
 	}
 }

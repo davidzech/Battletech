@@ -1,7 +1,7 @@
 // Campaign page. An unstarted campaign opens the start wizard: a step naming the force, one asking how many players (when the campaign allows a range), one step per starting named pilot (a name and an
-// allocator for that pilot's starting SP), then a step for the campaign's MekBay hangar link, with a step count and
-// progress bar at the bottom. A started campaign only has a small dialog for changing its hangar link. The server
-// checks every field again; this keeps the player from a doomed request and previews the pilots' levels.
+// allocator for that pilot's starting SP), then the hangar: built from mechs picked with the unit search (unitsearch.js, the default) or copied from a MekBay
+// hangar link (a shortcut for a force already built there), with a step count and progress bar at the bottom. The server checks every field again; this keeps
+// the player from a doomed request and previews the pilots' levels.
 (function () {
   var box = document.getElementById('campaign-run');
   if (!box) return;
@@ -52,12 +52,7 @@
     return input.value;
   }
 
-  function el(tag, cls, text) {
-    var e = document.createElement(tag);
-    if (cls) e.className = cls;
-    if (text !== undefined) e.textContent = text;
-    return e;
-  }
+  var el = Dom.el;
 
   function post(body) {
     return fetch('/api/campaign/start', {
@@ -119,6 +114,13 @@
     if (free.length) p.portrait = free[Math.floor(Math.random() * free.length)].file;
   });
   var hangar = '';
+  // The last step makes the hangar one of two ways: built from mechs picked here ('build', the default) or copied from a MekBay link ('link', a shortcut for a
+  // force already built there). picks are the mechs picked, one entry per mech (a design can be picked more than once).
+  var hangarMode = 'build';
+  var picks = [];
+  var maxBV = parseInt(wiz.dataset.maxBv, 10) || 0;
+  var minMechs = parseInt(wiz.dataset.minMechs, 10) || 0;
+  var unitSearch = null, picksBox = null, pickSummary = null;
   var step = 0;
   var busy = false;
 
@@ -150,7 +152,7 @@
   function renderPlayersStep() {
     title.textContent = 'How many players?';
     body.textContent = '';
-    body.appendChild(el('p', 'muted', 'This campaign can be played by ' + minPlayers + ' to ' + maxPlayers + ' players sharing one company. The number you choose is what every Deploy starts with; you can still change it for a single deploy.'));
+    body.appendChild(el('p', 'muted', 'This campaign can be played by ' + minPlayers + ' to ' + maxPlayers + ' players sharing one force. The number you choose is what every Deploy starts with; you can still change it for a single deploy.'));
     var pick = el('div', 'deploy-players-pick');
     for (var n = minPlayers; n <= maxPlayers; n++) {
       (function (n) {
@@ -294,7 +296,7 @@
   var checkSeq = 0;
   var statusBox = null;
 
-  function number(n) { return Number(n).toLocaleString('en-US'); }
+  var number = Dom.commas;
 
   // Reads the hangar behind the link and checks it against the campaign's starting conditions. A reply for a link
   // the player has since changed is ignored.
@@ -453,24 +455,34 @@
   }
 
   function renderHangar() {
-    title.textContent = 'Link your hangar';
+    title.textContent = hangarMode === 'build' ? 'Build your force' : 'Link your hangar';
     body.textContent = '';
     if (pilotCount) {
       body.appendChild(el('p', 'muted', 'Your named pilots:'));
-      var list = el('ul', 'wiz-recap');
+      var list = el('div', 'deploy-pilots-list wiz-pilot-cards');
       pilots.forEach(function (p) {
-        var li = el('li');
-        li.appendChild(el('b', null, p.name.trim()));
-        li.appendChild(el('span', 'muted', ' \u2014 '));
-        ladders.forEach(function (l, i) {
-          if (i) li.appendChild(el('span', 'muted', ' \u00b7 '));
-          li.appendChild(el('span', 'muted', l.name + ' '));
-          li.appendChild(el('b', 'recap-num', String(reach(l, p.sp[l.key]).level)));
-        });
-        list.appendChild(li);
+        // The levels this pilot's starting SP reaches, in the compact card the Deploy popup uses (pilotcard.js).
+        var lv = {};
+        ladders.forEach(function (l) { lv[l.key] = reach(l, p.sp[l.key]).level; });
+        var card = { name: p.name.trim(), portraitUrl: p.portrait ? '/portraits/' + p.portrait : '', gunnery: lv.gunnery, piloting: lv.piloting, edgeTokens: lv.edge_tokens, abilities: lv.edge_abilities };
+        list.appendChild(window.PilotCard ? PilotCard.chip(card, wiz.dataset.firstRank || 'Named pilot') : el('p', null, card.name));
       });
       body.appendChild(list);
     }
+    // The two ways to make the hangar, as a segmented switch.
+    var modes = el('div', 'wiz-modes');
+    modes.setAttribute('role', 'group');
+    modes.setAttribute('aria-label', 'How to make your hangar');
+    [['build', 'Pick your mechs'], ['link', 'Use a MekBay link']].forEach(function (m) {
+      var b = el('button', 'wiz-mode' + (hangarMode === m[0] ? ' active' : ''), m[1]);
+      b.type = 'button';
+      b.setAttribute('aria-pressed', hangarMode === m[0] ? 'true' : 'false');
+      b.addEventListener('click', function () { if (hangarMode !== m[0]) { hangarMode = m[0]; render(); } });
+      modes.appendChild(b);
+    });
+    body.appendChild(modes);
+    if (hangarMode === 'build') { renderBuild(); return; }
+    statusBox = null;
     body.appendChild(el('p', 'muted', 'Paste the link to this campaign\u2019s MekBay hangar, the force holding all of your mechs. We read it to check it meets the starting conditions.'));
     var label = el('label', null, 'MekBay hangar link');
     label.setAttribute('for', 'wiz-hangar');
@@ -503,6 +515,61 @@
     input.focus();
   }
 
+  // ---- Build your force: the mechs of the starting hangar, picked from the unit list (unitsearch.js). A result is added each time it is clicked; each picked
+  // mech has a remove button. The summary follows the campaign's starting conditions, which the server checks again when the campaign starts.
+  function pickCount(id) { return picks.filter(function (u) { return u.unit === id; }).length; }
+  function picksBV() { return picks.reduce(function (n, u) { return n + (Number(u.bv) || 0); }, 0); }
+  function buildProblem() {
+    if (!picks.length) return 'Pick the mechs of your starting force.';
+    if (minMechs && picks.length < minMechs) return 'You need at least ' + minMechs + ' mechs (you have ' + picks.length + ').';
+    if (maxBV && picksBV() > maxBV) return 'Your force totals ' + number(picksBV()) + ' BV, over the ' + number(maxBV) + ' BV starting limit.';
+    return '';
+  }
+  function renderPicks() {
+    if (!picksBox) return;
+    picksBox.textContent = '';
+    pickSummary.textContent = '';
+    var mechs = el('span', minMechs && picks.length < minMechs ? 'bad' : null);
+    mechs.appendChild(el('b', null, String(picks.length)));
+    mechs.appendChild(document.createTextNode((picks.length === 1 ? ' mech' : ' mechs') + (minMechs ? ' (at least ' + minMechs + ')' : '')));
+    pickSummary.appendChild(mechs);
+    var bv = el('span', maxBV && picksBV() > maxBV ? 'bad' : null);
+    bv.appendChild(el('b', null, number(picksBV())));
+    bv.appendChild(document.createTextNode(maxBV ? ' of ' + number(maxBV) + ' BV' : ' BV'));
+    pickSummary.appendChild(bv);
+    if (!picks.length) picksBox.appendChild(el('p', 'muted purchase-empty', 'No mechs yet. Search above and click a mech to add it to your force.'));
+    picks.forEach(function (u, i) {
+      var row = UnitSearch.plain(u);
+      row.picked = true;
+      row.actions = [{ icon: '\u00d7', label: 'Remove', title: 'Remove from your force', onClick: function () { picks.splice(i, 1); renderPicks(); unitSearch.repaint(); updateNext(); } }];
+      picksBox.appendChild(MechRow.build(row));
+    });
+  }
+  function renderBuild() {
+    var limits = [];
+    if (minMechs) limits.push('at least ' + minMechs + ' mechs');
+    if (maxBV) limits.push('up to ' + number(maxBV) + ' BV in all');
+    body.appendChild(el('p', 'muted', 'Pick the mechs of your starting force' + (limits.length ? ': ' + limits.join(', ') : '') + '. Click a mech to add it, and again to add another of it; right-click it to take one off. Each starts fully repaired, with an unnamed 4/5 pilot.'));
+    unitSearch = UnitSearch.create({
+      campaign: wiz.dataset.campaign, faction: wiz.dataset.faction, era: wiz.dataset.era, idPrefix: 'wiz-units',
+      decorate: function (row, u) { var n = pickCount(u.unit); if (n) { row.picked = true; row.badge = n === 1 ? 'In force' : n + ' in force'; } },
+      onPick: function (u) { picks.push(u); renderPicks(); unitSearch.repaint(); updateNext(); },
+      // A right-click takes one of that mech back off (the last one picked), down to none.
+      onUnpick: function (u) {
+        for (var i = picks.length - 1; i >= 0; i--) if (picks[i].unit === u.unit) { picks.splice(i, 1); break; }
+        renderPicks(); unitSearch.repaint(); updateNext();
+      }
+    });
+    body.appendChild(unitSearch.element);
+    body.appendChild(el('p', 'purchase-staged-head', 'Your force'));
+    pickSummary = el('p', 'hc-summary');
+    body.appendChild(pickSummary);
+    picksBox = el('div', 'mech-list purchase-staged');
+    body.appendChild(picksBox);
+    renderPicks();
+    unitSearch.focus();
+  }
+
   function render() {
     error.textContent = '';
     if (step === 0) renderForceStep(); else if (asksPlayers && step === 1) renderPlayersStep(); else if (step - lead < pilotCount) renderPilot(step - lead); else renderHangar();
@@ -522,7 +589,7 @@
     next.disabled = busy || missing !== '';
     // Once the hangar has been read, the status box right above already spells out what is wrong, so the hint stays
     // quiet there (the reason is still the button's tooltip).
-    var spelledOut = step >= lead + pilotCount && check.link === hangar.trim() && (check.state === 'done' || check.state === 'error');
+    var spelledOut = step >= lead + pilotCount && (hangarMode === 'build' ? picks.length > 0 : check.link === hangar.trim() && (check.state === 'done' || check.state === 'error'));
     hint.textContent = busy || spelledOut ? '' : missing;
     if (missing) next.title = missing; else next.removeAttribute('title');
   }
@@ -531,6 +598,7 @@
   function problem() {
     if (step === 0) return forceName.trim() ? '' : 'Name your force.';
     if (asksPlayers && step === 1) return '';
+    if (step >= lead + pilotCount && hangarMode === 'build') return buildProblem();
     if (step >= lead + pilotCount) {
       var bad = hangarProblem(hangar);
       if (bad) return bad;
@@ -551,7 +619,9 @@
   }
 
   function submit() {
-    var parts = ['campaign=' + encodeURIComponent(wiz.dataset.campaign), 'force_name=' + encodeURIComponent(forceName.trim()), 'players=' + players, 'hangar=' + encodeURIComponent(canonicalHangar(hangar) || hangar.trim())];
+    var parts = ['campaign=' + encodeURIComponent(wiz.dataset.campaign), 'force_name=' + encodeURIComponent(forceName.trim()), 'players=' + players];
+    if (hangarMode === 'build') picks.forEach(function (u) { parts.push('unit=' + encodeURIComponent(u.unit)); });
+    else parts.push('hangar=' + encodeURIComponent(canonicalHangar(hangar) || hangar.trim()));
     pilots.forEach(function (p, idx) {
       parts.push('pilot' + idx + '_name=' + encodeURIComponent(p.name.trim()));
       if (p.portrait) parts.push('pilot' + idx + '_portrait=' + encodeURIComponent(p.portrait));
@@ -579,7 +649,7 @@
   wizOpen.addEventListener('click', function () { step = 0; wiz.showModal(); render(); });
   function comingBack() {
     var failing = check.state === 'error' || (check.state === 'done' && !check.result.ok && !check.refreshing);
-    if (wiz.hasAttribute('open') && step >= lead + pilotCount && failing) forceCheck();
+    if (wiz.hasAttribute('open') && step >= lead + pilotCount && hangarMode === 'link' && failing) forceCheck();
   }
   window.addEventListener('focus', comingBack);
   document.addEventListener('visibilitychange', function () { if (!document.hidden) comingBack(); });

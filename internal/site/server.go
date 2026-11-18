@@ -1,10 +1,10 @@
 package site
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"embed"
 	"encoding/hex"
-	"fmt"
 	"html/template"
 	"log"
 	"net/http"
@@ -93,11 +93,16 @@ type Server struct {
 	mekbay MekBay
 
 	// The MekBay proxy (mekbayproxy.go), served on the hosts mekbay-<link id>.<site host> (and mekbay.localhost).
-	linkKey  string
 	upstream *[3]string // web, WebSocket and Origin of the MekBay to proxy; tests replace it
 	proxy    *mekbayProxy
 	onProxy  func(*mekbayProxy) // tests take hold of the proxy here
 }
+
+// Option customizes the handler returned by NewHandler.
+type Option func(*Server)
+
+// WithMekBay replaces the MekBay client (tests use a fake one).
+func WithMekBay(m MekBay) Option { return func(s *Server) { s.mekbay = m } }
 
 // NewHandler returns the site's HTTP handler. Campaign files are re-read on every request,
 // so edits show up on refresh.
@@ -106,7 +111,7 @@ func NewHandler(contentRoot string, store *Store, opts ...Option) http.Handler {
 	for _, o := range opts {
 		o(s)
 	}
-	s.proxy = newMekBayProxy(newMekBayVault(s.linkKey), store)
+	s.proxy = newMekBayProxy(store)
 	if s.upstream != nil {
 		s.proxy.web, s.proxy.ws, s.proxy.origin = s.upstream[0], s.upstream[1], s.upstream[2]
 	}
@@ -134,8 +139,6 @@ func NewHandler(contentRoot string, store *Store, opts ...Option) http.Handler {
 	mux.HandleFunc("GET /api/campaign/hangar-check", s.hangarCheck)
 	mux.HandleFunc("GET /api/campaign/force", s.forceJSON)
 	mux.HandleFunc("POST /api/pilots", s.addPilot)
-	mux.HandleFunc("POST /api/pilots/sp", s.awardSP)
-	mux.HandleFunc("POST /api/pilots/earn", s.earnSP)
 	mux.HandleFunc("POST /api/pilots/allocate", s.allocateSP)
 	mux.HandleFunc("POST /api/pilots/fallen", s.pilotFallen)
 	mux.HandleFunc("POST /api/pilots/revive", s.revivePilot)
@@ -164,7 +167,6 @@ func NewHandler(contentRoot string, store *Store, opts ...Option) http.Handler {
 	mux.HandleFunc("POST /api/pilots/delete", s.deletePilot)
 	mux.HandleFunc("POST /api/pilots/portrait", s.setPortrait)
 	mux.HandleFunc("GET /api/mekbay/hangar", s.hangarJSON)
-	mux.HandleFunc("POST /api/mekbay/deploy", s.deploy)
 	mux.HandleFunc("GET /{$}", s.home)
 	mux.HandleFunc("GET /{campaign}/{$}", s.campaign)
 	mux.HandleFunc("GET /{campaign}/keywords/{$}", s.keywords)
@@ -206,20 +208,8 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name
 					}
 					var alive int
 					p.Pilots, alive = pilotViews(pilots, p.Campaign.Ranks)
+					p.CanRecruit, p.RecruitNote = recruitStatus(p.Campaign, p.Run, alive)
 					limit := p.Campaign.PilotLimit()
-					cost := p.Campaign.RecruitCost
-					free := p.Run.FreeRecruits > 0
-					p.CanRecruit = alive < limit && (free || p.Run.Warchest >= cost)
-					switch {
-					case alive >= limit:
-						p.RecruitNote = fmt.Sprintf("Your command is full: %d of %d pilots.", alive, limit)
-					case free:
-						p.RecruitNote = "A replacement pilot is free: recruiting costs no SP."
-					case p.Run.Warchest < cost:
-						p.RecruitNote = fmt.Sprintf("Recruiting costs %s SP (warchest: %s).", withCommas(cost), withCommas(p.Run.Warchest))
-					case cost > 0:
-						p.RecruitNote = fmt.Sprintf("Recruiting costs %s SP.", withCommas(cost))
-					}
 					p.Ranks = p.Campaign.Ranks
 					if name == "campaign" || name == "scenario" || name == "manage" {
 						if h, at, ok, err := s.store.CachedHangar(r.Context(), id, p.Campaign.Slug, p.Run.HangarInstance); err != nil {
@@ -237,11 +227,16 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name
 		}
 	}
 	p.Commit = shortCommit(buildCommit)
+	// The page is rendered in full before anything is sent, so a template error is a clean 500 rather than half a page under a 200.
+	var buf bytes.Buffer
+	if err := s.pages[name].ExecuteTemplate(&buf, "layout", p); err != nil {
+		log.Printf("render %s: %v", name, err)
+		http.Error(w, "could not render the page", http.StatusInternalServerError)
+		return
+	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
-	if err := s.pages[name].ExecuteTemplate(w, "layout", p); err != nil {
-		log.Printf("render %s: %v", name, err)
-	}
+	_, _ = buf.WriteTo(w)
 }
 
 func (s *Server) notFound(w http.ResponseWriter, r *http.Request) {

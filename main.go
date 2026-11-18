@@ -2,11 +2,13 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"log"
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/davidzech/Battletech/internal/site"
 )
@@ -25,7 +27,6 @@ func main() {
 	content := flag.String("content", "campaigns", "folder holding the campaign folders")
 	dbPath := flag.String("db", "playthroughs.db", "SQLite database file for playthrough state (used when no PostgreSQL URL is set)")
 	pgURL := flag.String("postgres", os.Getenv("DATABASE_URL"), "PostgreSQL connection URL; defaults to $DATABASE_URL, and when set it is used instead of -db")
-	mekbayKey := flag.String("mekbay-link-key", os.Getenv("MEKBAY_LINK_KEY"), "secret that MekBay links seal their accounts under; defaults to $MEKBAY_LINK_KEY, and without one links stop working when the process restarts")
 	flag.Parse()
 
 	var (
@@ -45,6 +46,16 @@ func main() {
 	}
 	defer store.Close()
 
+	go func() { // a MekBay release that changes what the proxy relies on shows here, not as a player's broken table link
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		if err := site.CheckMekBay(ctx); err != nil {
+			log.Printf("warning: the MekBay proxy may not work with the current mekbay.com: %v", err)
+		} else {
+			log.Printf("MekBay proxy check: ok")
+		}
+	}()
+
 	log.Printf("serving %q on %s (database: %s)", *content, *addr, desc)
-	log.Fatal(http.ListenAndServe(*addr, site.NewHandler(*content, store, site.WithMekBayLinkKey(*mekbayKey))))
+	log.Fatal(http.ListenAndServe(*addr, site.NewHandler(*content, store)))
 }

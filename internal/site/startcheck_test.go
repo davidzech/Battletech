@@ -216,9 +216,8 @@ func TestStartingEnforcesTheHangarConditions(t *testing.T) {
 		t.Fatal("campaign should be started")
 	}
 
-	// The conditions are for starting: changing the link of a started campaign isn't checked again.
-	fake.setHangar(hangarOf("BMKoshi_E"), nil)
-	if r := post(t, srv, "/api/campaign/start", startForm("https://mekbay.com/?instance=01a12f98-8a21-7d12-b43d-52bb70872376"), cookie, srv.URL); r.StatusCode != http.StatusNoContent {
-		t.Fatalf("changing the hangar link: %d", r.StatusCode)
+	// A started campaign can't be started again (its hangar is never replaced from here).
+	if r := post(t, srv, "/api/campaign/start", startForm("https://mekbay.com/?instance=01a12f98-8a21-7d12-b43d-52bb70872376"), cookie, srv.URL); r.StatusCode != http.StatusConflict {
+		t.Fatalf("starting again: %d", r.StatusCode)
 	}
 }

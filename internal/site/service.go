@@ -2,7 +2,6 @@ package site
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -267,48 +266,17 @@ func repairState(state map[string]any, crits []any, level string, tons float64) 
 
 // ServiceUnit repairs or rearms a unit in the player's hangar force. It needs the owner's UID, because MekBay only accepts the owner's saves.
 func (c *MekBayClient) ServiceUnit(ctx context.Context, req ServiceRequest) error {
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-	s, err := dialMekBay(ctx, c.url(), req.OwnerUID)
-	if err != nil {
-		return err
-	}
-	defer s.close()
-	raw, err := s.call(ctx, map[string]any{"action": "getForce", "uuid": req.OwnerUID, "instanceId": req.Instance, "ownedOnly": false})
-	if err != nil {
-		return err
-	}
-	var reply struct {
-		Data map[string]any `json:"data"`
-	}
-	if err := json.Unmarshal(raw, &reply); err != nil || reply.Data == nil {
-		return errors.New("MekBay has no force for your hangar link; check that the link is saved in MekBay")
-	}
-	force := reply.Data
-	if err := serviceUnitState(force, req.UnitID, req.Kind, req.Level, req.Tons); err != nil {
-		return err
-	}
-	delete(force, "owned") // set by the server for readers; the app never sends it back
-	force["timestamp"] = mekbayTime(time.Now())
-	_, err = s.call(ctx, map[string]any{"action": "saveForce", "uuid": req.OwnerUID, "data": force, "savedForceCount": 1})
-	return err
+	return c.editForce(ctx, req.OwnerUID, req.Instance, func(force map[string]any, _ time.Time) error {
+		return serviceUnitState(force, req.UnitID, req.Kind, req.Level, req.Tons)
+	})
 }
 
 // serviceUnit is POST /api/hangar/service: repair or rearm one unit of the hangar, paid for from the warchest. It needs modify mode, since
 // the change is made in MekBay. The server works out the unit's condition and the price itself; a repair names the level the page showed, and
 // is refused if the unit has changed since.
 func (s *Server) serviceUnit(w http.ResponseWriter, r *http.Request) {
-	pt, c, ok := s.pilotRequest(w, r)
+	pt, c, run, ok := s.hangarRequest(w, r)
 	if !ok {
-		return
-	}
-	run, started, err := s.store.Run(r.Context(), pt.ID, c.Slug)
-	if err != nil || !started {
-		http.Error(w, "Start this campaign first.", http.StatusBadRequest)
-		return
-	}
-	if !run.Owned() {
-		http.Error(w, notOwnedMessage, http.StatusConflict)
 		return
 	}
 	kind := r.PostFormValue("kind")
@@ -372,21 +340,7 @@ func (s *Server) serviceUnit(w http.ResponseWriter, r *http.Request) {
 		}
 		cost = rearmCost(hu.AmmoBins)
 	}
-	if err := s.store.SpendWarchest(r.Context(), pt.ID, c.Slug, cost); errors.Is(err, ErrInsufficientFunds) {
-		http.Error(w, fmt.Sprintf("Not enough in the warchest: that costs %d SP and you have %d.", cost, run.Warchest), http.StatusConflict)
-		return
-	} else if err != nil {
-		http.Error(w, "could not charge the warchest", http.StatusInternalServerError)
-		return
-	}
-	if err := s.mekbay.ServiceUnit(r.Context(), ServiceRequest{OwnerUID: accountUID(currentSeed(r), SlotHangar), Instance: run.HangarInstance, UnitID: hu.ID, Kind: kind, Level: level, Tons: cat.Tons}); err != nil {
-		log.Printf("%s a unit in MekBay: %v", kind, err) // never log the owner UID
-		if rerr := s.store.RefundWarchest(r.Context(), pt.ID, c.Slug, cost); rerr != nil {
-			log.Printf("could not refund %d SP: %v", cost, rerr)
-		}
-		http.Error(w, err.Error(), http.StatusBadGateway)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	fmt.Fprintf(w, `{"cost":%d,"warchest":%d}`, cost, run.Warchest-cost)
+	s.payForHangarChange(w, r, pt, c, run, cost, kind+" a unit", func() error {
+		return s.mekbay.ServiceUnit(r.Context(), ServiceRequest{OwnerUID: accountUID(currentSeed(r), SlotHangar), Instance: run.HangarInstance, UnitID: hu.ID, Kind: kind, Level: level, Tons: cat.Tons})
+	})
 }

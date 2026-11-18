@@ -11,4 +11,6 @@ recruit_cost: 300
 availability_faction: Clan Wolf
 availability_era: Clan Invasion
 faction: clan
+mission_term: Sortie
+mvp_sp: 20
 ---

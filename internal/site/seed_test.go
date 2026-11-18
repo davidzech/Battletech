@@ -308,15 +308,16 @@ func TestSeedAndCampaignFlow(t *testing.T) {
 		t.Errorf("started campaign page has no Re-import hangar: %.1500s", c)
 	}
 
-	// Starting again (the endpoint still accepts it) re-imports the hangar (a fresh copy) and keeps a single run.
+	// Starting again is refused: a started campaign's hangar is never replaced from the start endpoint.
 	other := "https://mekbay.com/?instance=01a12f98-8a21-7d12-b43d-52bb70872376"
-	if r := post(t, srv, "/api/campaign/start", url.Values{"campaign": {"refusalwar"}, "hangar": {other}}, cookie, srv.URL); r.StatusCode != http.StatusNoContent {
-		t.Fatalf("change hangar: got %d", r.StatusCode)
+	before, _, _ := store.Run(ctx, id, "refusalwar")
+	if r := post(t, srv, "/api/campaign/start", url.Values{"campaign": {"refusalwar"}, "hangar": {other}}, cookie, srv.URL); r.StatusCode != http.StatusConflict {
+		t.Fatalf("starting again: got %d", r.StatusCode)
 	}
 	var runs int
 	_ = store.db.QueryRow(`SELECT COUNT(*) FROM campaign_runs`).Scan(&runs)
-	if run, _, _ := store.Run(ctx, id, "refusalwar"); runs != 1 || run.SourceURL != other || run.HangarInstance == "" || run.HangarInstance == goodInstance {
-		t.Fatalf("changing the hangar should update the one run: %d runs, %+v", runs, run)
+	if run, _, _ := store.Run(ctx, id, "refusalwar"); runs != 1 || run.HangarInstance != before.HangarInstance || run.SourceURL != before.SourceURL {
+		t.Fatalf("the one run keeps its hangar: %d runs, %+v", runs, run)
 	}
 }
 

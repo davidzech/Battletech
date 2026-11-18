@@ -1,50 +1,13 @@
 package site
 
 import (
-	"encoding/json"
 	"fmt"
-	"log"
-	"net/http"
 	"net/url"
-	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 )
 
-// Option customizes the handler returned by NewHandler.
-type Option func(*Server)
-
-// WithMekBay replaces the MekBay client (tests use a fake one).
-func WithMekBay(m MekBay) Option { return func(s *Server) { s.mekbay = m } }
-
-// operationName is the operation's name in MekBay, e.g. "Refusal War - Scenario 001".
-func operationName(c *Campaign, sc *Scenario) string { return c.Label + " - Scenario " + sc.Number }
-
-// opForDraft turns a scenario's .mul force files into one OpFor force, a group per file ("OpFor 1", "OpFor 2").
-func opForDraft(c *Campaign, sc *Scenario) (ForceDraft, error) {
-	d := ForceDraft{Name: operationName(c, sc) + " - OpFor"}
-	for _, f := range sc.Forces {
-		raw, err := os.ReadFile(filepath.Join(sc.Dir, f.File))
-		if err != nil {
-			return ForceDraft{}, err
-		}
-		entities, err := parseMul(raw)
-		if err != nil {
-			return ForceDraft{}, fmt.Errorf("%s: %w", f.File, err)
-		}
-		g := GroupDraft{Name: f.Label}
-		for _, e := range entities {
-			u, ok := lookupUnit(e.Chassis, e.Model)
-			if !ok {
-				return ForceDraft{}, fmt.Errorf("%s: %s %s is not in the unit catalog", f.File, e.Chassis, e.Model)
-			}
-			g.Units = append(g.Units, UnitDraft{Unit: u.Name, BV: adjustedBV(u.BV, e.Gunnery, e.Piloting), Pilot: e.Pilot, Gunnery: e.Gunnery, Piloting: e.Piloting})
-		}
-		d.Groups = append(d.Groups, g)
-	}
-	return d, nil
-}
+// How a unit is shown: its name (the Clan name first), role label and mech-row view, for every list of mechs on the site.
 
 // hangarUnitView is one hangar unit as the deploy popup shows it.
 type hangarUnitView struct {
@@ -123,6 +86,9 @@ func displayName(u Unit) string {
 	return strings.TrimSpace(name + " " + model)
 }
 
+// deployedGroup is the hangar group whose units the Deploy wizard gives Player 1 to start with (a group the player may have made in MekBay).
+const deployedGroup = "Deployed"
+
 // hangarViews describes every unit of a hangar for the deploy popup.
 func hangarViews(h HangarForce) []hangarUnitView {
 	views := make([]hangarUnitView, 0, len(h.Units))
@@ -185,158 +151,6 @@ func deployProblem(h HangarForce, ids []string, bvLimit int) string {
 		return fmt.Sprintf("The force is %d BV, over this scenario's limit of %d.", total, bvLimit)
 	}
 	return ""
-}
-
-// mekbayRequest is what both MekBay endpoints need first: the seed's playthrough, the campaign and scenario named by
-// the request, and the playthrough's run of that campaign (which holds its hangar). It writes the error response
-// itself and reports ok=false.
-func (s *Server) mekbayRequest(w http.ResponseWriter, r *http.Request) (pt Playthrough, run CampaignRun, c *Campaign, sc *Scenario, ok bool) {
-	seed := currentSeed(r)
-	if seed == "" {
-		http.Error(w, "Choose a seed first.", http.StatusBadRequest)
-		return
-	}
-	c, found := s.lib.Campaign(r.FormValue("campaign"))
-	if !found {
-		http.Error(w, "unknown campaign", http.StatusNotFound)
-		return
-	}
-	sc, found = c.Scenario(r.FormValue("scenario"))
-	if !found || len(sc.Forces) == 0 {
-		http.Error(w, "unknown scenario, or it has no OpFor to deploy against", http.StatusNotFound)
-		return
-	}
-	pt, found, err := s.store.Playthrough(r.Context(), playthroughID(seed))
-	if err != nil {
-		http.Error(w, "could not load playthrough", http.StatusInternalServerError)
-		return
-	}
-	if !found || !pt.Configured() {
-		http.Error(w, "Name your account first.", http.StatusBadRequest)
-		return
-	}
-	run, started, err := s.store.Run(r.Context(), pt.ID, c.Slug)
-	if err != nil {
-		http.Error(w, "could not load campaign", http.StatusInternalServerError)
-		return
-	}
-	if !started {
-		http.Error(w, "Start this campaign first.", http.StatusBadRequest)
-		return
-	}
-	return pt, run, c, sc, true
-}
-
-// hangarJSON lists the player's hangar for the deploy popup, with the scenario's BV limit.
-func (s *Server) hangarJSON(w http.ResponseWriter, r *http.Request) {
-	pt, run, c, sc, ok := s.mekbayRequest(w, r)
-	if !ok {
-		return
-	}
-	h, err := s.scenarioHangar(r.Context(), run, sc)
-	if err != nil {
-		log.Printf("read hangar for %s: %v", sc.ID, err)
-		http.Error(w, err.Error(), http.StatusBadGateway)
-		return
-	}
-	op, hasOp, err := s.store.MekBayOperation(r.Context(), pt.ID, c.Slug, sc.ID)
-	if err != nil {
-		http.Error(w, "could not load operation", http.StatusInternalServerError)
-		return
-	}
-	if !sc.provides() { // the scenario's own mechs are not the hangar, so they are never cached as it
-		s.cacheHangar(r.Context(), pt.ID, c.Slug, run.HangarInstance, h)
-	}
-	out := deployData(h, sc.BVLimit, run.Owned(), hasOp)
-	out["provided"] = sc.provides()
-	if hasOp {
-		out["url"] = OperationURL(op.OperationID)
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "no-store")
-	_ = json.NewEncoder(w).Encode(out)
-}
-
-// deploy sorts the player's hangar into "Deployed" (the chosen units) and "Hangar" (the rest) in MekBay, creates the
-// scenario's OpFor force and ties both into one operation. It needs modify mode (the owner's UID), because MekBay only
-// lets the owner save. An existing OpFor is kept, with whatever damage it has, unless reset_opfor=1.
-func (s *Server) deploy(w http.ResponseWriter, r *http.Request) {
-	if !sameOrigin(r) {
-		http.Error(w, "cross-origin request refused", http.StatusForbidden)
-		return
-	}
-	r.Body = http.MaxBytesReader(w, r.Body, 8192)
-	if err := r.ParseForm(); err != nil {
-		http.Error(w, "bad request", http.StatusBadRequest)
-		return
-	}
-	pt, run, c, sc, ok := s.mekbayRequest(w, r)
-	if !ok {
-		return
-	}
-	if !run.Owned() {
-		http.Error(w, notOwnedMessage, http.StatusConflict)
-		return
-	}
-	ids := r.PostForm["units"]
-	h, err := s.scenarioHangar(r.Context(), run, sc)
-	if err != nil {
-		log.Printf("read hangar for %s: %v", sc.ID, err)
-		http.Error(w, err.Error(), http.StatusBadGateway)
-		return
-	}
-	if msg := deployProblem(h, ids, sc.BVLimit); msg != "" {
-		http.Error(w, msg, http.StatusBadRequest)
-		return
-	}
-	pilots, err := s.store.Pilots(r.Context(), pt.ID, c.Slug)
-	if err != nil {
-		http.Error(w, "could not load your pilots", http.StatusInternalServerError)
-		return
-	}
-	crew, err := parseCrew(r, h, pilots)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	if msg := sc.rulesProblem([][]string{ids}, [][]CrewAssignment{crew}); msg != "" {
-		http.Error(w, msg, http.StatusBadRequest)
-		return
-	}
-	existing, has, err := s.store.MekBayOperation(r.Context(), pt.ID, c.Slug, sc.ID)
-	if err != nil {
-		http.Error(w, "could not load operation", http.StatusInternalServerError)
-		return
-	}
-	draft, err := opForDraft(c, sc)
-	if err != nil {
-		log.Printf("opfor draft for %s: %v", sc.ID, err) // never log the owner UID
-		http.Error(w, "could not read this scenario's OpFor files", http.StatusInternalServerError)
-		return
-	}
-	res, err := s.mekbay.SyncOperation(r.Context(), OperationRequest{
-		OwnerUID:         accountUID(currentSeed(r), SlotHangar),
-		CampaignInstance: run.HangarInstance,
-		DeployedUnitIDs:  ids,
-		Crew:             crew,
-		OpFor:            draft,
-		OpForInstance:    existing.OpForInstance,
-		KeepOpFor:        has && r.PostFormValue("reset_opfor") != "1",
-		OperationName:    operationName(c, sc),
-		OperationID:      existing.OperationID,
-	})
-	if err != nil {
-		log.Printf("mekbay sync for %s: %v", sc.ID, err)
-		http.Error(w, err.Error(), http.StatusBadGateway)
-		return
-	}
-	op := MekBayOperation(res)
-	if err := s.store.SaveMekBayOperation(r.Context(), pt.ID, c.Slug, sc.ID, op); err != nil {
-		http.Error(w, "deployed in MekBay but could not remember it", http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]string{"url": OperationURL(op.OperationID)})
 }
 
 // unitPageURL is the link to a unit's page on mekbay.com, from its MekBay unit ID (e.g. BMMadCat_H): the General tab of that design's page,

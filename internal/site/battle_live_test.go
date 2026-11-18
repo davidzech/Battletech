@@ -140,3 +140,76 @@ func TestCommitBattleLive(t *testing.T) {
 	}
 	t.Logf("hangar crew after: %q / %q", h.Units[0].Pilot, h.Units[1].Pilot)
 }
+
+// TestCheckpointForcesLive copies a force, deletes forces and deletes a battle on the real mekbay.com with a throwaway account: what checkpoints and aborts
+// rely on. It runs only when MEKBAY_LIVE_BATTLE is set.
+func TestCheckpointForcesLive(t *testing.T) {
+	if os.Getenv("MEKBAY_LIVE_BATTLE") == "" {
+		t.Skip("set MEKBAY_LIVE_BATTLE=1 to run against mekbay.com")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+	account := newID()
+	hs, err := dialMekBay(ctx, mekbayWSURL, account)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer hs.close()
+	hangarID := newID()
+	hangar := buildForce(hangarID, time.Now().UTC(), ForceDraft{Name: "Live hangar", Groups: []GroupDraft{{Name: "Hangar", Units: []UnitDraft{{Unit: "BMBlackHawk_Prime"}}}}})
+	if err := hs.saveData(ctx, hangar); err != nil {
+		t.Fatal(err)
+	}
+	cl := &MekBayClient{}
+	exists := func(instance string) bool {
+		f, err := hs.getForce(ctx, instance, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return f != nil
+	}
+
+	// A copy is a force of its own, with the same units.
+	copyID := newID()
+	if err := cl.CopyForce(ctx, CopyRequest{OwnerUID: account, Source: hangarID, Target: copyID}); err != nil {
+		t.Fatalf("copy: %v", err)
+	}
+	if h, err := cl.ReadHangar(ctx, copyID); err != nil || len(h.Units) != 1 || h.Units[0].Unit != "BMBlackHawk_Prime" {
+		t.Fatalf("the copy: %+v %v", h, err)
+	}
+	// Copying it back over the original works too (a rollback).
+	if err := cl.CopyForce(ctx, CopyRequest{OwnerUID: account, Source: copyID, Target: hangarID}); err != nil {
+		t.Fatalf("copy back: %v", err)
+	}
+	// Deleting it removes it (MekBay doesn't acknowledge, so DeleteForce waits for a read on the same connection).
+	if err := cl.DeleteForce(ctx, account, copyID); err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+	if exists(copyID) {
+		t.Error("the deleted copy is gone")
+	}
+	if !exists(hangarID) {
+		t.Error("the hangar is still there")
+	}
+
+	// A battle's operation and every force in it go with DeleteBattle.
+	res, err := cl.StartBattle(ctx, BattleRequest{Account: account, HangarInstance: hangarID, OperationName: "Live delete", OpFor: BattleOpFor{Draft: ForceDraft{Name: "OpFor", Groups: []GroupDraft{{Name: "OpFor 1", Units: []UnitDraft{{Unit: "BMLoki_Prime"}}}}}},
+		Players: []BattlePlayer{{Number: 1, Name: "P1", Units: []string{hangar.Groups[0].Units[0].ID}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cl.DeleteBattle(ctx, account, res.OperationID); err != nil {
+		t.Fatalf("delete battle: %v", err)
+	}
+	for _, in := range append([]string{res.OpForInstance}, res.PlayerInstances...) {
+		if exists(in) {
+			t.Errorf("force %s of the battle is gone", in)
+		}
+	}
+	if _, err := cl.ReadBattle(ctx, res.OperationID); err == nil {
+		t.Error("the operation is gone")
+	}
+	if !exists(hangarID) {
+		t.Error("the hangar is untouched")
+	}
+}

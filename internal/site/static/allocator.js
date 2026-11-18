@@ -13,12 +13,7 @@
   // The arrow between the SP so far and the next level, drawn rather than typed so it reads clearly in any font.
   var ARROW = '<svg viewBox="0 0 16 10" width="16" height="10" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 5h13M10 1l4 4-4 4"/></svg>';
 
-  function el(tag, cls, text) {
-    var e = document.createElement(tag);
-    if (cls) e.className = cls;
-    if (text !== undefined) e.textContent = text;
-    return e;
-  }
+  var el = Dom.el;
 
   // The row of the ladder reached with this much SP (its level and the SP it takes).
   function reach(l, spent) {

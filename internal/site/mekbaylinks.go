@@ -8,6 +8,8 @@ import (
 	"errors"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // MekBay links: what makes a browser act as a MekBay account (see mekbayproxy.go). A link is a long random id that appears as the first label of
@@ -16,7 +18,7 @@ import (
 // bookmarking or opening it in two tabs next to another link all work, because every link is its own browser origin with its own cookies and
 // storage.
 //
-// The id is a bearer credential, so it is 160 random bits, it lives in a table where the account is sealed (mekbayvault.go), it expires (and
+// The id is a bearer credential, so it is 160 random bits, it lives in a table beside the account it names, it expires (and
 // the expiry slides forward while the link is in use) and it can be revoked. The proxy marks every response Referrer-Policy: no-referrer, so
 // following a link out of MekBay never reveals the host name.
 //
@@ -56,43 +58,47 @@ func validMekBayLinkID(s string) bool {
 	return true
 }
 
+// ErrBadLink means a MekBay link is not valid, has expired or was revoked.
+var ErrBadLink = errors.New("This MekBay link is not valid or has expired.")
+
+// sandboxAccount is the shared account a browser opening the proxy directly on a developer's machine acts as (see sandboxAllowed). It is not a secret: everyone
+// who opens the proxy that way shares it.
+var sandboxAccount = MekBayUID("battletech localhost sandbox", "sandbox")
+
 // EnsureMekBayLink returns the link id for a playthrough's campaign and label, making it when there is none and making sure it names account and
 // is valid for ttl from now. Asking again gives the same id, so the link stays the same (and bookmarkable) for as long as it lives.
-func (s *Store) EnsureMekBayLink(ctx context.Context, playthroughID, campaign, label, account string, v *mekbayVault, ttl time.Duration, now time.Time) (string, error) {
-	sealed, err := v.Seal(account)
-	if err != nil {
-		return "", err
+func (s *Store) EnsureMekBayLink(ctx context.Context, playthroughID, campaign, label, account string, ttl time.Duration, now time.Time) (string, error) {
+	if _, err := uuid.Parse(account); err != nil {
+		return "", errors.New("not a MekBay user ID")
 	}
+	account = strings.ToLower(account)
 	expires, secs := now.Add(ttl).Unix(), int64(ttl/time.Second)
 	// Expired links are gone for good; clearing them keeps the table small and frees their labels for fresh ids.
 	if _, err := s.db.ExecContext(ctx, s.q(`DELETE FROM mekbay_links WHERE expires_at <= ?`), now.Unix()); err != nil {
 		return "", err
 	}
-	var id, current string
-	err = s.db.QueryRowContext(ctx,
-		s.q(`SELECT id, sealed FROM mekbay_links WHERE playthrough_id = ? AND campaign = ? AND label = ?`), playthroughID, campaign, label).Scan(&id, &current)
+	var id string
+	err := s.db.QueryRowContext(ctx,
+		s.q(`SELECT id FROM mekbay_links WHERE playthrough_id = ? AND campaign = ? AND label = ?`), playthroughID, campaign, label).Scan(&id)
 	switch {
 	case err == nil:
-		if open, oerr := v.Open(current); oerr == nil && open == strings.ToLower(account) {
-			sealed = current // unchanged: keep what is stored
-		}
-		_, err = s.db.ExecContext(ctx, s.q(`UPDATE mekbay_links SET sealed = ?, ttl_seconds = ?, expires_at = ? WHERE id = ?`), sealed, secs, expires, id)
+		_, err = s.db.ExecContext(ctx, s.q(`UPDATE mekbay_links SET account = ?, ttl_seconds = ?, expires_at = ? WHERE id = ?`), account, secs, expires, id)
 		return id, err
 	case errors.Is(err, sql.ErrNoRows):
 		id = newMekBayLinkID()
 		_, err = s.db.ExecContext(ctx,
-			s.q(`INSERT INTO mekbay_links (id, playthrough_id, campaign, label, sealed, ttl_seconds, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)`),
-			id, playthroughID, campaign, label, sealed, secs, expires)
+			s.q(`INSERT INTO mekbay_links (id, playthrough_id, campaign, label, account, ttl_seconds, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)`),
+			id, playthroughID, campaign, label, account, secs, expires)
 		return id, err
 	}
 	return "", err
 }
 
-// MekBayLink looks a link up by id. It reports the sealed account when the link exists and has not expired, and slides the expiry forward
+// MekBayLink looks a link up by id. It reports the link's account when the link exists and has not expired, and slides the expiry forward
 // (once a tenth of the lifetime has passed, so a busy link doesn't write on every connection).
-func (s *Store) MekBayLink(ctx context.Context, id string, now time.Time) (sealed string, ok bool, err error) {
+func (s *Store) MekBayLink(ctx context.Context, id string, now time.Time) (account string, ok bool, err error) {
 	var expires, ttl int64
-	err = s.db.QueryRowContext(ctx, s.q(`SELECT sealed, expires_at, ttl_seconds FROM mekbay_links WHERE id = ?`), id).Scan(&sealed, &expires, &ttl)
+	err = s.db.QueryRowContext(ctx, s.q(`SELECT account, expires_at, ttl_seconds FROM mekbay_links WHERE id = ?`), id).Scan(&account, &expires, &ttl)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", false, nil
 	}
@@ -107,7 +113,7 @@ func (s *Store) MekBayLink(ctx context.Context, id string, now time.Time) (seale
 			return "", false, err
 		}
 	}
-	return sealed, true, nil
+	return account, true, nil
 }
 
 // RevokeMekBayLink deletes a link, so its host name stops working at once. Asking for the label again makes a new id.
