@@ -67,3 +67,13 @@ func TestOutcomeDropdownRemainsWithoutADialog(t *testing.T) {
 		t.Error("without a started campaign the Outcome dropdown stays")
 	}
 }
+
+// The scenario page no longer ends with a "Next: <title>" link (a different system will replace it).
+func TestNoNextScenarioLink(t *testing.T) {
+	srv, _, cookie := startedCompany(t)
+	for _, path := range []string{"/refusalwar/scenario_000/", "/refusalwar/scenario_001/"} {
+		if p := body(t, srv, path, cookie); strings.Contains(p, `class="next"`) || strings.Contains(p, "Next: ") {
+			t.Errorf("%s still has a Next link", path)
+		}
+	}
+}

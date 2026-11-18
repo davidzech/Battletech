@@ -292,7 +292,6 @@ figure { margin: 1rem 0; }
 img { max-width: 100%; height: auto; }
 code { background: var(--panel-2); padding: 0.1em 0.35em; }
 
-.next { margin-top: 2rem; font: 1rem var(--display); letter-spacing: 0.08em; text-transform: uppercase; }
 
 footer {
   padding: 1.5rem 1.25rem 2rem;

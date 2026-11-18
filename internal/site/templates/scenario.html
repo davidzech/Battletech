@@ -97,5 +97,4 @@
 {{if ne .ScenarioState "locked"}}{{if .Scenario.HasOutcome}}{{if ne .ScenarioState "completed"}}<button type="button" class="button button-outline button-large" id="outcome-open">Complete mission</button>{{end}}{{else}}<button type="button" class="button button-outline button-large" id="mission-log-toggle">{{if eq .ScenarioState "completed"}}Mark not completed{{else}}Mark completed{{end}}</button>{{end}}{{end}}
 <p class="form-error" id="mission-log-error" role="alert"></p>
 </section>
-{{end}}{{end}}{{with .Next}}<p class="next"><a href="/{{$.Campaign.Slug}}/{{.Slug}}/">Next: {{.Title}} &rsaquo;</a></p>{{end}}
-{{end}}
+{{end}}{{end}}{{end}}

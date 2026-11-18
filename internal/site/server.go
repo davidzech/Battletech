@@ -49,7 +49,6 @@ type Page struct {
 	Crumbs             []Crumb
 	Campaign           *Campaign
 	Scenario           *Scenario
-	Next               *Scenario
 	Cards              []Card
 	HasLocked          bool           // some scenario cards are locked, so the campaign page offers 'Show all scenarios'
 	ScenarioState      string         // on a scenario page: completed, available or locked
@@ -285,7 +284,6 @@ func (s *Server) scenario(w http.ResponseWriter, r *http.Request) {
 		s.notFound(w, r)
 		return
 	}
-	next, _ := c.ScenarioByID(sc.Next)
 	completed, available := s.progress(r, c)
 	var images []string
 	for _, img := range sc.Images {
@@ -306,7 +304,6 @@ func (s *Server) scenario(w http.ResponseWriter, r *http.Request) {
 		Crumbs:        []Crumb{{Label: c.Label, URL: "/" + c.Slug + "/"}, scenarioCrumb(c, sc, available)},
 		Campaign:      c,
 		Scenario:      sc,
-		Next:          next,
 		ScenarioState: scenarioState(sc.Slug, completed, available),
 		Outcome:       s.recordedOutcome(r, c, sc, completed),
 	})
