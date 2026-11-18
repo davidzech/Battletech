@@ -157,7 +157,7 @@ details.fold > summary {
   display: inline-flex;
   align-items: center;
   gap: 0.6rem;
-  padding: 0.35rem 2rem 0.35rem 0.9rem;
+  padding: 0.35rem 1.4rem 0.35rem 0.9rem;
   background: var(--accent);
   color: var(--accent-ink);
   font: 700 1.35rem var(--display);
@@ -165,7 +165,7 @@ details.fold > summary {
   text-transform: uppercase;
   cursor: pointer;
   list-style: none;
-  clip-path: polygon(0 0, 100% 0, calc(100% - 12px) 100%, 0 100%);
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%); /* the action button's cut corner, mirrored vertically */
 }
 details.fold > summary::-webkit-details-marker { display: none; }
 details.fold > summary::before {
@@ -1425,3 +1425,4 @@ dialog.qr-dialog { padding: 0; max-width: min(92vw, 24rem); }
 .deploy-slot.static.filled.kia > :not(.kia-stamp) { opacity: 0.4; }
 .deploy-slot.kia .deploy-portrait { filter: grayscale(1); }
 .deploy-slot .kia-stamp { font-size: 1.05rem; border-width: 2px; padding: 0 0.4rem; }
+#deploy-open:disabled { opacity: 0.4; cursor: not-allowed; filter: grayscale(1); }
