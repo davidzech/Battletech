@@ -84,6 +84,12 @@ type Server struct {
 	store  *Store
 	pages  map[string]*template.Template
 	mekbay MekBay
+
+	// The MekBay proxy (mekbayproxy.go), served on the host mekbay.<site host>.
+	tokenKey string
+	upstream *[3]string // web, WebSocket and Origin of the MekBay to proxy; tests replace it
+	proxy    *mekbayProxy
+	onProxy  func(*mekbayProxy) // tests take hold of the proxy here
 }
 
 // NewHandler returns the site's HTTP handler. Campaign files are re-read on every request,
@@ -92,6 +98,13 @@ func NewHandler(contentRoot string, store *Store, opts ...Option) http.Handler {
 	s := &Server{lib: Library{Root: contentRoot}, store: store, pages: map[string]*template.Template{}, mekbay: &MekBayClient{}}
 	for _, o := range opts {
 		o(s)
+	}
+	s.proxy = newMekBayProxy(newMekBayTokens(s.tokenKey))
+	if s.upstream != nil {
+		s.proxy.web, s.proxy.ws, s.proxy.origin = s.upstream[0], s.upstream[1], s.upstream[2]
+	}
+	if s.onProxy != nil {
+		s.onProxy(s.proxy)
 	}
 	for _, name := range []string{"home", "campaign", "manage", "scenario", "keywords", "notfound"} {
 		s.pages[name] = template.Must(template.ParseFS(assets, "templates/layout.html", "templates/"+name+".html"))
@@ -149,7 +162,13 @@ func NewHandler(contentRoot string, store *Store, opts ...Option) http.Handler {
 	mux.HandleFunc("GET /{campaign}/{scenario}/images/{file}", s.image)
 	mux.HandleFunc("GET /{campaign}/{scenario}/forces/{file}", s.force)
 	mux.HandleFunc("/", s.notFound)
-	return mux
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if isMekBayHost(r.Host) {
+			s.proxy.ServeHTTP(w, r)
+			return
+		}
+		mux.ServeHTTP(w, r)
+	})
 }
 
 func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name string, p Page) {

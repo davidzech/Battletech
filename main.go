@@ -25,6 +25,7 @@ func main() {
 	content := flag.String("content", "campaigns", "folder holding the campaign folders")
 	dbPath := flag.String("db", "playthroughs.db", "SQLite database file for playthrough state (used when no PostgreSQL URL is set)")
 	pgURL := flag.String("postgres", os.Getenv("DATABASE_URL"), "PostgreSQL connection URL; defaults to $DATABASE_URL, and when set it is used instead of -db")
+	mekbayKey := flag.String("mekbay-token-key", os.Getenv("MEKBAY_TOKEN_KEY"), "secret that MekBay link tokens are sealed under; defaults to $MEKBAY_TOKEN_KEY, and without one tokens last only until the process restarts")
 	flag.Parse()
 
 	var (
@@ -45,5 +46,5 @@ func main() {
 	defer store.Close()
 
 	log.Printf("serving %q on %s (database: %s)", *content, *addr, desc)
-	log.Fatal(http.ListenAndServe(*addr, site.NewHandler(*content, store)))
+	log.Fatal(http.ListenAndServe(*addr, site.NewHandler(*content, store, site.WithMekBayTokenKey(*mekbayKey))))
 }
