@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"math"
 	"net/http"
 	"regexp"
@@ -55,6 +56,9 @@ import (
 //
 // The players enter what happened in the completion dialog, which previews the result by asking the server (POST /api/campaign/scenario-outcome); committing it
 // (POST /api/campaign/scenario-outcome/commit) applies every effect and records the report in one transaction, so a mission can only be completed once.
+
+// mvpBonusSP is the extra SP the mission's MVP earns.
+const mvpBonusSP = 20
 
 // OutcomeInput is something the players report when a mission is completed.
 type OutcomeInput struct {
@@ -254,6 +258,7 @@ type OutcomeEntry struct {
 	PilotID  string         `json:"id"`
 	TookPart bool           `json:"tookPart"` // active; false means benched
 	Killed   bool           `json:"killed"`   // killed in action (only an active pilot can be)
+	MVP      bool           `json:"mvp"`      // the mission's most valuable pilot: an extra mvpBonusSP (at most one, and one who took part and lives)
 	Values   map[string]any `json:"values"`   // numbers, or true/false for a bool input
 }
 
@@ -271,6 +276,7 @@ type PilotOutcome struct {
 	Entered []string `json:"entered"` // what was reported, as text ("Kills: 2")
 	SP      int      `json:"sp"`      // SP the pilot earns in all
 	KIA     bool     `json:"kia"`     // killed in action: removed from the campaign
+	MVP     bool     `json:"mvp"`     // chosen as the mission's MVP
 	Notes   []string `json:"notes"`
 }
 
@@ -359,6 +365,7 @@ func (sc *Scenario) EvaluateOutcome(in OutcomeInputs, names map[string]string) (
 		return res, err
 	}
 	seen := map[string]bool{}
+	mvps := 0
 	type taken struct {
 		out  *PilotOutcome
 		vars map[string]any
@@ -377,6 +384,15 @@ func (sc *Scenario) EvaluateOutcome(in OutcomeInputs, names map[string]string) (
 		if e.Killed && !e.TookPart {
 			return res, fmt.Errorf("%s was benched, so they cannot have been killed", name)
 		}
+		if e.MVP {
+			mvps++
+			if !e.TookPart || e.Killed {
+				return res, fmt.Errorf("%s cannot be the MVP: only a pilot who took part and lives can be", name)
+			}
+			if mvps > 1 {
+				return res, errors.New("only one pilot can be the MVP")
+			}
+		}
 		if e.TookPart {
 			vals, err := sc.inputValues("pilot", e.Values)
 			if err != nil {
@@ -394,6 +410,7 @@ func (sc *Scenario) EvaluateOutcome(in OutcomeInputs, names map[string]string) (
 			for k, v := range vals {
 				vars[k] = v
 			}
+			po.MVP = e.MVP
 			res.Pilots = append(res.Pilots, po)
 			active = append(active, taken{vars: vars})
 			continue
@@ -542,6 +559,13 @@ func (sc *Scenario) EvaluateOutcome(in OutcomeInputs, names map[string]string) (
 	} else if res.Pool > 0 {
 		res.Warchest += res.Pool
 		res.Notes = append(res.Notes, fmt.Sprintf("Pool: %d SP, all to the warchest.", res.Pool))
+	}
+	// The MVP earns an extra mvpBonusSP, on top of their share and not drawn from the pool.
+	for i := range res.Pilots {
+		if p := &res.Pilots[i]; p.MVP {
+			p.SP += mvpBonusSP
+			p.Notes = append(p.Notes, fmt.Sprintf("+%d SP (MVP)", mvpBonusSP))
+		}
 	}
 	for i := range res.Pilots {
 		if p := &res.Pilots[i]; len(p.Notes) == 0 {
@@ -744,6 +768,9 @@ func (s *Server) commitOutcome(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if !s.writeBackBattle(w, r, pt, c, sc) {
+		return
+	}
 	switch err := s.store.CompleteWithOutcome(r.Context(), pt.ID, c.Slug, sc.Slug, res); {
 	case errors.Is(err, ErrAlreadyCompleted):
 		http.Error(w, "This mission is already completed.", http.StatusConflict)
@@ -780,4 +807,31 @@ func (s *Store) Ledger(ctx context.Context, playthroughID, campaign string) ([]L
 		out = append(out, e)
 	}
 	return out, rows.Err()
+}
+
+// writeBackBattle, for a mission fought with the player's own force (not a provided one) that has a battle in progress, writes the battle's units back into the
+// hangar before the mission is completed (see commitbattle.go), so a failure leaves the mission open to try again (writing the same state twice changes nothing). It
+// answers the request itself and returns false when it fails.
+func (s *Server) writeBackBattle(w http.ResponseWriter, r *http.Request, pt Playthrough, c *Campaign, sc *Scenario) bool {
+	if sc.provides() {
+		return true
+	}
+	op, had, err := s.store.MekBayOperation(r.Context(), pt.ID, c.Slug, sc.ID)
+	if err != nil {
+		http.Error(w, "could not load the battle", http.StatusInternalServerError)
+		return false
+	}
+	run, started, err := s.store.Run(r.Context(), pt.ID, c.Slug)
+	if !had || err != nil || !started || !run.Owned() {
+		return true // no battle to write back, or a hangar the site doesn't own
+	}
+	rep, err := s.mekbay.CommitBattle(r.Context(), CommitBattleRequest{OwnerUID: accountUID(currentSeed(r), SlotHangar), HangarInstance: run.HangarInstance, OperationID: op.OperationID})
+	if err != nil {
+		http.Error(w, "Could not write the battle's damage back into your hangar: "+err.Error(), http.StatusBadGateway)
+		return false
+	}
+	if len(rep.Skipped) > 0 {
+		log.Printf("battle write-back: %d units written, no match in the hangar for %v", rep.Matched, rep.Skipped)
+	}
+	return true
 }

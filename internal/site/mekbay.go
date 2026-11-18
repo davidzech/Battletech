@@ -129,6 +129,8 @@ type MekBay interface {
 	StartBattle(ctx context.Context, req BattleRequest) (BattleResult, error)
 	// ReadBattle reads an operation and every force in it, anonymously, for the battle's live status.
 	ReadBattle(ctx context.Context, operationID string) (BattleStatus, error)
+	// CommitBattle writes the units' state from a finished battle back into the matching hangar units (see commitbattle.go).
+	CommitBattle(ctx context.Context, req CommitBattleRequest) (CommitBattleReport, error)
 }
 
 // MekBayClient is the real implementation, speaking to MekBay's WebSocket server.

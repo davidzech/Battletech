@@ -295,6 +295,8 @@ type fakeMekBay struct {
 	status    BattleStatus // what ReadBattle answers
 	statusErr error
 	statusOps []string // the operations ReadBattle was asked for
+	commits   []CommitBattleRequest
+	commitErr error
 }
 
 func (f *fakeMekBay) ReadHangar(context.Context, string) (HangarForce, error) {
@@ -331,6 +333,17 @@ func (f *fakeMekBay) StartBattle(_ context.Context, req BattleRequest) (BattleRe
 		res.PlayerInstances = append(res.PlayerInstances, newID())
 	}
 	return res, nil
+}
+
+// CommitBattle records what it was asked to write back.
+func (f *fakeMekBay) CommitBattle(_ context.Context, req CommitBattleRequest) (CommitBattleReport, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.commits = append(f.commits, req)
+	if f.commitErr != nil {
+		return CommitBattleReport{}, f.commitErr
+	}
+	return CommitBattleReport{Matched: 1}, nil
 }
 
 func (f *fakeMekBay) ReadBattle(_ context.Context, operationID string) (BattleStatus, error) {

@@ -1,7 +1,7 @@
 ---
 id: scenario_001
 default_next: ""
-pilot_sp: 100
+pilot_sp: 100   # SP each pilot who took part draws from the pool; the only place the amount is set
 objectives:
   - id: plant_large
     label: "Primary: destroy the chemical plant, large building"
@@ -33,7 +33,7 @@ outcomes:
 
 ## Victory & Rewards
 
-Objectives met fill the mission's pool of SP. Each pilot who took part draws 100 SP from it (a pilot who sat the mission out draws 50, and a pilot killed in action draws nothing and is lost); whatever is left goes to the warchest.
+Objectives met fill the mission's pool of SP. Each pilot who took part draws a flat share from it (half for a pilot who sat the mission out, and nothing for a pilot killed in action, who is lost); whatever is left goes to the warchest.
 
 | Objective                                                    | SP         |
 |--------------------------------------------------------------|------------|

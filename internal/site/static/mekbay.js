@@ -531,7 +531,8 @@
         // A mech crewed by a named pilot shows them to the right, as the pilot slots do (the card of the pilot, with their levels, on hover); any other crew keeps
         // the plain Gunnery/Piloting chip on the row.
         var named = u.pilot && pilotNamed(u.pilot);
-        var li = el('li', 'deploy-unit review' + (named ? ' has-slot' : ''));
+        // An uncrewed (or unnamed) mech is the same height and scale as one with a pilot, with its row spanning the width where the pilot's card would be.
+        var li = el('li', 'deploy-unit review has-slot' + (named ? '' : ' wide'));
         li.appendChild(MechRow.build(named ? viewOf(u) : u));
         if (named) {
           var slot = staticPilot(u.pilot);
