@@ -217,6 +217,15 @@ func (s *Server) startCampaign(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.cacheHangar(r.Context(), id, c.Slug, hangar.Instance, cloned) // the copy is the run's first cached hangar
+	// The first checkpoint: the campaign as it starts, which aborting the first mission rolls back to.
+	if run, ok, err := s.store.Run(r.Context(), id, c.Slug); err == nil && ok {
+		copyID, err := s.checkpointCopy(r.Context(), currentSeed(r), run)
+		if err != nil {
+			log.Printf("the starting checkpoint's hangar copy: %v", err)
+		} else {
+			s.recordCheckpoint(r.Context(), currentSeed(r), id, c.Slug, "Campaign started", copyID)
+		}
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 

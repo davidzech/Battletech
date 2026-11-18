@@ -775,6 +775,16 @@ func (s *Server) commitOutcome(w http.ResponseWriter, r *http.Request) {
 	if !s.writeBackBattle(w, r, pt, c, sc) {
 		return
 	}
+	// Two stages for the hangar: its frozen copy is made now, and the checkpoint that holds it is recorded once the completion is saved.
+	copyID, cerr := "", error(nil)
+	if run, ok, err := s.store.Run(r.Context(), pt.ID, c.Slug); err == nil && ok {
+		copyID, cerr = s.checkpointCopy(r.Context(), currentSeed(r), run)
+	}
+	if cerr != nil {
+		http.Error(w, "Could not save a checkpoint of your hangar in MekBay: "+cerr.Error(), http.StatusBadGateway)
+		return
+	}
+	label := "Completed Sortie " + sc.Number + ": " + sc.Title
 	switch err := s.store.CompleteWithOutcome(r.Context(), pt.ID, c.Slug, sc.Slug, res); {
 	case errors.Is(err, ErrAlreadyCompleted):
 		http.Error(w, "This mission is already completed.", http.StatusConflict)
@@ -785,7 +795,12 @@ func (s *Server) commitOutcome(w http.ResponseWriter, r *http.Request) {
 	case err != nil:
 		http.Error(w, "could not save the outcome", http.StatusInternalServerError)
 	default:
+		s.recordCheckpoint(r.Context(), currentSeed(r), pt.ID, c.Slug, label, copyID)
 		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if copyID != "" {
+		s.deleteHangars(r.Context(), currentSeed(r), []string{copyID}) // the completion was not saved: the staged copy is not needed
 	}
 }
 

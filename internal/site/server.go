@@ -72,15 +72,16 @@ type Page struct {
 	// pages embed it so they can paint the hangar before the live read finishes (see hangarcache.go).
 	CachedHangar *HangarForce
 	CachedAt     time.Time
-	Ranks        []string // the campaign's pilot ranks, lowest first (empty when it has none)
-	Memorial     bool     // at least one named pilot was killed in action
-	Ladders      string   // the pilot improvement ladders as JSON, for the pilot builder's live preview
-	Abilities    string   // the Edge ability catalog as JSON, for the ability picker
-	Portraits    string   // the portrait list as JSON, for the portrait picker
-	InProgress   bool     // the scenario has a battle in progress (an operation that is neither completed nor aborted)
-	OperationURL string   // the table's link to that battle, so the Operation in progress view can show it before anything is read from MekBay
-	BattleCache  string   // the last status read of that battle as JSON ({forces, updatedAt}), so the view paints it at once while a fresh read is made
-	Commit       string   // git commit the server was built from, short form ("dev" if unknown)
+	Ranks        []string         // the campaign's pilot ranks, lowest first (empty when it has none)
+	Memorial     bool             // at least one named pilot was killed in action
+	Ladders      string           // the pilot improvement ladders as JSON, for the pilot builder's live preview
+	Abilities    string           // the Edge ability catalog as JSON, for the ability picker
+	Portraits    string           // the portrait list as JSON, for the portrait picker
+	InProgress   bool             // the scenario has a battle in progress (an operation that is neither completed nor aborted)
+	OperationURL string           // the table's link to that battle, so the Operation in progress view can show it before anything is read from MekBay
+	Checkpoints  []CheckpointView // the campaign's rollback points, newest first (the Manage page)
+	BattleCache  string           // the last status read of that battle as JSON ({forces, updatedAt}), so the view paints it at once while a fresh read is made
+	Commit       string           // git commit the server was built from, short form ("dev" if unknown)
 }
 
 // Card is one entry in a list of links (campaigns or scenarios).
@@ -148,6 +149,7 @@ func NewHandler(contentRoot string, store *Store, opts ...Option) http.Handler {
 	mux.HandleFunc("POST /api/pilots/total", s.setPilotTotal)
 	mux.HandleFunc("POST /api/warchest", s.setWarchest)
 	mux.HandleFunc("POST /api/campaign/players", s.setPlayers)
+	mux.HandleFunc("POST /api/campaign/rollback", s.rollbackCampaign)
 	mux.HandleFunc("POST /api/campaign/force-name", s.setForceName)
 	mux.HandleFunc("POST /api/campaign/scenario-complete", s.setScenarioCompleted)
 	mux.HandleFunc("POST /api/campaign/scenario-outcome", s.previewOutcome)

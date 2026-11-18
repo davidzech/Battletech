@@ -183,13 +183,24 @@ func (s *Server) abortBattle(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	had, err := s.store.DeleteMekBayOperation(r.Context(), pt.ID, c.Slug, sc.ID)
-	if err != nil {
+	if _, had, err := s.store.MekBayOperation(r.Context(), pt.ID, c.Slug, sc.ID); err != nil {
 		http.Error(w, "could not abort the battle", http.StatusInternalServerError)
 		return
-	}
-	if !had {
+	} else if !had {
 		http.Error(w, "There is no battle in progress.", http.StatusNotFound)
+		return
+	}
+	// A failed mission undoes everything since the last checkpoint (the end of the previous mission): repairs, sales, purchases and SP spent in between included.
+	// A campaign with no checkpoint (started before they existed) only forgets the operation.
+	if cps, err := s.store.Checkpoints(r.Context(), pt.ID, c.Slug); err == nil && len(cps) > 0 {
+		if err := s.rollbackTo(r.Context(), currentSeed(r), pt.ID, c.Slug, cps[0].Seq); err != nil {
+			log.Printf("roll back on abort: %v", err)
+			http.Error(w, "Could not roll the campaign back: "+err.Error(), http.StatusBadGateway)
+			return
+		}
+	}
+	if _, err := s.store.DeleteMekBayOperation(r.Context(), pt.ID, c.Slug, sc.ID); err != nil {
+		http.Error(w, "could not abort the battle", http.StatusInternalServerError)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

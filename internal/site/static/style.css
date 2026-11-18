@@ -1433,3 +1433,9 @@ button.mission-log-open:focus-visible { outline: 2px solid var(--text); outline-
 .outcome-total-row b { color: var(--accent); font-family: var(--display); letter-spacing: 0.04em; }
 .outcome-field.required { cursor: default; }
 .outcome-field.required input:disabled { opacity: 0.75; cursor: not-allowed; }
+dialog.rollback { width: min(40rem, 94vw); }
+.checkpoints { list-style: none; margin: 0.8rem 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+.checkpoints li { display: flex; align-items: center; gap: 0.9rem; padding: 0.55rem 0.9rem; background: var(--panel); border: 1px solid var(--line); }
+.checkpoints .cp-label { flex: 1; font: 700 0.95rem var(--display); letter-spacing: 0.05em; text-transform: uppercase; }
+.checkpoints .cp-when, .checkpoints .cp-now { font-size: 0.8rem; }
+.checkpoints .cp-rollback { padding: 0.3rem 0.8rem; font-size: 0.8rem; }

@@ -49,6 +49,9 @@ func (s *Server) manage(w http.ResponseWriter, r *http.Request) {
 		p.BackURL = back + sc.Slug + "/"
 		p.BackLabel = "Back to Sortie " + sc.Number + ": " + sc.Title
 	}
+	if cps, err := s.store.Checkpoints(r.Context(), playthroughID(seed), c.Slug); err == nil {
+		p.Checkpoints = checkpointViews(cps)
+	}
 	p.OnManagePage = true
 	s.render(w, r, http.StatusOK, "manage", p)
 }

@@ -131,6 +131,10 @@ type MekBay interface {
 	ReadBattle(ctx context.Context, operationID string) (BattleStatus, error)
 	// CommitBattle writes the units' state from a finished battle back into the matching hangar units (see commitbattle.go).
 	CommitBattle(ctx context.Context, req CommitBattleRequest) (CommitBattleReport, error)
+	// CopyForce saves a copy of one of the owner's forces under another instance ID (checkpoints, see checkpoint.go).
+	CopyForce(ctx context.Context, req CopyRequest) error
+	// DeleteForce deletes forces of the owner's (best effort).
+	DeleteForce(ctx context.Context, owner string, instances ...string) error
 }
 
 // MekBayClient is the real implementation, speaking to MekBay's WebSocket server.

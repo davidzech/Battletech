@@ -459,8 +459,8 @@ func TestStartWizardSubmission(t *testing.T) {
 	if ps[0].EdgeTokens() != 2 || ps[1].Piloting() != 4 || ps[1].EdgeAbilities() != 0 {
 		t.Errorf("levels follow the ladders: %+v", ps)
 	}
-	if c := body(t, srv, "/refusalwar/manage/", cookie); !strings.Contains(c, "Katarina") || strings.Contains(c, "needs 2 named pilots") || strings.Contains(c, `id="start-wizard"`) || !strings.Contains(c, `id="run-dialog"`) {
-		t.Fatalf("a started campaign shows its pilots and the change-link dialog: %.3000s", c)
+	if c := body(t, srv, "/refusalwar/manage/", cookie); !strings.Contains(c, "Katarina") || strings.Contains(c, "needs 2 named pilots") || strings.Contains(c, `id="start-wizard"`) || strings.Contains(c, `id="run-dialog"`) {
+		t.Fatalf("a started campaign shows its pilots and no change-link dialog: %.3000s", c)
 	}
 
 	// Submitting the wizard again only re-imports the hangar: no duplicate pilots.
@@ -606,7 +606,7 @@ func TestManageAndOverview(t *testing.T) {
 	}
 	// The manage page holds all of them.
 	man := body(t, srv, "/refusalwar/manage/", cookie)
-	for _, want := range []string{`id="run-dialog"`, `id="delete-dialog"`, `id="sp-dialog"`, `class="button pilot-sp"`, "Purchase new unit"} {
+	for _, want := range []string{`id="delete-dialog"`, `id="sp-dialog"`, `class="button pilot-sp"`, "Purchase new unit"} {
 		if !strings.Contains(man, want) {
 			t.Errorf("manage page is missing %q", want)
 		}

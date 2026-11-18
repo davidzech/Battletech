@@ -106,8 +106,8 @@ func TestStartClonesTheHangar(t *testing.T) {
 	if p := body(t, srv, "/refusalwar/manage/", cookie); !strings.Contains(p, MekBayUID("wolfpack2026", SlotHangar)) || !strings.Contains(p, "instance="+run.HangarInstance) {
 		t.Error("the Manage page should link the site's copy and name the account that owns it")
 	}
-	if p := body(t, srv, "/refusalwar/manage/", cookie); !strings.Contains(p, goodHangarURL) {
-		t.Error("the change-link dialog should show the link the player gave")
+	if p := body(t, srv, "/refusalwar/manage/", cookie); strings.Contains(p, `id="run-dialog"`) {
+		t.Error("there is no Re-import hangar dialog any more")
 	}
 	// A failing clone starts nothing.
 	fake2 := &fakeMekBay{hangar: startingHangar()}

@@ -296,6 +296,9 @@ type fakeMekBay struct {
 	statusErr error
 	statusOps []string // the operations ReadBattle was asked for
 	commits   []CommitBattleRequest
+	copies    []CopyRequest
+	deletes   []string
+	copyErr   error
 	commitErr error
 }
 
@@ -344,6 +347,21 @@ func (f *fakeMekBay) CommitBattle(_ context.Context, req CommitBattleRequest) (C
 		return CommitBattleReport{}, f.commitErr
 	}
 	return CommitBattleReport{Matched: 1}, nil
+}
+
+// CopyForce and DeleteForce record what they were asked.
+func (f *fakeMekBay) CopyForce(_ context.Context, req CopyRequest) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.copies = append(f.copies, req)
+	return f.copyErr
+}
+
+func (f *fakeMekBay) DeleteForce(_ context.Context, _ string, instances ...string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.deletes = append(f.deletes, instances...)
+	return nil
 }
 
 func (f *fakeMekBay) ReadBattle(_ context.Context, operationID string) (BattleStatus, error) {

@@ -1,19 +1,6 @@
 {{define "content"}}<p class="kicker">{{.Campaign.Label}}</p>
 <h1 class="bt-title">Manage force</h1>
 <p><a href="{{if .BackURL}}{{.BackURL}}{{else}}/{{.Campaign.Slug}}/{{end}}">&lsaquo; {{if .BackLabel}}{{.BackLabel}}{{else}}Back to the campaign{{end}}</a></p>
-<dialog id="run-dialog" aria-labelledby="run-title">
-  <form id="run-form" autocomplete="off" novalidate>
-    <h2 id="run-title">Re-import your hangar</h2>
-    <p>Paste a MekBay hangar link and the site makes a fresh copy of that force and uses it from now on, so everything is repaired, rearmed and uncrewed again. Repairs, purchases and pilot assignments you made so far are not carried over.</p>
-    <label for="run-hangar">MekBay hangar link</label>
-    <input id="run-hangar" class="wide" name="hangar" type="url" value="{{.Run.SourceURL}}" placeholder="https://mekbay.com/?instance=&hellip;" spellcheck="false" required>
-    <p id="run-error" class="form-error" role="alert"></p>
-    <div class="form-actions">
-      <button type="submit" class="button">Re-import</button>
-      <button type="button" id="run-cancel">Cancel</button>
-    </div>
-  </form>
-</dialog>
 <section class="warchest overview" id="overview" data-campaign="{{.Campaign.Slug}}" data-min-players="{{.Campaign.MinPlayers}}" data-max-players="{{.Campaign.MaxPlayers}}" data-players="{{.Run.Players}}">
 <h2 class="section-title force-name" id="force-name"><span class="force-name-value" id="force-name-value">{{.Run.ForceLabel}}</span><button type="button" class="force-name-edit" id="force-name-edit" data-name="{{.Run.ForceName}}" title="Rename force" aria-label="Rename force"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button></h2>
 <div class="hangar-stats">
@@ -117,14 +104,21 @@
 <div class="mech-list" id="hangar-units-list"><p class="muted">Reading your hangar&hellip;</p></div>
 <p class="downloads" id="campaign-run" data-campaign="{{.Campaign.Slug}}"><button type="button" class="button" id="purchase-open">Purchase new unit</button></p>
 </section>
+<dialog id="rollback-dialog" class="rollback" aria-labelledby="rollback-title" data-campaign="{{.Campaign.Slug}}">
+  <h2 id="rollback-title">Rollback</h2>
+  <p class="muted">Choose a saved point to go back to. Everything after it is forgotten, and a battle in progress is given up.</p>
+  {{if .Checkpoints}}<ol class="checkpoints">{{range .Checkpoints}}<li><span class="cp-label">{{.Label}}</span><span class="muted cp-when">{{.When}}</span>{{if .Latest}}<span class="muted cp-now">latest</span>{{end}}<button type="button" class="button button-outline cp-rollback" data-checkpoint="{{.Seq}}" data-label="{{.Label}}">Roll back to here</button></li>{{end}}</ol>{{else}}<p class="muted">No saved points yet: they start with the next mission you complete.</p>{{end}}
+  <p class="form-error" id="rollback-error" role="alert"></p>
+  <div class="form-actions"><button type="button" id="rollback-close">Close</button></div>
+</dialog>
 <section class="danger-zone" id="danger-zone" data-campaign="{{.Campaign.Slug}}">
 <details class="danger-details">
 <summary><h2>Danger zone</h2></summary>
 <div class="fold-body">
 <p class="muted">Advanced Management corrects pilot records: rename, revive or delete a pilot, reset their SP allocation or Edge abilities, or override their total SP.</p>
 <p class="danger-action"><button type="button" class="button" id="records-open">Advanced Management</button></p>
-<p class="muted">Re-importing replaces this campaign&rsquo;s hangar with a fresh, clean copy of a MekBay force (the one you linked, or another). Your pilots and warchest stay as they are, but every unit comes from the new copy: repairs, purchases and pilot assignments made so far are lost.</p>
-<p class="danger-action"><button type="button" class="button" id="run-open">Re-import hangar</button></p>
+<p class="muted">The campaign is saved when it starts and each time a mission is completed. Rollback puts the pilots, SP, warchest, completed missions and hangar back as they were at one of those points, and forgets everything after it. Aborting a mission rolls back to the latest one.</p>
+<p class="danger-action"><button type="button" class="button" id="rollback-open">Rollback</button></p>
 <p class="muted hangar-copy">For advanced users: the site&rsquo;s own copy of your hangar is MekBay force <code>{{.Run.HangarInstance}}</code> (<a href="{{.Run.HangarURL}}" target="_blank" rel="noopener noreferrer">open in MekBay</a>). It is owned by the account <code>{{.SiteAccountUID}}</code>, which the site derives from your seed, so MekBay shows it read-only{{if .MekBayEditURL}}, unless you <a href="{{.MekBayEditURL}}" target="_blank" rel="noopener noreferrer">open it editable</a> (MekBay then acts as that account for this browser, so what you change there is real: damage and crews change without paying for repairs){{end}}; to replace it with a clean copy, re-import.</p>
 <p class="muted">Deleting this campaign removes {{.Run.ForceLabel}}&rsquo;s progress in it: its named pilots and the site&rsquo;s copy of its hangar. Your company and anything saved in MekBay are not touched.</p>
 <button type="button" class="button danger" id="delete-open">Delete campaign</button>
@@ -225,4 +219,5 @@
 <script src="/static/abilitycard.js" defer></script>
 <script src="/static/pilots.js" defer></script>
 <script src="/static/campaigndelete.js" defer></script>
+<script src="/static/history.js" defer></script>
 {{end}}

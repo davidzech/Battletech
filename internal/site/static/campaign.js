@@ -68,26 +68,6 @@
     });
   }
 
-  // ---- A started campaign: re-import the hangar (a fresh clean copy of a linked MekBay force).
-  var runDialog = document.getElementById('run-dialog');
-  var runOpen = document.getElementById('run-open');
-  if (runDialog && runOpen && typeof runDialog.showModal === 'function') {
-    var runInput = document.getElementById('run-hangar');
-    var runError = document.getElementById('run-error');
-    runOpen.addEventListener('click', function () { runError.textContent = ''; runDialog.showModal(); runInput.focus(); });
-    document.getElementById('run-cancel').addEventListener('click', function () { runDialog.close(); });
-    runInput.addEventListener('input', function () { trimField(runInput); runError.textContent = ''; });
-    document.getElementById('run-form').addEventListener('submit', function (e) {
-      e.preventDefault();
-      var bad = hangarProblem(runInput.value);
-      if (bad) { runError.textContent = bad; return; }
-      post('campaign=' + encodeURIComponent(box.dataset.campaign) + '&hangar=' + encodeURIComponent(canonicalHangar(runInput.value) || runInput.value.trim())).then(function (res) {
-        if (res.ok) { location.reload(); return; }
-        return res.text().then(function (t) { runError.textContent = t.trim() || 'Could not re-import the hangar.'; });
-      }, function () { runError.textContent = 'Could not reach the server.'; });
-    });
-  }
-
   // ---- An unstarted campaign: the start wizard.
   var wiz = document.getElementById('start-wizard');
   var wizOpen = document.getElementById('wizard-open');

@@ -3,6 +3,7 @@ package site
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 )
 
@@ -111,6 +112,15 @@ func (s *Server) setScenarioCompleted(w http.ResponseWriter, r *http.Request) {
 	if err := s.store.SetScenarioCompleted(r.Context(), pt.ID, c.Slug, sc.Slug, done); err != nil {
 		http.Error(w, "could not save the campaign log", http.StatusInternalServerError)
 		return
+	}
+	if done { // a mission completed by hand is a rollback point too
+		if run, ok, err := s.store.Run(r.Context(), pt.ID, c.Slug); err == nil && ok {
+			if copyID, err := s.checkpointCopy(r.Context(), currentSeed(r), run); err != nil {
+				log.Printf("checkpoint after %s: %v", sc.Slug, err)
+			} else {
+				s.recordCheckpoint(r.Context(), currentSeed(r), pt.ID, c.Slug, "Completed Sortie "+sc.Number+": "+sc.Title, copyID)
+			}
+		}
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

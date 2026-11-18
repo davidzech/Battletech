@@ -746,7 +746,7 @@
   if (abortOpen) abortOpen.addEventListener('click', function () {
     var ask = typeof Confirm !== 'undefined' ? Confirm.ask({
       title: 'Abort mission',
-      message: 'The battle is given up and the mission goes back to not started, with no rewards. The forces stay in MekBay, but this site forgets the operation.',
+      message: 'The battle is given up and the campaign rolls back to the end of the previous mission: repairs, sales, purchases and SP spent since then are undone, and the mission goes back to not started with no rewards.',
       confirmLabel: 'Abort mission',
       cancelLabel: 'Keep playing',
       danger: true
