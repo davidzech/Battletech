@@ -1,10 +1,10 @@
 package site
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"embed"
 	"encoding/hex"
-	"fmt"
 	"html/template"
 	"log"
 	"net/http"
@@ -204,20 +204,8 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name
 					}
 					var alive int
 					p.Pilots, alive = pilotViews(pilots, p.Campaign.Ranks)
+					p.CanRecruit, p.RecruitNote = recruitStatus(p.Campaign, p.Run, alive)
 					limit := p.Campaign.PilotLimit()
-					cost := p.Campaign.RecruitCost
-					free := p.Run.FreeRecruits > 0
-					p.CanRecruit = alive < limit && (free || p.Run.Warchest >= cost)
-					switch {
-					case alive >= limit:
-						p.RecruitNote = fmt.Sprintf("Your command is full: %d of %d pilots.", alive, limit)
-					case free:
-						p.RecruitNote = "A replacement pilot is free: recruiting costs no SP."
-					case p.Run.Warchest < cost:
-						p.RecruitNote = fmt.Sprintf("Recruiting costs %s SP (warchest: %s).", withCommas(cost), withCommas(p.Run.Warchest))
-					case cost > 0:
-						p.RecruitNote = fmt.Sprintf("Recruiting costs %s SP.", withCommas(cost))
-					}
 					p.Ranks = p.Campaign.Ranks
 					if name == "campaign" || name == "scenario" || name == "manage" {
 						if h, at, ok, err := s.store.CachedHangar(r.Context(), id, p.Campaign.Slug, p.Run.HangarInstance); err != nil {
@@ -235,11 +223,16 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name
 		}
 	}
 	p.Commit = shortCommit(buildCommit)
+	// The page is rendered in full before anything is sent, so a template error is a clean 500 rather than half a page under a 200.
+	var buf bytes.Buffer
+	if err := s.pages[name].ExecuteTemplate(&buf, "layout", p); err != nil {
+		log.Printf("render %s: %v", name, err)
+		http.Error(w, "could not render the page", http.StatusInternalServerError)
+		return
+	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
-	if err := s.pages[name].ExecuteTemplate(w, "layout", p); err != nil {
-		log.Printf("render %s: %v", name, err)
-	}
+	_, _ = buf.WriteTo(w)
 }
 
 func (s *Server) notFound(w http.ResponseWriter, r *http.Request) {

@@ -1433,3 +1433,22 @@ func TestSetWarchest(t *testing.T) {
 		}
 	}
 }
+
+func TestRecruitStatus(t *testing.T) {
+	c := &Campaign{MaxNamedPilots: 4, RecruitCost: 300}
+	for _, tc := range []struct {
+		warchest, free, alive int
+		can                   bool
+		note                  string
+	}{
+		{1000, 0, 2, true, "Recruiting costs 300 SP."},
+		{120, 0, 2, false, "Recruiting costs 300 SP (warchest: 120)."},
+		{0, 1, 2, true, "A replacement pilot is free: recruiting costs no SP."},
+		{1000, 1, 4, false, "Your command is full: 4 of 4 pilots."},
+	} {
+		can, note := recruitStatus(c, CampaignRun{Warchest: tc.warchest, FreeRecruits: tc.free}, tc.alive)
+		if can != tc.can || note != tc.note {
+			t.Errorf("%+v: %v %q", tc, can, note)
+		}
+	}
+}

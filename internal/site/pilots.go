@@ -521,3 +521,21 @@ func (s *Server) resetEdgeAbilities(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
+
+// recruitStatus says whether the command can recruit a named pilot now, and the brief note shown under the Recruit button: why not (a full command, too little in
+// the warchest), or what it costs.
+func recruitStatus(c *Campaign, run CampaignRun, alive int) (can bool, note string) {
+	limit, cost, free := c.PilotLimit(), c.RecruitCost, run.FreeRecruits > 0
+	can = alive < limit && (free || run.Warchest >= cost)
+	switch {
+	case alive >= limit:
+		note = fmt.Sprintf("Your command is full: %d of %d pilots.", alive, limit)
+	case free:
+		note = "A replacement pilot is free: recruiting costs no SP."
+	case run.Warchest < cost:
+		note = fmt.Sprintf("Recruiting costs %s SP (warchest: %s).", withCommas(cost), withCommas(run.Warchest))
+	case cost > 0:
+		note = fmt.Sprintf("Recruiting costs %s SP.", withCommas(cost))
+	}
+	return can, note
+}
