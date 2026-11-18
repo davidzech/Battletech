@@ -1344,3 +1344,27 @@ dialog button.deploy-count:disabled, .overview-players button.deploy-count:disab
 
 .recruit-note { margin: 0.4rem 0 1rem; font-size: 0.85rem; text-align: right; } /* under the right-aligned Recruit New Pilot button */
 #recruit-cost[hidden] { display: none; }
+
+/* The mission completion dialog (outcome.js): a card for each pilot with what to report, and the result as it would be. */
+dialog.outcome { width: min(46rem, calc(100vw - 2rem)); }
+.outcome-pilot { margin: 0.7rem 0; padding: 0.7rem 0.9rem; background: var(--bg); border: 1px solid var(--line); border-left: 3px solid var(--accent); }
+.outcome-pilot-head { display: flex; align-items: center; gap: 0.8rem; }
+.outcome-pilot-head img { background: var(--panel); border: 1px solid var(--line); }
+.outcome-pilot-name { display: grid; gap: 0.1rem; margin-right: auto; }
+.outcome-pilot-name b { font: 700 1.1rem var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
+.outcome-pilot-name .muted { font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.outcome-fields { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem 1.6rem; margin-top: 0.6rem; }
+.outcome-fields[hidden] { display: none; }
+.outcome-field { display: inline-flex; align-items: center; gap: 0.6rem; }
+.outcome-label { font: 700 0.75rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; }
+.outcome-field input[type=number] { width: 5rem; padding: 0.35rem 0.5rem; font: 700 1rem var(--display); color: var(--text); background: var(--panel); border: 1px solid var(--line); }
+.outcome-field input[type=number]:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.outcome-preview { margin: 0.6rem 0 0; padding: 0.4rem 0 0; list-style: none; border-top: 1px dashed var(--line); font: 700 0.9rem var(--display); letter-spacing: 0.05em; text-transform: uppercase; }
+.outcome-preview li { margin: 0.1rem 0; }
+.outcome-good { color: #5fc47e; }
+.outcome-bad { color: #e5594f; }
+.outcome-mission { margin: 0.9rem 0 0; }
+.outcome-summary { flex-basis: 100%; margin: 0.3rem 0 0; padding: 0; list-style: none; }
+.outcome-summary li { margin: 0.25rem 0; }
+.outcome-summary .outcome-note { margin-left: 0.5rem; font: 700 0.85rem var(--display); letter-spacing: 0.05em; text-transform: uppercase; color: #5fc47e; }
+.outcome-summary li:has(.outcome-note) .outcome-note:not(:first-of-type) { color: var(--muted); }

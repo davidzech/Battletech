@@ -33,6 +33,11 @@ type Scenario struct {
 	// ProvidedUnits, when set (front matter provided_units: MekBay unit IDs), replace the player's hangar for this scenario: the players pick from this fixed pool
 	// instead, for story reasons. The units exist only for this scenario and never touch the hangar (see provided.go).
 	ProvidedUnits []string
+	// OutcomeInputs and OutcomeRules are the scenario's outcome engine (Outcome.md front matter `inputs` and `outcomes`, see outcomes.go); OutcomeError says what is wrong
+	// with them, in which case the scenario has no engine.
+	OutcomeInputs []OutcomeInput
+	OutcomeRules  []OutcomeRule
+	OutcomeError  string
 	// Branches are the scenarios (slugs) this one may lead to once it is completed: the Outcome.md front matter `branches` list, or when that is omitted its
 	// `default_next`, or else the next scenario number. Only a scenario that is the campaign's first, completed, or a branch of a completed one is available.
 	Branches       []string
@@ -253,6 +258,9 @@ type frontData struct {
 	AvailabilityFaction string `yaml:"availability_faction"`
 	AvailabilityEra     string `yaml:"availability_era"`
 	DefaultNext         string `yaml:"default_next"`
+	// Inputs and Outcomes (Outcome.md) are the scenario's outcome engine.
+	Inputs   []OutcomeInput `yaml:"inputs"`
+	Outcomes []OutcomeRule  `yaml:"outcomes"`
 	// Branches (Outcome.md) lists the scenario IDs this scenario may branch to; omitted, it leads to the next scenario number.
 	Branches []string `yaml:"branches"`
 	// Faction and Ranks are described on Campaign (Intro.md).
@@ -357,6 +365,8 @@ func (l Library) load(name string) (*Campaign, bool) {
 			UnitLimit:      setup.UnitLimit,
 			PilotsRequired: setup.PilotsReq,
 			Next:           outcome.DefaultNext,
+			OutcomeInputs:  outcome.Inputs,
+			OutcomeRules:   outcome.Outcomes,
 			Branches:       lowerAll(outcome.Branches),
 			branchesListed: outcome.Branches != nil,
 			BriefingHTML:   renderBriefing(briefing),
@@ -366,6 +376,7 @@ func (l Library) load(name string) (*Campaign, bool) {
 		if s.ID == "" {
 			s.ID = s.Slug
 		}
+		s.compileOutcomes()
 		if s.Title == "" {
 			s.Title = humanize(e.Name())
 		}

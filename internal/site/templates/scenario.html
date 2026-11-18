@@ -10,10 +10,29 @@
 {{end}}{{if .Run.Started}}<section class="mission-log {{.ScenarioState}}" id="mission-log" data-campaign="{{.Campaign.Slug}}" data-scenario="{{.Scenario.Slug}}" data-done="{{if eq .ScenarioState "completed"}}1{{end}}">
 <span class="mission-log-label">Mission log</span>
 <span class="mission-log-state" id="mission-log-state">{{if eq .ScenarioState "completed"}}Completed &#10003;{{else if eq .ScenarioState "locked"}}Not available yet: complete the mission before it first.{{else}}Not completed{{end}}</span>
-{{if ne .ScenarioState "locked"}}<button type="button" class="button" id="mission-log-toggle">{{if eq .ScenarioState "completed"}}Mark not completed{{else}}Mark completed{{end}}</button>{{end}}
+{{if ne .ScenarioState "locked"}}{{if .Scenario.HasOutcome}}{{if ne .ScenarioState "completed"}}<button type="button" class="button" id="outcome-open">Complete mission&hellip;</button>{{end}}{{else}}<button type="button" class="button" id="mission-log-toggle">{{if eq .ScenarioState "completed"}}Mark not completed{{else}}Mark completed{{end}}</button>{{end}}{{end}}
+{{if .Outcome}}<ul class="outcome-summary" id="outcome-summary">{{range .Outcome.Pilots}}<li><b>{{.Name}}</b> <span class="muted">{{range $i, $e := .Entered}}{{if $i}} &middot; {{end}}{{$e}}{{end}}</span>{{range .Notes}} <span class="outcome-note">{{.}}</span>{{end}}</li>
+{{end}}{{range .Outcome.Notes}}<li class="outcome-note">{{.}}</li>
+{{end}}{{if .Outcome.Warchest}}<li class="outcome-note">{{.Outcome.Warchest}} SP to the warchest</li>{{end}}</ul>{{end}}
 <p class="form-error" id="mission-log-error" role="alert"></p>
 </section>
 <script src="/static/missionlog.js" defer></script>
+{{if and .Scenario.HasOutcome (ne .ScenarioState "locked") (ne .ScenarioState "completed")}}<dialog id="outcome-dialog" class="wizard outcome" aria-labelledby="outcome-title" data-campaign="{{.Campaign.Slug}}" data-scenario="{{.Scenario.Slug}}" data-inputs="{{.OutcomeInputsJSON}}" data-pilots="{{.OutcomePilotsJSON}}">
+  <form id="outcome-form" autocomplete="off" novalidate>
+    <h2 id="outcome-title">Complete mission</h2>
+    <p class="muted">Report how the mission went. The result is shown as you enter it, and nothing changes until you commit it. A completed mission cannot be undone.</p>
+    <div id="outcome-body"></div>
+    <p id="outcome-total" class="repair-cost" hidden></p>
+    <p id="outcome-error" class="form-error" role="alert"></p>
+    <div class="form-actions">
+      <button type="submit" class="button" id="outcome-commit">Commit as completed</button>
+      <button type="button" id="outcome-cancel">Cancel</button>
+    </div>
+  </form>
+</dialog>
+<script src="/static/confirm.js" defer></script>
+<script src="/static/outcome.js" defer></script>
+{{end}}
 {{end}}{{if .Scenario.BriefingHTML}}<section class="briefing" aria-label="Mission briefing">
 <p class="briefing-tag">Incoming transmission</p>
 <div class="briefing-text">{{.Scenario.BriefingHTML}}</div>

@@ -99,6 +99,16 @@ func (s *Server) addPilot(w http.ResponseWriter, r *http.Request) {
 	}
 	// Recruiting costs SP from the warchest (the campaign's recruit_cost): charged first, and given back if the pilot can't be added.
 	cost := c.RecruitCost
+	// A free recruit (a mission outcome can grant one, e.g. a replacement for a pilot who died) is used up instead of paying.
+	usedFree := false
+	if cost > 0 {
+		if ok, err := s.store.ConsumeFreeRecruit(r.Context(), pt.ID, c.Slug); err != nil {
+			http.Error(w, "could not use the free recruit", http.StatusInternalServerError)
+			return
+		} else if ok {
+			usedFree, cost = true, 0
+		}
+	}
 	if cost > 0 {
 		if err := s.store.SpendWarchest(r.Context(), pt.ID, c.Slug, cost); errors.Is(err, ErrInsufficientFunds) {
 			http.Error(w, fmt.Sprintf("Not enough in the warchest: recruiting a pilot costs %d SP.", cost), http.StatusConflict)
@@ -109,6 +119,11 @@ func (s *Server) addPilot(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	refund := func() {
+		if usedFree {
+			if err := s.store.RestoreFreeRecruit(r.Context(), pt.ID, c.Slug); err != nil {
+				log.Printf("could not restore a free recruit: %v", err)
+			}
+		}
 		if cost > 0 {
 			if err := s.store.RefundWarchest(r.Context(), pt.ID, c.Slug, cost); err != nil {
 				log.Printf("could not refund %d SP: %v", cost, err)

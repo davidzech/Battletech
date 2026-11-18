@@ -107,6 +107,9 @@ func TestCampaignLog(t *testing.T) {
 	cookie := post(t, srv, "/api/seed", url.Values{"seed": {"wolfpack2026"}}, nil, "").Cookies()[0]
 	id := playthroughID("wolfpack2026")
 	complete := func(scenario, done string) int {
+		if scenario == "scenario_000" && done == "1" { // Scenario 000 has an outcome engine: it is completed by reporting its outcome
+			return post(t, srv, "/api/campaign/scenario-outcome/commit", url.Values{"campaign": {"refusalwar"}, "scenario": {scenario}, "inputs": {`{"pilots":[],"mission":{}}`}}, cookie, srv.URL).StatusCode
+		}
 		return post(t, srv, "/api/campaign/scenario-complete", url.Values{"campaign": {"refusalwar"}, "scenario": {scenario}, "done": {done}}, cookie, srv.URL).StatusCode
 	}
 	cards := func() string { return body(t, srv, "/refusalwar/", cookie) }
@@ -139,8 +142,8 @@ func TestCampaignLog(t *testing.T) {
 	if done, _ := store.Completions(ctx, id, "refusalwar"); len(done) != 0 {
 		t.Fatalf("nothing is completed yet: %v", done)
 	}
-	// The scenario pages carry the mission log: 000 offers Mark completed, 001 says it is not available.
-	if p := body(t, srv, "/refusalwar/scenario_000/", cookie); !strings.Contains(p, `id="mission-log"`) || !strings.Contains(p, "Mark completed") || !strings.Contains(p, "Not completed") {
+	// The scenario pages carry the mission log: 000 (an outcome scenario) offers Complete mission, 001 says it is not available.
+	if p := body(t, srv, "/refusalwar/scenario_000/", cookie); !strings.Contains(p, `id="mission-log"`) || !strings.Contains(p, "Complete mission") || !strings.Contains(p, "Not completed") {
 		t.Errorf("Scenario 000's mission log: %.300s", p)
 	}
 	if p := body(t, srv, "/refusalwar/scenario_001/", cookie); !strings.Contains(p, "Not available yet") || strings.Contains(p, "mission-log-toggle") {
@@ -155,8 +158,14 @@ func TestCampaignLog(t *testing.T) {
 	if got := complete("scenario_000", "1"); got != http.StatusNoContent {
 		t.Fatalf("complete 000: %d", got)
 	}
-	if got := complete("scenario_000", "1"); got != http.StatusNoContent { // idempotent
+	if got := complete("scenario_000", "1"); got != http.StatusConflict { // an outcome is committed once, so the rewards can't be given twice
 		t.Errorf("complete again: %d", got)
+	}
+	if got := complete("scenario_001", "1"); got != http.StatusNoContent || complete("scenario_001", "1") != http.StatusNoContent { // a plain mark is idempotent
+		t.Errorf("complete 001 twice: %d", got)
+	}
+	if got := complete("scenario_001", "0"); got != http.StatusNoContent {
+		t.Errorf("unmark 001 for now: %d", got)
 	}
 	page = cards()
 	if !strings.Contains(page, `<li class="completed"><a class="card completed" href="/refusalwar/scenario_000/">`) || !strings.Contains(page, "Completed &#10003;") || !strings.Contains(page, `<li class="available"><a class="card available" href="/refusalwar/scenario_001/">`) {
@@ -165,8 +174,8 @@ func TestCampaignLog(t *testing.T) {
 	if strings.Contains(page, "show-all-scenarios") {
 		t.Error("with nothing locked there is nothing to show")
 	}
-	if p := body(t, srv, "/refusalwar/scenario_000/", cookie); !strings.Contains(p, "Mark not completed") || !strings.Contains(p, `data-done="1"`) {
-		t.Error("a completed scenario offers to be unmarked")
+	if p := body(t, srv, "/refusalwar/scenario_000/", cookie); strings.Contains(p, "Mark not completed") || !strings.Contains(p, `data-done="1"`) {
+		t.Error("a completed outcome scenario cannot be unmarked")
 	}
 	if p := body(t, srv, "/refusalwar/scenario_000/", cookie); !strings.Contains(p, "001 – Pyre Light") {
 		t.Error("now 001 is in the menu")
@@ -174,13 +183,19 @@ func TestCampaignLog(t *testing.T) {
 	if got := complete("scenario_001", "1"); got != http.StatusNoContent {
 		t.Errorf("complete 001: %d", got)
 	}
-	// Un-completing 000 leaves 001 completed.
-	if got := complete("scenario_000", "0"); got != http.StatusNoContent {
+	if p := body(t, srv, "/refusalwar/scenario_001/", cookie); !strings.Contains(p, "Mark not completed") {
+		t.Error("a completed scenario without an outcome offers to be unmarked")
+	}
+	// Un-completing 001 leaves 000 completed (and 000, which has a committed outcome, cannot be un-completed).
+	if got := complete("scenario_001", "0"); got != http.StatusNoContent {
+		t.Errorf("unmark 001: %d", got)
+	}
+	if got := complete("scenario_000", "0"); got != http.StatusConflict {
 		t.Errorf("unmark 000: %d", got)
 	}
 	done, _ := store.Completions(ctx, id, "refusalwar")
-	if len(done) != 1 || !done["scenario_001"] {
-		t.Errorf("only 001 is left completed: %v", done)
+	if len(done) != 1 || !done["scenario_000"] {
+		t.Errorf("only 000 is left completed: %v", done)
 	}
 	// Deleting the campaign deletes its log.
 	if ok, err := store.DeleteRun(ctx, id, "refusalwar"); err != nil || !ok {
