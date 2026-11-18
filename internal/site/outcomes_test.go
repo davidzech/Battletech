@@ -296,3 +296,23 @@ func TestFreeRecruitIsRestoredOnFailure(t *testing.T) {
 		t.Error("none left")
 	}
 }
+
+// Scenario 001 follows the Aces model: its objectives and the Jade Falcon mechs put SP into the pool, each pilot draws a share, and the rest is the warchest.
+func TestScenario001Outcome(t *testing.T) {
+	sc, ok := refusalWar(t).Scenario("scenario_001")
+	if !ok || !sc.HasOutcome() {
+		t.Fatalf("Scenario 001 has an outcome engine: %+v", sc)
+	}
+	names := map[string]string{"a": "Alrek", "b": "Katarina"}
+	res, err := sc.EvaluateOutcome(OutcomeInputs{
+		Pilots:  []OutcomeEntry{{PilotID: "a", TookPart: true}, {PilotID: "b", TookPart: true, Killed: true}},
+		Mission: map[string]any{"plant_large": true, "plant_small": false, "firebase_inspected": true, "waypoint_a": false, "waypoint_e": false, "falcon_mechs": float64(3)},
+	}, names)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Pool: 400 + 450 + 3 x 200 = 1450. Alrek draws 100, Katarina (killed) nothing, so 1350 goes to the warchest.
+	if res.Pool != 1450 || res.Pilots[0].SP != 100 || res.Pilots[1].SP != 0 || !res.Pilots[1].KIA || res.Warchest != 1350 {
+		t.Errorf("pool %d, pilots %+v, warchest %d", res.Pool, res.Pilots, res.Warchest)
+	}
+}

@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"sync"
@@ -390,7 +392,7 @@ func newMekBayTestServer(t *testing.T, mb MekBay) (*httptest.Server, *Store) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { store.Close() })
-	srv := httptest.NewServer(NewHandler("../../campaigns", store, WithMekBay(mb)))
+	srv := httptest.NewServer(NewHandler(plainScenario001Root(t), store, WithMekBay(mb)))
 	t.Cleanup(srv.Close)
 	return srv, store
 }
@@ -817,4 +819,45 @@ func TestMekBayLive(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Logf("operation %s, opfor force %s", OperationURL(res.OperationID), res.OpForInstance)
+}
+
+// plainScenario001Root is a copy of the campaigns (without the images) in which Scenario 001 has no outcome engine, standing in for a scenario that is completed
+// by a plain Mark completed. The real Scenario 001 follows the Aces model (see TestScenario001Outcome).
+func plainScenario001Root(t *testing.T) string {
+	t.Helper()
+	src, dst := "../../campaigns", t.TempDir()
+	err := filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, _ := filepath.Rel(src, path)
+		if d.IsDir() {
+			if d.Name() == "images" {
+				return filepath.SkipDir
+			}
+			return os.MkdirAll(filepath.Join(dst, rel), 0o755)
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		if filepath.ToSlash(rel) == "RefusalWar/Scenario_001/Outcome.md" {
+			data = []byte(`---
+id: scenario_001
+default_next: ""
+---
+
+# Scenario 001: Pyre Light - Outcome
+
+## Victory & Rewards
+
+A plain scenario for the tests.
+`)
+		}
+		return os.WriteFile(filepath.Join(dst, rel), data, 0o644)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return dst
 }
