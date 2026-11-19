@@ -43,10 +43,10 @@ body {
   min-height: 100dvh;
 }
 
-/* Hazard-stripe bar */
+/* The bar along the top of every page: solid yellow for now (it was hazard stripes: repeating-linear-gradient(-45deg, var(--accent) 0 14px, #111 14px 28px)) */
 .hazard {
   height: 10px;
-  background: repeating-linear-gradient(-45deg, var(--accent) 0 14px, #111 14px 28px);
+  background: var(--accent);
 }
 
 .top {
