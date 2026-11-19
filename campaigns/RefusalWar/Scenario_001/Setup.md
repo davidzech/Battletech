@@ -56,7 +56,8 @@ Use the Mountain Lake battlemap.
 
 ## Forces
 
-The Jade Falcons field 7,934 BV across OpFor 1 and OpFor 2 (10,472 BV at their pilots' 3/4 skills). The Wolves field up to 7,500 BV.
+**Jade Falcon Force:** 10,472 BV\
+**Wolf Force:** up to 7,500 BV
 
 ### Player Forces
 
