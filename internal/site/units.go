@@ -51,6 +51,11 @@ type Unit struct {
 	Walk          int    `json:"walk"`
 	Run           int    `json:"run"`
 	Jump          int    `json:"jump"`
+	// Firepower (every weapon fired at once, physical attacks left out), MaxRange (the longest weapon range in hexes) and Range (weighted by
+	// damage), worked out by gen_units.go the way MekBay's stat bars are.
+	Firepower int `json:"firepower"`
+	MaxRange  int `json:"maxRange"`
+	Range     int `json:"range"`
 }
 
 var (

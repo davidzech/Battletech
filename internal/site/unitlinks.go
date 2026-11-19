@@ -43,7 +43,10 @@ type unitLinkCard struct {
 	Walk          int    `json:"walk,omitempty"`
 	Run           int    `json:"run,omitempty"`
 	Jump          int    `json:"jump"`
-	Gunnery       int    `json:"gunnery,omitempty"` // from "(3/4)" after the link; 0 when none was written
+	Firepower     int    `json:"firepower,omitempty"` // every weapon fired at once
+	MaxRange      int    `json:"maxRange,omitempty"`  // the longest weapon range, in hexes
+	Range         int    `json:"range,omitempty"`     // the range weighted by each weapon's damage
+	Gunnery       int    `json:"gunnery,omitempty"`   // from "(3/4)" after the link; 0 when none was written
 	Piloting      int    `json:"piloting,omitempty"`
 	SkillBV       int    `json:"skillBV,omitempty"` // the BV at those skills
 }
@@ -70,7 +73,8 @@ func annotateUnitLinks(out string) string {
 		card := unitLinkCard{ID: u.Name, Name: name, Model: model, Icon: iconURL(u), Class: u.Class, Role: u.Role, Tons: u.Tons, Tech: u.TechBase,
 			BV: u.BV, Engine: u.Engine, Omni: u.Omni == 1,
 			Armor: u.Armor, ArmorType: strings.TrimSuffix(u.ArmorType, " Armor"), Structure: u.Internal, StructureType: u.StructureType,
-			Heat: u.Heat, Dissipation: u.Dissipation, Walk: u.Walk, Run: u.Run, Jump: u.Jump}
+			Heat: u.Heat, Dissipation: u.Dissipation, Walk: u.Walk, Run: u.Run, Jump: u.Jump,
+			Firepower: u.Firepower, MaxRange: u.MaxRange, Range: u.Range}
 		if p[4] != "" {
 			card.Gunnery, _ = strconv.Atoi(p[5])
 			card.Piloting, _ = strconv.Atoi(p[6])

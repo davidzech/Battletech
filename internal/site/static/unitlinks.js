@@ -40,6 +40,9 @@
       if (u.heat) fact(build, 'Heat', String(u.heat));
       if (u.dissipation) fact(build, 'Dissipation', String(u.dissipation));
       fact(build, 'Walk/Run/Jump', u.walk + ' / ' + u.run + ' / ' + (u.jump || 0));
+      if (u.firepower) fact(build, 'Firepower', String(u.firepower));
+      // The longest weapon range in hexes, and the range weighted by damage when that is shorter (most of the damage reaches less far).
+      if (u.maxRange) fact(build, 'Range', u.maxRange + (u.range && u.range !== u.maxRange ? ' (' + u.range + ' weighted)' : ''));
     }
     box.appendChild(cols);
     return box;

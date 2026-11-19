@@ -11,6 +11,7 @@ package main
 import (
 	"encoding/json"
 	"log"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -43,6 +44,12 @@ type entry struct {
 	Walk          int    `json:"walk,omitempty"`
 	Run           int    `json:"run,omitempty"`
 	Jump          int    `json:"jump,omitempty"`
+	// Firepower, MaxRange and Range are worked out from the weapons the way MekBay's own stat bars do (unit-search-index.service.ts,
+	// unit-range.util.ts): Firepower is the damage of every weapon fired at once, physical attacks left out; MaxRange the longest weapon range in hexes;
+	// Range the range weighted by each weapon's damage, rounded to the nearest of the weapons' own ranges.
+	Firepower int `json:"firepower,omitempty"`
+	MaxRange  int `json:"maxRange,omitempty"`
+	Range     int `json:"range,omitempty"`
 	// Comp is read from data/units.json (the unit's components) and never written; the index keeps only the ammo among them, as Ammo.
 	Comp []compEntry `json:"comp,omitempty"`
 	// MulID is the unit's Master Unit List ID, read for the availability lookup and never written.
@@ -56,6 +63,81 @@ type compEntry struct {
 	Loc  string `json:"l"`
 	Q    int    `json:"q"`  // slots (tons)
 	Q2   int    `json:"q2"` // total shots
+	Type string `json:"t"`  // P for a physical weapon
+	R    string `json:"r"`  // ranges in hexes, e.g. "5/10/15"
+	MD   string `json:"md"` // maximum damage, e.g. "7.0"
+}
+
+// weaponStats works out a mech's Firepower, MaxRange and Range from its components, as MekBay does (see entry).
+func weaponStats(comp []compEntry) (firepower, maxRange, weighted int) {
+	type part struct {
+		damage float64
+		known  bool
+		qty    int
+		rng    int
+	}
+	var parts []part
+	sum := 0.0
+	for _, c := range comp {
+		qty := c.Q
+		if qty == 0 {
+			qty = 1
+		}
+		md, err := strconv.ParseFloat(strings.TrimSpace(c.MD), 64)
+		known := err == nil && strings.TrimSpace(c.MD) != ""
+		if known && c.Type != "P" {
+			sum += md * float64(qty)
+		}
+		r := 0
+		for _, x := range strings.Split(c.R, "/") {
+			if n, err := strconv.Atoi(strings.TrimSpace(x)); err == nil && n > r {
+				r = n
+			}
+		}
+		if r > 0 {
+			parts = append(parts, part{md, known, qty, r})
+			maxRange = max(maxRange, r)
+		}
+	}
+	firepower = int(math.Round(sum))
+	if len(parts) == 0 {
+		return firepower, 0, 0
+	}
+	total, count := 0.0, 0
+	for _, p := range parts {
+		if p.known {
+			total += p.damage * float64(p.qty)
+			count += p.qty
+		}
+	}
+	avg := 0.0
+	if count > 0 {
+		avg = total / float64(count)
+	}
+	weight, ranged := 0.0, 0.0
+	for _, p := range parts {
+		d := p.damage
+		if !p.known {
+			d = avg
+		}
+		if w := d * float64(p.qty); w > 0 {
+			weight += w
+			ranged += float64(p.rng) * w
+		}
+	}
+	if weight <= 0 {
+		return firepower, maxRange, 0
+	}
+	exact := math.Round(ranged/weight*100) / 100
+	// The nearest of the weapons' own ranges, the longer on a tie.
+	best, bestDist := -1, 0.0
+	for _, p := range parts {
+		d := math.Abs(exact - float64(p.rng))
+		if best < 0 || d < bestDist || (d == bestDist && p.rng > best) {
+			best, bestDist = p.rng, d
+		}
+	}
+	return firepower, maxRange, best
 }
 
 // ammoEntry is one ammo entry of a unit: the bins of one ammo type in one location. Slots are tons, and Shots is the total over all of them.
@@ -87,6 +169,10 @@ func main() {
 			if doc.Units[i].Type == "Mek" && strings.Contains(c.Name, "Ammo") && c.Q > 0 {
 				doc.Units[i].Ammo = append(doc.Units[i].Ammo, ammoEntry{ID: c.ID, Name: c.Name, Loc: c.Loc, Slots: c.Q, Shots: c.Q2})
 			}
+		}
+		if doc.Units[i].Type == "Mek" {
+			u := &doc.Units[i]
+			u.Firepower, u.MaxRange, u.Range = weaponStats(u.Comp)
 		}
 		doc.Units[i].Comp = nil
 		if doc.Units[i].Type != "Mek" {
