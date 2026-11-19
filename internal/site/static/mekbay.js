@@ -220,7 +220,7 @@
     if (!pilots.length || unavailable) return box;
     if (!cur().selected[u.id]) {
       box.classList.add('disabled');
-      box.appendChild(el('span', 'deploy-slot-empty', 'Take this mech first'));
+      box.appendChild(el('span', 'deploy-slot-empty', 'Select this unit first'));
       return box;
     }
     var p = pilotNamed(cur().crew[u.id]);
