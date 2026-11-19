@@ -84,7 +84,7 @@ func TestDeployPlanEndpoint(t *testing.T) {
 
 	// One player.
 	one := read(plan("players", "1", "p1_units", "ua", "p1_units", "ub", "p1_assign_unit", "ua", "p1_assign_pilot", "alrek"))
-	if len(one.Players) != 1 || len(one.Players[0].Units) != 2 || one.Deployed || one.Limit != 10000 {
+	if len(one.Players) != 1 || len(one.Players[0].Units) != 2 || one.Deployed || one.Limit != 7500 {
 		t.Fatalf("one player: %+v", one)
 	}
 	if c := one.Players[0].Crew; len(c) != 1 || c[0].Pilot != "Alrek" || c[0].Gunnery != alrek.Gunnery() || c[0].Piloting != alrek.Piloting() || c[0].UnitName == "" {

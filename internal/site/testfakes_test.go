@@ -95,8 +95,8 @@ func TestScenarioBVLimit(t *testing.T) {
 	if !ok {
 		t.Fatal("no campaign")
 	}
-	if sc, _ := c.Scenario("scenario_001"); sc.BVLimit != 10000 {
-		t.Errorf("scenario 001 BV limit = %d, want 10000", sc.BVLimit)
+	if sc, _ := c.Scenario("scenario_001"); sc.BVLimit != 7500 {
+		t.Errorf("scenario 001 BV limit = %d, want 7500", sc.BVLimit)
 	}
 	if sc, _ := c.Scenario("scenario_000"); sc.BVLimit != 0 {
 		t.Errorf("scenario 000 should have no BV limit, got %d", sc.BVLimit)

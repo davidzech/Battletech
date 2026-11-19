@@ -3,7 +3,7 @@ id: scenario_001
 title: Pyre Light
 planet: Colmar
 map: Mountain Lake
-bv_limit: 10000
+bv_limit: 7500
 forces:
   opfor1: OpFor1.mul
   opfor2: OpFor2.mul
@@ -56,11 +56,12 @@ Use the Mountain Lake battlemap.
 
 ## Forces
 
-The Jade Falcons field 10,472 BV across OpFor 1 and OpFor 2. The Wolves field up to 10,000 BV.
+**Jade Falcon Force:** 10,472 BV\
+**Wolf Force:** up to 7,500 BV
 
 ### Player Forces
 
-Field any force up to 10,000 BV.
+Field any force up to 7,500 BV.
 
 **Deployment:** the western edge of the map.
 
