@@ -1335,6 +1335,8 @@ dialog button.deploy-count:disabled, .overview-players button.deploy-count:disab
 .mission-log.completed { border-left-color: #5fc47e; }
 .mission-log-label { font: 700 0.75rem var(--display); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
 .mission-log-state { display: inline-flex; align-items: center; gap: 0.6rem; font: 700 1rem var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
+/* Bahnschrift's capitals sit above the middle of their line box (its descent is larger than the space above the capitals), so the all-caps state is nudged down to line up with the LED and the label (a whole pixel: a fraction is snapped away). */
+.mission-log-state > span { position: relative; top: 1px; }
 .mission-log.completed .mission-log-state { color: #5fc47e; }
 .mission-log.locked .mission-log-state { color: var(--muted); }
 .mission-log .outcome-summary { flex-basis: 100%; }
