@@ -131,6 +131,14 @@
   function totalBV() { var t = 0; for (var i = 0; i < playerCount; i++) t += bvOf(i); return t; }
   function totalCount() { var t = 0; for (var i = 0; i < playerCount; i++) t += countOf(i); return t; }
   function over() { return (limit > 0 && totalBV() > limit) || (unitLimit > 0 && totalCount() > unitLimit); }
+  // The most mechs player i may take under the scenario's unit limit: every other player needs at least one, so a player who has taken none yet still
+  // holds a place (with a limit of 2 and two players, each takes one). Infinity without a limit.
+  function roomFor(i) {
+    if (!(unitLimit > 0)) return Infinity;
+    var others = 0;
+    for (var j = 0; j < playerCount; j++) if (j !== i) others += Math.max(countOf(j), 1);
+    return unitLimit - others;
+  }
   // Mechs a player has taken that have no named pilot, when the scenario requires one on each.
   function unmanned(i) {
     if (!needPilots) return 0;
@@ -212,7 +220,7 @@
     if (!pilots.length || unavailable) return box;
     if (!cur().selected[u.id]) {
       box.classList.add('disabled');
-      box.appendChild(el('span', 'deploy-slot-empty', 'Take this mech first'));
+      box.appendChild(el('span', 'deploy-slot-empty', 'Select this unit first'));
       return box;
     }
     var p = pilotNamed(cur().crew[u.id]);
@@ -264,8 +272,8 @@
     box.type = 'checkbox';
     box.className = 'themed-box';
     box.checked = !!cur().selected[u.id];
-    // A scenario's unit limit is reached: the mechs not yet taken can't be.
-    box.disabled = unavailable || (unitLimit > 0 && !cur().selected[u.id] && totalCount() >= unitLimit);
+    // A scenario's unit limit is reached, counting a mech kept for every other player: the mechs not yet taken can't be.
+    box.disabled = unavailable || (!cur().selected[u.id] && countOf(step) >= roomFor(step));
     box.addEventListener('change', function () {
       touched = true;
       if (box.checked) cur().selected[u.id] = true; else { delete cur().selected[u.id]; delete cur().crew[u.id]; } // a mech not being taken has no pilot
@@ -300,12 +308,13 @@
     // The scenario's own rules, in words, and what is still missing.
     var rules = document.getElementById('deploy-rules');
     var parts = [];
-    if (unitLimit) parts.push('Take up to ' + unitLimit + ' mechs in all');
+    if (unitLimit) parts.push('Take up to ' + unitLimit + ' mechs in all' + (playerCount > 1 ? ', at least one for each player' : ''));
     if (needPilots) parts.push('every mech needs a named pilot');
     rules.hidden = !parts.length;
     if (parts.length) {
       var text = parts.join(', ') + '.';
       if (anyUnmanned()) text += ' Assign a named pilot to each mech you take.';
+      if (countOf(step) > roomFor(step)) text += ' Leave a mech for each other player.';
       rules.textContent = text.charAt(0).toUpperCase() + text.slice(1);
     }
   }
@@ -582,7 +591,7 @@
       count.textContent = 'Step ' + (step + 1) + ' of ' + total;
     }
     var ok = !busy && !over();
-    if (!last) next.disabled = !ok || countOf(step) === 0 || unmanned(step) > 0;
+    if (!last) next.disabled = !ok || countOf(step) === 0 || unmanned(step) > 0 || countOf(step) > roomFor(step);
     else { var allHave = true; for (var i = 0; i < playerCount; i++) if (countOf(i) === 0) allHave = false; go.disabled = !ok || !allHave || anyUnmanned(); }
   }
 
