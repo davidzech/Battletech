@@ -886,6 +886,9 @@ html:not(.js) .wp-toggle, html:not(.js) .wp-stamp { display: none; }
 .pill-tip .pill-tip-title.cond-ammo { color: #6cb8ff; }
 .pill-tip .pill-tip-text { margin: 0; font-size: 0.85rem; line-height: 1.4; }
 .pill-tip .tip-facts { margin-top: 0.4rem; }
+/* A link to a unit's MekBay page in a scenario's text has a hover card (unitlinks.js); a dotted underline says so, and it lights up while its card is open. */
+a.unit-link { text-decoration-style: dotted; text-underline-offset: 0.2em; }
+a.unit-link.tip-open { color: var(--accent); }
 .mr-chip[tabindex]:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
 .force-summary .icons img { transition: border-color 0.12s, background-color 0.12s; cursor: default; }
 .force-summary .icons img:hover, .force-summary .icons img:focus-visible { border-color: var(--accent); background: rgba(255, 204, 0, 0.1); outline: none; }
@@ -1238,7 +1241,7 @@ dialog button.deploy-slot-x:hover:not(:disabled), dialog button.deploy-slot-x:fo
 /* The ability card's floating panel is a popover too (abilitycard.js): above the pilot card it is shown from, and unclipped by a dialog. */
 .skill-tip[popover] { inset: auto; margin: 0; padding: 0; border: 0; background: none; overflow: visible; color: inherit; }
 /* An interactive card (the pilot card) takes the pointer; the ability card shown from inside it does not, so the pointer stays on the pilot card. */
-.pill-tip.wide { pointer-events: auto; }
+.pill-tip.interactive { pointer-events: auto; }
 
 /* A themed checkbox keeps no ring after a mouse click (the dialog's generic input:focus outline used to leave a clipped one behind); keyboard focus draws
    the ring inside the box, so the list's overflow can't cut it off. */
@@ -1246,8 +1249,10 @@ dialog input.themed-box:focus, dialog .themed-check input:focus { outline: none;
 .themed-check input:focus-visible, input.themed-box:focus-visible, dialog input.themed-box:focus-visible, dialog .themed-check input:focus-visible { outline: 2px solid var(--text); outline-offset: -4px; }
 
 /* A bridge between a pilot and its card: the card's invisible edge reaches back across the gap to the pilot, so the pointer is never on neither of them. */
-.pill-tip.wide::before { content: ""; position: absolute; left: 0; right: 0; top: -14px; height: 14px; }
-.pill-tip.wide.above::before { top: auto; bottom: -14px; }
+/* Only an interactive card has it: on any other card (a unit link's) the bridge would lie over the bottom of the element it belongs to, take the pointer
+   from it and close the card, so hovering the bottom edge of a link showed nothing. */
+.pill-tip.interactive::before { content: ""; position: absolute; left: 0; right: 0; top: -14px; height: 14px; }
+.pill-tip.interactive.above::before { top: auto; bottom: -14px; }
 
 /* The condition pills inside the unit hover card on the overview. */
 .unit-tip .tip-pills { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-bottom: 0.4rem; }

@@ -91,6 +91,7 @@
       if (t.parentNode !== host) host.appendChild(t);
       t.textContent = '';
       t.classList.toggle('wide', !!content.build);
+      t.classList.toggle('interactive', !!content.interactive); // takes the pointer, with a bridge back to its element (style.css)
       if (content.build) {
         t.appendChild(content.build()); // custom content, e.g. a pilot card
       } else {
