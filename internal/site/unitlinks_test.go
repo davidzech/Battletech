@@ -96,3 +96,38 @@ func TestWeaponCountsAndTheOverviewCard(t *testing.T) {
 		t.Error("an unknown unit has no card")
 	}
 }
+
+// An omnimech's reconfigure options are marked available only when the campaign's faction fields the variant in its era (the same list as the
+// purchase search), and all are available for a campaign that names no faction and era.
+func TestSwapOptionsFollowAvailability(t *testing.T) {
+	c, ok := Library{Root: "../../campaigns"}.Campaign("refusalwar")
+	if !ok {
+		t.Fatal("no Refusal War campaign")
+	}
+	avail := availableUnits(c.AvailabilityFaction, c.AvailabilityEra)
+	if avail == nil {
+		t.Fatal("Refusal War names a faction and era MekBay knows")
+	}
+	views := hangarViews(HangarForce{Units: []HangarUnit{{ID: "u", Unit: "BMUller_A"}}})
+	markSwapAvailability(views, c)
+	var yes, no int
+	for _, o := range views[0].SwapOptions {
+		if o.Available != avail[o.Unit] {
+			t.Errorf("%s: available %v, the faction list says %v", o.Unit, o.Available, avail[o.Unit])
+		}
+		if o.Available {
+			yes++
+		} else {
+			no++
+		}
+	}
+	if yes == 0 || no == 0 {
+		t.Errorf("the Kit Fox has variants both in and out of Clan Wolf's Clan Invasion list: %d available, %d not", yes, no)
+	}
+	markSwapAvailability(views, &Campaign{})
+	for _, o := range views[0].SwapOptions {
+		if !o.Available {
+			t.Errorf("with no faction and era every variant is available: %s", o.Unit)
+		}
+	}
+}

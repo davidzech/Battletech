@@ -81,7 +81,7 @@ func (s *Server) forceJSON(w http.ResponseWriter, r *http.Request) {
 	s.cacheHangar(r.Context(), playthroughID(seed), c.Slug, run.HangarInstance, h)
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
-	_ = json.NewEncoder(w).Encode(forceData(h))
+	_ = json.NewEncoder(w).Encode(forceData(h, c))
 }
 
 // setPlayers is POST /api/campaign/players: change how many players a started campaign is played with (the Manage page's Overview). The count is only the

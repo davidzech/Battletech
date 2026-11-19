@@ -194,9 +194,12 @@
     text.classList.toggle('short', !!o && after < 0);
     document.getElementById('swap-apply').disabled = !o || after < 0;
   }
-  function swap(u) {
+  function swap(u, keep) {
     if (!swapDlg || typeof swapDlg.showModal !== 'function') return;
     swapUnitRow = u;
+    var box = document.getElementById('swap-available');
+    if (box && !keep) box.checked = true;
+    var was = keep ? document.getElementById('swap-select').value : '';
     document.getElementById('swap-title').textContent = 'Reconfigure ' + u.name;
     var select = document.getElementById('swap-select');
     select.textContent = '';
@@ -206,7 +209,11 @@
     here.className = 'swap-same';
     here.textContent = '● ' + (u.model || 'This variant') + ' — ' + commas(u.bv) + ' BV — current';
     select.appendChild(here);
+    // Like Purchase, only the variants the campaign's faction fields in its era are offered while the box is ticked (it is, each time the dialog
+    // opens); unticking it lists them all.
+    var onlyAvailable = document.getElementById('swap-available');
     (u.swapOptions || []).forEach(function (o) {
+      if (onlyAvailable && onlyAvailable.checked && o.available === false) return;
       var opt = document.createElement('option');
       opt.value = o.unit;
       // Like a stock: green for a variant worth more BV than this one, red for one worth less, so the change reads at a glance.
@@ -215,13 +222,16 @@
       opt.textContent = (dir === 'up' ? '▲ ' : dir === 'down' ? '▼ ' : '') + (o.model || o.unit) + ' — ' + commas(o.bv) + ' BV — ' + o.cost + ' SP';
       select.appendChild(opt);
     });
-    select.selectedIndex = 0;
+    select.value = was; // a variant still listed stays chosen when the box changes
+    if (select.selectedIndex < 0) select.selectedIndex = 0;
     document.getElementById('swap-error').textContent = '';
     swapCostText();
-    swapDlg.showModal();
+    if (!swapDlg.open) swapDlg.showModal();
   }
   if (swapDlg) {
     document.getElementById('swap-select').addEventListener('change', swapCostText);
+    var availBox = document.getElementById('swap-available');
+    if (availBox) availBox.addEventListener('change', function () { if (swapUnitRow) swap(swapUnitRow, true); });
     document.getElementById('swap-cancel').addEventListener('click', function () { swapDlg.close(); });
     swapDlg.addEventListener('click', function (e) { if (e.target === swapDlg) swapDlg.close(); });
     document.getElementById('swap-form').addEventListener('submit', function (e) {

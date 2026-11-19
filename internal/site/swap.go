@@ -33,6 +33,24 @@ type swapOption struct {
 	Tons      float64 `json:"tons"`
 	Icon      string  `json:"icon"`
 	MekBayURL string  `json:"mekbayUrl"`
+	// Available is whether the campaign's faction fields this variant in its era (availability_faction and availability_era in Intro.md, the same
+	// list the purchase search filters by); the Reconfigure dialog offers only these unless the player unticks the box. A campaign that names no
+	// faction and era leaves every variant available. Set by markSwapAvailability, which knows the campaign.
+	Available bool `json:"available"`
+}
+
+// markSwapAvailability marks each unit's reconfigure options as available or not to the campaign's faction in its era.
+func markSwapAvailability(views []hangarUnitView, c *Campaign) {
+	var available map[string]bool
+	if c != nil && c.AvailabilityFaction != "" && c.AvailabilityEra != "" {
+		available = availableUnits(c.AvailabilityFaction, c.AvailabilityEra)
+	}
+	for i := range views {
+		for j := range views[i].SwapOptions {
+			o := &views[i].SwapOptions[j]
+			o.Available = available == nil || available[o.Unit]
+		}
+	}
 }
 
 var (

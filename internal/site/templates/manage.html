@@ -170,6 +170,7 @@
     <h2 id="swap-title">Reconfigure</h2>
     <label for="swap-select">Variant</label>
     <select id="swap-select"></select>
+    {{if and .Campaign.AvailabilityFaction .Campaign.AvailabilityEra}}<label class="themed-check swap-available"><input type="checkbox" id="swap-available" checked><span>Only variants {{.Campaign.AvailabilityFaction}} fields in the {{.Campaign.AvailabilityEra}} era</span></label>{{end}}
     <div id="swap-sub" class="swap-unit"></div>
     <dl id="swap-breakdown" class="confirm-items" hidden></dl>
     <p id="swap-cost" class="repair-cost"></p>
