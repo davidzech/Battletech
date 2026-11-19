@@ -18,19 +18,30 @@
     if (u.model) names.appendChild(el('span', 'tip-model', u.model));
     head.appendChild(names);
     box.appendChild(head);
-    var facts = el('dl', 'tip-facts');
-    function fact(k, v) { facts.appendChild(el('dt', null, k)); facts.appendChild(el('dd', null, v)); }
-    if (u.role) fact('Role', u.role);
-    fact('Class', [u.class, u.omni ? 'OmniMech' : ''].filter(Boolean).join(' · '));
-    fact('Tonnage', String(u.tons));
-    if (u.tech) fact('Tech', u.tech);
-    if (u.engine) fact('Engine', u.engine);
-    fact('Base BV', commas(u.bv));
-    if (u.gunnery || u.piloting) {
-      fact('Pilot', u.gunnery + '/' + u.piloting);
-      fact('BV at ' + u.gunnery + '/' + u.piloting, commas(u.skillBV));
+    // Two columns: what the unit is on the left, how it is built on the right (a unit without construction figures, not a mech, has only the first).
+    var cols = el('div', 'unit-card-cols');
+    function column() { var dl = el('dl', 'tip-facts'); cols.appendChild(dl); return dl; }
+    function fact(dl, k, v) { dl.appendChild(el('dt', null, k)); dl.appendChild(el('dd', null, v)); }
+    var about = column();
+    if (u.role) fact(about, 'Role', u.role);
+    fact(about, 'Class', [u.class, u.omni ? 'OmniMech' : ''].filter(Boolean).join(' · '));
+    fact(about, 'Tonnage', String(u.tons));
+    if (u.tech) fact(about, 'Tech', u.tech);
+    if (u.engine) fact(about, 'Engine', u.engine);
+    if (u.armorType) fact(about, 'Armor type', u.armorType);
+    if (u.structureType) fact(about, 'Structure type', u.structureType);
+    fact(about, 'Base BV', commas(u.bv));
+    // The pilot's skills are in the label: "BV at 3/4".
+    if (u.gunnery || u.piloting) fact(about, 'BV at ' + u.gunnery + '/' + u.piloting, commas(u.skillBV));
+    if (u.armor || u.structure) {
+      var build = column();
+      fact(build, 'Armor', String(u.armor));
+      fact(build, 'Structure', String(u.structure));
+      if (u.heat) fact(build, 'Heat', String(u.heat));
+      if (u.dissipation) fact(build, 'Dissipation', String(u.dissipation));
+      fact(build, 'Walk/Run/Jump', u.walk + ' / ' + u.run + ' / ' + (u.jump || 0));
     }
-    box.appendChild(facts);
+    box.appendChild(cols);
     return box;
   }
 

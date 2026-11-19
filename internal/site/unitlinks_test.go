@@ -31,6 +31,11 @@ func TestUnitLinksCarryTheirCards(t *testing.T) {
 	if nova.Gunnery != 3 || nova.Piloting != 4 || nova.SkillBV != adjustedBV(nova.BV, 3, 4) || nova.SkillBV <= nova.BV {
 		t.Errorf("the skills after the link give the BV at those skills: %+v", nova)
 	}
+	// The Nova Prime's construction, as the catalog has it (the type without its trailing " Armor").
+	if nova.Armor != 160 || nova.ArmorType != "Standard" || nova.Structure != 83 || nova.StructureType != "Standard" || nova.Heat != 60 || nova.Dissipation != 36 ||
+		nova.Walk != 5 || nova.Run != 8 || nova.Jump != 5 {
+		t.Errorf("the card carries armor, structure, heat and movement: %+v", nova)
+	}
 	if grizzly.Gunnery != 0 || grizzly.SkillBV != 0 {
 		t.Errorf("no skills written, none on the card: %+v", grizzly)
 	}

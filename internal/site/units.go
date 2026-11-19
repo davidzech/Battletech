@@ -40,6 +40,17 @@ type Unit struct {
 	Engine   string    `json:"engine"`      // Fusion, XL (Clan), Light, ICE...
 	Ammo     []AmmoBin `json:"ammo"`        // the unit's ammunition, for the rearm breakdown
 	Icon     string    `json:"icon"`        // file name in icons/ (mechs only; "" for anything else)
+	// A mech's construction (mechs only, 0 or "" for anything else): armor and internal structure points in all and their types, the heat generated
+	// firing everything and the heat sunk per turn, and Walk/Run/Jump movement points.
+	Armor         int    `json:"armor"`
+	ArmorType     string `json:"armorType"`
+	Internal      int    `json:"internal"`
+	StructureType string `json:"structureType"`
+	Heat          int    `json:"heat"`
+	Dissipation   int    `json:"dissipation"`
+	Walk          int    `json:"walk"`
+	Run           int    `json:"run"`
+	Jump          int    `json:"jump"`
 }
 
 var (

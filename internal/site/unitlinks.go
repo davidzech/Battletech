@@ -21,20 +21,31 @@ var unitLinkHTML = regexp.MustCompile(`<a href="(https://(?:www\.)?mekbay\.com/[
 
 // unitLinkCard is what the hover card shows.
 type unitLinkCard struct {
-	ID       string  `json:"id"`
-	Name     string  `json:"name"`  // the Clan name when the design has one
-	Model    string  `json:"model"` // e.g. "Prime"
-	Icon     string  `json:"icon"`
-	Class    string  `json:"class"`
-	Role     string  `json:"role"`
-	Tons     float64 `json:"tons"`
-	Tech     string  `json:"tech"`
-	BV       int     `json:"bv"` // base BV
-	Engine   string  `json:"engine,omitempty"`
-	Omni     bool    `json:"omni,omitempty"`
-	Gunnery  int     `json:"gunnery,omitempty"` // from "(3/4)" after the link; 0 when none was written
-	Piloting int     `json:"piloting,omitempty"`
-	SkillBV  int     `json:"skillBV,omitempty"` // the BV at those skills
+	ID     string  `json:"id"`
+	Name   string  `json:"name"`  // the Clan name when the design has one
+	Model  string  `json:"model"` // e.g. "Prime"
+	Icon   string  `json:"icon"`
+	Class  string  `json:"class"`
+	Role   string  `json:"role"`
+	Tons   float64 `json:"tons"`
+	Tech   string  `json:"tech"`
+	BV     int     `json:"bv"` // base BV
+	Engine string  `json:"engine,omitempty"`
+	Omni   bool    `json:"omni,omitempty"`
+	// The mech's construction, the card's second column: armor and internal structure points and their types, heat generated and dissipated, and
+	// Walk/Run/Jump movement points.
+	Armor         int    `json:"armor,omitempty"`
+	ArmorType     string `json:"armorType,omitempty"`
+	Structure     int    `json:"structure,omitempty"`
+	StructureType string `json:"structureType,omitempty"`
+	Heat          int    `json:"heat,omitempty"`
+	Dissipation   int    `json:"dissipation,omitempty"`
+	Walk          int    `json:"walk,omitempty"`
+	Run           int    `json:"run,omitempty"`
+	Jump          int    `json:"jump"`
+	Gunnery       int    `json:"gunnery,omitempty"` // from "(3/4)" after the link; 0 when none was written
+	Piloting      int    `json:"piloting,omitempty"`
+	SkillBV       int    `json:"skillBV,omitempty"` // the BV at those skills
 }
 
 // shareUnitID is the MekBay unit ID a mekbay.com link opens (its shareUnit parameter), "" for any other link.
@@ -57,7 +68,9 @@ func annotateUnitLinks(out string) string {
 		}
 		name, model := unitNames(u)
 		card := unitLinkCard{ID: u.Name, Name: name, Model: model, Icon: iconURL(u), Class: u.Class, Role: u.Role, Tons: u.Tons, Tech: u.TechBase,
-			BV: u.BV, Engine: u.Engine, Omni: u.Omni == 1}
+			BV: u.BV, Engine: u.Engine, Omni: u.Omni == 1,
+			Armor: u.Armor, ArmorType: strings.TrimSuffix(u.ArmorType, " Armor"), Structure: u.Internal, StructureType: u.StructureType,
+			Heat: u.Heat, Dissipation: u.Dissipation, Walk: u.Walk, Run: u.Run, Jump: u.Jump}
 		if p[4] != "" {
 			card.Gunnery, _ = strconv.Atoi(p[5])
 			card.Piloting, _ = strconv.Atoi(p[6])

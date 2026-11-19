@@ -33,6 +33,16 @@ type entry struct {
 	Omni    int     `json:"omni,omitempty"`   // 1 for an omnimech, whose variants can be swapped (see swap.go)
 	Engine  string  `json:"engine,omitempty"` // Fusion, XL (Clan), ...; the crippling rule needs to know Fusion from the rest
 	Icon    string  `json:"icon,omitempty"`   // in data/units.json: the path inside mm-data; written to the index as iconFile(path)
+	// A mech's construction, for the unit card (unitlinks.go); left out for anything else to keep the index small.
+	Armor         int    `json:"armor,omitempty"`         // armor points in all
+	ArmorType     string `json:"armorType,omitempty"`     // e.g. "Ferro-Fibrous"
+	Internal      int    `json:"internal,omitempty"`      // internal structure points in all
+	StructureType string `json:"structureType,omitempty"` // e.g. "Endo Steel"
+	Heat          int    `json:"heat,omitempty"`          // heat generated firing everything
+	Dissipation   int    `json:"dissipation,omitempty"`   // heat sunk per turn
+	Walk          int    `json:"walk,omitempty"`
+	Run           int    `json:"run,omitempty"`
+	Jump          int    `json:"jump,omitempty"`
 	// Comp is read from data/units.json (the unit's components) and never written; the index keeps only the ammo among them, as Ammo.
 	Comp []compEntry `json:"comp,omitempty"`
 	// MulID is the unit's Master Unit List ID, read for the availability lookup and never written.
@@ -79,6 +89,10 @@ func main() {
 			}
 		}
 		doc.Units[i].Comp = nil
+		if doc.Units[i].Type != "Mek" {
+			u := &doc.Units[i]
+			u.Armor, u.ArmorType, u.Internal, u.StructureType, u.Heat, u.Dissipation, u.Walk, u.Run, u.Jump = 0, "", 0, "", 0, 0, 0, 0, 0
+		}
 		// Only mechs have vendored icons (see gen_icons.go); anything else shows a default one.
 		if doc.Units[i].Type == "Mek" && doc.Units[i].Icon != "" {
 			doc.Units[i].Icon = iconFile(doc.Units[i].Icon)
