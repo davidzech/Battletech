@@ -285,7 +285,20 @@
       // Clicking the row opens the player's hangar on MekBay with this unit selected (MekBay's `sel` parameter is the force unit's ID).
       if (hangarLink && u.id) row.rowUrl = hangarLink + (hangarLink.indexOf('?') < 0 ? '?' : '&') + 'sel=' + encodeURIComponent(u.id);
       row.actions = actionsFor(u);
-      list.appendChild(MechRow.build(row));
+      var built = MechRow.build(row);
+      // Hovering the row (or focusing it) shows the unit's card, the same card as the overview's and a scenario's unit links, under the row and
+      // right-aligned with it, so the mechs listed on the left stay in view; the row keeps its yellow border while the card is open
+      // (.mech-row.tip-open). Its status pills have cards of their own, so coming back off a pill onto the row brings the row's card back.
+      if (typeof UnitCard !== 'undefined') {
+        (function (r) {
+          MechRow.attachTip(r, { focusable: false, align: 'right', build: function () { return UnitCard.forUnit(u); } });
+          r.addEventListener('mouseover', function (e) {
+            var own = e.target.closest && e.target.closest('[aria-describedby]');
+            if ((!own || own === r) && !r.classList.contains('tip-open')) r.dispatchEvent(new Event('mouseenter'));
+          });
+        })(built);
+      }
+      list.appendChild(built);
     });
   }
 

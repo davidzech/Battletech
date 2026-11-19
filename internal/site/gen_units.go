@@ -50,6 +50,10 @@ type entry struct {
 	Firepower int `json:"firepower,omitempty"`
 	MaxRange  int `json:"maxRange,omitempty"`
 	Range     int `json:"range,omitempty"`
+	// Ballistic, Energy and Missile count the mech's weapons of each type (the components typed B, E and M, by quantity), as MekBay's weapon type bar.
+	Ballistic int `json:"ballistic,omitempty"`
+	Energy    int `json:"energy,omitempty"`
+	Missile   int `json:"missile,omitempty"`
 	// Comp is read from data/units.json (the unit's components) and never written; the index keeps only the ammo among them, as Ammo.
 	Comp []compEntry `json:"comp,omitempty"`
 	// MulID is the unit's Master Unit List ID, read for the availability lookup and never written.
@@ -173,6 +177,16 @@ func main() {
 		if doc.Units[i].Type == "Mek" {
 			u := &doc.Units[i]
 			u.Firepower, u.MaxRange, u.Range = weaponStats(u.Comp)
+			for _, c := range u.Comp {
+				switch c.Type {
+				case "B":
+					u.Ballistic += max(c.Q, 1)
+				case "E":
+					u.Energy += max(c.Q, 1)
+				case "M":
+					u.Missile += max(c.Q, 1)
+				}
+			}
 		}
 		doc.Units[i].Comp = nil
 		if doc.Units[i].Type != "Mek" {

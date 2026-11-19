@@ -56,6 +56,10 @@ type Unit struct {
 	Firepower int `json:"firepower"`
 	MaxRange  int `json:"maxRange"`
 	Range     int `json:"range"`
+	// Ballistic, Energy and Missile count the mech's weapons of each type (gen_units.go).
+	Ballistic int `json:"ballistic"`
+	Energy    int `json:"energy"`
+	Missile   int `json:"missile"`
 }
 
 var (

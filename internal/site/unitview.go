@@ -48,6 +48,8 @@ type hangarUnitView struct {
 	SellFull  bool `json:"sellFull"`
 	// SwapOptions are the other variants an omnimech can be reconfigured to, with their prices (see swap.go); empty for any other unit.
 	SwapOptions []swapOption `json:"swapOptions,omitempty"`
+	// Card is the unit's catalog card, the same as a scenario's unit links show (unitlinks.go), for the overview's hover card; nil for an unknown unit.
+	Card *unitCard `json:"card,omitempty"`
 }
 
 var chassisNames = regexp.MustCompile(`^(.*?)\s*\((.+)\)$`)
@@ -98,6 +100,7 @@ func hangarViews(h HangarForce) []hangarUnitView {
 			v.Name, v.Model = unitNames(u)
 			v.Class, v.Role, v.Tons, v.Icon = u.Class, roleLabel(u), u.Tons, iconURL(u)
 			v.BV = u.BV // base BV: this campaign ignores pilot skills, so skill can never be a way to game the BV cap
+			v.Card = catalogCard(u)
 		} else {
 			v.Name, v.Unknown, v.Icon = hu.Unit, true, defaultIconURL("")
 		}

@@ -19,8 +19,8 @@ import (
 // target and rel added by renderMarkdown), never a visitor's.
 var unitLinkHTML = regexp.MustCompile(`<a href="(https://(?:www\.)?mekbay\.com/[^"]*)"([^>]*)>((?s:.*?))</a>(\s*\(([0-8])/([0-8])\))?`)
 
-// unitLinkCard is what the hover card shows.
-type unitLinkCard struct {
+// unitCard is what a unit's hover card shows (static/unitcard.js), on a scenario's unit links and on the overview's unit icons (hangarUnitView.Card).
+type unitCard struct {
 	ID     string  `json:"id"`
 	Name   string  `json:"name"`  // the Clan name when the design has one
 	Model  string  `json:"model"` // e.g. "Prime"
@@ -34,21 +34,43 @@ type unitLinkCard struct {
 	Omni   bool    `json:"omni,omitempty"`
 	// The mech's construction, the card's second column: armor and internal structure points and their types, heat generated and dissipated, and
 	// Walk/Run/Jump movement points.
-	Armor         int    `json:"armor,omitempty"`
-	ArmorType     string `json:"armorType,omitempty"`
-	Structure     int    `json:"structure,omitempty"`
-	StructureType string `json:"structureType,omitempty"`
-	Heat          int    `json:"heat,omitempty"`
-	Dissipation   int    `json:"dissipation,omitempty"`
-	Walk          int    `json:"walk,omitempty"`
-	Run           int    `json:"run,omitempty"`
-	Jump          int    `json:"jump"`
-	Firepower     int    `json:"firepower,omitempty"` // every weapon fired at once
-	MaxRange      int    `json:"maxRange,omitempty"`  // the longest weapon range, in hexes
-	Range         int    `json:"range,omitempty"`     // the range weighted by each weapon's damage
-	Gunnery       int    `json:"gunnery,omitempty"`   // from "(3/4)" after the link; 0 when none was written
-	Piloting      int    `json:"piloting,omitempty"`
-	SkillBV       int    `json:"skillBV,omitempty"` // the BV at those skills
+	Armor         int           `json:"armor,omitempty"`
+	ArmorType     string        `json:"armorType,omitempty"`
+	Structure     int           `json:"structure,omitempty"`
+	StructureType string        `json:"structureType,omitempty"`
+	Heat          int           `json:"heat,omitempty"`
+	Dissipation   int           `json:"dissipation,omitempty"`
+	Walk          int           `json:"walk,omitempty"`
+	Run           int           `json:"run,omitempty"`
+	Jump          int           `json:"jump"`
+	Firepower     int           `json:"firepower,omitempty"` // every weapon fired at once
+	MaxRange      int           `json:"maxRange,omitempty"`  // the longest weapon range, in hexes
+	Range         int           `json:"range,omitempty"`     // the range weighted by each weapon's damage
+	Weapons       *weaponCounts `json:"weapons,omitempty"`   // how many ballistic, energy and missile weapons it mounts (mechs only)
+	Gunnery       int           `json:"gunnery,omitempty"`   // from "(3/4)" after the link; 0 when none was written
+	Piloting      int           `json:"piloting,omitempty"`
+	SkillBV       int           `json:"skillBV,omitempty"` // the BV at those skills
+}
+
+// weaponCounts is how many weapons of each type a mech mounts, for the card's weapon type bar.
+type weaponCounts struct {
+	Ballistic int `json:"ballistic"`
+	Energy    int `json:"energy"`
+	Missile   int `json:"missile"`
+}
+
+// catalogCard is the card of a catalog unit, without any pilot's skills.
+func catalogCard(u Unit) *unitCard {
+	name, model := unitNames(u)
+	card := &unitCard{ID: u.Name, Name: name, Model: model, Icon: iconURL(u), Class: u.Class, Role: u.Role, Tons: u.Tons, Tech: u.TechBase,
+		BV: u.BV, Engine: u.Engine, Omni: u.Omni == 1,
+		Armor: u.Armor, ArmorType: strings.TrimSuffix(u.ArmorType, " Armor"), Structure: u.Internal, StructureType: u.StructureType,
+		Heat: u.Heat, Dissipation: u.Dissipation, Walk: u.Walk, Run: u.Run, Jump: u.Jump,
+		Firepower: u.Firepower, MaxRange: u.MaxRange, Range: u.Range}
+	if u.Type == "Mek" {
+		card.Weapons = &weaponCounts{u.Ballistic, u.Energy, u.Missile}
+	}
+	return card
 }
 
 // shareUnitID is the MekBay unit ID a mekbay.com link opens (its shareUnit parameter), "" for any other link.
@@ -69,12 +91,7 @@ func annotateUnitLinks(out string) string {
 		if id == "" || !ok {
 			return m
 		}
-		name, model := unitNames(u)
-		card := unitLinkCard{ID: u.Name, Name: name, Model: model, Icon: iconURL(u), Class: u.Class, Role: u.Role, Tons: u.Tons, Tech: u.TechBase,
-			BV: u.BV, Engine: u.Engine, Omni: u.Omni == 1,
-			Armor: u.Armor, ArmorType: strings.TrimSuffix(u.ArmorType, " Armor"), Structure: u.Internal, StructureType: u.StructureType,
-			Heat: u.Heat, Dissipation: u.Dissipation, Walk: u.Walk, Run: u.Run, Jump: u.Jump,
-			Firepower: u.Firepower, MaxRange: u.MaxRange, Range: u.Range}
+		card := catalogCard(u)
 		if p[4] != "" {
 			card.Gunnery, _ = strconv.Atoi(p[5])
 			card.Piloting, _ = strconv.Atoi(p[6])

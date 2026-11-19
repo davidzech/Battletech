@@ -633,7 +633,7 @@ dialog .deploy-unit label {
 .mech-row.destroyed .mr-icon { filter: grayscale(1); opacity: 0.6; }
 /* The opt-in "open on MekBay" button at the right of a row (mechrow.js externalUrl). */
 .mech-row.has-row-link { cursor: pointer; }
-.mech-row.has-row-link:hover, .mech-row.has-row-link:focus-visible { border-color: var(--accent); outline: none; }
+.mech-row.has-row-link:hover, .mech-row.has-row-link:focus-visible, .mech-row.tip-open { border-color: var(--accent); outline: none; }
 .mr-nameline { display: flex; align-items: center; gap: 0.45rem; }
 /* The little gray external-link icon after the unit name: a link to the unit's generic page, with no button around it. */
 .mr-ext { flex: none; display: inline-flex; align-items: center; color: var(--muted); }
@@ -891,7 +891,17 @@ a.unit-link { text-decoration-style: dotted; text-underline-offset: 0.2em; }
 a.unit-link.tip-open { color: var(--accent); }
 /* The unit card's two columns, what the unit is and how it is built, divided by a thin rule. */
 .unit-card-cols { display: grid; grid-template-columns: auto auto; gap: 0 1.2rem; align-items: start; }
-.unit-card-cols > dl + dl { padding-left: 1.2rem; border-left: 1px solid var(--line); }
+.unit-card-col + .unit-card-col { padding-left: 1.2rem; border-left: 1px solid var(--line); }
+.unit-card .tip-pills, .unit-card > .tag { margin-bottom: 0.4rem; }
+/* The BV at the top right of the card, level with the name. */
+.unit-card .tip-head .tip-bv { margin-left: auto; padding-left: 1.5rem; align-self: flex-start; font: 700 1.1rem var(--display); letter-spacing: 0.04em; color: var(--accent); white-space: nowrap; }
+/* The weapon type bar under the right column, after MekBay's: an icon on the type's colour (--wt) and a count in a box edged with it; zero is dimmed. */
+.weapon-types { display: flex; gap: 0.4rem; margin-top: 0.55rem; }
+.weapon-type { display: inline-flex; align-items: stretch; height: 1.6rem; border: 1px solid var(--wt); }
+.weapon-type-icon { display: inline-flex; align-items: center; justify-content: center; width: 1.6rem; background: var(--wt); }
+.weapon-type-icon img { width: 1.05rem; height: 1.05rem; display: block; }
+.weapon-type-count { display: inline-flex; align-items: center; justify-content: center; min-width: 2.1rem; padding: 0 0.35rem; background: #15171a; font: 700 0.95rem var(--display); }
+.weapon-type.none .weapon-type-count { color: var(--muted); font-weight: 400; }
 /* The values in bold, so they stand out from their small-caps labels. */
 .unit-card .tip-facts dd { font-weight: 700; }
 .mr-chip[tabindex]:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }

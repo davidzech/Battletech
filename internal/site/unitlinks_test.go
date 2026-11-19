@@ -18,7 +18,7 @@ func TestUnitLinksCarryTheirCards(t *testing.T) {
 	if len(cards) != 2 {
 		t.Fatalf("the two known units get cards, the unknown one and the other site don't: %d in %s", len(cards), out)
 	}
-	var nova, grizzly unitLinkCard
+	var nova, grizzly unitCard
 	if err := json.Unmarshal([]byte(html.UnescapeString(cards[0][1])), &nova); err != nil {
 		t.Fatal(err)
 	}
@@ -78,5 +78,21 @@ func TestFirepowerAndRange(t *testing.T) {
 	}
 	if u.Firepower != 72 || u.MaxRange != 21 || u.Range != 9 {
 		t.Errorf("Atlas AS7-D: firepower %d, range %d (%d weighted), want 72, 21 (9)", u.Firepower, u.MaxRange, u.Range)
+	}
+}
+
+// The weapon type bar counts weapons by type (the Atlas AS7-D: an AC/20, four medium lasers, an LRM 20 and an SRM 6), and the overview's hangar views
+// carry the same card as a scenario's unit links.
+func TestWeaponCountsAndTheOverviewCard(t *testing.T) {
+	u, _ := unitByName("BMAtlas_AS7D")
+	if c := catalogCard(u); c.Weapons == nil || *c.Weapons != (weaponCounts{Ballistic: 1, Energy: 4, Missile: 2}) {
+		t.Errorf("Atlas AS7-D weapons: %+v", c.Weapons)
+	}
+	views := hangarViews(HangarForce{Units: []HangarUnit{{ID: "u1", Unit: "BMAtlas_AS7D"}, {ID: "u2", Unit: "BMNoSuchMech_X"}}})
+	if c := views[0].Card; c == nil || c.ID != "BMAtlas_AS7D" || c.Firepower != 72 || c.Weapons == nil || c.Gunnery != 0 {
+		t.Errorf("a hangar unit carries its catalog card, with no skills: %+v", c)
+	}
+	if views[1].Card != nil {
+		t.Error("an unknown unit has no card")
 	}
 }

@@ -1,0 +1,5 @@
+weapon-ballistic.svg, weapon-energy.svg and weapon-missile.svg are MekBay's weapon type icons
+(https://mekbay.com/images/ballistic.svg, energy.svg, missile.svg), copied unchanged from MekBay's
+source (public/images), Copyright (C) The MegaMek Team, licensed under the GNU General Public
+License v3.0 or later (https://www.gnu.org/licenses/gpl-3.0.html). The unit card (unitlinks.js)
+shows them beside each mech's count of ballistic, energy and missile weapons.
