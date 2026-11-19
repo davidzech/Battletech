@@ -1331,12 +1331,12 @@ dialog button.deploy-count:disabled, .overview-players button.deploy-count:disab
 .cards.scenarios.show-all li.locked { display: list-item; }
 .card.locked { opacity: 0.5; border-style: dashed; }
 .show-all { margin: 0.2rem 0 1.2rem; }
-.mission-log { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 1rem; margin: 1rem 0; padding: 0.6rem 1rem; background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--line); }
+/* The label and the state share a baseline (two sizes of capitals look crooked centred). Bahnschrift's capitals sit above the middle of their line box (its descent is larger than the space above them), so the bar is padded a pixel more on top and the LED raised a pixel, to centre on the capitals (whole pixels: a fraction is snapped away). */
+.mission-log { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.4rem 1rem; margin: 1rem 0; padding: calc(0.6rem + 1px) 1rem calc(0.6rem - 1px); background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--line); }
 .mission-log.completed { border-left-color: #5fc47e; }
 .mission-log-label { font: 700 0.75rem var(--display); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
 .mission-log-state { display: inline-flex; align-items: center; gap: 0.6rem; font: 700 1rem var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
-/* Bahnschrift's capitals sit above the middle of their line box (its descent is larger than the space above the capitals), so the all-caps state is nudged down to line up with the LED and the label (a whole pixel: a fraction is snapped away). */
-.mission-log-state > span { position: relative; top: 1px; }
+.mission-log-state .mission-led { position: relative; top: -1px; }
 .mission-log.completed .mission-log-state { color: #5fc47e; }
 .mission-log.locked .mission-log-state { color: var(--muted); }
 .mission-log .outcome-summary { flex-basis: 100%; }
