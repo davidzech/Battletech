@@ -379,7 +379,7 @@ func TestShortCommit(t *testing.T) {
 		"dev":     "dev",
 		"e42dcb5": "e42dcb5",
 		"e42dcb519e167135fb40db03d94a087dbc10261b":       "e42dcb5",
-		"e42dcb519e167135fb40db03d94a087dbc10261b-dirty": "e42dcb5-dirty",
+		"e42dcb519e167135fb40db03d94a087dbc10261b-dirty": "e42dcb5", // the "-dirty" mark is dropped
 	} {
 		if got := shortCommit(in); got != want {
 			t.Errorf("shortCommit(%q) = %q, want %q", in, got, want)
