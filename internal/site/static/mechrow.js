@@ -79,7 +79,8 @@
     return tip;
   }
   // content: { title, cls, text, lines: [{ label, value }] }, or { build: function () -> element } for custom content; optional delay (ms), focusable: false,
-  // and interactive: true to let the pointer move onto the card (and into things inside it, like the ability chips of a pilot card) without it going away.
+  // and interactive: true to let the pointer move onto the card (and into things inside it, like the ability chips of a pilot card) without it going away;
+  // align: 'right' lines the card's right edge up with the element's (a Hangar row's card, so the mechs on the left stay in view).
   function attachTip(pill, content) {
     if (content.focusable !== false) pill.tabIndex = 0; // false for a part of something that is already focusable
     pill.setAttribute('aria-describedby', 'pill-tip');
@@ -91,6 +92,7 @@
       if (t.parentNode !== host) host.appendChild(t);
       t.textContent = '';
       t.classList.toggle('wide', !!content.build);
+      t.classList.toggle('interactive', !!content.interactive); // takes the pointer, with a bridge back to its element (style.css)
       if (content.build) {
         t.appendChild(content.build()); // custom content, e.g. a pilot card
       } else {
@@ -109,7 +111,7 @@
       t.hidden = false;
       if (canPopover && !t.matches(':popover-open')) t.showPopover();
       var r = pill.getBoundingClientRect(), w = t.offsetWidth, h = t.offsetHeight, gap = 6;
-      var left = Math.min(Math.max(8, r.left), window.innerWidth - w - 8);
+      var left = Math.min(Math.max(8, content.align === 'right' ? r.right - w : r.left), window.innerWidth - w - 8);
       var top = r.bottom + gap;
       var above = false;
       if (top + h > window.innerHeight - 8 && r.top - gap - h >= 8) { top = r.top - gap - h; above = true; }

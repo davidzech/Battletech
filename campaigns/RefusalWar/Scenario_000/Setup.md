@@ -59,11 +59,11 @@ Layout both parts of the Circles of Equals battlemat.
 
 Each cadet is given a machine from the Trial's pool:
 
-- [Nova Prime](https://mekbay.com/?gs=cbt&shareUnit=BMBlackHawk_Prime&tab=Sheet)
-- [Stormcrow Prime](https://mekbay.com/?gs=cbt&shareUnit=BMRyoken_Prime&tab=Sheet)
-- [Shadow Cat Prime](https://mekbay.com/?gs=cbt&shareUnit=BMShadowCat_Prime&tab=Sheet)
-- [Pouncer Prime](https://mekbay.com/?gs=cbt&shareUnit=BMPouncer_Prime&tab=Sheet)
-- [Mongrel Prime](https://mekbay.com/?gs=cbt&shareUnit=BMGrendel_Prime&tab=Sheet)
+- [Nova Prime](https://mekbay.com/?gs=cbt&shareUnit=BMBlackHawk_Prime&tab=General)
+- [Stormcrow Prime](https://mekbay.com/?gs=cbt&shareUnit=BMRyoken_Prime&tab=General)
+- [Shadow Cat Prime](https://mekbay.com/?gs=cbt&shareUnit=BMShadowCat_Prime&tab=General)
+- [Pouncer Prime](https://mekbay.com/?gs=cbt&shareUnit=BMPouncer_Prime&tab=General)
+- [Mongrel Prime](https://mekbay.com/?gs=cbt&shareUnit=BMGrendel_Prime&tab=General)
 
 These machines are lent for the Trial only: they are not part of your force, and whatever happens to them does not follow you out of the Circle. No more than two machines may take the field in all, and each must have a named pilot.
 
@@ -73,17 +73,17 @@ These machines are lent for the Trial only: they are not part of your force, and
 
 **Deployment:** TBD
 
-- [Mist Lynx E](https://mekbay.com/?gs=cbt&shareUnit=BMKoshi_E&tab=Sheet) (3/4) Striker
-- [Grizzly](https://mekbay.com/?gs=cbt&shareUnit=BMGrizzly&tab=Sheet) (3/4) Skirmisher
-- [Timber Wolf H](https://mekbay.com/?gs=cbt&shareUnit=BMMadCat_H&tab=Sheet) (3/4) Missile Boat
+- [Mist Lynx E](https://mekbay.com/?gs=cbt&shareUnit=BMKoshi_E&tab=General) (3/4) Striker
+- [Grizzly](https://mekbay.com/?gs=cbt&shareUnit=BMGrizzly&tab=General) (3/4) Skirmisher
+- [Timber Wolf H](https://mekbay.com/?gs=cbt&shareUnit=BMMadCat_H&tab=General) (3/4) Missile Boat
 
 ### OpFor 2
 
 **Deployment:** TBD
 
-- [Kit Fox J](https://mekbay.com/?gs=cbt&shareUnit=BMUller_J&tab=Sheet) (3/4) Striker
-- [Shadow Cat A](https://mekbay.com/?gs=cbt&shareUnit=BMShadowCat_A&tab=Sheet) (3/4) Sniper
-- [Loki Prime](https://mekbay.com/?gs=cbt&shareUnit=BMLoki_Prime&tab=Sheet) (3/4) Striker
+- [Kit Fox J](https://mekbay.com/?gs=cbt&shareUnit=BMUller_J&tab=General) (3/4) Striker
+- [Shadow Cat A](https://mekbay.com/?gs=cbt&shareUnit=BMShadowCat_A&tab=General) (3/4) Sniper
+- [Loki Prime](https://mekbay.com/?gs=cbt&shareUnit=BMLoki_Prime&tab=General) (3/4) Striker
 
 ## Special Rules
 

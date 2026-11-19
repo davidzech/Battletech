@@ -68,16 +68,16 @@ Field any force up to 10,000 BV.
 
 **Deployment:** the eastern side of the map.
 
-- [Nova Prime](https://mekbay.com/?gs=cbt&shareUnit=BMBlackHawk_Prime&tab=Sheet) (3/4) Skirmisher: Star Commander Alrek, hex 2113
-- [Mongrel Prime](https://mekbay.com/?gs=cbt&shareUnit=BMGrendel_Prime&tab=Sheet) (3/4) Striker: Katarina, hex 2003
+- [Nova Prime](https://mekbay.com/?gs=cbt&shareUnit=BMBlackHawk_Prime&tab=General) (3/4) Skirmisher: Star Commander Alrek, hex 2113
+- [Mongrel Prime](https://mekbay.com/?gs=cbt&shareUnit=BMGrendel_Prime&tab=General) (3/4) Striker: Katarina, hex 2003
 
 ### OpFor 2
 
 **Deployment:** reserve. They enter the map when **Waypoint H** is revealed (see Waypoints).
 
-- [Howler](https://mekbay.com/?gs=cbt&shareUnit=BMBaboon&tab=Sheet) (3/4) Missile Boat: Rurik
-- [Kit Fox Prime](https://mekbay.com/?gs=cbt&shareUnit=BMUller_Prime&tab=Sheet) (3/4) Sniper: Sybille
-- [Fire Moth Prime](https://mekbay.com/?gs=cbt&shareUnit=BMDasher_Prime&tab=Sheet) (3/4) Striker: Jarek
+- [Howler](https://mekbay.com/?gs=cbt&shareUnit=BMBaboon&tab=General) (3/4) Missile Boat: Rurik
+- [Kit Fox Prime](https://mekbay.com/?gs=cbt&shareUnit=BMUller_Prime&tab=General) (3/4) Sniper: Sybille
+- [Fire Moth Prime](https://mekbay.com/?gs=cbt&shareUnit=BMDasher_Prime&tab=General) (3/4) Striker: Jarek
 
 ## Special Rules
 

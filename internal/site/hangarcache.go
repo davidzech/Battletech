@@ -16,10 +16,12 @@ import (
 // never been read shows the loading state, once. The copy belongs to the hangar link it was read from: change the link and the
 // old copy is ignored.
 
-// forceData is the hangar as the campaign overview shows it: every unit, and the base BV they sum to (an unknown unit adds
-// nothing; a destroyed one still counts, being still in the hangar).
-func forceData(h HangarForce) map[string]any {
+// forceData is the hangar as the campaign overview and the Manage page show it: every unit, and the base BV they sum to (an unknown unit adds
+// nothing; a destroyed one still counts, being still in the hangar), with each omnimech's variants marked as available to the campaign's faction
+// in its era or not.
+func forceData(h HangarForce, c *Campaign) map[string]any {
 	units := hangarViews(h)
+	markSwapAvailability(units, c)
 	bv := 0
 	for _, u := range units {
 		if !u.Unknown {
@@ -48,7 +50,7 @@ func (p Page) ForceJSON() string {
 	if p.CachedHangar == nil {
 		return ""
 	}
-	return cachedJSON(forceData(*p.CachedHangar), p.CachedAt)
+	return cachedJSON(forceData(*p.CachedHangar, p.Campaign), p.CachedAt)
 }
 
 // PilotsJSON is the campaign's living named pilots for the Deploy popup's pilot tray: who they are, their four numbers, and (for the hover card, which

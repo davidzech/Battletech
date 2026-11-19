@@ -358,7 +358,7 @@ func renderMarkdown(src string, stripTitle bool) template.HTML {
 	}
 	// External links (MekBay etc.) open in a new tab.
 	out := externalLink.ReplaceAllString(buf.String(), `<a href="$1" target="_blank" rel="noopener noreferrer"`)
-	return template.HTML(out)
+	return template.HTML(annotateUnitLinks(out)) // a link to a unit's MekBay page carries the unit's details for its hover card (unitlinks.go)
 }
 
 // Campaigns lists every campaign, sorted by folder name.
@@ -498,11 +498,15 @@ func (c *Campaign) applyIntro(meta introMeta) {
 	c.MVPSP = meta.MVPSP
 }
 
-// checkScenarios reports what is wrong with the scenarios as a whole: an outcome engine that doesn't compile, and a branch to a scenario that doesn't exist.
+// checkScenarios reports what is wrong with the scenarios as a whole: an outcome engine that doesn't compile, a link to a MekBay unit the catalog
+// doesn't know, and a branch to a scenario that doesn't exist.
 func (c *Campaign) checkScenarios() {
 	for _, sc := range c.Scenarios {
 		if sc.OutcomeError != "" {
 			c.Problems = append(c.Problems, sc.Slug+"/Outcome.md: "+sc.OutcomeError)
+		}
+		for _, id := range unknownUnitLinks(string(sc.BriefingHTML) + string(sc.SetupHTML)) {
+			c.Problems = append(c.Problems, fmt.Sprintf("%s/Setup.md: links to the MekBay unit %q, which is not in the unit catalog", sc.Slug, id))
 		}
 		for _, b := range sc.Branches {
 			if _, ok := c.Scenario(b); !ok {
