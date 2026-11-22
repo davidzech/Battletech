@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/davidzech/Battletech/internal/storage"
+
 	"github.com/davidzech/Battletech/internal/content"
 
 	"github.com/davidzech/Battletech/internal/mekbay"
@@ -317,7 +319,7 @@ func TestCompletingTheMissionEndsTheBattle(t *testing.T) {
 	_, store, _ := startedCompany(t)
 	ctx := context.Background()
 	id := playthroughID("wolfpack2026")
-	op := MekBayOperation{OpForInstance: "of", OperationID: "op"}
+	op := storage.MekBayOperation{OpForInstance: "of", OperationID: "op"}
 	for name, complete := range map[string]func(scenario string) error{
 		"marked completed": func(sc string) error { return store.SetScenarioCompleted(ctx, id, "refusalwar", sc, true) },
 		"completed with an outcome": func(sc string) error {

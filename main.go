@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/davidzech/Battletech/internal/site"
+	"github.com/davidzech/Battletech/internal/storage"
 )
 
 // defaultAddr listens on every interface, except under `go run`, where it stays on localhost so
@@ -30,15 +31,15 @@ func main() {
 	flag.Parse()
 
 	var (
-		store *site.Store
+		store *storage.Store
 		err   error
 		desc  string
 	)
 	if *pgURL != "" {
-		store, err = site.OpenPostgres(*pgURL)
+		store, err = storage.OpenPostgres(*pgURL)
 		desc = "postgres"
 	} else {
-		store, err = site.OpenSQLite(*dbPath)
+		store, err = storage.OpenSQLite(*dbPath)
 		desc = "sqlite " + *dbPath
 	}
 	if err != nil {

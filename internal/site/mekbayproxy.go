@@ -19,6 +19,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/davidzech/Battletech/internal/storage"
+
 	"github.com/coder/websocket"
 )
 
@@ -128,8 +130,8 @@ func parseMekBayHost(host string) (id string, kind mekbayHostKind) {
 	switch {
 	case first == "mekbay":
 		return "", sandboxHost
-	case strings.HasPrefix(first, mekbayLinkPrefix):
-		if id := strings.TrimPrefix(first, mekbayLinkPrefix); validMekBayLinkID(id) {
+	case strings.HasPrefix(first, storage.LinkPrefix):
+		if id := strings.TrimPrefix(first, storage.LinkPrefix); storage.ValidLinkID(id) {
 			return id, linkHost
 		}
 		return "", linkHost
@@ -185,7 +187,7 @@ func (p *mekbayProxy) account(r *http.Request) (account string, status int, msg 
 	switch {
 	case kind == linkHost:
 		if id == "" {
-			return "", http.StatusForbidden, ErrBadLink.Error()
+			return "", http.StatusForbidden, storage.ErrBadLink.Error()
 		}
 		acct, ok, err := p.links.MekBayLink(r.Context(), id, p.now())
 		if err != nil {
@@ -193,11 +195,11 @@ func (p *mekbayProxy) account(r *http.Request) (account string, status int, msg 
 			return "", http.StatusInternalServerError, "Could not look the link up."
 		}
 		if !ok {
-			return "", http.StatusForbidden, ErrBadLink.Error()
+			return "", http.StatusForbidden, storage.ErrBadLink.Error()
 		}
 		return acct, 0, ""
 	case kind == sandboxHost && sandboxAllowed(r):
-		return sandboxAccount, 0, ""
+		return storage.SandboxAccount, 0, ""
 	}
 	return "", http.StatusForbidden, "Open your MekBay link from the site first."
 }
@@ -469,7 +471,7 @@ const tableLabel = "table"
 // same ever after), with the given query: ?instance=<force> loads a force and ?operation=<id> an operation.
 // tableLabel is the label of the link the whole table shares.
 func (s *Server) mekbayLink(r *http.Request, playthroughID, campaign, label, account string, query url.Values) (string, error) {
-	id, err := s.store.EnsureMekBayLink(r.Context(), playthroughID, campaign, label, account, mekbayLinkTTL, s.proxy.now())
+	id, err := s.store.EnsureMekBayLink(r.Context(), playthroughID, campaign, label, account, storage.LinkTTL, s.proxy.now())
 	if err != nil {
 		return "", err
 	}
@@ -477,7 +479,7 @@ func (s *Server) mekbayLink(r *http.Request, playthroughID, campaign, label, acc
 	if isHTTPS(r) {
 		scheme = "https"
 	}
-	link := scheme + "://" + mekbayLinkPrefix + id + "." + siteHost(r.Host) + "/"
+	link := scheme + "://" + storage.LinkPrefix + id + "." + siteHost(r.Host) + "/"
 	if len(query) > 0 {
 		link += "?" + query.Encode()
 	}

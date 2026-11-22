@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/davidzech/Battletech/internal/storage"
+
 	"github.com/davidzech/Battletech/internal/content"
 )
 
@@ -27,7 +29,7 @@ func TestForceNames(t *testing.T) {
 	if _, err := parseAccountName(""); err == nil || !strings.Contains(err.Error(), "account") {
 		t.Errorf("and for an account: %v", err)
 	}
-	if (CampaignRun{}).ForceLabel() != "Your force" || (CampaignRun{ForceName: "Kell Hounds"}).ForceLabel() != "Kell Hounds" {
+	if (storage.CampaignRun{}).ForceLabel() != "Your force" || (storage.CampaignRun{ForceName: "Kell Hounds"}).ForceLabel() != "Kell Hounds" {
 		t.Error("a run from before forces were named is just 'Your force'")
 	}
 }

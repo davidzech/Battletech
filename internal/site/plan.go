@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/davidzech/Battletech/internal/storage"
+
 	"github.com/davidzech/Battletech/internal/content"
 
 	"github.com/davidzech/Battletech/internal/mekbay"
@@ -76,8 +78,8 @@ func planProblem(h mekbay.HangarForce, units [][]string, bvLimit int) string {
 
 // builtPlan is a deployment plan that has passed every check.
 type builtPlan struct {
-	pt    Playthrough
-	run   CampaignRun
+	pt    storage.Playthrough
+	run   storage.CampaignRun
 	c     *content.Campaign
 	sc    *content.Scenario
 	h     mekbay.HangarForce // the force the players take their mechs from (the hangar, or the scenario's provided mechs)

@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/davidzech/Battletech/internal/storage"
+
 	"github.com/davidzech/Battletech/internal/pilot"
 )
 
@@ -30,7 +32,7 @@ func TestCheckpointsAndRollback(t *testing.T) {
 		}
 		return v
 	}
-	state := func() (run CampaignRun, sp map[string]int, fallen map[string]bool) {
+	state := func() (run storage.CampaignRun, sp map[string]int, fallen map[string]bool) {
 		run, _, _ = store.Run(ctx, id, "refusalwar")
 		sp, fallen = map[string]int{}, map[string]bool{}
 		ps, _ := store.Pilots(ctx, id, "refusalwar")
@@ -39,7 +41,7 @@ func TestCheckpointsAndRollback(t *testing.T) {
 		}
 		return
 	}
-	checkpoints := func() []Checkpoint {
+	checkpoints := func() []storage.Checkpoint {
 		cps, err := store.Checkpoints(ctx, id, "refusalwar")
 		if err != nil {
 			t.Fatal(err)
@@ -101,7 +103,7 @@ func TestCheckpointsAndRollback(t *testing.T) {
 	// Between missions, things change (a pilot's SP, the funds), and a battle starts for the next mission.
 	post(t, srv, "/api/pilots/allocate", form("pilot", pilotID["Alrek"], "earned", "40"), cookie, srv.URL)
 	post(t, srv, "/api/warchest", form("funds", "1"), cookie, srv.URL)
-	if err := store.SaveMekBayOperation(ctx, id, "refusalwar", "scenario_001", MekBayOperation{OpForInstance: "opfor", OperationID: "op-1"}); err != nil {
+	if err := store.SaveMekBayOperation(ctx, id, "refusalwar", "scenario_001", storage.MekBayOperation{OpForInstance: "opfor", OperationID: "op-1"}); err != nil {
 		t.Fatal(err)
 	}
 	_, spBefore, _ := state()
@@ -164,17 +166,17 @@ func TestCheckpointsAndRollback(t *testing.T) {
 
 	// A campaign keeps at most maxCheckpoints; the oldest go, and their hangars are deleted.
 	first := checkpoints()[0].HangarCopy
-	for i := 0; i < maxCheckpoints+3; i++ {
+	for i := 0; i < storage.MaxCheckpoints+3; i++ {
 		dropped, err := store.AddCheckpoint(ctx, id, "refusalwar", "Filler "+strconv.Itoa(i), "copy-"+strconv.Itoa(i))
 		if err != nil {
 			t.Fatal(err)
 		}
 		_ = dropped
 	}
-	if n := len(checkpoints()); n != maxCheckpoints {
-		t.Errorf("at most %d checkpoints: %d", maxCheckpoints, n)
+	if n := len(checkpoints()); n != storage.MaxCheckpoints {
+		t.Errorf("at most %d checkpoints: %d", storage.MaxCheckpoints, n)
 	}
-	if cps := checkpoints(); cps[0].Label != "Filler "+strconv.Itoa(maxCheckpoints+2) || slices.ContainsFunc(cps, func(c Checkpoint) bool { return c.HangarCopy == first }) {
+	if cps := checkpoints(); cps[0].Label != "Filler "+strconv.Itoa(storage.MaxCheckpoints+2) || slices.ContainsFunc(cps, func(c storage.Checkpoint) bool { return c.HangarCopy == first }) {
 		t.Errorf("the newest are kept and the oldest dropped: %+v", cps[0])
 	}
 
@@ -276,7 +278,7 @@ func TestAbortModes(t *testing.T) {
 		return v
 	}
 	battle := func(op string) {
-		if err := store.SaveMekBayOperation(ctx, id, "refusalwar", "scenario_000", MekBayOperation{OpForInstance: "opfor", OperationID: op}); err != nil {
+		if err := store.SaveMekBayOperation(ctx, id, "refusalwar", "scenario_000", storage.MekBayOperation{OpForInstance: "opfor", OperationID: op}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -340,7 +342,7 @@ func TestRollbackRestoresKeywords(t *testing.T) {
 	}
 	id := playthroughID(seed)
 	grant := func(kw string) {
-		if _, err := store.db.ExecContext(ctx, store.q(`INSERT INTO campaign_keywords (playthrough_id, campaign, keyword, scenario_id) VALUES (?, ?, ?, ?)`), id, "refusalwar", kw, "scenario_000"); err != nil {
+		if _, err := store.DB().ExecContext(ctx, store.Rebind(`INSERT INTO campaign_keywords (playthrough_id, campaign, keyword, scenario_id) VALUES (?, ?, ?, ?)`), id, "refusalwar", kw, "scenario_000"); err != nil {
 			t.Fatal(err)
 		}
 	}

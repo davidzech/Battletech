@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/davidzech/Battletech/internal/storage"
+
 	"github.com/davidzech/Battletech/internal/content"
 
 	"github.com/davidzech/Battletech/internal/pilot"
@@ -45,7 +47,7 @@ func TestMissionOutcomeEndToEnd(t *testing.T) {
 	commit := func(v url.Values) int {
 		return post(t, srv, "/api/campaign/scenario-outcome/commit", v, cookie, srv.URL).StatusCode
 	}
-	state := func() (alrek, katarina pilot.NamedPilot, run CampaignRun) {
+	state := func() (alrek, katarina pilot.NamedPilot, run storage.CampaignRun) {
 		ps, _ := store.Pilots(ctx, id, "refusalwar")
 		for _, p := range ps {
 			if p.Name == "Alrek" {
@@ -181,7 +183,7 @@ func TestFreeRecruitIsRestoredOnFailure(t *testing.T) {
 	srv, store, cookie := startedCompany(t)
 	ctx := context.Background()
 	id := playthroughID("wolfpack2026")
-	if _, err := store.db.Exec(`UPDATE campaign_runs SET free_recruits = 1`); err != nil {
+	if _, err := store.DB().Exec(`UPDATE campaign_runs SET free_recruits = 1`); err != nil {
 		t.Fatal(err)
 	}
 	if got := post(t, srv, "/api/pilots", url.Values{"campaign": {"refusalwar"}, "name": {"alrek"}}, cookie, srv.URL).StatusCode; got != http.StatusBadRequest {

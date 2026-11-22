@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/davidzech/Battletech/internal/storage"
+
 	"github.com/davidzech/Battletech/internal/content"
 
 	"github.com/davidzech/Battletech/internal/format"
@@ -18,7 +20,7 @@ import (
 
 // pilotRequest checks what every endpoint that changes a campaign needs (see runRequest) and returns the playthrough and the campaign. It writes the error
 // response itself and reports ok=false.
-func (s *Server) pilotRequest(w http.ResponseWriter, r *http.Request) (pt Playthrough, c *content.Campaign, ok bool) {
+func (s *Server) pilotRequest(w http.ResponseWriter, r *http.Request) (pt storage.Playthrough, c *content.Campaign, ok bool) {
 	pt, c, _, ok = s.runRequest(w, r)
 	return pt, c, ok
 }
@@ -81,7 +83,7 @@ func (s *Server) addPilot(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if cost > 0 {
-		if err := s.store.SpendWarchest(r.Context(), pt.ID, c.Slug, cost); errors.Is(err, ErrInsufficientFunds) {
+		if err := s.store.SpendWarchest(r.Context(), pt.ID, c.Slug, cost); errors.Is(err, storage.ErrInsufficientFunds) {
 			http.Error(w, fmt.Sprintf("Not enough in the warchest: recruiting a pilot costs %d SP.", cost), http.StatusConflict)
 			return
 		} else if err != nil {
@@ -105,7 +107,7 @@ func (s *Server) addPilot(w http.ResponseWriter, r *http.Request) {
 		refund()
 		http.Error(w, fmt.Sprintf("You can have at most %d named pilots at a time.", c.PilotLimit()), http.StatusBadRequest)
 		return
-	} else if errors.Is(err, ErrNameTaken) {
+	} else if errors.Is(err, storage.ErrNameTaken) {
 		refund()
 		http.Error(w, "Another pilot already has that name.", http.StatusBadRequest)
 		return
@@ -301,7 +303,7 @@ func (s *Server) allocateSP(w http.ResponseWriter, r *http.Request) {
 	if err := s.store.ApplySP(r.Context(), pt.ID, c.Slug, r.PostFormValue("pilot"), earned, a); errors.Is(err, sql.ErrNoRows) {
 		http.Error(w, "No such living pilot.", http.StatusNotFound)
 		return
-	} else if errors.Is(err, ErrNotEnoughSP) {
+	} else if errors.Is(err, storage.ErrNotEnoughSP) {
 		http.Error(w, "That is more SP than the pilot has unallocated.", http.StatusBadRequest)
 		return
 	} else if err != nil {
@@ -388,7 +390,7 @@ func (s *Server) setPilotTotal(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
 		http.Error(w, "No such pilot.", http.StatusNotFound)
-	case errors.Is(err, ErrTotalBelowAllocated):
+	case errors.Is(err, storage.ErrTotalBelowAllocated):
 		http.Error(w, "That total is below the SP already allocated. Setting it resets the pilot's allocation.", http.StatusConflict)
 	case err != nil:
 		http.Error(w, "could not save the total", http.StatusInternalServerError)
@@ -432,7 +434,7 @@ func (s *Server) renamePilot(w http.ResponseWriter, r *http.Request) {
 	switch err := s.store.RenamePilot(r.Context(), pt.ID, c.Slug, r.PostFormValue("pilot"), name); {
 	case errors.Is(err, sql.ErrNoRows):
 		http.Error(w, "No such pilot.", http.StatusNotFound)
-	case errors.Is(err, ErrNameTaken):
+	case errors.Is(err, storage.ErrNameTaken):
 		http.Error(w, "Another pilot already has that name.", http.StatusBadRequest)
 	case err != nil:
 		http.Error(w, "could not rename the pilot", http.StatusInternalServerError)
@@ -472,13 +474,13 @@ func (s *Server) learnAbilities(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
 		http.Error(w, "No such living pilot.", http.StatusNotFound)
-	case errors.Is(err, ErrNoPendingAbilities):
+	case errors.Is(err, storage.ErrNoPendingAbilities):
 		http.Error(w, "This pilot has no new Edge ability to choose.", http.StatusBadRequest)
-	case errors.Is(err, ErrAbilityCount):
+	case errors.Is(err, storage.ErrAbilityCount):
 		http.Error(w, "Choose an Edge ability for each one the pilot has earned.", http.StatusBadRequest)
-	case errors.Is(err, ErrUnknownAbility):
+	case errors.Is(err, storage.ErrUnknownAbility):
 		http.Error(w, "Pick the Edge abilities from the list.", http.StatusBadRequest)
-	case errors.Is(err, ErrAbilityLearned):
+	case errors.Is(err, storage.ErrAbilityLearned):
 		http.Error(w, "Each Edge ability can be learned once.", http.StatusBadRequest)
 	case err != nil:
 		http.Error(w, "could not save the Edge abilities", http.StatusInternalServerError)
@@ -505,7 +507,7 @@ func (s *Server) resetEdgeAbilities(w http.ResponseWriter, r *http.Request) {
 
 // recruitStatus says whether the command can recruit a named pilot now, and the brief note shown under the Recruit button: why not (a full command, too little in
 // the warchest), or what it costs.
-func recruitStatus(c *content.Campaign, run CampaignRun, alive int) (can bool, note string) {
+func recruitStatus(c *content.Campaign, run storage.CampaignRun, alive int) (can bool, note string) {
 	limit, cost, free := c.PilotLimit(), c.RecruitCost, run.FreeRecruits > 0
 	can = alive < limit && (free || run.Warchest >= cost)
 	switch {

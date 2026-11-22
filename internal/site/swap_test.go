@@ -23,7 +23,7 @@ func TestSwapUnitEndpoint(t *testing.T) {
 		t.Fatalf("start: %d", r.StatusCode)
 	}
 	// These tests are about prices, not the campaign's starting funds: give them a round balance.
-	if _, err := store.db.Exec(`UPDATE campaign_runs SET warchest = 4500`); err != nil {
+	if _, err := store.DB().Exec(`UPDATE campaign_runs SET warchest = 4500`); err != nil {
 		t.Fatal(err)
 	}
 	id := playthroughID("wolfpack2026")

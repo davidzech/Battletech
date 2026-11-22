@@ -5,6 +5,8 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/davidzech/Battletech/internal/storage"
+
 	"github.com/davidzech/Battletech/internal/content"
 )
 
@@ -13,7 +15,7 @@ import (
 // mekbayRequest is what both MekBay endpoints need first: the seed's playthrough, the campaign and scenario named by
 // the request, and the playthrough's run of that campaign (which holds its hangar). It writes the error response
 // itself and reports ok=false.
-func (s *Server) mekbayRequest(w http.ResponseWriter, r *http.Request) (pt Playthrough, run CampaignRun, c *content.Campaign, sc *content.Scenario, ok bool) {
+func (s *Server) mekbayRequest(w http.ResponseWriter, r *http.Request) (pt storage.Playthrough, run storage.CampaignRun, c *content.Campaign, sc *content.Scenario, ok bool) {
 	seed := currentSeed(r)
 	if seed == "" {
 		http.Error(w, "Choose a seed first.", http.StatusBadRequest)

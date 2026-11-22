@@ -14,6 +14,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/davidzech/Battletech/internal/storage"
+
 	"github.com/davidzech/Battletech/internal/content"
 
 	"github.com/davidzech/Battletech/internal/mekbay"
@@ -62,12 +64,12 @@ type Page struct {
 	HasLocked          bool                   // some scenario cards are locked, so the campaign page offers 'Show all scenarios'
 	ScenarioState      string                 // on a scenario page: completed, available or locked
 	NextScenarios      []content.Scenario     // on a completed scenario's page: the scenarios it leads to, which are now available
-	Ledger             []LedgerEntry          // the keywords the campaign has been granted (on the keywords page)
+	Ledger             []storage.LedgerEntry  // the keywords the campaign has been granted (on the keywords page)
 	Outcome            *content.OutcomeResult // on a completed scenario page: the recorded report of its outcome
 	Images             []string               // URLs of the scenario's images
 	Seed               string                 // the visitor's seed ("" if none chosen yet)
-	Play               Playthrough            // the visitor's playthrough (zero value if no seed)
-	Run                CampaignRun            // the playthrough's run of this page's campaign (zero value until it is started)
+	Play               storage.Playthrough    // the visitor's playthrough (zero value if no seed)
+	Run                storage.CampaignRun    // the playthrough's run of this page's campaign (zero value until it is started)
 	Pilots             []pilot.PilotView      // the run's named pilots
 	CanRecruit         bool                   // the command has room for another living named pilot, and the warchest can pay for them
 	RecruitNote        string                 // the short gray note under Recruit New Pilot: why it is unavailable, or what it costs
@@ -94,7 +96,7 @@ type Card struct{ Num, Name, Sub, URL, State string } // State: "completed", "av
 // Server serves the campaigns found under the content root.
 type Server struct {
 	lib    content.Library
-	store  *Store
+	store  *storage.Store
 	pages  map[string]*template.Template
 	mekbay mekbay.MekBay
 
@@ -112,7 +114,7 @@ func WithMekBay(m mekbay.MekBay) Option { return func(s *Server) { s.mekbay = m 
 
 // NewHandler returns the site's HTTP handler. Campaign files are re-read on every request,
 // so edits show up on refresh.
-func NewHandler(contentRoot string, store *Store, opts ...Option) http.Handler {
+func NewHandler(contentRoot string, store *storage.Store, opts ...Option) http.Handler {
 	s := &Server{lib: content.Library{Root: contentRoot}, store: store, pages: map[string]*template.Template{}, mekbay: &mekbay.Client{}}
 	for _, o := range opts {
 		o(s)

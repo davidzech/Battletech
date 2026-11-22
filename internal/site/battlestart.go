@@ -9,6 +9,8 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/davidzech/Battletech/internal/storage"
+
 	"github.com/davidzech/Battletech/internal/mekbay"
 )
 
@@ -103,7 +105,7 @@ func (s *Server) startBattle(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
-	if err := s.store.SaveMekBayOperation(r.Context(), bp.pt.ID, bp.c.Slug, bp.sc.ID, MekBayOperation{OpForInstance: got.OpForInstance, OperationID: got.OperationID}); err != nil {
+	if err := s.store.SaveMekBayOperation(r.Context(), bp.pt.ID, bp.c.Slug, bp.sc.ID, storage.MekBayOperation{OpForInstance: got.OpForInstance, OperationID: got.OperationID}); err != nil {
 		log.Printf("record operation: %v", err)
 		http.Error(w, "The battle was started in MekBay but could not be recorded here.", http.StatusInternalServerError)
 		return

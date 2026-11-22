@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/davidzech/Battletech/internal/storage"
+
 	"github.com/davidzech/Battletech/internal/content"
 
 	"github.com/davidzech/Battletech/internal/mekbay"
@@ -157,7 +159,7 @@ func (s *Server) startCampaign(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if err := s.store.StartRunWithPilots(r.Context(), id, c.Slug, hangar, pilots, c.StartingWarchest, players, forceName); errors.Is(err, ErrAlreadyStarted) {
+	if err := s.store.StartRunWithPilots(r.Context(), id, c.Slug, hangar, pilots, c.StartingWarchest, players, forceName); errors.Is(err, storage.ErrAlreadyStarted) {
 		http.Error(w, "This campaign has already been started.", http.StatusConflict)
 		return
 	} else if err != nil {

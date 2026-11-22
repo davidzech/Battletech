@@ -14,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/davidzech/Battletech/internal/storage"
+
 	"github.com/davidzech/Battletech/internal/mekbay"
 
 	"github.com/coder/websocket"
@@ -110,7 +112,7 @@ type proxyFixture struct {
 	fake   *fakeUpstream
 	site   *httptest.Server
 	proxy  *mekbayProxy
-	store  *Store
+	store  *storage.Store
 	client *http.Client
 	port   string
 }
@@ -118,7 +120,7 @@ type proxyFixture struct {
 func newProxyFixture(t *testing.T) *proxyFixture {
 	t.Helper()
 	fake := newFakeUpstream(t)
-	store, err := OpenSQLite(t.TempDir() + "/proxy.db")
+	store, err := storage.OpenSQLite(t.TempDir() + "/proxy.db")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,7 +151,7 @@ func (p *proxyFixture) link(t *testing.T, label, account string) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return mekbayLinkPrefix + id + ".localhost"
+	return storage.LinkPrefix + id + ".localhost"
 }
 
 func (p *proxyFixture) get(t *testing.T, host, path string) (*http.Response, string) {
@@ -193,7 +195,7 @@ func whoIs(t *testing.T, conn *websocket.Conn) string {
 }
 
 func TestMekBayHostParsing(t *testing.T) {
-	id := newMekBayLinkID()
+	id := storage.NewLinkID()
 	for _, c := range []struct {
 		host string
 		id   string
@@ -317,9 +319,9 @@ func TestMekBayProxyRefusesBadLinks(t *testing.T) {
 		t.Fatal(ok, err)
 	}
 	for name, host := range map[string]string{
-		"an unknown id":   mekbayLinkPrefix + newMekBayLinkID() + ".localhost",
+		"an unknown id":   storage.LinkPrefix + storage.NewLinkID() + ".localhost",
 		"a malformed id":  "mekbay-nope.localhost",
-		"an expired link": mekbayLinkPrefix + expired + ".localhost",
+		"an expired link": storage.LinkPrefix + expired + ".localhost",
 		"a revoked link":  revoked,
 	} {
 		resp, body := p.get(t, host, "/")
@@ -486,7 +488,7 @@ func TestMekBayRelaySandbox(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer b.CloseNow()
-	sandbox := sandboxAccount
+	sandbox := storage.SandboxAccount
 	if ua, ub := whoIs(t, a), whoIs(t, b); ua != sandbox || ub != sandbox || sandbox == testAccount || len(sandbox) != 36 {
 		t.Errorf("everyone on the bare host shares one account: %q %q want %q", ua, ub, sandbox)
 	}
@@ -565,7 +567,7 @@ func TestSwapUUID(t *testing.T) {
 }
 
 func TestMekBayLinkBuilder(t *testing.T) {
-	store, err := OpenSQLite(t.TempDir() + "/builder.db")
+	store, err := storage.OpenSQLite(t.TempDir() + "/builder.db")
 	if err != nil {
 		t.Fatal(err)
 	}

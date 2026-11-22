@@ -1,4 +1,4 @@
-package site
+package storage
 
 import (
 	"context"
@@ -28,18 +28,18 @@ import (
 // bookmarked; revoking it makes the next request for that label mint a new id (and so a new host name).
 
 const (
-	// mekbayLinkPrefix starts the first label of a link's host name: mekbay-<id>.
-	mekbayLinkPrefix = "mekbay-"
+	// LinkPrefix starts the first label of a link's host name: mekbay-<id>.
+	LinkPrefix = "mekbay-"
 	// mekbayLinkIDLen is the length of an id: 20 random bytes in lowercase base32.
 	mekbayLinkIDLen = 32
-	// mekbayLinkTTL is how long a link stays valid after it was last handed out or used.
-	mekbayLinkTTL = 14 * 24 * time.Hour
+	// LinkTTL is how long a link stays valid after it was last handed out or used.
+	LinkTTL = 14 * 24 * time.Hour
 )
 
 var linkEncoding = base32.StdEncoding.WithPadding(base32.NoPadding)
 
-// newMekBayLinkID makes a link id: 160 random bits as 32 characters of a-z and 2-7, which are safe in a DNS label.
-func newMekBayLinkID() string {
+// NewLinkID makes a link id: 160 random bits as 32 characters of a-z and 2-7, which are safe in a DNS label.
+func NewLinkID() string {
 	b := make([]byte, 20)
 	if _, err := rand.Read(b); err != nil {
 		panic(err) // only fails if the system has no randomness
@@ -47,8 +47,8 @@ func newMekBayLinkID() string {
 	return strings.ToLower(linkEncoding.EncodeToString(b))
 }
 
-// validMekBayLinkID says whether s has the shape of a link id (it says nothing about whether the link exists).
-func validMekBayLinkID(s string) bool {
+// ValidLinkID says whether s has the shape of a link id (it says nothing about whether the link exists).
+func ValidLinkID(s string) bool {
 	if len(s) != mekbayLinkIDLen {
 		return false
 	}
@@ -63,9 +63,9 @@ func validMekBayLinkID(s string) bool {
 // ErrBadLink means a MekBay link is not valid, has expired or was revoked.
 var ErrBadLink = errors.New("This MekBay link is not valid or has expired.")
 
-// sandboxAccount is the shared account a browser opening the proxy directly on a developer's machine acts as (see sandboxAllowed). It is not a secret: everyone
+// SandboxAccount is the shared account a browser opening the proxy directly on a developer's machine acts as (see sandboxAllowed). It is not a secret: everyone
 // who opens the proxy that way shares it.
-var sandboxAccount = mekbay.MekBayUID("battletech localhost sandbox", "sandbox")
+var SandboxAccount = mekbay.MekBayUID("battletech localhost sandbox", "sandbox")
 
 // EnsureMekBayLink returns the link id for a playthrough's campaign and label, making it when there is none and making sure it names account and
 // is valid for ttl from now. Asking again gives the same id, so the link stays the same (and bookmarkable) for as long as it lives.
@@ -87,7 +87,7 @@ func (s *Store) EnsureMekBayLink(ctx context.Context, playthroughID, campaign, l
 		_, err = s.db.ExecContext(ctx, s.q(`UPDATE mekbay_links SET account = ?, ttl_seconds = ?, expires_at = ? WHERE id = ?`), account, secs, expires, id)
 		return id, err
 	case errors.Is(err, sql.ErrNoRows):
-		id = newMekBayLinkID()
+		id = NewLinkID()
 		_, err = s.db.ExecContext(ctx,
 			s.q(`INSERT INTO mekbay_links (id, playthrough_id, campaign, label, account, ttl_seconds, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)`),
 			id, playthroughID, campaign, label, account, secs, expires)

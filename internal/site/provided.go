@@ -4,6 +4,8 @@ import (
 	"context"
 	"strings"
 
+	"github.com/davidzech/Battletech/internal/storage"
+
 	"github.com/davidzech/Battletech/internal/content"
 
 	"github.com/davidzech/Battletech/internal/mekbay"
@@ -31,7 +33,7 @@ func providedForce(sc *content.Scenario) mekbay.HangarForce {
 }
 
 // scenarioHangar is the force the scenario's Deploy works from: its own provided mechs, or else the player's hangar read from MekBay.
-func (s *Server) scenarioHangar(ctx context.Context, run CampaignRun, sc *content.Scenario) (mekbay.HangarForce, error) {
+func (s *Server) scenarioHangar(ctx context.Context, run storage.CampaignRun, sc *content.Scenario) (mekbay.HangarForce, error) {
 	if sc.Provides() {
 		return providedForce(sc), nil
 	}

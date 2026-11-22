@@ -22,7 +22,7 @@ func TestSellUnitEndpoint(t *testing.T) {
 		t.Fatalf("start: %d", r.StatusCode)
 	}
 	// These tests are about prices, not the campaign's starting funds: give them a round balance.
-	if _, err := store.db.Exec(`UPDATE campaign_runs SET warchest = 4500`); err != nil {
+	if _, err := store.DB().Exec(`UPDATE campaign_runs SET warchest = 4500`); err != nil {
 		t.Fatal(err)
 	}
 	id := playthroughID("wolfpack2026")
@@ -45,11 +45,11 @@ func TestSellUnitEndpoint(t *testing.T) {
 		t.Errorf("cross-origin: %d", got)
 	}
 	// A run from before the site kept its own copy can't sell.
-	_, _ = store.db.Exec(`UPDATE campaign_runs SET source_url = ''`)
+	_, _ = store.DB().Exec(`UPDATE campaign_runs SET source_url = ''`)
 	if got := sell("ua"); got != http.StatusConflict || funds() != 4500 {
 		t.Errorf("a hangar the site doesn't own: %d, funds %d", got, funds())
 	}
-	_, _ = store.db.Exec(`UPDATE campaign_runs SET source_url = ?`, goodHangarURL)
+	_, _ = store.DB().Exec(`UPDATE campaign_runs SET source_url = ?`, goodHangarURL)
 
 	// A fully repaired and rearmed unit sells for half its BV; the unit leaves the hangar in MekBay.
 	if got := sell("ua"); got != http.StatusOK || funds() != 4500+madCat.BV/2 {

@@ -1,4 +1,4 @@
-package site
+package storage
 
 import (
 	"context"
@@ -561,3 +561,9 @@ func (s *Store) DeleteRun(ctx context.Context, playthroughID, campaign string) (
 	n, _ := res.RowsAffected()
 	return n > 0, tx.Commit()
 }
+
+// DB is the database underneath, for tests and one-off tools that need raw SQL; the site itself goes through the Store's methods.
+func (s *Store) DB() *sql.DB { return s.db }
+
+// Rebind rewrites a query written with ? placeholders for the database in use (Postgres numbers them), as every Store method does.
+func (s *Store) Rebind(query string) string { return s.q(query) }

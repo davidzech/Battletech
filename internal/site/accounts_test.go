@@ -3,6 +3,8 @@ package site
 import (
 	"testing"
 
+	"github.com/davidzech/Battletech/internal/storage"
+
 	"github.com/davidzech/Battletech/internal/mekbay"
 )
 
@@ -48,7 +50,7 @@ func TestOneAccountPerSeed(t *testing.T) {
 // A database from when players' own MekBay user IDs were kept loses them: nothing needs them any more.
 func TestOldPlayerIDsAreForgotten(t *testing.T) {
 	path := t.TempDir() + "/old.db"
-	s, err := OpenSQLite(path)
+	s, err := storage.OpenSQLite(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,18 +58,18 @@ func TestOldPlayerIDsAreForgotten(t *testing.T) {
 		`CREATE TABLE player_accounts (playthrough_id TEXT NOT NULL, slot TEXT NOT NULL, uid TEXT NOT NULL, PRIMARY KEY (playthrough_id, slot))`,
 		`INSERT INTO player_accounts (playthrough_id, slot, uid) VALUES ('x', 'p1', '` + uidP1 + `')`,
 	} {
-		if _, err := s.db.Exec(q); err != nil {
+		if _, err := s.DB().Exec(q); err != nil {
 			t.Fatal(err)
 		}
 	}
-	s.db.Close()
-	s, err = OpenSQLite(path) // opening runs the schema, which drops the table
+	s.DB().Close()
+	s, err = storage.OpenSQLite(path) // opening runs the schema, which drops the table
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer s.db.Close()
+	defer s.DB().Close()
 	var n int
-	if err := s.db.QueryRow(`SELECT count(*) FROM sqlite_master WHERE name = 'player_accounts'`).Scan(&n); err != nil || n != 0 {
+	if err := s.DB().QueryRow(`SELECT count(*) FROM sqlite_master WHERE name = 'player_accounts'`).Scan(&n); err != nil || n != 0 {
 		t.Errorf("the table of players' own IDs is gone: %d %v", n, err)
 	}
 }

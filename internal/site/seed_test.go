@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/davidzech/Battletech/internal/storage"
+
 	"github.com/davidzech/Battletech/internal/mekbay"
 )
 
@@ -115,7 +117,7 @@ func TestParseAccountName(t *testing.T) {
 
 // newTestServer is a site with a fake MekBay whose hangar meets Refusal War's starting conditions, so tests that
 // start campaigns never touch the network.
-func newTestServer(t *testing.T) (*httptest.Server, *Store) {
+func newTestServer(t *testing.T) (*httptest.Server, *storage.Store) {
 	t.Helper()
 	return newMekBayTestServer(t, &fakeMekBay{hangar: startingHangar()})
 }
@@ -196,7 +198,7 @@ func TestSeedAndCampaignFlow(t *testing.T) {
 	}
 	// The stored key must not be the seed.
 	var raw string
-	_ = store.db.QueryRow(`SELECT id FROM playthroughs`).Scan(&raw)
+	_ = store.DB().QueryRow(`SELECT id FROM playthroughs`).Scan(&raw)
 	if strings.Contains(raw, "wolfpack") {
 		t.Fatal("seed must not be stored")
 	}
@@ -317,7 +319,7 @@ func TestSeedAndCampaignFlow(t *testing.T) {
 		t.Fatalf("starting again: got %d", r.StatusCode)
 	}
 	var runs int
-	_ = store.db.QueryRow(`SELECT COUNT(*) FROM campaign_runs`).Scan(&runs)
+	_ = store.DB().QueryRow(`SELECT COUNT(*) FROM campaign_runs`).Scan(&runs)
 	if run, _, _ := store.Run(ctx, id, "refusalwar"); runs != 1 || run.HangarInstance != before.HangarInstance || run.SourceURL != before.SourceURL {
 		t.Fatalf("the one run keeps its hangar: %d runs, %+v", runs, run)
 	}
@@ -340,7 +342,7 @@ func TestAccountSettingsAskForNoMekBayIDs(t *testing.T) {
 		t.Fatalf("a name, with a stray ID field: %d", r.StatusCode)
 	}
 	var n int
-	if err := store.db.QueryRow(`SELECT count(*) FROM sqlite_master WHERE name = 'player_accounts'`).Scan(&n); err != nil || n != 0 {
+	if err := store.DB().QueryRow(`SELECT count(*) FROM sqlite_master WHERE name = 'player_accounts'`).Scan(&n); err != nil || n != 0 {
 		t.Errorf("there is nowhere to keep a player's own ID: %d %v", n, err)
 	}
 }

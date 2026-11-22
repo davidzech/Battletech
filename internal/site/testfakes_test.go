@@ -12,6 +12,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/davidzech/Battletech/internal/storage"
+
 	"github.com/davidzech/Battletech/internal/content"
 
 	"github.com/davidzech/Battletech/internal/mekbay"
@@ -305,9 +307,9 @@ func (f *fakeMekBay) PurchaseUnits(_ context.Context, req mekbay.PurchaseRequest
 	return f.serviceErr
 }
 
-func newMekBayTestServer(t *testing.T, mb mekbay.MekBay) (*httptest.Server, *Store) {
+func newMekBayTestServer(t *testing.T, mb mekbay.MekBay) (*httptest.Server, *storage.Store) {
 	t.Helper()
-	store, err := OpenSQLite(t.TempDir() + "/test.db")
+	store, err := storage.OpenSQLite(t.TempDir() + "/test.db")
 	if err != nil {
 		t.Fatal(err)
 	}

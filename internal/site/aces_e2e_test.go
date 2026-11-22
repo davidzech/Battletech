@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/davidzech/Battletech/internal/storage"
+
 	"github.com/davidzech/Battletech/internal/content"
 
 	"github.com/davidzech/Battletech/internal/mekbay"
@@ -60,11 +62,11 @@ outcomes:
 	write("Scenario_001/Setup.md", "---\nid: scenario_001\ntitle: Next\n---\n# Next\n")
 
 	fake := &fakeMekBay{hangar: startingHangar()}
-	store, err := OpenSQLite(t.TempDir() + "/aces.db")
+	store, err := storage.OpenSQLite(t.TempDir() + "/aces.db")
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { store.db.Close() })
+	t.Cleanup(func() { store.DB().Close() })
 	srv := newTestServerAt(t, root, store, fake)
 	ctx := context.Background()
 	cookie := post(t, srv, "/api/seed", url.Values{"seed": {"wolfpack2026"}}, nil, "").Cookies()[0]
@@ -115,7 +117,7 @@ outcomes:
 		t.Fatalf("a commit without the MVP: %d", got)
 	}
 	// With a battle in progress, the battle's units are written back into the hangar before the mission is completed: if that fails, nothing is completed.
-	if err := store.SaveMekBayOperation(ctx, id, "refusalwar", "scenario_000", MekBayOperation{OpForInstance: "opfor", OperationID: "op-1"}); err != nil {
+	if err := store.SaveMekBayOperation(ctx, id, "refusalwar", "scenario_000", storage.MekBayOperation{OpForInstance: "opfor", OperationID: "op-1"}); err != nil {
 		t.Fatal(err)
 	}
 	fake.mu.Lock()
@@ -171,7 +173,7 @@ outcomes:
 }
 
 // newTestServerAt serves the campaigns found under root with the given store and MekBay.
-func newTestServerAt(t *testing.T, root string, store *Store, mb mekbay.MekBay) *httptest.Server {
+func newTestServerAt(t *testing.T, root string, store *storage.Store, mb mekbay.MekBay) *httptest.Server {
 	t.Helper()
 	srv := httptest.NewServer(NewHandler(root, store, WithMekBay(mb)))
 	t.Cleanup(srv.Close)

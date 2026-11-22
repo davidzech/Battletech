@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/davidzech/Battletech/internal/storage"
+
 	"github.com/davidzech/Battletech/internal/mekbay"
 
 	"github.com/coder/websocket"
@@ -28,7 +30,7 @@ func TestMekBayProxyLive(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	store, err := OpenSQLite(t.TempDir() + "/live.db")
+	store, err := storage.OpenSQLite(t.TempDir() + "/live.db")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,7 +55,7 @@ func TestMekBayProxyLive(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		return mekbayLinkPrefix + id + ".localhost"
+		return storage.LinkPrefix + id + ".localhost"
 	}
 	ownerHost, strangerHost := linkHost("owner", owner), linkHost("stranger", stranger)
 
