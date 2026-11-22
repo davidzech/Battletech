@@ -132,6 +132,11 @@ func NewHandler(contentRoot string, store *Store, opts ...Option) http.Handler {
 		}
 		http.ServeFileFS(w, r, assets, path.Join("static", name))
 	})
+	// Browsers ask for /favicon.ico on their own (for pages without the layout's icon link, such as an image or a JSON reply): answer with the same PNG.
+	mux.HandleFunc("GET /favicon.ico", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("ETag", staticETags["favicon.png"])
+		http.ServeFileFS(w, r, assets, "static/favicon.png")
+	})
 	mux.HandleFunc("POST /api/seed", s.setSeed)
 	mux.HandleFunc("POST /api/account", s.setAccount)
 	mux.HandleFunc("POST /api/campaign/start", s.startCampaign)
