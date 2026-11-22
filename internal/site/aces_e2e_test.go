@@ -92,16 +92,23 @@ outcomes:
 	}
 	entries := []OutcomeEntry{
 		{PilotID: pid["Alrek"], TookPart: true}, {PilotID: pid["Katarina"], TookPart: true, Killed: true},
-		{PilotID: pid["Jarek"], TookPart: true}, {PilotID: pid["Sybille"], TookPart: false},
+		{PilotID: pid["Jarek"], TookPart: true, MVP: true}, {PilotID: pid["Sybille"], TookPart: false},
 	}
-	// Preview: 600 SP pool; Alrek 80, Katarina (killed) 0, Jarek 80, Sybille (benched) 40 = 200 from the pool, 400 to the warchest.
+	// Preview: 600 SP pool; Alrek 80, Katarina (killed) 0, Jarek 80, Sybille (benched) 40 = 200 from the pool, 400 to the warchest. Jarek, the MVP, earns 20 more
+	// for free: it doesn't come out of the pool. Only Alrek and Jarek took part and stay, so only they could be the MVP.
 	r := post(t, srv, "/api/campaign/scenario-outcome", report(true, true, entries...), cookie, srv.URL)
 	var res OutcomeResult
 	if r.StatusCode != http.StatusOK || json.NewDecoder(r.Body).Decode(&res) != nil {
 		t.Fatalf("preview: %d", r.StatusCode)
 	}
-	if res.Pool != 600 || sps(res) != "Alrek=80,Katarina=0,Jarek=80,Sybille=40" || res.Warchest != 400 || strings.Join(res.Keywords, ",") != "depot_gone,data_saved" || !res.Pilots[1].KIA {
+	if res.Pool != 600 || sps(res) != "Alrek=80,Katarina=0,Jarek=100,Sybille=40" || res.Warchest != 400 || strings.Join(res.MVPCandidates, ",") != pid["Alrek"]+","+pid["Jarek"] || strings.Join(res.Keywords, ",") != "depot_gone,data_saved" || !res.Pilots[1].KIA {
 		t.Fatalf("preview: %+v (%s)", res, sps(res))
+	}
+	// Every mission has an MVP: a report without one is refused (the preview above works without one, so the dialog can offer the candidates).
+	noMVP := append([]OutcomeEntry(nil), entries...)
+	noMVP[2].MVP = false
+	if got := post(t, srv, "/api/campaign/scenario-outcome/commit", report(true, true, noMVP...), cookie, srv.URL).StatusCode; got != http.StatusBadRequest {
+		t.Fatalf("a commit without the MVP: %d", got)
 	}
 	// With a battle in progress, the battle's units are written back into the hangar before the mission is completed: if that fails, nothing is completed.
 	if err := store.SaveMekBayOperation(ctx, id, "refusalwar", "scenario_000", MekBayOperation{OpForInstance: "opfor", OperationID: "op-1"}); err != nil {
@@ -129,7 +136,7 @@ outcomes:
 	fake.mu.Unlock()
 	after, _ := store.Pilots(ctx, id, "refusalwar")
 	for _, p := range after {
-		want := map[string]int{"Alrek": 80, "Katarina": 0, "Jarek": 80, "Sybille": 40}[p.Name]
+		want := map[string]int{"Alrek": 80, "Katarina": 0, "Jarek": 100, "Sybille": 40}[p.Name]
 		if p.TotalSP != total[p.Name]+want || p.Fallen != (p.Name == "Katarina") {
 			t.Errorf("%s: total %d (was %d, want +%d), fallen %v", p.Name, p.TotalSP, total[p.Name], want, p.Fallen)
 		}
