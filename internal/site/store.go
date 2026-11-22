@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/davidzech/Battletech/internal/format"
+
 	"github.com/davidzech/Battletech/internal/mekbay"
 
 	"github.com/davidzech/Battletech/internal/pilot"
@@ -54,7 +56,7 @@ func (r CampaignRun) ForceLabel() string {
 }
 
 // WarchestText is the warchest with a thousands separator, e.g. "4,500".
-func (r CampaignRun) WarchestText() string { return withCommas(r.Warchest) }
+func (r CampaignRun) WarchestText() string { return format.Commas(r.Warchest) }
 
 // Started reports whether the campaign has been started (a zero CampaignRun means it hasn't).
 func (r CampaignRun) Started() bool { return r.HangarInstance != "" }

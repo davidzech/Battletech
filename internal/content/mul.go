@@ -1,4 +1,4 @@
-package site
+package content
 
 import (
 	"bytes"
@@ -15,8 +15,8 @@ type MulEntity struct {
 	Piloting int
 }
 
-// parseMul reads the units out of a .mul file, in file order.
-func parseMul(data []byte) ([]MulEntity, error) {
+// ParseMul reads the units out of a .mul file, in file order.
+func ParseMul(data []byte) ([]MulEntity, error) {
 	var doc struct {
 		Entities []struct {
 			Chassis string `xml:"chassis,attr"`

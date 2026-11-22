@@ -1,5 +1,6 @@
-// Package site serves the campaign folders as a website.
-package site
+// Package content reads the campaign folders: each campaign's Intro.md, Keywords.md and Names.md, and its scenarios' Setup.md and
+// Outcome.md (front matter checked strictly), their force files, and the outcome engine that turns a mission's report into rewards.
+package content
 
 import (
 	"bytes"
@@ -12,6 +13,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/davidzech/Battletech/internal/format"
 
 	"github.com/davidzech/Battletech/internal/pilot"
 
@@ -351,7 +354,7 @@ func readMarkdown(path string, dst any) (string, error) {
 	return m[2], nil
 }
 
-func renderMarkdown(src string, stripTitle bool) template.HTML {
+func RenderMarkdown(src string, stripTitle bool) template.HTML {
 	if stripTitle {
 		src = leadingTitle.ReplaceAllString(src, "")
 	}
@@ -454,8 +457,8 @@ func (l Library) load(name string) (*Campaign, bool) {
 			Branches:          lowerAll(outcome.Branches),
 			branchesListed:    outcome.Branches != nil,
 			BriefingHTML:      renderBriefing(briefing),
-			SetupHTML:         renderMarkdown(setupBody, false),
-			OutcomeHTML:       renderMarkdown(outcomeBody, true),
+			SetupHTML:         RenderMarkdown(setupBody, false),
+			OutcomeHTML:       RenderMarkdown(outcomeBody, true),
 		}
 		if outcome.MVPSP != nil {
 			s.MVPSP = *outcome.MVPSP
@@ -463,7 +466,7 @@ func (l Library) load(name string) (*Campaign, bool) {
 		if s.ID == "" {
 			s.ID = s.Slug
 		}
-		s.compileOutcomes()
+		s.CompileOutcomes()
 		if s.Title == "" {
 			s.Title = humanize(e.Name())
 		}
@@ -477,8 +480,8 @@ func (l Library) load(name string) (*Campaign, bool) {
 	var kwMeta struct{}
 	kw, err := readMarkdown(filepath.Join(dir, "Keywords.md"), &kwMeta)
 	problem("Keywords.md", err)
-	c.IntroHTML = renderMarkdown(intro, false)
-	c.KeywordsHTML = renderMarkdown(kw, true)
+	c.IntroHTML = RenderMarkdown(intro, false)
+	c.KeywordsHTML = RenderMarkdown(kw, true)
 	c.Keywords = keywordIDs(kw)
 	c.loadNames(dir)
 	c.checkGrants()
@@ -560,7 +563,7 @@ func splitWaypoints(body string) (rest string, wps []Waypoint) {
 		wps = append(wps, Waypoint{
 			Name: name,
 			ID:   strings.Trim(nonSlug.ReplaceAllString(strings.ToLower(name), "-"), "-"),
-			HTML: redactable(renderMarkdown(strings.Join(cur, "\n"), false)),
+			HTML: redactable(RenderMarkdown(strings.Join(cur, "\n"), false)),
 		})
 		name, cur = "", nil
 	}
@@ -657,7 +660,7 @@ func splitBriefing(body string) (briefing, rest string) {
 // renderBriefing renders the fluff, marking any paragraph that opens with a quotation mark as a
 // pull quote and any that opens with an em dash as its attribution, so they can be styled.
 func renderBriefing(src string) template.HTML {
-	html := string(renderMarkdown(src, false))
+	html := string(RenderMarkdown(src, false))
 	for _, open := range []string{"<p>&quot;", "<p>&ldquo;", "<p>\""} {
 		html = strings.ReplaceAll(html, open, `<p class="pull">`+open[len("<p>"):])
 	}
@@ -666,7 +669,7 @@ func renderBriefing(src string) template.HTML {
 }
 
 // StartingWarchestText is the starting warchest with a thousands separator, e.g. "4,500".
-func (c *Campaign) StartingWarchestText() string { return withCommas(c.StartingWarchest) }
+func (c *Campaign) StartingWarchestText() string { return format.Commas(c.StartingWarchest) }
 
 // StartingBVText is the starting BV with a thousands separator, e.g. "6,000".
-func (c *Campaign) StartingBVText() string { return withCommas(c.StartingBV) }
+func (c *Campaign) StartingBVText() string { return format.Commas(c.StartingBV) }

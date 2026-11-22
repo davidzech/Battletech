@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/davidzech/Battletech/internal/content"
+
 	"github.com/davidzech/Battletech/internal/mekbay"
 
 	"github.com/davidzech/Battletech/internal/catalog"
@@ -13,17 +15,19 @@ import (
 // A scenario's OpFor and operation as the battle builds them in MekBay (see battle.go).
 
 // operationName is the operation's name in MekBay, e.g. "Refusal War - Sortie 001".
-func operationName(c *Campaign, sc *Scenario) string { return c.Label + " - " + c.MissionNumber(*sc) }
+func operationName(c *content.Campaign, sc *content.Scenario) string {
+	return c.Label + " - " + c.MissionNumber(*sc)
+}
 
 // opForDraft turns a scenario's .mul force files into one OpFor force, a group per file ("OpFor 1", "OpFor 2").
-func opForDraft(c *Campaign, sc *Scenario) (mekbay.ForceDraft, error) {
+func opForDraft(c *content.Campaign, sc *content.Scenario) (mekbay.ForceDraft, error) {
 	d := mekbay.ForceDraft{Name: operationName(c, sc) + " - OpFor"}
 	for _, f := range sc.Forces {
 		raw, err := os.ReadFile(filepath.Join(sc.Dir, f.File))
 		if err != nil {
 			return mekbay.ForceDraft{}, err
 		}
-		entities, err := parseMul(raw)
+		entities, err := content.ParseMul(raw)
 		if err != nil {
 			return mekbay.ForceDraft{}, fmt.Errorf("%s: %w", f.File, err)
 		}

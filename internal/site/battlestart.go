@@ -74,7 +74,7 @@ func (s *Server) startBattle(w http.ResponseWriter, r *http.Request) {
 	req := mekbay.BattleRequest{
 		Account:        account,
 		HangarInstance: bp.run.HangarInstance,
-		Provided:       bp.sc.provides(),
+		Provided:       bp.sc.Provides(),
 		OpFor:          mekbay.BattleOpFor{Draft: draft},
 		OperationName:  operationName(bp.c, bp.sc),
 	}

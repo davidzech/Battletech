@@ -4,6 +4,8 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/davidzech/Battletech/internal/content"
+
 	"github.com/davidzech/Battletech/internal/hangar"
 
 	"github.com/davidzech/Battletech/internal/mekbay"
@@ -21,7 +23,7 @@ import (
 // per-scenario matter (assigned when deploying), so nothing about the crew is carried over.
 
 // markSwapAvailability marks each unit's reconfigure options as available or not to the campaign's faction in its era.
-func markSwapAvailability(views []hangarUnitView, c *Campaign) {
+func markSwapAvailability(views []hangarUnitView, c *content.Campaign) {
 	var available map[string]bool
 	if c != nil && c.AvailabilityFaction != "" && c.AvailabilityEra != "" {
 		available = catalog.Available(c.AvailabilityFaction, c.AvailabilityEra)

@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/davidzech/Battletech/internal/content"
+
 	"github.com/davidzech/Battletech/internal/mekbay"
 )
 
@@ -88,18 +90,18 @@ outcomes:
 	if !strings.Contains(page, `id="outcome-open"`) || !strings.Contains(page, "Destroy the depot") || !strings.Contains(page, "400 SP") || !strings.Contains(page, "Escape with the data") {
 		t.Fatalf("an Aces-style mission completes by reporting; its objectives reach the dialog: %.500s", page)
 	}
-	report := func(depot, data bool, entries ...OutcomeEntry) url.Values {
-		b, _ := json.Marshal(OutcomeInputs{Pilots: entries, Mission: map[string]any{"depot": depot, "data": data}})
+	report := func(depot, data bool, entries ...content.OutcomeEntry) url.Values {
+		b, _ := json.Marshal(content.OutcomeInputs{Pilots: entries, Mission: map[string]any{"depot": depot, "data": data}})
 		return url.Values{"campaign": {"refusalwar"}, "scenario": {"scenario_000"}, "inputs": {string(b)}}
 	}
-	entries := []OutcomeEntry{
+	entries := []content.OutcomeEntry{
 		{PilotID: pid["Alrek"], TookPart: true}, {PilotID: pid["Katarina"], TookPart: true, Killed: true},
 		{PilotID: pid["Jarek"], TookPart: true, MVP: true}, {PilotID: pid["Sybille"], TookPart: false},
 	}
 	// Preview: 600 SP pool; Alrek 80, Katarina (killed) 0, Jarek 80, Sybille (benched) 40 = 200 from the pool, 400 to the warchest. Jarek, the MVP, earns 20 more
 	// for free: it doesn't come out of the pool. Only Alrek and Jarek took part and stay, so only they could be the MVP.
 	r := post(t, srv, "/api/campaign/scenario-outcome", report(true, true, entries...), cookie, srv.URL)
-	var res OutcomeResult
+	var res content.OutcomeResult
 	if r.StatusCode != http.StatusOK || json.NewDecoder(r.Body).Decode(&res) != nil {
 		t.Fatalf("preview: %d", r.StatusCode)
 	}
@@ -107,7 +109,7 @@ outcomes:
 		t.Fatalf("preview: %+v (%s)", res, sps(res))
 	}
 	// Every mission has an MVP: a report without one is refused (the preview above works without one, so the dialog can offer the candidates).
-	noMVP := append([]OutcomeEntry(nil), entries...)
+	noMVP := append([]content.OutcomeEntry(nil), entries...)
 	noMVP[2].MVP = false
 	if got := post(t, srv, "/api/campaign/scenario-outcome/commit", report(true, true, noMVP...), cookie, srv.URL).StatusCode; got != http.StatusBadRequest {
 		t.Fatalf("a commit without the MVP: %d", got)

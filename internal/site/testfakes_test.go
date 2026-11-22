@@ -12,6 +12,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/davidzech/Battletech/internal/content"
+
 	"github.com/davidzech/Battletech/internal/mekbay"
 
 	"github.com/davidzech/Battletech/internal/catalog"
@@ -38,14 +40,14 @@ func TestLookupUnitAndParseMul(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	es, err := parseMul(raw)
+	es, err := content.ParseMul(raw)
 	if err != nil || len(es) != 3 {
 		t.Fatalf("parseMul = %v, %v", es, err)
 	}
 	if es[0].Chassis != "Koshi (Mist Lynx)" || es[0].Model != "E" || es[0].Pilot != "Tyra" || es[0].Gunnery != 3 || es[0].Piloting != 4 {
 		t.Errorf("first entity = %+v", es[0])
 	}
-	if _, err := parseMul([]byte("not xml")); err == nil {
+	if _, err := content.ParseMul([]byte("not xml")); err == nil {
 		t.Error("garbage should not parse")
 	}
 }
@@ -65,7 +67,7 @@ func TestAdjustedBV(t *testing.T) {
 }
 
 func TestEveryScenarioForceResolves(t *testing.T) {
-	lib := Library{Root: "../../campaigns"}
+	lib := content.Library{Root: "../../campaigns"}
 	cs, err := lib.Campaigns()
 	if err != nil {
 		t.Fatal(err)
@@ -89,7 +91,7 @@ func TestEveryScenarioForceResolves(t *testing.T) {
 }
 
 func TestScenarioBVLimit(t *testing.T) {
-	c, ok := (Library{Root: "../../campaigns"}).Campaign("refusalwar")
+	c, ok := (content.Library{Root: "../../campaigns"}).Campaign("refusalwar")
 	if !ok {
 		t.Fatal("no campaign")
 	}

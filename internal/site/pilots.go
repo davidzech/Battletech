@@ -9,12 +9,16 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/davidzech/Battletech/internal/content"
+
+	"github.com/davidzech/Battletech/internal/format"
+
 	"github.com/davidzech/Battletech/internal/pilot"
 )
 
 // pilotRequest checks what every endpoint that changes a campaign needs (see runRequest) and returns the playthrough and the campaign. It writes the error
 // response itself and reports ok=false.
-func (s *Server) pilotRequest(w http.ResponseWriter, r *http.Request) (pt Playthrough, c *Campaign, ok bool) {
+func (s *Server) pilotRequest(w http.ResponseWriter, r *http.Request) (pt Playthrough, c *content.Campaign, ok bool) {
 	pt, c, _, ok = s.runRequest(w, r)
 	return pt, c, ok
 }
@@ -152,7 +156,7 @@ func (s *Server) pilotFallen(w http.ResponseWriter, r *http.Request) {
 // parseStartingPilots reads the pilots a campaign's start wizard submits (fields pilot0_name, pilot0_gunnery, ...):
 // exactly the campaign's number of starting pilots, each with a name of their own, and every one allocating all of
 // the campaign's starting SP, as the book has a pilot allocate SP the moment they earn it.
-func parseStartingPilots(r *http.Request, c *Campaign) ([]pilot.NewPilot, error) {
+func parseStartingPilots(r *http.Request, c *content.Campaign) ([]pilot.NewPilot, error) {
 	var out []pilot.NewPilot
 	seen := map[string]bool{}
 	takenPortraits := map[string]bool{}
@@ -501,7 +505,7 @@ func (s *Server) resetEdgeAbilities(w http.ResponseWriter, r *http.Request) {
 
 // recruitStatus says whether the command can recruit a named pilot now, and the brief note shown under the Recruit button: why not (a full command, too little in
 // the warchest), or what it costs.
-func recruitStatus(c *Campaign, run CampaignRun, alive int) (can bool, note string) {
+func recruitStatus(c *content.Campaign, run CampaignRun, alive int) (can bool, note string) {
 	limit, cost, free := c.PilotLimit(), c.RecruitCost, run.FreeRecruits > 0
 	can = alive < limit && (free || run.Warchest >= cost)
 	switch {
@@ -510,9 +514,9 @@ func recruitStatus(c *Campaign, run CampaignRun, alive int) (can bool, note stri
 	case free:
 		note = "A replacement pilot is free: recruiting costs no SP."
 	case run.Warchest < cost:
-		note = fmt.Sprintf("Recruiting costs %s SP (warchest: %s).", withCommas(cost), withCommas(run.Warchest))
+		note = fmt.Sprintf("Recruiting costs %s SP (warchest: %s).", format.Commas(cost), format.Commas(run.Warchest))
 	case cost > 0:
-		note = fmt.Sprintf("Recruiting costs %s SP.", withCommas(cost))
+		note = fmt.Sprintf("Recruiting costs %s SP.", format.Commas(cost))
 	}
 	return can, note
 }

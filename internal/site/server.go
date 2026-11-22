@@ -14,6 +14,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/davidzech/Battletech/internal/content"
+
 	"github.com/davidzech/Battletech/internal/mekbay"
 
 	"github.com/davidzech/Battletech/internal/pilot"
@@ -53,23 +55,23 @@ type Page struct {
 	// BackURL and BackLabel, when set, replace the Manage page's "Back to the campaign" link (it returns to the sortie the player came from).
 	BackURL, BackLabel string
 	Crumbs             []Crumb
-	Campaign           *Campaign
+	Campaign           *content.Campaign
 	OnManagePage       bool // the Manage force page itself, which has no Manage force button in its header
-	Scenario           *Scenario
+	Scenario           *content.Scenario
 	Cards              []Card
-	HasLocked          bool              // some scenario cards are locked, so the campaign page offers 'Show all scenarios'
-	ScenarioState      string            // on a scenario page: completed, available or locked
-	NextScenarios      []Scenario        // on a completed scenario's page: the scenarios it leads to, which are now available
-	Ledger             []LedgerEntry     // the keywords the campaign has been granted (on the keywords page)
-	Outcome            *OutcomeResult    // on a completed scenario page: the recorded report of its outcome
-	Images             []string          // URLs of the scenario's images
-	Seed               string            // the visitor's seed ("" if none chosen yet)
-	Play               Playthrough       // the visitor's playthrough (zero value if no seed)
-	Run                CampaignRun       // the playthrough's run of this page's campaign (zero value until it is started)
-	Pilots             []pilot.PilotView // the run's named pilots
-	CanRecruit         bool              // the command has room for another living named pilot, and the warchest can pay for them
-	RecruitNote        string            // the short gray note under Recruit New Pilot: why it is unavailable, or what it costs
-	MaxPilots          int               // most living named pilots a command may have
+	HasLocked          bool                   // some scenario cards are locked, so the campaign page offers 'Show all scenarios'
+	ScenarioState      string                 // on a scenario page: completed, available or locked
+	NextScenarios      []content.Scenario     // on a completed scenario's page: the scenarios it leads to, which are now available
+	Ledger             []LedgerEntry          // the keywords the campaign has been granted (on the keywords page)
+	Outcome            *content.OutcomeResult // on a completed scenario page: the recorded report of its outcome
+	Images             []string               // URLs of the scenario's images
+	Seed               string                 // the visitor's seed ("" if none chosen yet)
+	Play               Playthrough            // the visitor's playthrough (zero value if no seed)
+	Run                CampaignRun            // the playthrough's run of this page's campaign (zero value until it is started)
+	Pilots             []pilot.PilotView      // the run's named pilots
+	CanRecruit         bool                   // the command has room for another living named pilot, and the warchest can pay for them
+	RecruitNote        string                 // the short gray note under Recruit New Pilot: why it is unavailable, or what it costs
+	MaxPilots          int                    // most living named pilots a command may have
 	// CachedHangar is the hangar last read from MekBay for this run (nil if none yet), and CachedAt when; the campaign and scenario
 	// pages embed it so they can paint the hangar before the live read finishes (see hangarcache.go).
 	CachedHangar *mekbay.HangarForce
@@ -91,7 +93,7 @@ type Card struct{ Num, Name, Sub, URL, State string } // State: "completed", "av
 
 // Server serves the campaigns found under the content root.
 type Server struct {
-	lib    Library
+	lib    content.Library
 	store  *Store
 	pages  map[string]*template.Template
 	mekbay mekbay.MekBay
@@ -111,7 +113,7 @@ func WithMekBay(m mekbay.MekBay) Option { return func(s *Server) { s.mekbay = m 
 // NewHandler returns the site's HTTP handler. Campaign files are re-read on every request,
 // so edits show up on refresh.
 func NewHandler(contentRoot string, store *Store, opts ...Option) http.Handler {
-	s := &Server{lib: Library{Root: contentRoot}, store: store, pages: map[string]*template.Template{}, mekbay: &mekbay.Client{}}
+	s := &Server{lib: content.Library{Root: contentRoot}, store: store, pages: map[string]*template.Template{}, mekbay: &mekbay.Client{}}
 	for _, o := range opts {
 		o(s)
 	}
@@ -341,7 +343,7 @@ func (s *Server) scenario(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	var next []Scenario
+	var next []content.Scenario
 	if completed[sc.Slug] {
 		for _, b := range sc.Branches {
 			if n, ok := c.Scenario(b); ok {
@@ -366,8 +368,8 @@ func (s *Server) scenario(w http.ResponseWriter, r *http.Request) {
 
 // scenarioCrumb is the breadcrumb for a scenario page, "001 – Pyre Light", with a menu of
 // every scenario in the campaign.
-func scenarioCrumb(c *Campaign, sc *Scenario, available map[string]bool) Crumb {
-	label := func(s *Scenario) string { return s.Number + " – " + s.Title }
+func scenarioCrumb(c *content.Campaign, sc *content.Scenario, available map[string]bool) Crumb {
+	label := func(s *content.Scenario) string { return s.Number + " – " + s.Title }
 	cr := Crumb{Label: label(sc), URL: "/" + c.Slug + "/" + sc.Slug + "/"}
 	for i := range c.Scenarios {
 		o := &c.Scenarios[i]

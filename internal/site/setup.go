@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/davidzech/Battletech/internal/content"
+
 	"github.com/davidzech/Battletech/internal/mekbay"
 
 	"github.com/davidzech/Battletech/internal/pilot"
@@ -17,9 +19,6 @@ import (
 
 // parseAccountName validates the account's name: whatever the player likes to call their account.
 func parseAccountName(raw string) (string, error) { return pilot.ParseName(raw, "account") }
-
-// parseForceName validates a campaign's force name, e.g. "Wolf's Dragoons": each campaign's force has its own, to suit that campaign's theme.
-func parseForceName(raw string) (string, error) { return pilot.ParseName(raw, "force") }
 
 // setAccount saves the account's name and the players' optional MekBay user IDs for the visitor's playthrough.
 func (s *Server) setAccount(w http.ResponseWriter, r *http.Request) {
@@ -116,7 +115,7 @@ func (s *Server) startCampaign(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	forceName, err := parseForceName(r.PostFormValue("force_name"))
+	forceName, err := content.ParseForceName(r.PostFormValue("force_name"))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -180,7 +179,7 @@ func (s *Server) startCampaign(w http.ResponseWriter, r *http.Request) {
 
 // parseStartingPlayers reads how many players the campaign is played with: a whole number within the campaign's range (a campaign that allows only one
 // count needs none sent). The count is only the Deploy wizard's default, which can be changed for each deploy.
-func parseStartingPlayers(raw string, c *Campaign) (int, error) {
+func parseStartingPlayers(raw string, c *content.Campaign) (int, error) {
 	lo, hi := playerRange(c)
 	if lo == hi {
 		return lo, nil

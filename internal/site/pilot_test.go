@@ -14,13 +14,15 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/davidzech/Battletech/internal/content"
+
 	"github.com/davidzech/Battletech/internal/mekbay"
 
 	"github.com/davidzech/Battletech/internal/pilot"
 )
 
 func TestRefusalWarStartsWithTwoNamedPilots(t *testing.T) {
-	c, ok := (Library{Root: "../../campaigns"}).Campaign("refusalwar")
+	c, ok := (content.Library{Root: "../../campaigns"}).Campaign("refusalwar")
 	if !ok || c.StartingNamedPilots != 2 || c.StartingPilotSP != 150 || c.StartingBV != 10000 || c.StartingMinMechs != 5 {
 		t.Fatalf("Refusal War starts with two named pilots (150 SP each) and a 10000 BV force: %+v", c)
 	}
@@ -1011,7 +1013,7 @@ func TestCampaignFactionAndRanks(t *testing.T) {
 	mk("plain", "---\nmin_players: 1\n---\n")
 	mk("unknown", "---\nfaction: martians\n---\n")
 	mk("custom", "---\nfaction: clan\nranks:\n  - Sergeant\n  - Lieutenant\n  - Captain\n---\n")
-	lib := Library{Root: root}
+	lib := content.Library{Root: root}
 	if c, ok := lib.Campaign("plain"); !ok || c.Ranks != nil || c.Faction != "" {
 		t.Errorf("a campaign with no faction has no ranks: %+v", c)
 	}
@@ -1283,7 +1285,7 @@ func TestSetWarchest(t *testing.T) {
 }
 
 func TestRecruitStatus(t *testing.T) {
-	c := &Campaign{MaxNamedPilots: 4, RecruitCost: 300}
+	c := &content.Campaign{MaxNamedPilots: 4, RecruitCost: 300}
 	for _, tc := range []struct {
 		warchest, free, alive int
 		can                   bool
@@ -1309,7 +1311,7 @@ func TestStartWizardKnowsTheFirstRank(t *testing.T) {
 	if p := body(t, srv, "/refusalwar/", cookie); !strings.Contains(p, `data-first-rank="MechWarrior"`) || !strings.Contains(p, "/static/pilotcard.js") {
 		t.Error("the wizard knows the first rank and loads the compact pilot cards")
 	}
-	if (&Campaign{}).FirstRank() != "" {
+	if (&content.Campaign{}).FirstRank() != "" {
 		t.Error("a campaign with no ranks has no first rank")
 	}
 }

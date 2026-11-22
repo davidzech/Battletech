@@ -7,6 +7,10 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/davidzech/Battletech/internal/content"
+
+	"github.com/davidzech/Battletech/internal/format"
+
 	"github.com/davidzech/Battletech/internal/mekbay"
 
 	"github.com/davidzech/Battletech/internal/catalog"
@@ -44,7 +48,7 @@ type startCheck struct {
 
 // checkStartingHangar counts a hangar's mechs and BV and lists what keeps it from meeting the campaign's starting
 // conditions.
-func checkStartingHangar(h mekbay.HangarForce, c *Campaign) startCheck {
+func checkStartingHangar(h mekbay.HangarForce, c *content.Campaign) startCheck {
 	res := startCheck{Units: []startCheckUnit{}, Problems: []string{}, MaxBV: c.StartingBV, MinMechs: c.StartingMinMechs}
 	var unknown []string
 	for _, hu := range h.Units {
@@ -69,7 +73,7 @@ func checkStartingHangar(h mekbay.HangarForce, c *Campaign) startCheck {
 		res.Problems = append(res.Problems, fmt.Sprintf("You need at least %d mechs in your hangar (you have %d).", res.MinMechs, res.Mechs))
 	}
 	if res.MaxBV > 0 && res.BV > res.MaxBV {
-		res.Problems = append(res.Problems, fmt.Sprintf("Your hangar totals %s BV, over the %s BV starting limit.", withCommas(res.BV), withCommas(res.MaxBV)))
+		res.Problems = append(res.Problems, fmt.Sprintf("Your hangar totals %s BV, over the %s BV starting limit.", format.Commas(res.BV), format.Commas(res.MaxBV)))
 	}
 	res.OK = len(res.Problems) == 0
 	return res
@@ -125,13 +129,4 @@ func (s *Server) hangarCheck(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	_ = json.NewEncoder(w).Encode(checkStartingHangar(h, c))
-}
-
-// withCommas formats a number with thousands separators, e.g. 6000 as "6,000".
-func withCommas(n int) string {
-	digits := fmt.Sprint(n)
-	for i := len(digits) - 3; i > 0; i -= 3 {
-		digits = digits[:i] + "," + digits[i:]
-	}
-	return digits
 }

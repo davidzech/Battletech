@@ -9,10 +9,12 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/davidzech/Battletech/internal/content"
 )
 
 // A scratch campaign: 000 lists its branches (skipping 001), 001 leaves them out (so leads to 002), 002 names a default_next, 003 is the end of the line.
-func scratchCampaign(t *testing.T) *Campaign {
+func scratchCampaign(t *testing.T) *content.Campaign {
 	t.Helper()
 	root := t.TempDir()
 	write := func(dir, file, text string) {
@@ -31,7 +33,7 @@ func scratchCampaign(t *testing.T) *Campaign {
 	write("Scenario_001", "Outcome.md", "---\nid: scenario_001\n---\n")
 	write("Scenario_002", "Outcome.md", "---\nid: scenario_002\ndefault_next: scenario_004\n---\n")
 	write("Scenario_003", "Outcome.md", "---\nid: scenario_003\nbranches: []\n---\n")
-	c, ok := (Library{Root: root}).Campaign("scratch")
+	c, ok := (content.Library{Root: root}).Campaign("scratch")
 	if !ok {
 		t.Fatal("scratch campaign not loaded")
 	}
@@ -89,7 +91,7 @@ func TestScenarioBranches(t *testing.T) {
 	if s1, _ := rw.Scenario("scenario_001"); len(s1.Branches) != 0 {
 		t.Errorf("Scenario 001 leads nowhere yet: %v", s1.Branches)
 	}
-	for _, camp := range []*Campaign{rw, c} {
+	for _, camp := range []*content.Campaign{rw, c} {
 		for _, sc := range camp.Scenarios {
 			for _, b := range sc.Branches {
 				if _, ok := camp.Scenario(b); !ok {

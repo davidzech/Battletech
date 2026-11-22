@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+
+	"github.com/davidzech/Battletech/internal/content"
 )
 
 // The campaign log: which of a campaign's scenarios the run has completed. The first scenario (000) is available from the start, and completing a scenario
@@ -55,7 +57,7 @@ func scenarioState(slug string, completed, available map[string]bool) string {
 }
 
 // progress loads the visitor's completed scenarios for a campaign (none without a seed or a started campaign) and the set that makes available.
-func (s *Server) progress(r *http.Request, c *Campaign) (completed, available map[string]bool) {
+func (s *Server) progress(r *http.Request, c *content.Campaign) (completed, available map[string]bool) {
 	completed = map[string]bool{}
 	if seed := currentSeed(r); seed != "" {
 		id := playthroughID(seed)
@@ -121,7 +123,7 @@ func (s *Server) setScenarioCompleted(w http.ResponseWriter, r *http.Request) {
 }
 
 // recordedOutcome is the stored report of a completed scenario's outcome, for the scenario page (nil if there is none).
-func (s *Server) recordedOutcome(r *http.Request, c *Campaign, sc *Scenario, completed map[string]bool) *OutcomeResult {
+func (s *Server) recordedOutcome(r *http.Request, c *content.Campaign, sc *content.Scenario, completed map[string]bool) *content.OutcomeResult {
 	seed := currentSeed(r)
 	if seed == "" || !sc.HasOutcome() || !completed[sc.Slug] {
 		return nil

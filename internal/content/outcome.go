@@ -1,4 +1,4 @@
-package site
+package content
 
 import (
 	"errors"
@@ -98,9 +98,9 @@ func (sc *Scenario) HasOutcome() bool {
 // keywordID is a keyword's ID: lowercase snake_case.
 var keywordID = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
 
-// compileOutcomes turns the objectives into inputs and rules, fills in the input defaults and compiles every expression; a mistake in the front matter is kept in
+// CompileOutcomes turns the objectives into inputs and rules, fills in the input defaults and compiles every expression; a mistake in the front matter is kept in
 // OutcomeError (and the scenario then has no engine).
-func (sc *Scenario) compileOutcomes() {
+func (sc *Scenario) CompileOutcomes() {
 	fail := func(format string, args ...any) { sc.OutcomeError = fmt.Sprintf(format, args...) }
 	for _, o := range sc.OutcomeObjectives {
 		if o.ID == "" {

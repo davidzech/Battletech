@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+
+	"github.com/davidzech/Battletech/internal/content"
 )
 
 // The outcome engine's storage: completing a mission with its outcome, the recorded report, free recruits and the keyword ledger (see outcomes.go).
@@ -21,7 +23,7 @@ var ErrOutcomeFunds = errors.New("the outcome would take the warchest below zero
 // CompleteWithOutcome applies a mission's outcome and records the mission as completed, all in one transaction: SP to the pilots who earned it, pilots killed in
 // action, the warchest and the free recruits, the keywords granted (into the campaign ledger), and the completion row holding the report. It fails with ErrAlreadyCompleted if the mission was already completed, so
 // the rewards can never be given twice.
-func (s *Store) CompleteWithOutcome(ctx context.Context, playthroughID, campaign, scenario string, res OutcomeResult) error {
+func (s *Store) CompleteWithOutcome(ctx context.Context, playthroughID, campaign, scenario string, res content.OutcomeResult) error {
 	record, err := json.Marshal(res)
 	if err != nil {
 		return err
@@ -83,7 +85,7 @@ func (s *Store) CompleteWithOutcome(ctx context.Context, playthroughID, campaign
 }
 
 // CompletionOutcome returns the recorded report of a completed mission ("" with ok when it was completed without an outcome); ok is false if it isn't completed.
-func (s *Store) CompletionOutcome(ctx context.Context, playthroughID, campaign, scenario string) (res *OutcomeResult, ok bool, err error) {
+func (s *Store) CompletionOutcome(ctx context.Context, playthroughID, campaign, scenario string) (res *content.OutcomeResult, ok bool, err error) {
 	var raw string
 	err = s.db.QueryRowContext(ctx, s.q(`SELECT outcome FROM scenario_completions WHERE playthrough_id = ? AND campaign = ? AND scenario_id = ?`), playthroughID, campaign, scenario).Scan(&raw)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -95,7 +97,7 @@ func (s *Store) CompletionOutcome(ctx context.Context, playthroughID, campaign, 
 	if raw == "" {
 		return nil, true, nil
 	}
-	var r OutcomeResult
+	var r content.OutcomeResult
 	if err := json.Unmarshal([]byte(raw), &r); err != nil {
 		return nil, true, nil // a record this version can't read is still a completion
 	}

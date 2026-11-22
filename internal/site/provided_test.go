@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/davidzech/Battletech/internal/content"
+
 	"github.com/davidzech/Battletech/internal/hangar"
 
 	"github.com/davidzech/Battletech/internal/mekbay"
@@ -20,8 +22,8 @@ import (
 var scenario000Pool = []string{"BMBlackHawk_Prime", "BMRyoken_Prime", "BMShadowCat_Prime", "BMPouncer_Prime", "BMGrendel_Prime"}
 
 func TestProvidedForce(t *testing.T) {
-	sc := &Scenario{ProvidedUnits: scenario000Pool}
-	if !sc.provides() || (&Scenario{}).provides() || (*Scenario)(nil).provides() {
+	sc := &content.Scenario{ProvidedUnits: scenario000Pool}
+	if !sc.Provides() || (&content.Scenario{}).Provides() || (*content.Scenario)(nil).Provides() {
 		t.Fatal("provides() is true only for a scenario that lists units")
 	}
 	h := providedForce(sc)
@@ -48,13 +50,13 @@ func TestProvidedForce(t *testing.T) {
 
 // Scenario 000's own front matter lists the four mechs, and every provided unit of every scenario is a real mech.
 func TestScenario000ProvidesItsOwnMechs(t *testing.T) {
-	lib := Library{Root: "../../campaigns"}
+	lib := content.Library{Root: "../../campaigns"}
 	c, _ := lib.Campaign("refusalwar")
 	sc, ok := c.Scenario("scenario_000")
 	if !ok || strings.Join(sc.ProvidedUnits, ",") != strings.Join(scenario000Pool, ",") {
 		t.Fatalf("Scenario 000 should provide Nova, Stormcrow, Shadow Cat, Pouncer and Mongrel (Grendel) Primes: %+v", sc.ProvidedUnits)
 	}
-	if sc1, _ := c.Scenario("scenario_001"); sc1.provides() {
+	if sc1, _ := c.Scenario("scenario_001"); sc1.Provides() {
 		t.Error("Sortie 001 uses the player's hangar")
 	}
 	camps, err := lib.Campaigns()
@@ -134,7 +136,7 @@ func TestProvidedScenarioDeploy(t *testing.T) {
 
 // Scenario 000 allows two mechs in all, each with a named pilot, and has no BV limit.
 func TestScenarioRules(t *testing.T) {
-	sc := &Scenario{UnitLimit: 2, PilotsRequired: true}
+	sc := &content.Scenario{UnitLimit: 2, PilotsRequired: true}
 	crew := func(units ...string) []mekbay.CrewAssignment {
 		var out []mekbay.CrewAssignment
 		for _, u := range units {
@@ -155,12 +157,12 @@ func TestScenarioRules(t *testing.T) {
 		"no assignments at all":       {[][]string{{"a"}}, nil, true},
 		"another player's pilot only": {[][]string{{"a"}, {"b"}}, [][]mekbay.CrewAssignment{crew("b"), crew("b")}, true},
 	} {
-		if msg := sc.rulesProblem(c.units, c.crews); (msg != "") != c.bad {
+		if msg := sc.RulesProblem(c.units, c.crews); (msg != "") != c.bad {
 			t.Errorf("%s: %q", name, msg)
 		}
 	}
 	// No rules, no problems.
-	if msg := (&Scenario{}).rulesProblem([][]string{{"a", "b", "c"}}, nil); msg != "" {
+	if msg := (&content.Scenario{}).RulesProblem([][]string{{"a", "b", "c"}}, nil); msg != "" {
 		t.Errorf("a scenario without rules: %q", msg)
 	}
 }
@@ -173,7 +175,7 @@ func TestScenario000EnforcesItsRules(t *testing.T) {
 	if r := post(t, srv, "/api/campaign/start", startForm(goodHangar, "Alrek", "Katarina"), cookie, srv.URL); r.StatusCode != http.StatusNoContent {
 		t.Fatalf("start: %d", r.StatusCode)
 	}
-	pool := providedForce(&Scenario{ProvidedUnits: scenario000Pool})
+	pool := providedForce(&content.Scenario{ProvidedUnits: scenario000Pool})
 	id := func(i int) string { return pool.Units[i].ID }
 	plan := func(kv ...string) int {
 		v := url.Values{"campaign": {"refusalwar"}, "scenario": {"scenario_000"}, "players": {"1"}}

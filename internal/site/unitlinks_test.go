@@ -7,13 +7,15 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/davidzech/Battletech/internal/content"
+
 	"github.com/davidzech/Battletech/internal/mekbay"
 
 	"github.com/davidzech/Battletech/internal/catalog"
 )
 
 func TestUnitLinksCarryTheirCards(t *testing.T) {
-	out := string(renderMarkdown("- [Nova Prime](https://mekbay.com/?gs=cbt&shareUnit=BMBlackHawk_Prime&tab=General) (3/4) Skirmisher: Alrek\n"+
+	out := string(content.RenderMarkdown("- [Nova Prime](https://mekbay.com/?gs=cbt&shareUnit=BMBlackHawk_Prime&tab=General) (3/4) Skirmisher: Alrek\n"+
 		"- [Grizzly](https://mekbay.com/?gs=cbt&shareUnit=BMGrizzly&tab=General) Brawler\n"+
 		"- [Nothing](https://mekbay.com/?gs=cbt&shareUnit=BMNoSuchMech_X&tab=General) (3/4)\n"+
 		"- [Elsewhere](https://www.sarna.net/wiki/Nova)\n", false))
@@ -53,7 +55,7 @@ func TestUnitLinksCarryTheirCards(t *testing.T) {
 }
 
 func TestScenarioPagesHaveUnitCards(t *testing.T) {
-	c, ok := Library{Root: "../../campaigns"}.Campaign("refusalwar")
+	c, ok := content.Library{Root: "../../campaigns"}.Campaign("refusalwar")
 	if !ok {
 		t.Fatal("no Refusal War campaign")
 	}
@@ -92,7 +94,7 @@ func TestWeaponCountsAndTheOverviewCard(t *testing.T) {
 // An omnimech's reconfigure options are marked available only when the campaign's faction fields the variant in its era (the same list as the
 // purchase search), and all are available for a campaign that names no faction and era.
 func TestSwapOptionsFollowAvailability(t *testing.T) {
-	c, ok := Library{Root: "../../campaigns"}.Campaign("refusalwar")
+	c, ok := content.Library{Root: "../../campaigns"}.Campaign("refusalwar")
 	if !ok {
 		t.Fatal("no Refusal War campaign")
 	}
@@ -116,7 +118,7 @@ func TestSwapOptionsFollowAvailability(t *testing.T) {
 	if yes == 0 || no == 0 {
 		t.Errorf("the Kit Fox has variants both in and out of Clan Wolf's Clan Invasion list: %d available, %d not", yes, no)
 	}
-	markSwapAvailability(views, &Campaign{})
+	markSwapAvailability(views, &content.Campaign{})
 	for _, o := range views[0].SwapOptions {
 		if !o.Available {
 			t.Errorf("with no faction and era every variant is available: %s", o.Unit)

@@ -1,4 +1,4 @@
-package site
+package content
 
 import (
 	"encoding/json"
@@ -33,7 +33,7 @@ func (c *Campaign) loadNames(dir string) {
 			}
 		}
 	}
-	check(n.Forces, "force_names", parseForceName)
+	check(n.Forces, "force_names", ParseForceName)
 	check(n.Male, "male_pilot_names", pilot.ParsePilotName)
 	check(n.Female, "female_pilot_names", pilot.ParsePilotName)
 	check(n.Neutral, "neutral_pilot_names", pilot.ParsePilotName)
@@ -48,3 +48,6 @@ func (c *Campaign) NamesJSON() string {
 	}
 	return string(b)
 }
+
+// ParseForceName validates a campaign's force name, e.g. "Wolf's Dragoons": each campaign's force has its own, to suit that campaign's theme.
+func ParseForceName(raw string) (string, error) { return pilot.ParseName(raw, "force") }

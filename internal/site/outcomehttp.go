@@ -6,6 +6,8 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/davidzech/Battletech/internal/content"
+
 	"github.com/davidzech/Battletech/internal/mekbay"
 )
 
@@ -13,7 +15,7 @@ import (
 
 // outcomeRequest checks a scenario-outcome request and evaluates it: a same-origin request from a started campaign, for an available scenario with an outcome engine
 // that is not completed yet. It returns what the engine makes of the reported inputs.
-func (s *Server) outcomeRequest(w http.ResponseWriter, r *http.Request) (pt Playthrough, c *Campaign, sc *Scenario, res OutcomeResult, ok bool) {
+func (s *Server) outcomeRequest(w http.ResponseWriter, r *http.Request) (pt Playthrough, c *content.Campaign, sc *content.Scenario, res content.OutcomeResult, ok bool) {
 	if pt, c, ok = s.pilotRequest(w, r); !ok {
 		return
 	}
@@ -40,7 +42,7 @@ func (s *Server) outcomeRequest(w http.ResponseWriter, r *http.Request) (pt Play
 		http.Error(w, "That scenario isn't available yet: complete the one before it first.", http.StatusConflict)
 		return
 	}
-	var in OutcomeInputs
+	var in content.OutcomeInputs
 	if err := json.Unmarshal([]byte(r.PostFormValue("inputs")), &in); err != nil {
 		http.Error(w, "The outcome form could not be read.", http.StatusBadRequest)
 		return
@@ -124,8 +126,8 @@ func (s *Server) commitOutcome(w http.ResponseWriter, r *http.Request) {
 // writeBackBattle, for a mission fought with the player's own force (not a provided one) that has a battle in progress, writes the battle's units back into the
 // hangar before the mission is completed (see commitbattle.go), so a failure leaves the mission open to try again (writing the same state twice changes nothing). It
 // answers the request itself and returns false when it fails.
-func (s *Server) writeBackBattle(w http.ResponseWriter, r *http.Request, pt Playthrough, c *Campaign, sc *Scenario) bool {
-	if sc.provides() {
+func (s *Server) writeBackBattle(w http.ResponseWriter, r *http.Request, pt Playthrough, c *content.Campaign, sc *content.Scenario) bool {
+	if sc.Provides() {
 		return true
 	}
 	op, had, err := s.store.MekBayOperation(r.Context(), pt.ID, c.Slug, sc.ID)

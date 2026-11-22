@@ -9,6 +9,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/davidzech/Battletech/internal/content"
+
+	"github.com/davidzech/Battletech/internal/format"
+
 	"github.com/davidzech/Battletech/internal/mekbay"
 
 	"github.com/davidzech/Battletech/internal/catalog"
@@ -34,9 +38,9 @@ func (f *fakeMekBay) setHangar(h mekbay.HangarForce, err error) {
 	f.hangar, f.err = h, err
 }
 
-func refusalWar(t *testing.T) *Campaign {
+func refusalWar(t *testing.T) *content.Campaign {
 	t.Helper()
-	c, ok := (Library{Root: "../../campaigns"}).Campaign("refusalwar")
+	c, ok := (content.Library{Root: "../../campaigns"}).Campaign("refusalwar")
 	if !ok || c.StartingBV != 10000 || c.StartingMinMechs != 5 {
 		t.Fatalf("Refusal War should start with at least 5 mechs and up to 10000 BV: %+v", c)
 	}
@@ -45,7 +49,7 @@ func refusalWar(t *testing.T) *Campaign {
 
 func TestWithCommas(t *testing.T) {
 	for n, want := range map[int]string{0: "0", 999: "999", 1000: "1,000", 6000: "6,000", 12500: "12,500", 1234567: "1,234,567"} {
-		if got := withCommas(n); got != want {
+		if got := format.Commas(n); got != want {
 			t.Errorf("withCommas(%d) = %q, want %q", n, got, want)
 		}
 	}
@@ -102,7 +106,7 @@ func TestCheckStartingHangar(t *testing.T) {
 		t.Errorf("an unknown unit: %+v", odd)
 	}
 	// A campaign with no starting conditions accepts anything.
-	if r := checkStartingHangar(mekbay.HangarForce{}, &Campaign{}); !r.OK {
+	if r := checkStartingHangar(mekbay.HangarForce{}, &content.Campaign{}); !r.OK {
 		t.Errorf("no conditions, no problems: %+v", r)
 	}
 }

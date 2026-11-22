@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/davidzech/Battletech/internal/content"
+
 	"github.com/davidzech/Battletech/internal/mekbay"
 
 	"github.com/davidzech/Battletech/internal/pilot"
@@ -319,7 +321,7 @@ func TestCompletingTheMissionEndsTheBattle(t *testing.T) {
 	for name, complete := range map[string]func(scenario string) error{
 		"marked completed": func(sc string) error { return store.SetScenarioCompleted(ctx, id, "refusalwar", sc, true) },
 		"completed with an outcome": func(sc string) error {
-			return store.CompleteWithOutcome(ctx, id, "refusalwar", sc, OutcomeResult{})
+			return store.CompleteWithOutcome(ctx, id, "refusalwar", sc, content.OutcomeResult{})
 		},
 	} {
 		sc := "scenario_" + map[string]string{"marked completed": "001", "completed with an outcome": "000"}[name]
