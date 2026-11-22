@@ -1,4 +1,4 @@
-package site
+package mekbay
 
 import (
 	"context"
@@ -45,7 +45,7 @@ func pristineUnit(um map[string]any, now time.Time) {
 			}
 		}
 	}
-	state["crew"] = []any{map[string]any{"id": 0, "name": "", "gunnerySkill": defaultGunnery, "pilotingSkill": defaultPiloting, "hits": 0, "state": 0}}
+	state["crew"] = []any{map[string]any{"id": 0, "name": "", "gunnerySkill": DefaultGunnery, "pilotingSkill": DefaultPiloting, "hits": 0, "state": 0}}
 	um["updatedTs"] = now.UnixMilli()
 }
 
@@ -72,20 +72,20 @@ func cloneForce(data map[string]any, instance string, now time.Time) (map[string
 		}
 	}
 	force["instanceId"] = instance
-	force["timestamp"] = mekbayTime(now)
+	force["timestamp"] = FormatTime(now)
 	delete(force, "owned")
 	return force, nil
 }
 
 // CloneHangar reads a force by its ID and saves a clean copy of it under the owner's account, returning the copy as the site will read it.
-func (c *MekBayClient) CloneHangar(ctx context.Context, req CloneRequest) (HangarForce, error) {
+func (c *Client) CloneHangar(ctx context.Context, req CloneRequest) (HangarForce, error) {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	s, err := dialMekBay(ctx, c.url(), req.OwnerUID)
+	s, err := Dial(ctx, c.url(), req.OwnerUID)
 	if err != nil {
 		return HangarForce{}, err
 	}
-	defer s.close()
+	defer s.Close()
 	data, err := s.getForce(ctx, req.Source, false)
 	if err != nil {
 		return HangarForce{}, err
@@ -104,5 +104,5 @@ func (c *MekBayClient) CloneHangar(ctx context.Context, req CloneRequest) (Hanga
 	if err != nil {
 		return HangarForce{}, err
 	}
-	return parseHangarForce(b)
+	return ParseHangarForce(b)
 }

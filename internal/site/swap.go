@@ -1,14 +1,13 @@
 package site
 
 import (
-	"context"
-	"errors"
 	"log"
 	"math"
 	"net/http"
 	"sort"
 	"sync"
-	"time"
+
+	"github.com/davidzech/Battletech/internal/mekbay"
 
 	"github.com/davidzech/Battletech/internal/catalog"
 )
@@ -104,43 +103,6 @@ func swapOptions(u catalog.Unit) []swapOption {
 	return out
 }
 
-// swapUnitState reconfigures the unit with this ID inside a force in MekBay's save format: its design becomes newName and its state is reset (a fresh unit has no
-// damage, no critical hits and full ammunition, and the old variant's slots mean nothing to the new one).
-func swapUnitState(force map[string]any, unitID, newName string, now time.Time) error {
-	groups, _ := force["groups"].([]any)
-	for _, g := range groups {
-		gm, _ := g.(map[string]any)
-		units, _ := gm["units"].([]any)
-		for _, u := range units {
-			um, _ := u.(map[string]any)
-			if um == nil || um["id"] != unitID {
-				continue
-			}
-			pristineUnit(um, now)
-			state, _ := um["state"].(map[string]any)
-			state["crits"] = []any{}
-			um["unit"] = newName
-			return nil
-		}
-	}
-	return errors.New("that unit is no longer in your hangar force")
-}
-
-// SwapRequest asks MekBay to reconfigure a unit of the site's copy of the hangar.
-type SwapRequest struct {
-	OwnerUID string
-	Instance string
-	UnitID   string // the unit's own ID inside the force
-	To       string // MekBay unit ID of the variant
-}
-
-// SwapUnit reconfigures a unit in the hangar force. It needs the owner's UID, because MekBay only accepts the owner's saves.
-func (c *MekBayClient) SwapUnit(ctx context.Context, req SwapRequest) error {
-	return c.editForce(ctx, req.OwnerUID, req.Instance, func(force map[string]any, now time.Time) error {
-		return swapUnitState(force, req.UnitID, req.To, now)
-	})
-}
-
 // swapUnit is POST /api/hangar/swap: reconfigure the hangar unit named by `unit` to the variant `to`. The server works the price out itself, refuses a unit that isn't
 // fully repaired and rearmed or a variant that isn't one of its chassis's, and charges the warchest first (refunded if MekBay fails).
 func (s *Server) swapUnit(w http.ResponseWriter, r *http.Request) {
@@ -154,7 +116,7 @@ func (s *Server) swapUnit(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
-	var hu HangarUnit
+	var hu mekbay.HangarUnit
 	found := false
 	for _, u := range h.Units {
 		if u.ID == r.PostFormValue("unit") {
@@ -188,6 +150,6 @@ func (s *Server) swapUnit(w http.ResponseWriter, r *http.Request) {
 	}
 	cost := option.Cost
 	s.payForHangarChange(w, r, pt, c, run, cost, "swap a unit", func() error {
-		return s.mekbay.SwapUnit(r.Context(), SwapRequest{OwnerUID: accountUID(currentSeed(r), SlotHangar), Instance: run.HangarInstance, UnitID: hu.ID, To: to})
+		return s.mekbay.SwapUnit(r.Context(), mekbay.SwapRequest{OwnerUID: mekbay.AccountUID(currentSeed(r), mekbay.SlotHangar), Instance: run.HangarInstance, UnitID: hu.ID, To: to})
 	})
 }

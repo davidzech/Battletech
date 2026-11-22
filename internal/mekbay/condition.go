@@ -1,4 +1,4 @@
-package site
+package mekbay
 
 import (
 	"fmt"
@@ -63,8 +63,8 @@ func maxStructure(loc string, tons float64) int {
 	return t[4] // legs
 }
 
-// internalGone reports whether a location has lost all its internal structure.
-func internalGone(hu HangarUnit, loc string, tons float64) bool {
+// InternalGone reports whether a location has lost all its internal structure.
+func InternalGone(hu HangarUnit, loc string, tons float64) bool {
 	max := maxStructure(loc, tons)
 	return max > 0 && hu.Locations[loc].Internal >= max
 }
@@ -72,11 +72,11 @@ func internalGone(hu HangarUnit, loc string, tons float64) bool {
 // structureKeys are the locations whose internal structure counts as structure damage (rear armor locations have none).
 var structureKeys = []string{"HD", "CT", "LT", "RT", "LA", "RA", "LL", "RL", "FLL", "FRL", "RLL", "RRL"}
 
-// conditionOf works out a unit's worst state and a short note saying why (for the pill's tooltip). tons and engine come from the
+// ConditionOf works out a unit's worst state and a short note saying why (for the pill's tooltip). tons and engine come from the
 // catalog (0 and "" if unknown).
-func conditionOf(hu HangarUnit, tons float64, engine string) (Condition, string) {
+func ConditionOf(hu HangarUnit, tons float64, engine string) (Condition, string) {
 	// Hot Spots: Draconis Reach, Destroyed vs. Truly Destroyed: a mech is truly destroyed only when its center torso internal structure is eliminated.
-	if internalGone(hu, "CT", tons) {
+	if InternalGone(hu, "CT", tons) {
 		return CondTruly, "Truly destroyed: center torso structure eliminated, so it cannot be repaired"
 	}
 	if hu.Destroyed {
@@ -116,12 +116,12 @@ func crippledBecause(hu HangarUnit, tons float64, engine string) string {
 	}
 	limbs, legs := 0, 0
 	for _, k := range armKeys {
-		if internalGone(hu, k, tons) {
+		if InternalGone(hu, k, tons) {
 			limbs++
 		}
 	}
 	for _, k := range legKeys {
-		if internalGone(hu, k, tons) {
+		if InternalGone(hu, k, tons) {
 			limbs++
 			legs++
 		}
@@ -131,7 +131,7 @@ func crippledBecause(hu HangarUnit, tons float64, engine string) string {
 	}
 	torsos := 0
 	for _, k := range torsoKeys {
-		if internalGone(hu, k, tons) {
+		if InternalGone(hu, k, tons) {
 			torsos++
 		}
 	}

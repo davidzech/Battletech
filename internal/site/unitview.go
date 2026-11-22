@@ -3,6 +3,8 @@ package site
 import (
 	"fmt"
 
+	"github.com/davidzech/Battletech/internal/mekbay"
+
 	"github.com/davidzech/Battletech/internal/catalog"
 )
 
@@ -55,10 +57,10 @@ type hangarUnitView struct {
 const deployedGroup = "Deployed"
 
 // hangarViews describes every unit of a hangar for the deploy popup.
-func hangarViews(h HangarForce) []hangarUnitView {
+func hangarViews(h mekbay.HangarForce) []hangarUnitView {
 	views := make([]hangarUnitView, 0, len(h.Units))
 	for _, hu := range h.Units {
-		v := hangarUnitView{MekBayURL: catalog.PageURL(hu.Unit), ID: hu.ID, Pilot: hu.Pilot, PilotDead: hu.PilotDead, Gunnery: hu.Gunnery, Piloting: hu.Piloting, Damaged: hu.Damaged, Destroyed: hu.Destroyed, InDeployed: sameGroupName(hu.Group, deployedGroup)}
+		v := hangarUnitView{MekBayURL: catalog.PageURL(hu.Unit), ID: hu.ID, Pilot: hu.Pilot, PilotDead: hu.PilotDead, Gunnery: hu.Gunnery, Piloting: hu.Piloting, Damaged: hu.Damaged, Destroyed: hu.Destroyed, InDeployed: mekbay.SameGroupName(hu.Group, deployedGroup)}
 		if u, ok := catalog.ByName(hu.Unit); ok {
 			v.Name, v.Model = catalog.Names(u)
 			v.Class, v.Role, v.Tons, v.Icon = u.Class, catalog.RoleLabel(u), u.Tons, catalog.IconURL(u)
@@ -72,7 +74,7 @@ func hangarViews(h HangarForce) []hangarUnitView {
 		if u, ok := catalog.ByName(hu.Unit); ok {
 			tons, engine = u.Tons, u.Engine
 		}
-		c, note := conditionOf(hu, tons, engine)
+		c, note := mekbay.ConditionOf(hu, tons, engine)
 		v.Condition, v.ConditionNote, v.AmmoExpended = string(c), note, hu.AmmoUsed > 0
 		if u, ok := catalog.ByName(hu.Unit); ok && u.Type == "Mek" {
 			v.RepairLevels, v.RepairCosts, v.RearmCost = repairOptions(hu, c, u.Tons), repairCosts(u.Tons, u.TechBase), rearmCost(hu.AmmoBins)
@@ -88,7 +90,7 @@ func hangarViews(h HangarForce) []hangarUnitView {
 
 // deployProblem checks a chosen set of hangar units against the hangar and the scenario's limits; it returns a
 // message for the player, or "" when the choice is fine.
-func deployProblem(h HangarForce, ids []string, bvLimit int) string {
+func deployProblem(h mekbay.HangarForce, ids []string, bvLimit int) string {
 	if len(ids) == 0 {
 		return "Choose at least one unit to deploy."
 	}

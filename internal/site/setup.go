@@ -7,66 +7,13 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"net/url"
-	"regexp"
 	"strconv"
 	"strings"
 
+	"github.com/davidzech/Battletech/internal/mekbay"
+
 	"github.com/davidzech/Battletech/internal/pilot"
 )
-
-// Hangar is a MekBay hangar link reduced to what the site needs: the force's instance ID. Whatever else a pasted link
-// carries (the selected unit, an operation, tracking parameters, enemy forces) is dropped.
-type Hangar struct {
-	URL      string // the canonical link, https://mekbay.com/?instance=<id>
-	Instance string // the hangar force's instance ID
-	// Source, on a run's hangar, is the link the player gave. URL and Instance are then the site's own copy of that force (see clone.go), and parseHangar,
-	// which reads what the player pasted, leaves it empty.
-	Source string
-}
-
-var uuidPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
-
-// friendlyInstance picks our own force out of a MekBay "instance" value, which lists forces separated by commas, the
-// hostile ones prefixed "enemy:" (instance=<mine>,enemy:<theirs>). It is the first entry that isn't hostile, or "" if
-// there is none or it isn't a valid ID.
-func friendlyInstance(list string) string {
-	for _, entry := range strings.Split(list, ",") {
-		entry = strings.ToLower(strings.TrimSpace(entry))
-		if strings.HasPrefix(entry, "enemy:") {
-			continue
-		}
-		if uuidPattern.MatchString(entry) {
-			return entry
-		}
-		return ""
-	}
-	return ""
-}
-
-// parseHangar accepts any MekBay link to a hangar and reduces it to https://mekbay.com/?instance=<id>. The link must be
-// https, on mekbay.com, with an instance ID. Extra parameters are harmless and are dropped, the unit selection
-// (&sel=) among them; a list of forces ("<mine>,enemy:<theirs>") gives its friendly force.
-func parseHangar(raw string) (Hangar, error) {
-	raw = strings.TrimSpace(raw)
-	u, err := url.Parse(raw)
-	host := ""
-	if err == nil {
-		host = strings.ToLower(u.Hostname())
-	}
-	if err != nil || u.Scheme != "https" || u.User != nil || u.Port() != "" || (host != "mekbay.com" && host != "www.mekbay.com") {
-		return Hangar{}, errors.New("Paste a MekBay hangar link, like https://mekbay.com/?instance=…")
-	}
-	q := u.Query()
-	instance := friendlyInstance(q.Get("instance"))
-	if instance == "" {
-		if q.Get("operation") != "" && q.Get("instance") == "" {
-			return Hangar{}, errors.New("That is an operation link. Paste the link to your hangar instead (it has ?instance=…).")
-		}
-		return Hangar{}, errors.New("That MekBay link has no valid instance id (?instance=…).")
-	}
-	return Hangar{URL: "https://mekbay.com/?instance=" + instance, Instance: instance}, nil
-}
 
 // parseAccountName validates the account's name: whatever the player likes to call their account.
 func parseAccountName(raw string) (string, error) { return pilot.ParseName(raw, "account") }
@@ -146,9 +93,9 @@ func (s *Server) startCampaign(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	var source Hangar
+	var source mekbay.Hangar
 	if units == nil {
-		if source, err = parseHangar(r.PostFormValue("hangar")); err != nil {
+		if source, err = mekbay.ParseHangarLink(r.PostFormValue("hangar")); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -180,10 +127,10 @@ func (s *Server) startCampaign(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// The hangar must meet the campaign's starting conditions (enough mechs, within the starting BV).
-	var hangar Hangar
-	var made HangarForce
+	var hangar mekbay.Hangar
+	var made mekbay.HangarForce
 	if units != nil {
-		if check := checkStartingHangar(draftHangar(units), c); !check.OK {
+		if check := checkStartingHangar(mekbay.DraftHangar(units), c); !check.OK {
 			http.Error(w, strings.Join(check.Problems, " "), http.StatusBadRequest)
 			return
 		}
@@ -247,13 +194,13 @@ func parseStartingPlayers(raw string, c *Campaign) (int, error) {
 
 // cloneHangar copies the force the player linked into a new, clean force owned by the seed's own MekBay account, and returns the run's hangar: the copy's
 // link and instance, with the player's link kept as its source.
-func (s *Server) cloneHangar(ctx context.Context, seed string, source Hangar) (Hangar, HangarForce, error) {
-	target := newID()
-	got, err := s.mekbay.CloneHangar(ctx, CloneRequest{OwnerUID: accountUID(seed, SlotHangar), Source: source.Instance, Target: target})
+func (s *Server) cloneHangar(ctx context.Context, seed string, source mekbay.Hangar) (mekbay.Hangar, mekbay.HangarForce, error) {
+	target := mekbay.NewID()
+	got, err := s.mekbay.CloneHangar(ctx, mekbay.CloneRequest{OwnerUID: mekbay.AccountUID(seed, mekbay.SlotHangar), Source: source.Instance, Target: target})
 	if err != nil {
-		return Hangar{}, HangarForce{}, err
+		return mekbay.Hangar{}, mekbay.HangarForce{}, err
 	}
-	return Hangar{URL: "https://mekbay.com/?instance=" + target, Instance: target, Source: source.URL}, got, nil
+	return mekbay.Hangar{URL: "https://mekbay.com/?instance=" + target, Instance: target, Source: source.URL}, got, nil
 }
 
 // setSeed validates a chosen seed, records its playthrough and stores the seed in a cookie. The

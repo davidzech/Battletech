@@ -14,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/davidzech/Battletech/internal/mekbay"
+
 	"github.com/coder/websocket"
 )
 
@@ -613,7 +615,7 @@ func TestMekBayLinkBuilder(t *testing.T) {
 func TestDeletingTheCampaignRevokesItsLinks(t *testing.T) {
 	srv, store, cookie := startedCompany(t)
 	ctx := context.Background()
-	id, err := store.EnsureMekBayLink(ctx, playthroughID("wolfpack2026"), "refusalwar", tableLabel, accountUID("wolfpack2026", SlotHangar), time.Hour, time.Now())
+	id, err := store.EnsureMekBayLink(ctx, playthroughID("wolfpack2026"), "refusalwar", tableLabel, mekbay.AccountUID("wolfpack2026", mekbay.SlotHangar), time.Hour, time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

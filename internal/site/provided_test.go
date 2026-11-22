@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/davidzech/Battletech/internal/mekbay"
+
 	"github.com/davidzech/Battletech/internal/catalog"
 )
 
@@ -79,7 +81,7 @@ func TestProvidedScenarioDeploy(t *testing.T) {
 	}
 	id := playthroughID("wolfpack2026")
 	// A MekBay that can't be reached must not matter: the provided mechs are not read from it, and the hangar isn't touched.
-	fake.setHangar(HangarForce{}, errors.New("MekBay must not be read for a provided force"))
+	fake.setHangar(mekbay.HangarForce{}, errors.New("MekBay must not be read for a provided force"))
 	const hangarPath = "/api/mekbay/hangar?campaign=refusalwar&scenario=scenario_000"
 	r := get(t, srv, hangarPath, cookie)
 	var view struct {
@@ -131,25 +133,25 @@ func TestProvidedScenarioDeploy(t *testing.T) {
 // Scenario 000 allows two mechs in all, each with a named pilot, and has no BV limit.
 func TestScenarioRules(t *testing.T) {
 	sc := &Scenario{UnitLimit: 2, PilotsRequired: true}
-	crew := func(units ...string) []CrewAssignment {
-		var out []CrewAssignment
+	crew := func(units ...string) []mekbay.CrewAssignment {
+		var out []mekbay.CrewAssignment
 		for _, u := range units {
-			out = append(out, CrewAssignment{UnitID: u, Name: "Alrek"})
+			out = append(out, mekbay.CrewAssignment{UnitID: u, Name: "Alrek"})
 		}
 		return out
 	}
 	for name, c := range map[string]struct {
 		units [][]string
-		crews [][]CrewAssignment
+		crews [][]mekbay.CrewAssignment
 		bad   bool
 	}{
-		"two mechs, both crewed":      {[][]string{{"a", "b"}}, [][]CrewAssignment{crew("a", "b")}, false},
-		"one each for two players":    {[][]string{{"a"}, {"b"}}, [][]CrewAssignment{crew("a"), crew("b")}, false},
-		"three mechs is over":         {[][]string{{"a", "b"}, {"c"}}, [][]CrewAssignment{crew("a", "b"), crew("c")}, true},
-		"a mech without a pilot":      {[][]string{{"a", "b"}}, [][]CrewAssignment{crew("a")}, true},
-		"a pilot sent empty":          {[][]string{{"a"}}, [][]CrewAssignment{{{UnitID: "a"}}}, true},
+		"two mechs, both crewed":      {[][]string{{"a", "b"}}, [][]mekbay.CrewAssignment{crew("a", "b")}, false},
+		"one each for two players":    {[][]string{{"a"}, {"b"}}, [][]mekbay.CrewAssignment{crew("a"), crew("b")}, false},
+		"three mechs is over":         {[][]string{{"a", "b"}, {"c"}}, [][]mekbay.CrewAssignment{crew("a", "b"), crew("c")}, true},
+		"a mech without a pilot":      {[][]string{{"a", "b"}}, [][]mekbay.CrewAssignment{crew("a")}, true},
+		"a pilot sent empty":          {[][]string{{"a"}}, [][]mekbay.CrewAssignment{{{UnitID: "a"}}}, true},
 		"no assignments at all":       {[][]string{{"a"}}, nil, true},
-		"another player's pilot only": {[][]string{{"a"}, {"b"}}, [][]CrewAssignment{crew("b"), crew("b")}, true},
+		"another player's pilot only": {[][]string{{"a"}, {"b"}}, [][]mekbay.CrewAssignment{crew("b"), crew("b")}, true},
 	} {
 		if msg := sc.rulesProblem(c.units, c.crews); (msg != "") != c.bad {
 			t.Errorf("%s: %q", name, msg)

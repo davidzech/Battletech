@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/davidzech/Battletech/internal/mekbay"
+
 	"github.com/davidzech/Battletech/internal/catalog"
 )
 
@@ -78,7 +80,7 @@ func TestWeaponCountsAndTheOverviewCard(t *testing.T) {
 	if c := catalog.CardFor(u); c.Weapons == nil || *c.Weapons != (catalog.WeaponCounts{Ballistic: 1, Energy: 4, Missile: 2}) {
 		t.Errorf("Atlas AS7-D weapons: %+v", c.Weapons)
 	}
-	views := hangarViews(HangarForce{Units: []HangarUnit{{ID: "u1", Unit: "BMAtlas_AS7D"}, {ID: "u2", Unit: "BMNoSuchMech_X"}}})
+	views := hangarViews(mekbay.HangarForce{Units: []mekbay.HangarUnit{{ID: "u1", Unit: "BMAtlas_AS7D"}, {ID: "u2", Unit: "BMNoSuchMech_X"}}})
 	if c := views[0].Card; c == nil || c.ID != "BMAtlas_AS7D" || c.Firepower != 72 || c.Weapons == nil || c.Gunnery != 0 {
 		t.Errorf("a hangar unit carries its catalog card, with no skills: %+v", c)
 	}
@@ -98,7 +100,7 @@ func TestSwapOptionsFollowAvailability(t *testing.T) {
 	if avail == nil {
 		t.Fatal("Refusal War names a faction and era MekBay knows")
 	}
-	views := hangarViews(HangarForce{Units: []HangarUnit{{ID: "u", Unit: "BMUller_A"}}})
+	views := hangarViews(mekbay.HangarForce{Units: []mekbay.HangarUnit{{ID: "u", Unit: "BMUller_A"}}})
 	markSwapAvailability(views, c)
 	var yes, no int
 	for _, o := range views[0].SwapOptions {

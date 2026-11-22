@@ -1,12 +1,11 @@
 package site
 
 import (
-	"context"
-	"errors"
 	"fmt"
 	"log"
 	"net/http"
-	"time"
+
+	"github.com/davidzech/Battletech/internal/mekbay"
 
 	"github.com/davidzech/Battletech/internal/catalog"
 )
@@ -17,7 +16,7 @@ import (
 // out of the hangar force (crew and all) and pays the warchest.
 
 // unitPristine reports whether a unit is fully repaired and rearmed: no recorded damage, not destroyed, no spent ammunition.
-func unitPristine(hu HangarUnit) bool {
+func unitPristine(hu mekbay.HangarUnit) bool {
 	return !hu.Damaged && !hu.Destroyed && hu.AmmoUsed == 0 && hu.AmmoBins == 0 && len(hu.Locations) == 0 && len(hu.Crits) == 0
 }
 
@@ -28,39 +27,6 @@ func sellValue(bv int, pristine bool) int {
 		v /= 2
 	}
 	return v
-}
-
-// removeUnitFromForce takes the unit with this ID out of a saved force (the decoded JSON of its `data`); false if it isn't there.
-func removeUnitFromForce(force map[string]any, unitID string) bool {
-	groups, _ := force["groups"].([]any)
-	for _, g := range groups {
-		gm, _ := g.(map[string]any)
-		units, _ := gm["units"].([]any)
-		for i, u := range units {
-			if um, _ := u.(map[string]any); um != nil && um["id"] == unitID {
-				gm["units"] = append(units[:i:i], units[i+1:]...)
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// SellRequest asks MekBay to remove a unit from the site's copy of the hangar.
-type SellRequest struct {
-	OwnerUID string
-	Instance string
-	UnitID   string // the unit's own ID inside the force
-}
-
-// SellUnit removes a unit from the hangar force. It needs the owner's UID, because MekBay only accepts the owner's saves.
-func (c *MekBayClient) SellUnit(ctx context.Context, req SellRequest) error {
-	return c.editForce(ctx, req.OwnerUID, req.Instance, func(force map[string]any, _ time.Time) error {
-		if !removeUnitFromForce(force, req.UnitID) {
-			return errors.New("that unit is no longer in your hangar force")
-		}
-		return nil
-	})
 }
 
 // sellUnit is POST /api/hangar/sell: sell the hangar unit named by `unit`. The server works out the price itself from the unit's state. The unit is taken out of
@@ -76,7 +42,7 @@ func (s *Server) sellUnit(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
-	var hu HangarUnit
+	var hu mekbay.HangarUnit
 	found := false
 	for _, u := range h.Units {
 		if u.ID == r.PostFormValue("unit") {
@@ -93,7 +59,7 @@ func (s *Server) sellUnit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	value := sellValue(cat.BV, unitPristine(hu))
-	if err := s.mekbay.SellUnit(r.Context(), SellRequest{OwnerUID: accountUID(currentSeed(r), SlotHangar), Instance: run.HangarInstance, UnitID: hu.ID}); err != nil {
+	if err := s.mekbay.SellUnit(r.Context(), mekbay.SellRequest{OwnerUID: mekbay.AccountUID(currentSeed(r), mekbay.SlotHangar), Instance: run.HangarInstance, UnitID: hu.ID}); err != nil {
 		log.Printf("sell a unit in MekBay: %v", err) // never log the owner UID
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return

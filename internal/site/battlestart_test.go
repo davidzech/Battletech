@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/davidzech/Battletech/internal/mekbay"
+
 	"github.com/davidzech/Battletech/internal/pilot"
 )
 
@@ -83,7 +85,7 @@ func TestStartBattleEndpoint(t *testing.T) {
 		t.Fatalf("one start: %d", len(fake.battles))
 	}
 	req := fake.battles[0]
-	if req.Account != MekBayUID(seed, SlotHangar) || req.Provided || req.HangarInstance != run.HangarInstance || len(req.Players) != 2 || req.OperationName != "Refusal War - Sortie 001" {
+	if req.Account != mekbay.MekBayUID(seed, mekbay.SlotHangar) || req.Provided || req.HangarInstance != run.HangarInstance || len(req.Players) != 2 || req.OperationName != "Refusal War - Sortie 001" {
 		t.Fatalf("the request: %+v", req)
 	}
 	for i, p := range req.Players {
@@ -106,7 +108,7 @@ func TestStartBattleEndpoint(t *testing.T) {
 	if m == nil || m[3] != first.Operation {
 		t.Fatalf("the link opens the operation on a mekbay-<id> host: %q (%s)", first.URL, first.Operation)
 	}
-	if strings.Contains(first.URL, MekBayUID(seed, SlotHangar)) {
+	if strings.Contains(first.URL, mekbay.MekBayUID(seed, mekbay.SlotHangar)) {
 		t.Errorf("the link never shows the account: %q", first.URL)
 	}
 	// The scenario is recorded as started, with its operation and OpFor.
@@ -237,11 +239,11 @@ func TestBattleStatusAndAbort(t *testing.T) {
 	hurt.Name = "Wolf Pack - Player 1"
 	hurt.Units[0].Pilot, hurt.Units[0].Gunnery, hurt.Units[0].Piloting = "Alrek", 3, 4
 	hurt.Units[0].Damaged, hurt.Units[0].AmmoUsed, hurt.Units[0].AmmoBins = true, 2, 1
-	hurt.Units[0].Locations = map[string]LocationLoss{"CT": {Armor: 6}}
+	hurt.Units[0].Locations = map[string]mekbay.LocationLoss{"CT": {Armor: 6}}
 	second := hangarOf("BMGrizzly")
 	second.Name = "Wolf Pack - Player 2"
 	fake.mu.Lock()
-	fake.status = BattleStatus{Forces: []BattleForce{{Alignment: "friendly", Force: hurt}, {Alignment: "friendly", Force: second}}}
+	fake.status = mekbay.BattleStatus{Forces: []mekbay.BattleForce{{Alignment: "friendly", Force: hurt}, {Alignment: "friendly", Force: second}}}
 	fake.mu.Unlock()
 	res := status()
 	if res.StatusCode != http.StatusOK || res.Header.Get("Cache-Control") != "no-store" {
@@ -338,7 +340,7 @@ func TestCrewIsDead(t *testing.T) {
 		state, hits int
 		dead        bool
 	}{{0, 0, false}, {0, 5, false}, {1, 3, false}, {3, 0, false}, {5, 2, false}, {2, 0, true}, {4, 0, true}, {0, 6, true}, {1, 7, true}} {
-		if got := crewIsDead(c.state, c.hits); got != c.dead {
+		if got := mekbay.CrewIsDead(c.state, c.hits); got != c.dead {
 			t.Errorf("state %d, %d hits: dead = %v, want %v", c.state, c.hits, got, c.dead)
 		}
 	}
@@ -355,7 +357,7 @@ func TestCrewIsDead(t *testing.T) {
 		"killed":       {`{"name":"Alrek","gunnerySkill":3,"pilotingSkill":4,"hits":0,"state":4}`, true},
 		"no crew data": {``, false},
 	} {
-		h, err := parseHangarForce(json.RawMessage(reply(c.crew)))
+		h, err := mekbay.ParseHangarForce(json.RawMessage(reply(c.crew)))
 		if err != nil || len(h.Units) != 1 || h.Units[0].PilotDead != c.dead {
 			t.Errorf("%s: %+v %v", name, h.Units, err)
 		}
@@ -381,7 +383,7 @@ func TestPilotDeadFromTheCockpit(t *testing.T) {
 		"head gone":      {`"locations":{"HD":{"armor":9,"internal":3}}`, true},
 		"head hurt":      {`"locations":{"HD":{"armor":9,"internal":2}}`, false},
 	} {
-		h, err := parseHangarForce(json.RawMessage(reply(c.state)))
+		h, err := mekbay.ParseHangarForce(json.RawMessage(reply(c.state)))
 		if err != nil || len(h.Units) != 1 || h.Units[0].PilotDead != c.dead {
 			t.Errorf("%s: %+v %v", name, h.Units, err)
 		}

@@ -5,6 +5,8 @@ import (
 	"errors"
 	"log"
 	"net/http"
+
+	"github.com/davidzech/Battletech/internal/mekbay"
 )
 
 // The outcome engine's endpoints: previewing and committing a mission's outcome (see outcomes.go).
@@ -135,7 +137,7 @@ func (s *Server) writeBackBattle(w http.ResponseWriter, r *http.Request, pt Play
 	if !had || err != nil || !started || !run.Owned() {
 		return true // no battle to write back, or a hangar the site doesn't own
 	}
-	rep, err := s.mekbay.CommitBattle(r.Context(), CommitBattleRequest{OwnerUID: accountUID(currentSeed(r), SlotHangar), HangarInstance: run.HangarInstance, OperationID: op.OperationID})
+	rep, err := s.mekbay.CommitBattle(r.Context(), mekbay.CommitBattleRequest{OwnerUID: mekbay.AccountUID(currentSeed(r), mekbay.SlotHangar), HangarInstance: run.HangarInstance, OperationID: op.OperationID})
 	if err != nil {
 		http.Error(w, "Could not write the battle's damage back into your hangar: "+err.Error(), http.StatusBadGateway)
 		return false

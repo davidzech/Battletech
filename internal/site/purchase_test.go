@@ -2,13 +2,13 @@ package site
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"net/url"
 	"strings"
 	"testing"
-	"time"
+
+	"github.com/davidzech/Battletech/internal/mekbay"
 
 	"github.com/davidzech/Battletech/internal/catalog"
 )
@@ -28,32 +28,6 @@ func TestPurchaseCost(t *testing.T) {
 		if _, err := purchaseCost(ids); err == nil {
 			t.Errorf("%s should be refused", name)
 		}
-	}
-}
-
-func TestAddUnitsToForce(t *testing.T) {
-	var force map[string]any
-	if err := json.Unmarshal([]byte(crippledForce), &force); err != nil {
-		t.Fatal(err)
-	}
-	// There is no Hangar group yet (the one group has no name): a new one is made, and the old unit is untouched.
-	addUnitsToForce(force, []string{"BMMadCat_H", "BMKoshi_E"}, time.Now())
-	b, _ := json.Marshal(map[string]any{"data": force})
-	h, err := parseHangarForce(b)
-	if err != nil || len(h.Units) != 3 {
-		t.Fatalf("parse: %v, %d units", err, len(h.Units))
-	}
-	if h.Units[0].Unit != "BMBaboon" || h.Units[1].Unit != "BMMadCat_H" || h.Units[2].Unit != "BMKoshi_E" || h.Units[1].Group != "Hangar" {
-		t.Errorf("units: %+v", h.Units)
-	}
-	if c, _ := conditionOf(h.Units[1], 60, "XL (Clan)"); c != CondOK || h.Units[1].Gunnery != 4 || h.Units[1].Piloting != 5 || h.Units[1].ID == "" || h.Units[1].ID == h.Units[2].ID {
-		t.Errorf("a bought unit should be fresh, 4/5, with its own ID: %+v", h.Units[1])
-	}
-	// A second purchase joins the same Hangar group.
-	addUnitsToForce(force, []string{"BMGrizzly"}, time.Now())
-	groups, _ := force["groups"].([]any)
-	if len(groups) != 2 {
-		t.Errorf("expected the original group and one Hangar group, got %d", len(groups))
 	}
 }
 
@@ -94,7 +68,7 @@ func TestPurchaseEndpoint(t *testing.T) {
 	if got := buy("BMMadCat_H", "BMKoshi_E"); got != http.StatusOK || funds() != 4500-want {
 		t.Fatalf("buy: %d, funds %d (want %d)", got, funds(), 4500-want)
 	}
-	if len(fake.purchases) != 1 || strings.Join(fake.purchases[0].Units, ",") != "BMMadCat_H,BMKoshi_E" || fake.purchases[0].OwnerUID != MekBayUID("wolfpack2026", SlotHangar) || fake.purchases[0].Instance == goodInstance || fake.purchases[0].Instance == "" {
+	if len(fake.purchases) != 1 || strings.Join(fake.purchases[0].Units, ",") != "BMMadCat_H,BMKoshi_E" || fake.purchases[0].OwnerUID != mekbay.MekBayUID("wolfpack2026", mekbay.SlotHangar) || fake.purchases[0].Instance == goodInstance || fake.purchases[0].Instance == "" {
 		t.Errorf("MekBay was asked: %+v", fake.purchases)
 	}
 	// Refused: nothing chosen, an unknown unit, and too little in the warchest. Nothing is charged.

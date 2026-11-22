@@ -2,11 +2,11 @@ package site
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/url"
 	"testing"
-	"time"
+
+	"github.com/davidzech/Battletech/internal/mekbay"
 
 	"github.com/davidzech/Battletech/internal/catalog"
 )
@@ -59,24 +59,6 @@ func TestSwapPriceAndOptions(t *testing.T) {
 	grizzly, _ := catalog.ByName("BMGrizzly")
 	if grizzly.Omni != 0 || swapOptions(grizzly) != nil {
 		t.Errorf("the Grizzly is not an omnimech: %+v", swapOptions(grizzly))
-	}
-}
-
-func TestSwapUnitState(t *testing.T) {
-	var src map[string]any
-	if err := json.Unmarshal([]byte(wornForce), &src); err != nil {
-		t.Fatal(err)
-	}
-	if err := swapUnitState(src, "u1", "BMMadCat_A", time.Now()); err != nil {
-		t.Fatal(err)
-	}
-	um := src["groups"].([]any)[0].(map[string]any)["units"].([]any)[0].(map[string]any)
-	st := um["state"].(map[string]any)
-	if um["unit"] != "BMMadCat_A" || len(st["locations"].(map[string]any)) != 0 || len(st["crits"].([]any)) != 0 || st["destroyed"] != false {
-		t.Errorf("the unit should be the new variant, fresh: %+v", um)
-	}
-	if swapUnitState(src, "nope", "x", time.Now()) == nil {
-		t.Error("a unit that isn't in the force can't be swapped")
 	}
 }
 
@@ -138,7 +120,7 @@ func TestSwapUnitEndpoint(t *testing.T) {
 	if got := swap("ua", up.Unit); got != http.StatusOK || funds() != 4500-up.Cost {
 		t.Fatalf("swap: %d, funds %d (want %d)", got, funds(), 4500-up.Cost)
 	}
-	if len(fake.swaps) != 1 || fake.swaps[0].UnitID != "ua" || fake.swaps[0].To != up.Unit || fake.swaps[0].OwnerUID != MekBayUID("wolfpack2026", SlotHangar) {
+	if len(fake.swaps) != 1 || fake.swaps[0].UnitID != "ua" || fake.swaps[0].To != up.Unit || fake.swaps[0].OwnerUID != mekbay.MekBayUID("wolfpack2026", mekbay.SlotHangar) {
 		t.Errorf("MekBay was asked: %+v", fake.swaps)
 	}
 	// A failure in MekBay refunds, and too little in the warchest refuses.

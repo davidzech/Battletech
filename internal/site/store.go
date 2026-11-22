@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/davidzech/Battletech/internal/mekbay"
+
 	"github.com/davidzech/Battletech/internal/pilot"
 
 	_ "github.com/jackc/pgx/v5/stdlib" // pure-Go PostgreSQL driver
@@ -457,7 +459,7 @@ func (s *Store) Run(ctx context.Context, playthroughID, campaign string) (r Camp
 
 // StartRun starts a campaign with its MekBay hangar. Doing it again for a started campaign changes the hangar and
 // keeps when it was started.
-func (s *Store) StartRun(ctx context.Context, playthroughID, campaign string, h Hangar) error {
+func (s *Store) StartRun(ctx context.Context, playthroughID, campaign string, h mekbay.Hangar) error {
 	_, err := s.db.ExecContext(ctx,
 		s.q(`INSERT INTO campaign_runs (playthrough_id, campaign, hangar_url, hangar_instance, source_url) VALUES (?, ?, ?, ?, ?)
 		     ON CONFLICT (playthrough_id, campaign) DO UPDATE SET hangar_url = excluded.hangar_url, hangar_instance = excluded.hangar_instance, source_url = excluded.source_url`),
@@ -495,7 +497,7 @@ var ErrAlreadyStarted = errors.New("this campaign has already been started")
 
 // StartRunWithPilots starts a campaign and creates its starting named pilots, all or nothing. It refuses
 // (ErrAlreadyStarted) if the campaign was already started, so submitting the wizard twice can't make duplicate pilots.
-func (s *Store) StartRunWithPilots(ctx context.Context, playthroughID, campaign string, h Hangar, pilots []pilot.NewPilot, warchest, players int, forceName string) error {
+func (s *Store) StartRunWithPilots(ctx context.Context, playthroughID, campaign string, h mekbay.Hangar, pilots []pilot.NewPilot, warchest, players int, forceName string) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -516,7 +518,7 @@ func (s *Store) StartRunWithPilots(ctx context.Context, playthroughID, campaign 
 		return err
 	}
 	for _, p := range pilots {
-		id := newID()
+		id := mekbay.NewID()
 		if _, err := tx.ExecContext(ctx,
 			s.q(`INSERT INTO named_pilots (id, playthrough_id, campaign, name, portrait, sp_gunnery, sp_piloting, sp_edge_tokens, sp_edge_abilities, sp_total) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`),
 			id, playthroughID, campaign, p.Name, p.Portrait, p.SP.Gunnery, p.SP.Piloting, p.SP.EdgeTokens, p.SP.EdgeAbilities, p.SP.Total()); err != nil {

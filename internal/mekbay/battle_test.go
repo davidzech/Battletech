@@ -1,4 +1,4 @@
-package site
+package mekbay
 
 import (
 	"context"
@@ -95,8 +95,8 @@ func (f *fakeForceServer) serve(w http.ResponseWriter, r *http.Request) {
 }
 
 func (f *fakeForceServer) saveHangar(owner string, draft ForceDraft) (instance string, unitIDs []string) {
-	instance = newID()
-	b, _ := json.Marshal(buildForce(instance, time.Now().UTC(), draft))
+	instance = NewID()
+	b, _ := json.Marshal(BuildForce(instance, time.Now().UTC(), draft))
 	var data map[string]any
 	_ = json.Unmarshal(b, &data)
 	f.forces[instance], f.owners[instance] = data, owner
@@ -134,7 +134,7 @@ const tableAccount = "00000000-0000-4000-8000-0000000000a0"
 
 func TestStartBattleBuildsForcesAndTheOperation(t *testing.T) {
 	f := newFakeForceServer(t)
-	cl := &MekBayClient{URL: f.wsURL()}
+	cl := &Client{URL: f.wsURL()}
 	f.mu.Lock()
 	hangar, ids := f.saveHangar(tableAccount, ForceDraft{Name: "Hangar", Groups: []GroupDraft{{Name: "G", Units: []UnitDraft{{Unit: "BMMadCat_H"}, {Unit: "BMKoshi_E"}, {Unit: "BMGrizzly"}}}}})
 	f.mu.Unlock()
@@ -202,7 +202,7 @@ func TestStartBattleBuildsForcesAndTheOperation(t *testing.T) {
 // A battle's status is its players' forces as MekBay has them now; the OpFor's is not read.
 func TestReadBattleReadsThePlayersForces(t *testing.T) {
 	f := newFakeForceServer(t)
-	cl := &MekBayClient{URL: f.wsURL()}
+	cl := &Client{URL: f.wsURL()}
 	player := func(n int, unit string) BattlePlayer {
 		return BattlePlayer{Number: n, Name: "P", Draft: ForceDraft{Name: "Player " + string(rune('0'+n)), Groups: []GroupDraft{{Name: "Deployed", Units: []UnitDraft{{Unit: unit, Pilot: "Alrek", Gunnery: 3, Piloting: 4}}}}}}
 	}
@@ -227,14 +227,14 @@ func TestReadBattleReadsThePlayersForces(t *testing.T) {
 	if u := got.Forces[0].Force.Units[0]; u.Unit != "BMBlackHawk_Prime" || u.Pilot != "Alrek" || u.Locations["CT"].Armor != 7 {
 		t.Errorf("a player's mech as MekBay has it now, damage and all: %+v", u)
 	}
-	if _, err := cl.ReadBattle(context.Background(), newID()); err == nil || !strings.Contains(err.Error(), "no such operation") {
+	if _, err := cl.ReadBattle(context.Background(), NewID()); err == nil || !strings.Contains(err.Error(), "no such operation") {
 		t.Errorf("an operation that isn't there: %v", err)
 	}
 }
 
 func TestStartBattleKeepsTheOperationAndOpFor(t *testing.T) {
 	f := newFakeForceServer(t)
-	cl := &MekBayClient{URL: f.wsURL()}
+	cl := &Client{URL: f.wsURL()}
 	draft := ForceDraft{Name: "OpFor", Groups: []GroupDraft{{Name: "OpFor 1", Units: []UnitDraft{{Unit: "BMLoki_Prime"}}}}}
 	battle := func(op BattleOpFor, operation string) BattleRequest {
 		return BattleRequest{Account: tableAccount, Provided: true, OperationName: "Scenario", OperationID: operation, OpFor: op, Players: []BattlePlayer{
@@ -270,13 +270,13 @@ func TestStartBattleKeepsTheOperationAndOpFor(t *testing.T) {
 		t.Errorf("the one operation now holds the new forces: %v (%d operations)", forces, nOps)
 	}
 	// An OpFor that has vanished from MekBay says so, instead of starting a battle against nothing.
-	if _, err := cl.StartBattle(context.Background(), battle(BattleOpFor{Draft: draft, Reuse: newID()}, "")); err == nil || !strings.Contains(err.Error(), "reset the OpFor") {
+	if _, err := cl.StartBattle(context.Background(), battle(BattleOpFor{Draft: draft, Reuse: NewID()}, "")); err == nil || !strings.Contains(err.Error(), "reset the OpFor") {
 		t.Errorf("a missing OpFor: %v", err)
 	}
 	if _, err := cl.StartBattle(context.Background(), BattleRequest{Account: tableAccount, OpFor: BattleOpFor{Draft: draft}}); err == nil {
 		t.Error("a battle needs players")
 	}
-	if _, err := cl.StartBattle(context.Background(), BattleRequest{Account: tableAccount, HangarInstance: newID(), OpFor: BattleOpFor{Draft: draft}, Players: []BattlePlayer{{Number: 1, Units: []string{"x"}}}}); err == nil || !strings.Contains(err.Error(), "hangar") {
+	if _, err := cl.StartBattle(context.Background(), BattleRequest{Account: tableAccount, HangarInstance: NewID(), OpFor: BattleOpFor{Draft: draft}, Players: []BattlePlayer{{Number: 1, Units: []string{"x"}}}}); err == nil || !strings.Contains(err.Error(), "hangar") {
 		t.Errorf("a hangar that is not in MekBay: %v", err)
 	}
 	// Forces owned by another account can't be touched.

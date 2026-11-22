@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/davidzech/Battletech/internal/mekbay"
 )
 
 // The whole Aces-style flow on a scratch copy of Refusal War whose Scenario 000 is replaced by an Aces-style mission: four pilots, two active (one of them killed),
@@ -130,7 +132,7 @@ outcomes:
 		t.Fatalf("commit: %d", got)
 	}
 	fake.mu.Lock()
-	if len(fake.commits) != 2 || fake.commits[1].OperationID != "op-1" || fake.commits[1].HangarInstance != run0.HangarInstance || fake.commits[1].OwnerUID != accountUID("wolfpack2026", SlotHangar) {
+	if len(fake.commits) != 2 || fake.commits[1].OperationID != "op-1" || fake.commits[1].HangarInstance != run0.HangarInstance || fake.commits[1].OwnerUID != mekbay.AccountUID("wolfpack2026", mekbay.SlotHangar) {
 		t.Errorf("the hangar was written back from the battle's operation: %+v", fake.commits)
 	}
 	fake.mu.Unlock()
@@ -167,7 +169,7 @@ outcomes:
 }
 
 // newTestServerAt serves the campaigns found under root with the given store and MekBay.
-func newTestServerAt(t *testing.T, root string, store *Store, mb MekBay) *httptest.Server {
+func newTestServerAt(t *testing.T, root string, store *Store, mb mekbay.MekBay) *httptest.Server {
 	t.Helper()
 	srv := httptest.NewServer(NewHandler(root, store, WithMekBay(mb)))
 	t.Cleanup(srv.Close)

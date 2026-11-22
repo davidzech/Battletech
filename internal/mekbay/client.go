@@ -1,4 +1,4 @@
-package site
+package mekbay
 
 import (
 	"context"
@@ -16,8 +16,8 @@ import (
 // app uses (client source: github.com/MegaMek/mekbay, ws.service.ts and data.service.ts). It is unofficial and
 // may break whenever MekBay changes it.
 const (
-	mekbayWS       = "wss://mekbay.com/ws"
-	mekbayProtocol = 2 // PROTOCOL_VERSION in ws.service.ts
+	mekbayWS = "wss://mekbay.com/ws"
+	Protocol = 2 // PROTOCOL_VERSION in ws.service.ts
 )
 
 // ForceDraft is a force to create in MekBay: groups of units, with their pilots.
@@ -113,12 +113,12 @@ type MekBay interface {
 	DeleteBattle(ctx context.Context, owner, operationID string) error
 }
 
-// MekBayClient is the real implementation, speaking to MekBay's WebSocket server.
-type MekBayClient struct {
+// Client is the real implementation, speaking to MekBay's WebSocket server.
+type Client struct {
 	URL string // defaults to wss://mekbay.com/ws
 }
 
-func (c *MekBayClient) url() string {
+func (c *Client) url() string {
 	if c.URL == "" {
 		return mekbayWS
 	}
@@ -126,26 +126,26 @@ func (c *MekBayClient) url() string {
 }
 
 // ReadHangar reads a force anonymously, with a throwaway identity.
-func (c *MekBayClient) ReadHangar(ctx context.Context, instance string) (HangarForce, error) {
+func (c *Client) ReadHangar(ctx context.Context, instance string) (HangarForce, error) {
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-	s, err := dialMekBay(ctx, c.url(), newID())
+	s, err := Dial(ctx, c.url(), NewID())
 	if err != nil {
 		return HangarForce{}, err
 	}
-	defer s.close()
-	raw, err := s.call(ctx, map[string]any{"action": "getForce", "uuid": s.uuid, "instanceId": instance, "ownedOnly": false})
+	defer s.Close()
+	raw, err := s.Call(ctx, map[string]any{"action": "getForce", "uuid": s.uuid, "instanceId": instance, "ownedOnly": false})
 	if err != nil {
 		return HangarForce{}, err
 	}
-	return parseHangarForce(raw)
+	return ParseHangarForce(raw)
 }
 
-// mekbayTime formats a time the way MekBay writes force timestamps.
-func mekbayTime(t time.Time) string { return t.UTC().Format("2006-01-02T15:04:05.000Z") }
+// FormatTime formats a time the way MekBay writes force timestamps.
+func FormatTime(t time.Time) string { return t.UTC().Format("2006-01-02T15:04:05.000Z") }
 
-// parseHangarForce reads a getForce reply into a HangarForce.
-func parseHangarForce(raw json.RawMessage) (HangarForce, error) {
+// ParseHangarForce reads a getForce reply into a HangarForce.
+func ParseHangarForce(raw json.RawMessage) (HangarForce, error) {
 	var reply struct {
 		Data *struct {
 			Name      string `json:"name"`
@@ -192,11 +192,11 @@ func parseHangarForce(raw json.RawMessage) (HangarForce, error) {
 	h := HangarForce{Name: reply.Data.Name, Timestamp: reply.Data.Timestamp}
 	for _, g := range reply.Data.Groups {
 		for _, u := range g.Units {
-			hu := HangarUnit{ID: u.ID, Unit: u.Unit, Group: g.Name, Destroyed: u.State.Destroyed, Gunnery: defaultGunnery, Piloting: defaultPiloting}
+			hu := HangarUnit{ID: u.ID, Unit: u.Unit, Group: g.Name, Destroyed: u.State.Destroyed, Gunnery: DefaultGunnery, Piloting: DefaultPiloting}
 			if len(u.State.Crew) > 0 {
 				c := u.State.Crew[0]
 				hu.Pilot, hu.Gunnery, hu.Piloting = c.Name, c.Gunnery, c.Piloting
-				hu.PilotDead = crewIsDead(c.State, c.Hits)
+				hu.PilotDead = CrewIsDead(c.State, c.Hits)
 			}
 			hu.Damaged = len(u.State.Locations) > 0
 			for k, l := range u.State.Locations {
@@ -245,37 +245,44 @@ func parseHangarForce(raw json.RawMessage) (HangarForce, error) {
 	return h, nil
 }
 
-// mekbaySession is one registered WebSocket connection.
-type mekbaySession struct {
+// Session is one registered WebSocket connection.
+type Session struct {
 	conn *websocket.Conn
 	id   string
 	uuid string
 }
 
-func dialMekBay(ctx context.Context, url, uid string) (*mekbaySession, error) {
+// NewSession wraps a WebSocket connection already open to MekBay (or to something that relays to it, such as the site's proxy) as a session that
+// acts as the account uid. It does not register the session.
+func NewSession(conn *websocket.Conn, uid string) *Session {
+	return &Session{conn: conn, id: NewID(), uuid: uid}
+}
+
+// Dial opens a session to MekBay's WebSocket at url as the account uid.
+func Dial(ctx context.Context, url, uid string) (*Session, error) {
 	conn, _, err := websocket.Dial(ctx, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("could not reach MekBay: %w", err)
 	}
 	conn.SetReadLimit(16 << 20)
-	s := &mekbaySession{conn: conn, id: newID(), uuid: uid}
-	if err := s.send(ctx, map[string]any{"action": "register", "uuid": uid, "version": mekbayProtocol}); err != nil {
-		s.close()
+	s := &Session{conn: conn, id: NewID(), uuid: uid}
+	if err := s.Send(ctx, map[string]any{"action": "register", "uuid": uid, "version": Protocol}); err != nil {
+		s.Close()
 		return nil, err
 	}
 	return s, nil
 }
 
-func (s *mekbaySession) close() { _ = s.conn.CloseNow() }
+func (s *Session) Close() { _ = s.conn.CloseNow() }
 
-// send writes one message, stamped with the session and a fresh request ID.
-func (s *mekbaySession) send(ctx context.Context, msg map[string]any) error {
+// Send writes one message, stamped with the session and a fresh request ID.
+func (s *Session) Send(ctx context.Context, msg map[string]any) error {
 	_, err := s.sendID(ctx, msg)
 	return err
 }
 
-func (s *mekbaySession) sendID(ctx context.Context, msg map[string]any) (string, error) {
-	rid := newID()
+func (s *Session) sendID(ctx context.Context, msg map[string]any) (string, error) {
+	rid := NewID()
 	msg["sessionId"], msg["requestId"] = s.id, rid
 	b, err := json.Marshal(msg)
 	if err != nil {
@@ -287,9 +294,9 @@ func (s *mekbaySession) sendID(ctx context.Context, msg map[string]any) (string,
 	return rid, nil
 }
 
-// call sends a message and returns the raw reply that carries its request ID. MekBay reports refusals as
+// Call sends a message and returns the raw reply that carries its request ID. MekBay reports refusals as
 // "error" or "warning" replies (e.g. code not_owner), which become Go errors.
-func (s *mekbaySession) call(ctx context.Context, msg map[string]any) (json.RawMessage, error) {
+func (s *Session) Call(ctx context.Context, msg map[string]any) (json.RawMessage, error) {
 	rid, err := s.sendID(ctx, msg)
 	if err != nil {
 		return nil, err
@@ -323,8 +330,8 @@ var errNoHangarForce = errors.New("MekBay no longer has the force for your hanga
 
 // getForce reads one force's saved data (the decoded JSON of its `data`) as the session's account. It returns nil, nil when MekBay has no such force (or, with
 // ownedOnly, when the account doesn't own it).
-func (s *mekbaySession) getForce(ctx context.Context, instance string, ownedOnly bool) (map[string]any, error) {
-	raw, err := s.call(ctx, map[string]any{"action": "getForce", "uuid": s.uuid, "instanceId": instance, "ownedOnly": ownedOnly})
+func (s *Session) getForce(ctx context.Context, instance string, ownedOnly bool) (map[string]any, error) {
+	raw, err := s.Call(ctx, map[string]any{"action": "getForce", "uuid": s.uuid, "instanceId": instance, "ownedOnly": ownedOnly})
 	if err != nil {
 		return nil, err
 	}
@@ -338,29 +345,29 @@ func (s *mekbaySession) getForce(ctx context.Context, instance string, ownedOnly
 }
 
 // saveData saves a force (anything that encodes as one) as the session's account; only the account that owns a force may save it.
-func (s *mekbaySession) saveData(ctx context.Context, force any) error {
-	_, err := s.call(ctx, map[string]any{"action": "saveForce", "uuid": s.uuid, "data": force, "savedForceCount": 1})
+func (s *Session) saveData(ctx context.Context, force any) error {
+	_, err := s.Call(ctx, map[string]any{"action": "saveForce", "uuid": s.uuid, "data": force, "savedForceCount": 1})
 	return err
 }
 
 // saveForce saves a force read with getForce after changing it: the "owned" flag MekBay sets for readers is dropped (the app never sends it back) and the
 // timestamp is set to now, so every device that has the force loaded takes the new version.
-func (s *mekbaySession) saveForce(ctx context.Context, force map[string]any, now time.Time) error {
+func (s *Session) saveForce(ctx context.Context, force map[string]any, now time.Time) error {
 	delete(force, "owned")
-	force["timestamp"] = mekbayTime(now)
+	force["timestamp"] = FormatTime(now)
 	return s.saveData(ctx, force)
 }
 
 // editForce reads one of the owner's forces, changes it with edit and saves it, on one connection. It is how every change to the site's copy of a hangar is
 // made (repairs, rearms, purchases, sales, swaps).
-func (c *MekBayClient) editForce(ctx context.Context, owner, instance string, edit func(force map[string]any, now time.Time) error) error {
+func (c *Client) editForce(ctx context.Context, owner, instance string, edit func(force map[string]any, now time.Time) error) error {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	s, err := dialMekBay(ctx, c.url(), owner)
+	s, err := Dial(ctx, c.url(), owner)
 	if err != nil {
 		return err
 	}
-	defer s.close()
+	defer s.Close()
 	force, err := s.getForce(ctx, instance, false)
 	if err != nil {
 		return err
@@ -375,7 +382,7 @@ func (c *MekBayClient) editForce(ctx context.Context, owner, instance string, ed
 	return s.saveForce(ctx, force, now)
 }
 
-func newID() string {
+func NewID() string {
 	id, err := uuid.NewV7()
 	if err != nil {
 		panic(err) // only fails if the system has no randomness
@@ -428,15 +435,15 @@ type serializedCrew struct {
 	State    int    `json:"state"`
 }
 
-// buildForce turns a draft into a pristine (undamaged) Classic BattleTech force in MekBay's save format.
-func buildForce(instanceID string, now time.Time, d ForceDraft) serializedForce {
-	f := serializedForce{Version: 1, Timestamp: mekbayTime(now), InstanceID: instanceID, Type: "cbt", Name: d.Name, Groups: []serializedGroup{}}
+// BuildForce turns a draft into a pristine (undamaged) Classic BattleTech force in MekBay's save format.
+func BuildForce(instanceID string, now time.Time, d ForceDraft) serializedForce {
+	f := serializedForce{Version: 1, Timestamp: FormatTime(now), InstanceID: instanceID, Type: "cbt", Name: d.Name, Groups: []serializedGroup{}}
 	for _, g := range d.Groups {
-		sg := serializedGroup{ID: newID(), Name: g.Name, Units: []serializedUnit{}}
+		sg := serializedGroup{ID: NewID(), Name: g.Name, Units: []serializedUnit{}}
 		for _, u := range g.Units {
 			f.BV += u.BV
 			sg.Units = append(sg.Units, serializedUnit{
-				ID: newID(), Unit: u.Unit, UpdatedTs: now.UnixMilli(),
+				ID: NewID(), Unit: u.Unit, UpdatedTs: now.UnixMilli(),
 				State: serializedState{
 					Crew:      []serializedCrew{{Name: u.Pilot, Gunnery: u.Gunnery, Piloting: u.Piloting}},
 					Crits:     []any{},
@@ -451,6 +458,6 @@ func buildForce(instanceID string, now time.Time, d ForceDraft) serializedForce 
 	return f
 }
 
-// crewIsDead says whether MekBay's record of a crew member shows them dead: its stored state is dead (2) or killed (4), or they have taken the six hits that kill.
+// CrewIsDead says whether MekBay's record of a crew member shows them dead: its stored state is dead (2) or killed (4), or they have taken the six hits that kill.
 // (The other states are healthy 0, unconscious 1, ejected 3 and stunned 5.)
-func crewIsDead(state, hits int) bool { return state == 2 || state == 4 || hits >= 6 }
+func CrewIsDead(state, hits int) bool { return state == 2 || state == 4 || hits >= 6 }

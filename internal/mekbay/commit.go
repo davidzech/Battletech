@@ -1,4 +1,4 @@
-package site
+package mekbay
 
 import (
 	"context"
@@ -73,15 +73,15 @@ func commitState(hangar map[string]any, battle map[string]map[string]any) Commit
 }
 
 // CommitBattle reads the battle's operation, takes the state of every unit in the players' forces and saves it into the matching units of the hangar force.
-func (c *MekBayClient) CommitBattle(ctx context.Context, req CommitBattleRequest) (CommitBattleReport, error) {
+func (c *Client) CommitBattle(ctx context.Context, req CommitBattleRequest) (CommitBattleReport, error) {
 	ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
-	s, err := dialMekBay(ctx, c.url(), req.OwnerUID)
+	s, err := Dial(ctx, c.url(), req.OwnerUID)
 	if err != nil {
 		return CommitBattleReport{}, err
 	}
-	defer s.close()
-	raw, err := s.call(ctx, map[string]any{"action": "getOperation", "operationId": req.OperationID})
+	defer s.Close()
+	raw, err := s.Call(ctx, map[string]any{"action": "getOperation", "operationId": req.OperationID})
 	if err != nil {
 		return CommitBattleReport{}, err
 	}
@@ -144,7 +144,7 @@ func resetCrew(state map[string]any) {
 	crew, _ := state["crew"].([]any)
 	for _, c := range crew {
 		if cm, ok := c.(map[string]any); ok {
-			cm["name"], cm["gunnerySkill"], cm["pilotingSkill"], cm["hits"], cm["state"] = "", defaultGunnery, defaultPiloting, 0, 0
+			cm["name"], cm["gunnerySkill"], cm["pilotingSkill"], cm["hits"], cm["state"] = "", DefaultGunnery, DefaultPiloting, 0, 0
 		}
 	}
 }

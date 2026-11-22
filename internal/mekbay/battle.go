@@ -1,4 +1,4 @@
-package site
+package mekbay
 
 import (
 	"context"
@@ -100,8 +100,8 @@ func subsetForce(hangar map[string]any, units []string, instance, name string, n
 			f[k] = v
 		}
 	}
-	f["instanceId"], f["name"], f["timestamp"] = instance, name, mekbayTime(now)
-	f["groups"] = []any{map[string]any{"id": newID(), "name": "Deployed", "color": "", "units": taken}}
+	f["instanceId"], f["name"], f["timestamp"] = instance, name, FormatTime(now)
+	f["groups"] = []any{map[string]any{"id": NewID(), "name": "Deployed", "color": "", "units": taken}}
 	return f, nil
 }
 
@@ -115,8 +115,8 @@ func deepCopy(m map[string]any) (map[string]any, error) {
 }
 
 // saveOperation saves an operation and reads it back to confirm it (MekBay doesn't acknowledge saveOperation).
-func (s *mekbaySession) saveOperation(ctx context.Context, op map[string]any, opID string) error {
-	if err := s.send(ctx, map[string]any{"action": "saveOperation", "data": op}); err != nil {
+func (s *Session) saveOperation(ctx context.Context, op map[string]any, opID string) error {
+	if err := s.Send(ctx, map[string]any{"action": "saveOperation", "data": op}); err != nil {
 		return err
 	}
 	for attempt := 0; attempt < 6; attempt++ {
@@ -125,7 +125,7 @@ func (s *mekbaySession) saveOperation(ctx context.Context, op map[string]any, op
 			return ctx.Err()
 		case <-time.After(400 * time.Millisecond):
 		}
-		got, err := s.call(ctx, map[string]any{"action": "getOperation", "operationId": opID})
+		got, err := s.Call(ctx, map[string]any{"action": "getOperation", "operationId": opID})
 		if err != nil {
 			return err
 		}
@@ -142,17 +142,17 @@ func (s *mekbaySession) saveOperation(ctx context.Context, op map[string]any, op
 }
 
 // StartBattle builds the players' forces and the OpFor's and saves the operation that pits them against each other (see the notes at the top of this file).
-func (c *MekBayClient) StartBattle(ctx context.Context, req BattleRequest) (BattleResult, error) {
-	if len(req.Players) < 1 || len(req.Players) > maxPlayers {
-		return BattleResult{}, fmt.Errorf("a battle has 1 to %d players", maxPlayers)
+func (c *Client) StartBattle(ctx context.Context, req BattleRequest) (BattleResult, error) {
+	if len(req.Players) < 1 || len(req.Players) > MaxPlayers {
+		return BattleResult{}, fmt.Errorf("a battle has 1 to %d players", MaxPlayers)
 	}
 	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
-	s, err := dialMekBay(ctx, c.url(), req.Account)
+	s, err := Dial(ctx, c.url(), req.Account)
 	if err != nil {
 		return BattleResult{}, err
 	}
-	defer s.close()
+	defer s.Close()
 	get := func(instance string, ownedOnly bool) (map[string]any, error) {
 		return s.getForce(ctx, instance, ownedOnly)
 	}
@@ -171,8 +171,8 @@ func (c *MekBayClient) StartBattle(ctx context.Context, req BattleRequest) (Batt
 		}
 		opforTS, _ = d["timestamp"].(string)
 	} else {
-		res.OpForInstance = newID()
-		f := buildForce(res.OpForInstance, time.Now().UTC(), req.OpFor.Draft)
+		res.OpForInstance = NewID()
+		f := BuildForce(res.OpForInstance, time.Now().UTC(), req.OpFor.Draft)
 		opforTS = f.Timestamp
 		if err := save(f); err != nil {
 			return BattleResult{}, err
@@ -191,10 +191,10 @@ func (c *MekBayClient) StartBattle(ctx context.Context, req BattleRequest) (Batt
 	}
 	forces := []map[string]any{}
 	for _, p := range req.Players {
-		instance, ts := newID(), ""
+		instance, ts := NewID(), ""
 		var force any
 		if req.Provided {
-			f := buildForce(instance, time.Now().UTC(), p.Draft)
+			f := BuildForce(instance, time.Now().UTC(), p.Draft)
 			force, ts = f, f.Timestamp
 		} else {
 			f, err := subsetForce(hangar, p.Units, instance, p.Name, time.Now().UTC())
@@ -216,7 +216,7 @@ func (c *MekBayClient) StartBattle(ctx context.Context, req BattleRequest) (Batt
 	// The operation: every player's force on the friendly side, the OpFor on the other.
 	res.OperationID = req.OperationID
 	if res.OperationID == "" {
-		res.OperationID = newID()
+		res.OperationID = NewID()
 	}
 	forces = append(forces, map[string]any{"instanceId": res.OpForInstance, "alignment": "enemy", "timestamp": opforTS})
 	op := map[string]any{"operationId": res.OperationID, "name": req.OperationName, "note": "", "timestamp": time.Now().UnixMilli(), "forces": forces}
@@ -239,15 +239,15 @@ type BattleStatus struct {
 
 // ReadBattle reads an operation and each of its players' forces anonymously (anyone can read what they have the IDs of), which is how the site shows how a
 // battle stands: MekBay holds the damage, ammunition and crews, and players change them there. The OpFor's force is not read, since the page doesn't show it.
-func (c *MekBayClient) ReadBattle(ctx context.Context, operationID string) (BattleStatus, error) {
+func (c *Client) ReadBattle(ctx context.Context, operationID string) (BattleStatus, error) {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	s, err := dialMekBay(ctx, c.url(), newID())
+	s, err := Dial(ctx, c.url(), NewID())
 	if err != nil {
 		return BattleStatus{}, err
 	}
-	defer s.close()
-	raw, err := s.call(ctx, map[string]any{"action": "getOperation", "operationId": operationID})
+	defer s.Close()
+	raw, err := s.Call(ctx, map[string]any{"action": "getOperation", "operationId": operationID})
 	if err != nil {
 		return BattleStatus{}, err
 	}
@@ -267,11 +267,11 @@ func (c *MekBayClient) ReadBattle(ctx context.Context, operationID string) (Batt
 		if f.Alignment != "friendly" {
 			continue
 		}
-		got, err := s.call(ctx, map[string]any{"action": "getForce", "uuid": s.uuid, "instanceId": f.InstanceID, "ownedOnly": false})
+		got, err := s.Call(ctx, map[string]any{"action": "getForce", "uuid": s.uuid, "instanceId": f.InstanceID, "ownedOnly": false})
 		if err != nil {
 			return BattleStatus{}, err
 		}
-		h, err := parseHangarForce(got)
+		h, err := ParseHangarForce(got)
 		if err != nil {
 			continue // a force deleted from MekBay since: the others are still worth showing
 		}

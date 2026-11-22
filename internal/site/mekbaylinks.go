@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/davidzech/Battletech/internal/mekbay"
+
 	"github.com/google/uuid"
 )
 
@@ -63,7 +65,7 @@ var ErrBadLink = errors.New("This MekBay link is not valid or has expired.")
 
 // sandboxAccount is the shared account a browser opening the proxy directly on a developer's machine acts as (see sandboxAllowed). It is not a secret: everyone
 // who opens the proxy that way shares it.
-var sandboxAccount = MekBayUID("battletech localhost sandbox", "sandbox")
+var sandboxAccount = mekbay.MekBayUID("battletech localhost sandbox", "sandbox")
 
 // EnsureMekBayLink returns the link id for a playthrough's campaign and label, making it when there is none and making sure it names account and
 // is valid for ttl from now. Asking again gives the same id, so the link stays the same (and bookmarkable) for as long as it lives.

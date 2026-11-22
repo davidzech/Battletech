@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/davidzech/Battletech/internal/mekbay"
+
 	"github.com/coder/websocket"
 )
 
@@ -43,7 +45,7 @@ func TestMekBayProxyLive(t *testing.T) {
 		return (&net.Dialer{}).DialContext(ctx, network, addr)
 	}}, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 
-	owner, stranger, browserID := newID(), newID(), newID() // browserID is the random identity the page itself believes it has
+	owner, stranger, browserID := mekbay.NewID(), mekbay.NewID(), mekbay.NewID() // browserID is the random identity the page itself believes it has
 	// linkHost is the host name of the link for an account, as the site would hand it out.
 	linkHost := func(label, account string) string {
 		t.Helper()
@@ -79,19 +81,19 @@ func TestMekBayProxyLive(t *testing.T) {
 	}
 
 	// 3. A throwaway owner saves a tiny force, directly.
-	instance := newID()
-	own, err := dialMekBay(ctx, mekbayWSURL, owner)
+	instance := mekbay.NewID()
+	own, err := mekbay.Dial(ctx, mekbayWSURL, owner)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer own.close()
-	force := buildForce(instance, time.Now().UTC(), ForceDraft{Name: "Proxy live test", Groups: []GroupDraft{{Name: "Test", Units: []UnitDraft{{Unit: "BMBlackHawk_Prime"}}}}})
-	if _, err := own.call(ctx, map[string]any{"action": "saveForce", "uuid": owner, "data": force, "savedForceCount": 1}); err != nil {
+	defer own.Close()
+	force := mekbay.BuildForce(instance, time.Now().UTC(), mekbay.ForceDraft{Name: "Proxy live test", Groups: []mekbay.GroupDraft{{Name: "Test", Units: []mekbay.UnitDraft{{Unit: "BMBlackHawk_Prime"}}}}})
+	if _, err := own.Call(ctx, map[string]any{"action": "saveForce", "uuid": owner, "data": force, "savedForceCount": 1}); err != nil {
 		t.Fatalf("could not create the test force: %v", err)
 	}
 
 	// browser opens the relay on a link's host and registers as the random identity the page generated.
-	browser := func(host string) *mekbaySession {
+	browser := func(host string) *mekbay.Session {
 		t.Helper()
 		conn, _, err := websocket.Dial(ctx, "ws://"+host+":"+port+"/ws", &websocket.DialOptions{
 			HTTPClient: client,
@@ -101,8 +103,8 @@ func TestMekBayProxyLive(t *testing.T) {
 			t.Fatalf("could not open the relay: %v", err)
 		}
 		conn.SetReadLimit(16 << 20)
-		s := &mekbaySession{conn: conn, id: newID(), uuid: browserID}
-		if err := s.send(ctx, map[string]any{"action": "register", "uuid": browserID, "version": mekbayProtocol}); err != nil {
+		s := mekbay.NewSession(conn, browserID)
+		if err := s.Send(ctx, map[string]any{"action": "register", "uuid": browserID, "version": mekbay.Protocol}); err != nil {
 			t.Fatal(err)
 		}
 		return s
@@ -110,8 +112,8 @@ func TestMekBayProxyLive(t *testing.T) {
 
 	// 4. The owner's browser, though it presents itself as someone else, is treated as the owner: ownedOnly only answers the owner.
 	ob := browser(ownerHost)
-	defer ob.close()
-	reply, err := ob.call(ctx, map[string]any{"action": "getForce", "uuid": browserID, "instanceId": instance, "ownedOnly": true})
+	defer ob.Close()
+	reply, err := ob.Call(ctx, map[string]any{"action": "getForce", "uuid": browserID, "instanceId": instance, "ownedOnly": true})
 	if err != nil {
 		t.Fatalf("the owner's browser could not read its force: %v", err)
 	}
@@ -125,20 +127,20 @@ func TestMekBayProxyLive(t *testing.T) {
 
 	// 5. ...and may change it.
 	got.Data["name"] = "Proxy live test (edited through the relay)"
-	got.Data["timestamp"] = mekbayTime(time.Now())
+	got.Data["timestamp"] = mekbay.FormatTime(time.Now())
 	delete(got.Data, "owned")
-	if _, err := ob.call(ctx, map[string]any{"action": "saveForce", "uuid": browserID, "data": got.Data, "savedForceCount": 1}); err != nil {
+	if _, err := ob.Call(ctx, map[string]any{"action": "saveForce", "uuid": browserID, "data": got.Data, "savedForceCount": 1}); err != nil {
 		t.Fatalf("the owner's browser could not save its force: %v", err)
 	}
-	read, err := (&MekBayClient{}).ReadHangar(ctx, instance)
+	read, err := (&mekbay.Client{}).ReadHangar(ctx, instance)
 	if err != nil || read.Name != "Proxy live test (edited through the relay)" {
 		t.Fatalf("the edit reached MekBay: %q %v", read.Name, err)
 	}
 
 	// 6. A browser on someone else's link can neither read it as its own nor change it.
 	sb := browser(strangerHost)
-	defer sb.close()
-	if reply, err := sb.call(ctx, map[string]any{"action": "getForce", "uuid": browserID, "instanceId": instance, "ownedOnly": true}); err == nil {
+	defer sb.Close()
+	if reply, err := sb.Call(ctx, map[string]any{"action": "getForce", "uuid": browserID, "instanceId": instance, "ownedOnly": true}); err == nil {
 		var g struct {
 			Data map[string]any `json:"data"`
 		}
@@ -147,10 +149,10 @@ func TestMekBayProxyLive(t *testing.T) {
 		}
 	}
 	got.Data["name"] = "hijacked"
-	if _, err := sb.call(ctx, map[string]any{"action": "saveForce", "uuid": browserID, "data": got.Data, "savedForceCount": 1}); err == nil || !strings.Contains(err.Error(), "doesn't own") {
+	if _, err := sb.Call(ctx, map[string]any{"action": "saveForce", "uuid": browserID, "data": got.Data, "savedForceCount": 1}); err == nil || !strings.Contains(err.Error(), "doesn't own") {
 		t.Errorf("a stranger's save is refused as not_owner: %v", err)
 	}
-	if read, _ := (&MekBayClient{}).ReadHangar(ctx, instance); read.Name == "hijacked" {
+	if read, _ := (&mekbay.Client{}).ReadHangar(ctx, instance); read.Name == "hijacked" {
 		t.Error("the stranger's edit must not have landed")
 	}
 }

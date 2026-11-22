@@ -1,4 +1,4 @@
-package site
+package mekbay
 
 import (
 	"context"
@@ -16,17 +16,17 @@ func TestStartBattleLive(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
-	account := newID()
+	account := NewID()
 
 	// A hangar with three mechs, owned by the same account (as the site's hangar copy is).
-	hs, err := dialMekBay(ctx, mekbayWSURL, account)
+	hs, err := Dial(ctx, mekbayWS, account)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer hs.close()
-	hangarID := newID()
-	hangar := buildForce(hangarID, time.Now().UTC(), ForceDraft{Name: "Live hangar", Groups: []GroupDraft{{Name: "Hangar", Units: []UnitDraft{{Unit: "BMBlackHawk_Prime"}, {Unit: "BMShadowCat_Prime"}, {Unit: "BMRyoken_Prime"}}}}})
-	if _, err := hs.call(ctx, map[string]any{"action": "saveForce", "uuid": account, "data": hangar, "savedForceCount": 1}); err != nil {
+	defer hs.Close()
+	hangarID := NewID()
+	hangar := BuildForce(hangarID, time.Now().UTC(), ForceDraft{Name: "Live hangar", Groups: []GroupDraft{{Name: "Hangar", Units: []UnitDraft{{Unit: "BMBlackHawk_Prime"}, {Unit: "BMShadowCat_Prime"}, {Unit: "BMRyoken_Prime"}}}}})
+	if _, err := hs.Call(ctx, map[string]any{"action": "saveForce", "uuid": account, "data": hangar, "savedForceCount": 1}); err != nil {
 		t.Fatal(err)
 	}
 	var ids []string
@@ -34,7 +34,7 @@ func TestStartBattleLive(t *testing.T) {
 		ids = append(ids, u.ID)
 	}
 
-	cl := &MekBayClient{}
+	cl := &Client{}
 	req := BattleRequest{
 		Account:        account,
 		HangarInstance: hangarID,
@@ -64,7 +64,7 @@ func TestStartBattleLive(t *testing.T) {
 
 	// The operation lists both players' forces as friendly and the OpFor as the enemy.
 	forces := func(operation string) map[string]string {
-		raw, err := hs.call(ctx, map[string]any{"action": "getOperation", "operationId": operation})
+		raw, err := hs.Call(ctx, map[string]any{"action": "getOperation", "operationId": operation})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -112,19 +112,19 @@ func TestCommitBattleLive(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
-	account := newID()
-	hs, err := dialMekBay(ctx, mekbayWSURL, account)
+	account := NewID()
+	hs, err := Dial(ctx, mekbayWS, account)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer hs.close()
-	hangarID := newID()
-	hangar := buildForce(hangarID, time.Now().UTC(), ForceDraft{Name: "Live hangar", Groups: []GroupDraft{{Name: "Hangar", Units: []UnitDraft{{Unit: "BMBlackHawk_Prime"}, {Unit: "BMBlackHawk_Prime"}}}}})
-	if _, err := hs.call(ctx, map[string]any{"action": "saveForce", "uuid": account, "data": hangar, "savedForceCount": 1}); err != nil {
+	defer hs.Close()
+	hangarID := NewID()
+	hangar := BuildForce(hangarID, time.Now().UTC(), ForceDraft{Name: "Live hangar", Groups: []GroupDraft{{Name: "Hangar", Units: []UnitDraft{{Unit: "BMBlackHawk_Prime"}, {Unit: "BMBlackHawk_Prime"}}}}})
+	if _, err := hs.Call(ctx, map[string]any{"action": "saveForce", "uuid": account, "data": hangar, "savedForceCount": 1}); err != nil {
 		t.Fatal(err)
 	}
 	ids := []string{hangar.Groups[0].Units[0].ID, hangar.Groups[0].Units[1].ID}
-	cl := &MekBayClient{}
+	cl := &Client{}
 	res, err := cl.StartBattle(ctx, BattleRequest{Account: account, HangarInstance: hangarID, OperationName: "Live commit", OpFor: BattleOpFor{Draft: ForceDraft{Name: "OpFor", Groups: []GroupDraft{{Name: "OpFor 1", Units: []UnitDraft{{Unit: "BMLoki_Prime"}}}}}},
 		Players: []BattlePlayer{{Number: 1, Name: "P1", Units: []string{ids[1]}, Crew: []CrewAssignment{{UnitID: ids[1], Name: "Katarina", Gunnery: 3, Piloting: 4}}}}})
 	if err != nil {
@@ -149,18 +149,18 @@ func TestCheckpointForcesLive(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
-	account := newID()
-	hs, err := dialMekBay(ctx, mekbayWSURL, account)
+	account := NewID()
+	hs, err := Dial(ctx, mekbayWS, account)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer hs.close()
-	hangarID := newID()
-	hangar := buildForce(hangarID, time.Now().UTC(), ForceDraft{Name: "Live hangar", Groups: []GroupDraft{{Name: "Hangar", Units: []UnitDraft{{Unit: "BMBlackHawk_Prime"}}}}})
+	defer hs.Close()
+	hangarID := NewID()
+	hangar := BuildForce(hangarID, time.Now().UTC(), ForceDraft{Name: "Live hangar", Groups: []GroupDraft{{Name: "Hangar", Units: []UnitDraft{{Unit: "BMBlackHawk_Prime"}}}}})
 	if err := hs.saveData(ctx, hangar); err != nil {
 		t.Fatal(err)
 	}
-	cl := &MekBayClient{}
+	cl := &Client{}
 	exists := func(instance string) bool {
 		f, err := hs.getForce(ctx, instance, true)
 		if err != nil {
@@ -170,7 +170,7 @@ func TestCheckpointForcesLive(t *testing.T) {
 	}
 
 	// A copy is a force of its own, with the same units.
-	copyID := newID()
+	copyID := NewID()
 	if err := cl.CopyForce(ctx, CopyRequest{OwnerUID: account, Source: hangarID, Target: copyID}); err != nil {
 		t.Fatalf("copy: %v", err)
 	}

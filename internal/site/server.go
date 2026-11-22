@@ -14,6 +14,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/davidzech/Battletech/internal/mekbay"
+
 	"github.com/davidzech/Battletech/internal/pilot"
 )
 
@@ -70,7 +72,7 @@ type Page struct {
 	MaxPilots          int               // most living named pilots a command may have
 	// CachedHangar is the hangar last read from MekBay for this run (nil if none yet), and CachedAt when; the campaign and scenario
 	// pages embed it so they can paint the hangar before the live read finishes (see hangarcache.go).
-	CachedHangar *HangarForce
+	CachedHangar *mekbay.HangarForce
 	CachedAt     time.Time
 	Ranks        []string         // the campaign's pilot ranks, lowest first (empty when it has none)
 	Memorial     bool             // at least one named pilot was killed in action
@@ -92,7 +94,7 @@ type Server struct {
 	lib    Library
 	store  *Store
 	pages  map[string]*template.Template
-	mekbay MekBay
+	mekbay mekbay.MekBay
 
 	// The MekBay proxy (mekbayproxy.go), served on the hosts mekbay-<link id>.<site host> (and mekbay.localhost).
 	upstream *[3]string // web, WebSocket and Origin of the MekBay to proxy; tests replace it
@@ -104,12 +106,12 @@ type Server struct {
 type Option func(*Server)
 
 // WithMekBay replaces the MekBay client (tests use a fake one).
-func WithMekBay(m MekBay) Option { return func(s *Server) { s.mekbay = m } }
+func WithMekBay(m mekbay.MekBay) Option { return func(s *Server) { s.mekbay = m } }
 
 // NewHandler returns the site's HTTP handler. Campaign files are re-read on every request,
 // so edits show up on refresh.
 func NewHandler(contentRoot string, store *Store, opts ...Option) http.Handler {
-	s := &Server{lib: Library{Root: contentRoot}, store: store, pages: map[string]*template.Template{}, mekbay: &MekBayClient{}}
+	s := &Server{lib: Library{Root: contentRoot}, store: store, pages: map[string]*template.Template{}, mekbay: &mekbay.Client{}}
 	for _, o := range opts {
 		o(s)
 	}
@@ -332,7 +334,7 @@ func (s *Server) scenario(w http.ResponseWriter, r *http.Request) {
 			} else if forces != "" {
 				battleCache = `{"forces":` + forces + `,"updatedAt":` + strconv.FormatInt(at, 10) + `}`
 			}
-			if link, err := s.mekbayLink(r, playthroughID(seed), c.Slug, tableLabel, accountUID(seed, SlotHangar), url.Values{"operation": {op.OperationID}}); err != nil {
+			if link, err := s.mekbayLink(r, playthroughID(seed), c.Slug, tableLabel, mekbay.AccountUID(seed, mekbay.SlotHangar), url.Values{"operation": {op.OperationID}}); err != nil {
 				log.Printf("link to the operation: %v", err)
 			} else {
 				operationURL = link

@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"net/url"
 	"time"
+
+	"github.com/davidzech/Battletech/internal/mekbay"
 )
 
 // battleResponse is what Start battle answers: the one link the whole table opens.
@@ -18,28 +20,28 @@ type battleResponse struct {
 
 // playerDraft is a player's force built from scratch, for a scenario whose mechs are provided and so are not in MekBay: the units they took, with the crews
 // they were given.
-func playerDraft(name string, h HangarForce, units []string, crews []CrewAssignment, views map[string]hangarUnitView) ForceDraft {
-	byID := map[string]HangarUnit{}
+func playerDraft(name string, h mekbay.HangarForce, units []string, crews []mekbay.CrewAssignment, views map[string]hangarUnitView) mekbay.ForceDraft {
+	byID := map[string]mekbay.HangarUnit{}
 	for _, u := range h.Units {
 		byID[u.ID] = u
 	}
-	crew := map[string]CrewAssignment{}
+	crew := map[string]mekbay.CrewAssignment{}
 	for _, a := range crews {
 		crew[a.UnitID] = a
 	}
-	g := GroupDraft{Name: "Deployed"}
+	g := mekbay.GroupDraft{Name: "Deployed"}
 	for _, id := range units {
 		u := byID[id]
-		ud := UnitDraft{Unit: u.Unit, BV: views[id].BV, Pilot: u.Pilot, Gunnery: u.Gunnery, Piloting: u.Piloting}
+		ud := mekbay.UnitDraft{Unit: u.Unit, BV: views[id].BV, Pilot: u.Pilot, Gunnery: u.Gunnery, Piloting: u.Piloting}
 		if a, ok := crew[id]; ok {
 			ud.Pilot, ud.Gunnery, ud.Piloting = a.Name, a.Gunnery, a.Piloting
 		}
 		if ud.Pilot == "" {
-			ud.Gunnery, ud.Piloting = defaultGunnery, defaultPiloting
+			ud.Gunnery, ud.Piloting = mekbay.DefaultGunnery, mekbay.DefaultPiloting
 		}
 		g.Units = append(g.Units, ud)
 	}
-	return ForceDraft{Name: name, Groups: []GroupDraft{g}}
+	return mekbay.ForceDraft{Name: name, Groups: []mekbay.GroupDraft{g}}
 }
 
 // startBattle is POST /api/battle/start: the Deploy wizard's last step. It takes the same fields as POST /api/deploy/plan (and checks them the same way), plus
@@ -61,7 +63,7 @@ func (s *Server) startBattle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	seed := currentSeed(r)
-	account := accountUID(seed, SlotHangar)
+	account := mekbay.AccountUID(seed, mekbay.SlotHangar)
 	draft, err := opForDraft(bp.c, bp.sc)
 	if err != nil {
 		log.Printf("build the OpFor for %s: %v", bp.sc.ID, err)
@@ -69,11 +71,11 @@ func (s *Server) startBattle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// A repeated start updates the same operation, and keeps the OpFor (and the damage recorded on it) unless asked to rebuild it.
-	req := BattleRequest{
+	req := mekbay.BattleRequest{
 		Account:        account,
 		HangarInstance: bp.run.HangarInstance,
 		Provided:       bp.sc.provides(),
-		OpFor:          BattleOpFor{Draft: draft},
+		OpFor:          mekbay.BattleOpFor{Draft: draft},
 		OperationName:  operationName(bp.c, bp.sc),
 	}
 	if prev, had, err := s.store.MekBayOperation(r.Context(), bp.pt.ID, bp.c.Slug, bp.sc.ID); err != nil {
@@ -88,7 +90,7 @@ func (s *Server) startBattle(w http.ResponseWriter, r *http.Request) {
 	for i := range bp.units {
 		num := i + 1
 		name := fmt.Sprintf("%s - Player %d", bp.run.ForceLabel(), num)
-		p := BattlePlayer{Number: num, Name: name, Units: bp.units[i], Crew: bp.crews[i]}
+		p := mekbay.BattlePlayer{Number: num, Name: name, Units: bp.units[i], Crew: bp.crews[i]}
 		if req.Provided {
 			p.Draft = playerDraft(name, bp.h, bp.units[i], bp.crews[i], bp.views)
 		}
@@ -154,7 +156,7 @@ func (s *Server) battleStatus(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
-	link, err := s.mekbayLink(r, pt.ID, c.Slug, tableLabel, accountUID(currentSeed(r), SlotHangar), url.Values{"operation": {op.OperationID}})
+	link, err := s.mekbayLink(r, pt.ID, c.Slug, tableLabel, mekbay.AccountUID(currentSeed(r), mekbay.SlotHangar), url.Values{"operation": {op.OperationID}})
 	if err != nil {
 		http.Error(w, "could not make the link", http.StatusInternalServerError)
 		return
@@ -216,7 +218,7 @@ func (s *Server) abortBattle(w http.ResponseWriter, r *http.Request) {
 
 // deleteBattle cleans up an aborted battle in MekBay (its operation and every force in it), in the background of the request: a failure only leaves them behind.
 func (s *Server) deleteBattle(ctx context.Context, seed, operationID string) {
-	if err := s.mekbay.DeleteBattle(context.WithoutCancel(ctx), accountUID(seed, SlotHangar), operationID); err != nil {
+	if err := s.mekbay.DeleteBattle(context.WithoutCancel(ctx), mekbay.AccountUID(seed, mekbay.SlotHangar), operationID); err != nil {
 		log.Printf("delete the aborted battle in MekBay: %v", err)
 	}
 }

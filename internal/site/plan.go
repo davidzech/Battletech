@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+
+	"github.com/davidzech/Battletech/internal/mekbay"
 )
 
 // The deployment plan: which mechs and pilots each player takes on a sortie. The Deploy wizard steps through the players one at a time, each choosing from what
@@ -20,7 +22,7 @@ func playerRange(c *Campaign) (lo, hi int) {
 	if hi <= 0 {
 		return 1, 1
 	}
-	hi = min(hi, maxPlayers)
+	hi = min(hi, mekbay.MaxPlayers)
 	if lo <= 0 || lo > hi {
 		lo = 1
 	}
@@ -58,7 +60,7 @@ type planResult struct {
 
 // rulesProblem checks a plan against the scenario's own rules, beyond the BV limit: the most mechs in all (unit_limit), and a named pilot on every mech
 // (pilots_required). units[i] and crews[i] are player i+1's mech IDs and pilot assignments. It returns the first problem as a sentence, or "".
-func (sc *Scenario) rulesProblem(units [][]string, crews [][]CrewAssignment) string {
+func (sc *Scenario) rulesProblem(units [][]string, crews [][]mekbay.CrewAssignment) string {
 	total := 0
 	for _, u := range units {
 		total += len(u)
@@ -87,7 +89,7 @@ func (sc *Scenario) rulesProblem(units [][]string, crews [][]CrewAssignment) str
 }
 
 // planProblem checks a whole plan against the hangar and returns the first problem as a sentence, or "". units[i] is player i+1's mech IDs.
-func planProblem(h HangarForce, units [][]string, bvLimit int) string {
+func planProblem(h mekbay.HangarForce, units [][]string, bvLimit int) string {
 	var all []string
 	for i, u := range units {
 		if len(u) == 0 {
@@ -106,10 +108,10 @@ type builtPlan struct {
 	run   CampaignRun
 	c     *Campaign
 	sc    *Scenario
-	h     HangarForce // the force the players take their mechs from (the hangar, or the scenario's provided mechs)
+	h     mekbay.HangarForce // the force the players take their mechs from (the hangar, or the scenario's provided mechs)
 	views map[string]hangarUnitView
 	units [][]string // each player's mechs
-	crews [][]CrewAssignment
+	crews [][]mekbay.CrewAssignment
 	res   planResult
 }
 
@@ -164,7 +166,7 @@ func (s *Server) checkPlan(w http.ResponseWriter, r *http.Request) (*builtPlan, 
 	}
 	res := planResult{Players: []planPlayer{}, Limit: sc.BVLimit}
 	pilotUsed := map[string]int{}
-	crews := make([][]CrewAssignment, n)
+	crews := make([][]mekbay.CrewAssignment, n)
 	for i := 0; i < n; i++ {
 		num := i + 1
 		pre := "p" + strconv.Itoa(num) + "_"

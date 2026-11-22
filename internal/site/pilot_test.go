@@ -14,6 +14,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/davidzech/Battletech/internal/mekbay"
+
 	"github.com/davidzech/Battletech/internal/pilot"
 )
 
@@ -85,7 +87,7 @@ func pilotStore(t *testing.T, s *Store, id string) {
 
 	// Starting a campaign creates its run and pilots together, and only once.
 	start := []pilot.NewPilot{{Name: "Alrek", SP: pilot.SPAllocation{Gunnery: 90, EdgeTokens: 60}}, {Name: "Katarina", SP: pilot.SPAllocation{Piloting: 100, EdgeTokens: 50}}}
-	hangar := Hangar{URL: goodHangarURL, Instance: goodInstance}
+	hangar := mekbay.Hangar{URL: goodHangarURL, Instance: goodInstance}
 	if err := s.StartRunWithPilots(ctx, id, "wizard", hangar, start, 4500, 1, "Test Force"); err != nil {
 		t.Fatal(err)
 	}
@@ -161,7 +163,7 @@ func TestNamedPilotsFlow(t *testing.T) {
 	}
 	id := playthroughID("wolfpack2026")
 	// A campaign started without pilots (before they were part of starting one) has to name them afterwards.
-	if err := store.StartRun(ctx, id, "refusalwar", Hangar{URL: goodHangarURL, Instance: goodInstance}); err != nil {
+	if err := store.StartRun(ctx, id, "refusalwar", mekbay.Hangar{URL: goodHangarURL, Instance: goodInstance}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := store.db.Exec(`UPDATE campaign_runs SET warchest = 5000`); err != nil { // recruiting costs SP

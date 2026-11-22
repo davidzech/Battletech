@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/davidzech/Battletech/internal/mekbay"
+
 	"github.com/davidzech/Battletech/internal/catalog"
 )
 
@@ -22,30 +24,16 @@ func TestSellValue(t *testing.T) {
 			t.Errorf("sellValue(%d, %v) = %d, want %d", c.bv, c.pristine, got, c.want)
 		}
 	}
-	if !unitPristine(HangarUnit{}) {
+	if !unitPristine(mekbay.HangarUnit{}) {
 		t.Error("an untouched unit is pristine")
 	}
-	for name, hu := range map[string]HangarUnit{
+	for name, hu := range map[string]mekbay.HangarUnit{
 		"damaged": {Damaged: true}, "destroyed": {Destroyed: true}, "spent ammo": {AmmoBins: 1, AmmoUsed: 4},
-		"lost armor": {Locations: map[string]LocationLoss{"CT": {Armor: 1}}}, "a crit": {Crits: []CritDamage{{}}},
+		"lost armor": {Locations: map[string]mekbay.LocationLoss{"CT": {Armor: 1}}}, "a crit": {Crits: []mekbay.CritDamage{{}}},
 	} {
 		if unitPristine(hu) {
 			t.Errorf("%s: should not be pristine", name)
 		}
-	}
-}
-
-func TestRemoveUnitFromForce(t *testing.T) {
-	force := map[string]any{"groups": []any{
-		map[string]any{"name": "A", "units": []any{map[string]any{"id": "u1"}, map[string]any{"id": "u2"}}},
-		map[string]any{"name": "B", "units": []any{map[string]any{"id": "u3"}}},
-	}}
-	if !removeUnitFromForce(force, "u2") || removeUnitFromForce(force, "u2") || removeUnitFromForce(force, "nope") {
-		t.Fatal("remove should succeed once and fail for a missing unit")
-	}
-	a := force["groups"].([]any)[0].(map[string]any)["units"].([]any)
-	if len(a) != 1 || a[0].(map[string]any)["id"] != "u1" || len(force["groups"].([]any)[1].(map[string]any)["units"].([]any)) != 1 {
-		t.Errorf("only u2 should be gone: %+v", force)
 	}
 }
 
@@ -67,7 +55,7 @@ func TestSellUnitEndpoint(t *testing.T) {
 	h := hangarOf("BMMadCat_H", "BMDasher_Prime", "BMKoshi_E")
 	h.Units[1].AmmoBins, h.Units[1].AmmoUsed = 1, 4
 	h.Units[1].Damaged = true
-	h.Units[2].Destroyed, h.Units[2].Locations = true, map[string]LocationLoss{"CT": {Internal: 8}}
+	h.Units[2].Destroyed, h.Units[2].Locations = true, map[string]mekbay.LocationLoss{"CT": {Internal: 8}}
 	h.Units[2].Damaged = true
 	fake.setHangar(h, nil)
 	funds := func() int { r, _, _ := store.Run(ctx, id, "refusalwar"); return r.Warchest }
@@ -92,7 +80,7 @@ func TestSellUnitEndpoint(t *testing.T) {
 	if got := sell("ua"); got != http.StatusOK || funds() != 4500+madCat.BV/2 {
 		t.Fatalf("sell pristine: %d, funds %d (want %d)", got, funds(), 4500+madCat.BV/2)
 	}
-	if len(fake.sales) != 1 || fake.sales[0].UnitID != "ua" || fake.sales[0].OwnerUID != MekBayUID("wolfpack2026", SlotHangar) || fake.sales[0].Instance == goodInstance {
+	if len(fake.sales) != 1 || fake.sales[0].UnitID != "ua" || fake.sales[0].OwnerUID != mekbay.MekBayUID("wolfpack2026", mekbay.SlotHangar) || fake.sales[0].Instance == goodInstance {
 		t.Errorf("MekBay was asked: %+v", fake.sales)
 	}
 	// Worn units sell for a quarter: spent ammunition, and a truly destroyed mech.
@@ -117,7 +105,7 @@ func TestSellUnitEndpoint(t *testing.T) {
 	// A truly destroyed mech can't be rearmed either: selling is all that is left.
 	fake.serviceErr = nil
 	h = hangarOf("BMKoshi_E")
-	h.Units[0].Destroyed, h.Units[0].Damaged, h.Units[0].Locations = true, true, map[string]LocationLoss{"CT": {Internal: 8}}
+	h.Units[0].Destroyed, h.Units[0].Damaged, h.Units[0].Locations = true, true, map[string]mekbay.LocationLoss{"CT": {Internal: 8}}
 	h.Units[0].AmmoBins, h.Units[0].AmmoUsed = 1, 3
 	fake.setHangar(h, nil)
 	if got := post(t, srv, "/api/hangar/service", url.Values{"campaign": {"refusalwar"}, "kind": {"rearm"}, "unit": {"ua"}}, cookie, srv.URL).StatusCode; got != http.StatusConflict {

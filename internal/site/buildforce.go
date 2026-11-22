@@ -2,10 +2,10 @@ package site
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
-	"time"
+
+	"github.com/davidzech/Battletech/internal/mekbay"
 
 	"github.com/davidzech/Battletech/internal/catalog"
 )
@@ -36,50 +36,21 @@ func parseStartingUnits(r *http.Request) ([]string, error) {
 	return ids, nil
 }
 
-// draftHangar is a list of picked mechs as a hangar force, for the starting check before anything is made in MekBay.
-func draftHangar(ids []string) HangarForce {
-	h := HangarForce{Name: "Hangar"}
-	for i, id := range ids {
-		h.Units = append(h.Units, HangarUnit{ID: fmt.Sprintf("pick-%d", i), Unit: id, Group: hangarGroup, Gunnery: defaultGunnery, Piloting: defaultPiloting})
-	}
-	return h
-}
-
-// CreateForce saves a new force, built from a draft, under the owner's account at the given instance ID, and returns it as the site reads a hangar.
-func (c *MekBayClient) CreateForce(ctx context.Context, owner, instance string, d ForceDraft) (HangarForce, error) {
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-	s, err := dialMekBay(ctx, c.url(), owner)
-	if err != nil {
-		return HangarForce{}, err
-	}
-	defer s.close()
-	force := buildForce(instance, time.Now().UTC(), d)
-	if err := s.saveData(ctx, force); err != nil {
-		return HangarForce{}, err
-	}
-	b, err := json.Marshal(map[string]any{"data": force})
-	if err != nil {
-		return HangarForce{}, err
-	}
-	return parseHangarForce(b)
-}
-
 // buildHangar makes the starting hangar from the picked mechs: a new force in MekBay owned by the seed's account, in one group named Hangar. The run's hangar then
 // points at it, and since nothing was copied from a link of the player's, the force's own link stands as its source.
-func (s *Server) buildHangar(ctx context.Context, seed, name string, ids []string) (Hangar, HangarForce, error) {
-	units := make([]UnitDraft, len(ids))
+func (s *Server) buildHangar(ctx context.Context, seed, name string, ids []string) (mekbay.Hangar, mekbay.HangarForce, error) {
+	units := make([]mekbay.UnitDraft, len(ids))
 	for i, id := range ids {
-		units[i] = UnitDraft{Unit: id, Gunnery: defaultGunnery, Piloting: defaultPiloting}
+		units[i] = mekbay.UnitDraft{Unit: id, Gunnery: mekbay.DefaultGunnery, Piloting: mekbay.DefaultPiloting}
 		if u, ok := catalog.ByName(id); ok {
 			units[i].BV = u.BV // the force's BV as MekBay would total it (a 4/5 pilot leaves the base BV as it is)
 		}
 	}
-	target := newID()
-	got, err := s.mekbay.CreateForce(ctx, accountUID(seed, SlotHangar), target, ForceDraft{Name: name, Groups: []GroupDraft{{Name: hangarGroup, Units: units}}})
+	target := mekbay.NewID()
+	got, err := s.mekbay.CreateForce(ctx, mekbay.AccountUID(seed, mekbay.SlotHangar), target, mekbay.ForceDraft{Name: name, Groups: []mekbay.GroupDraft{{Name: mekbay.HangarGroup, Units: units}}})
 	if err != nil {
-		return Hangar{}, HangarForce{}, err
+		return mekbay.Hangar{}, mekbay.HangarForce{}, err
 	}
 	link := "https://mekbay.com/?instance=" + target
-	return Hangar{URL: link, Instance: target, Source: link}, got, nil
+	return mekbay.Hangar{URL: link, Instance: target, Source: link}, got, nil
 }

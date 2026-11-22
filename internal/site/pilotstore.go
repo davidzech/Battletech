@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"errors"
 
+	"github.com/davidzech/Battletech/internal/mekbay"
+
 	"github.com/davidzech/Battletech/internal/pilot"
 )
 
@@ -108,7 +110,7 @@ func (s *Store) AddPilotWithRank(ctx context.Context, playthroughID, campaign, n
 	if named > 0 {
 		return pilot.NamedPilot{}, ErrNameTaken
 	}
-	p := pilot.NamedPilot{ID: newID(), Name: name, Portrait: portrait, Rank: rank, SP: start, TotalSP: total}
+	p := pilot.NamedPilot{ID: mekbay.NewID(), Name: name, Portrait: portrait, Rank: rank, SP: start, TotalSP: total}
 	if _, err := tx.ExecContext(ctx,
 		s.q(`INSERT INTO named_pilots (id, playthrough_id, campaign, name, portrait, rank, sp_gunnery, sp_piloting, sp_edge_tokens, sp_edge_abilities, sp_total) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`),
 		p.ID, playthroughID, campaign, name, portrait, rank, start.Gunnery, start.Piloting, start.EdgeTokens, start.EdgeAbilities, total); err != nil {

@@ -7,6 +7,8 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+
+	"github.com/davidzech/Battletech/internal/mekbay"
 )
 
 const (
@@ -62,7 +64,7 @@ func TestParseHangar(t *testing.T) {
 		"the enemy listed first":         "https://mekbay.com/?instance=enemy:01a12f98-8a21-7d12-b43d-52bb70872376," + goodInstance,
 		"several enemies around ours":    "https://mekbay.com/?instance=enemy:01a12f98-8a21-7d12-b43d-52bb70872376, " + goodInstance + ",enemy:01a12f98-8a21-7d12-b43d-52bb70872377",
 	} {
-		h, err := parseHangar(in)
+		h, err := mekbay.ParseHangarLink(in)
 		if err != nil || h.Instance != goodInstance || h.URL != goodHangarURL {
 			t.Errorf("%s: parseHangar(%q) = %+v, %v; want %s", name, in, h, err, goodHangarURL)
 		}
@@ -81,11 +83,11 @@ func TestParseHangar(t *testing.T) {
 		"a bad first friendly one": "https://mekbay.com/?instance=nope," + goodInstance,
 		"an operation link":        "https://mekbay.com/?operation=01a1e329-5a80-76bb-8f8c-5443d79bcd02",
 	} {
-		if h, err := parseHangar(bad); err == nil {
+		if h, err := mekbay.ParseHangarLink(bad); err == nil {
 			t.Errorf("%s: parseHangar(%q) should fail, got %+v", name, bad, h)
 		}
 	}
-	if _, err := parseHangar("https://mekbay.com/?operation=01a1e329-5a80-76bb-8f8c-5443d79bcd02"); err == nil || !strings.Contains(err.Error(), "operation link") {
+	if _, err := mekbay.ParseHangarLink("https://mekbay.com/?operation=01a1e329-5a80-76bb-8f8c-5443d79bcd02"); err == nil || !strings.Contains(err.Error(), "operation link") {
 		t.Errorf("an operation link should say so, got %v", err)
 	}
 }

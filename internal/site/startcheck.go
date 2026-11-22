@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/davidzech/Battletech/internal/mekbay"
+
 	"github.com/davidzech/Battletech/internal/catalog"
 )
 
@@ -42,7 +44,7 @@ type startCheck struct {
 
 // checkStartingHangar counts a hangar's mechs and BV and lists what keeps it from meeting the campaign's starting
 // conditions.
-func checkStartingHangar(h HangarForce, c *Campaign) startCheck {
+func checkStartingHangar(h mekbay.HangarForce, c *Campaign) startCheck {
 	res := startCheck{Units: []startCheckUnit{}, Problems: []string{}, MaxBV: c.StartingBV, MinMechs: c.StartingMinMechs}
 	var unknown []string
 	for _, hu := range h.Units {
@@ -106,10 +108,10 @@ func (s *Server) hangarCheck(w http.ResponseWriter, r *http.Request) {
 	} else if units != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Cache-Control", "no-store")
-		_ = json.NewEncoder(w).Encode(checkStartingHangar(draftHangar(units), c))
+		_ = json.NewEncoder(w).Encode(checkStartingHangar(mekbay.DraftHangar(units), c))
 		return
 	}
-	link, err := parseHangar(r.FormValue("hangar"))
+	link, err := mekbay.ParseHangarLink(r.FormValue("hangar"))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return

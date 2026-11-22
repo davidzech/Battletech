@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/davidzech/Battletech/internal/mekbay"
+
 	"github.com/davidzech/Battletech/internal/catalog"
 )
 
@@ -115,7 +117,7 @@ func TestHangarCachePullThrough(t *testing.T) {
 		t.Errorf("the live read should have replaced the cached copy: %.300s", attr)
 	}
 	// A failed read keeps the last copy, so the page still has something to show.
-	fake.setHangar(HangarForce{}, errors.New("mekbay is down"))
+	fake.setHangar(mekbay.HangarForce{}, errors.New("mekbay is down"))
 	if r := get(t, srv, "/api/campaign/force?campaign=refusalwar", cookie); r.StatusCode != http.StatusBadGateway {
 		t.Errorf("a failed read: %d", r.StatusCode)
 	}
@@ -135,7 +137,7 @@ func TestHangarCachePullThrough(t *testing.T) {
 
 	// A run pointing at another hangar force (as a rollback past a re-made hangar would) makes the old copy meaningless: it is not shown for the new one.
 	other := "01a12f98-8a21-7d12-b43d-52bb70872376"
-	if err := store.StartRun(ctx, id, "refusalwar", Hangar{URL: "https://mekbay.com/?instance=" + other, Instance: other, Source: "https://mekbay.com/?instance=" + other}); err != nil {
+	if err := store.StartRun(ctx, id, "refusalwar", mekbay.Hangar{URL: "https://mekbay.com/?instance=" + other, Instance: other, Source: "https://mekbay.com/?instance=" + other}); err != nil {
 		t.Fatal(err)
 	}
 	if attr := cachedAttr(body(t, srv, "/refusalwar/", cookie)); attr != "" {

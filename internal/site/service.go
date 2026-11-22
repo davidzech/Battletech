@@ -1,15 +1,13 @@
 package site
 
 import (
-	"context"
-	"errors"
-	"fmt"
 	"log"
 	"math"
 	"net/http"
 	"sort"
 	"strings"
-	"time"
+
+	"github.com/davidzech/Battletech/internal/mekbay"
 
 	"github.com/davidzech/Battletech/internal/catalog"
 )
@@ -25,19 +23,11 @@ import (
 // Only the highest repair level that applies is paid, and it covers every level beneath it. Clan and Mixed tech cost half again as much
 // (x1.5, rounded up). A unit whose center torso structure is gone is truly destroyed and can't be repaired at all.
 
-// Repair levels, lowest first.
-const (
-	RepairArmor     = "armor"
-	RepairStructure = "structure"
-	RepairCrippled  = "crippled"
-	RepairDestroyed = "destroyed"
-)
-
 // repairLevels lists the levels with their cost multipliers on tonnage.
 var repairLevels = []struct {
 	ID   string
 	Mult float64
-}{{RepairArmor, 0.5}, {RepairStructure, 2}, {RepairCrippled, 3}, {RepairDestroyed, 5}}
+}{{mekbay.RepairArmor, 0.5}, {mekbay.RepairStructure, 2}, {mekbay.RepairCrippled, 3}, {mekbay.RepairDestroyed, 5}}
 
 // rearmCostPerTon is what a ton of expended ammunition costs to restore.
 const rearmCostPerTon = 10
@@ -46,36 +36,36 @@ const rearmCostPerTon = 10
 // or destroyed unit may have only its armor repaired: armor if any armor is lost; structure if a surviving location has lost internal structure or
 // has a critical hit (the engine's hits and destroyed locations belong to the crippled level); crippled for a crippled or destroyed unit; and
 // destroyed for a destroyed one. A truly destroyed or undamaged unit has none.
-func repairOptions(hu HangarUnit, c Condition, tons float64) []string {
-	if c == CondTruly || c == CondOK {
+func repairOptions(hu mekbay.HangarUnit, c mekbay.Condition, tons float64) []string {
+	if c == mekbay.CondTruly || c == mekbay.CondOK {
 		return nil
 	}
 	var out []string
 	for _, l := range hu.Locations {
 		if l.Armor > 0 {
-			out = append(out, RepairArmor)
+			out = append(out, mekbay.RepairArmor)
 			break
 		}
 	}
 	structure := false
 	for k, l := range hu.Locations {
-		if l.Internal > 0 && !internalGone(hu, k, tons) {
+		if l.Internal > 0 && !mekbay.InternalGone(hu, k, tons) {
 			structure = true
 		}
 	}
 	for _, cr := range hu.Crits {
-		if !cr.Engine && !internalGone(hu, cr.Loc, tons) {
+		if !cr.Engine && !mekbay.InternalGone(hu, cr.Loc, tons) {
 			structure = true
 		}
 	}
 	if structure {
-		out = append(out, RepairStructure)
+		out = append(out, mekbay.RepairStructure)
 	}
-	if c == CondCrippled || c == CondDestroyed {
-		out = append(out, RepairCrippled)
+	if c == mekbay.CondCrippled || c == mekbay.CondDestroyed {
+		out = append(out, mekbay.RepairCrippled)
 	}
-	if c == CondDestroyed {
-		out = append(out, RepairDestroyed)
+	if c == mekbay.CondDestroyed {
+		out = append(out, mekbay.RepairDestroyed)
 	}
 	return out
 }
@@ -118,7 +108,7 @@ type ammoLine struct {
 // ammoBreakdown lists what a rearm would refill, by ammo type, alphabetically. Each used bin is a ton; its capacity is the unit's shots for
 // that ammo in that location divided by its slots there (the catalog knows that, MekBay only records the shots used). A bin the catalog doesn't
 // list is still counted, with an unknown (zero) capacity.
-func ammoBreakdown(hu HangarUnit, u catalog.Unit) []ammoLine {
+func ammoBreakdown(hu mekbay.HangarUnit, u catalog.Unit) []ammoLine {
 	var out []ammoLine
 	index := map[string]int{}
 	for _, use := range hu.AmmoUsed2 {
@@ -143,136 +133,6 @@ func ammoBreakdown(hu HangarUnit, u catalog.Unit) []ammoLine {
 	return out
 }
 
-// ServiceRequest asks MekBay to clear a unit's damage (repair) or refill its ammunition (rearm) in the player's hangar force.
-type ServiceRequest struct {
-	OwnerUID string
-	Instance string
-	UnitID   string
-	Kind     string  // "repair" or "rearm"
-	Level    string  // for a repair, the level (armor, structure, crippled, destroyed)
-	Tons     float64 // the unit's tonnage, to tell which locations are destroyed
-}
-
-// serviceUnitState applies a repair or rearm to the unit with this ID inside a force in MekBay's save format. Each repair level fixes its own
-// damage and the levels beneath it, and nothing above:
-//
-//	armor      the lost armor, everywhere
-//	structure  also internal structure in locations that are not destroyed, and critical hits there (but not the engine's, which cripple)
-//	crippled   also destroyed locations and the engine's hits: all damage, so every location and every critical slot is cleared
-//	destroyed  also the destroyed flag
-//
-// A rearm refills the ammunition and leaves the damage.
-func serviceUnitState(force map[string]any, unitID, kind, level string, tons float64) error {
-	groups, _ := force["groups"].([]any)
-	for _, g := range groups {
-		gm, _ := g.(map[string]any)
-		units, _ := gm["units"].([]any)
-		for _, u := range units {
-			um, _ := u.(map[string]any)
-			if um == nil || um["id"] != unitID {
-				continue
-			}
-			state, _ := um["state"].(map[string]any)
-			if state == nil {
-				return errors.New("that unit has no recorded state to change")
-			}
-			crits, _ := state["crits"].([]any)
-			switch kind {
-			case "repair":
-				if err := repairState(state, crits, level, tons); err != nil {
-					return err
-				}
-			case "rearm":
-				for _, c := range crits {
-					if cm, ok := c.(map[string]any); ok {
-						if _, has := cm["consumed"]; has {
-							cm["consumed"] = 0
-						}
-					}
-				}
-			default:
-				return fmt.Errorf("unknown service %q", kind)
-			}
-			um["updatedTs"] = time.Now().UnixMilli()
-			return nil
-		}
-	}
-	return errors.New("that unit is no longer in your hangar force")
-}
-
-// clearCrit takes a critical slot's damage away and keeps its spent ammunition.
-func clearCrit(cm map[string]any) {
-	delete(cm, "destroyed")
-	delete(cm, "destroying")
-	delete(cm, "destroyedTurn")
-	if _, has := cm["hits"]; has {
-		cm["hits"] = 0
-	}
-}
-
-func repairState(state map[string]any, crits []any, level string, tons float64) error {
-	locs, _ := state["locations"].(map[string]any)
-	loss := func(m map[string]any, key string) int { f, _ := m[key].(float64); return int(f) }
-	gone := func(loc string, m map[string]any) bool {
-		max := maxStructure(loc, tons)
-		return max > 0 && loss(m, "internal") >= max
-	}
-	switch level {
-	case RepairArmor, RepairStructure:
-		for k, v := range locs {
-			m, _ := v.(map[string]any)
-			if m == nil {
-				continue
-			}
-			m["armor"] = 0
-			if level == RepairStructure && !gone(k, m) {
-				m["internal"] = 0
-			}
-			if loss(m, "internal") == 0 {
-				delete(locs, k)
-			}
-		}
-		if level == RepairStructure {
-			for _, c := range crits {
-				cm, ok := c.(map[string]any)
-				if !ok {
-					continue
-				}
-				loc, _ := cm["loc"].(string)
-				name, _ := cm["name"].(string)
-				if lm, _ := locs[loc].(map[string]any); lm != nil && gone(loc, lm) {
-					continue // a destroyed location's slots go with the location
-				}
-				if strings.Contains(strings.ToLower(name), "engine") {
-					continue // engine hits are what cripples a unit
-				}
-				clearCrit(cm)
-			}
-		}
-	case RepairCrippled, RepairDestroyed:
-		state["locations"] = map[string]any{}
-		delete(state, "ruleChecks")
-		for _, c := range crits {
-			if cm, ok := c.(map[string]any); ok {
-				clearCrit(cm)
-			}
-		}
-		if level == RepairDestroyed {
-			state["destroyed"] = false
-		}
-	default:
-		return fmt.Errorf("unknown repair level %q", level)
-	}
-	return nil
-}
-
-// ServiceUnit repairs or rearms a unit in the player's hangar force. It needs the owner's UID, because MekBay only accepts the owner's saves.
-func (c *MekBayClient) ServiceUnit(ctx context.Context, req ServiceRequest) error {
-	return c.editForce(ctx, req.OwnerUID, req.Instance, func(force map[string]any, _ time.Time) error {
-		return serviceUnitState(force, req.UnitID, req.Kind, req.Level, req.Tons)
-	})
-}
-
 // serviceUnit is POST /api/hangar/service: repair or rearm one unit of the hangar, paid for from the warchest. It needs modify mode, since
 // the change is made in MekBay. The server works out the unit's condition and the price itself; a repair names the level the page showed, and
 // is refused if the unit has changed since.
@@ -292,7 +152,7 @@ func (s *Server) serviceUnit(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
-	var hu HangarUnit
+	var hu mekbay.HangarUnit
 	found := false
 	for _, u := range h.Units {
 		if u.ID == r.PostFormValue("unit") {
@@ -311,8 +171,8 @@ func (s *Server) serviceUnit(w http.ResponseWriter, r *http.Request) {
 	cost, level := 0, ""
 	switch kind {
 	case "repair":
-		cond, _ := conditionOf(hu, cat.Tons, cat.Engine)
-		if cond == CondTruly {
+		cond, _ := mekbay.ConditionOf(hu, cat.Tons, cat.Engine)
+		if cond == mekbay.CondTruly {
 			http.Error(w, "A truly destroyed unit can't be repaired.", http.StatusConflict)
 			return
 		}
@@ -332,7 +192,7 @@ func (s *Server) serviceUnit(w http.ResponseWriter, r *http.Request) {
 		}
 		cost = repairCost(level, cat.Tons, cat.TechBase)
 	case "rearm":
-		if cond, _ := conditionOf(hu, cat.Tons, cat.Engine); cond == CondTruly {
+		if cond, _ := mekbay.ConditionOf(hu, cat.Tons, cat.Engine); cond == mekbay.CondTruly {
 			http.Error(w, "A truly destroyed unit can only be sold.", http.StatusConflict)
 			return
 		}
@@ -343,6 +203,6 @@ func (s *Server) serviceUnit(w http.ResponseWriter, r *http.Request) {
 		cost = rearmCost(hu.AmmoBins)
 	}
 	s.payForHangarChange(w, r, pt, c, run, cost, kind+" a unit", func() error {
-		return s.mekbay.ServiceUnit(r.Context(), ServiceRequest{OwnerUID: accountUID(currentSeed(r), SlotHangar), Instance: run.HangarInstance, UnitID: hu.ID, Kind: kind, Level: level, Tons: cat.Tons})
+		return s.mekbay.ServiceUnit(r.Context(), mekbay.ServiceRequest{OwnerUID: mekbay.AccountUID(currentSeed(r), mekbay.SlotHangar), Instance: run.HangarInstance, UnitID: hu.ID, Kind: kind, Level: level, Tons: cat.Tons})
 	})
 }
