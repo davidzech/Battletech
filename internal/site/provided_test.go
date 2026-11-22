@@ -8,14 +8,19 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+
+	"github.com/davidzech/Battletech/internal/catalog"
+	"github.com/davidzech/Battletech/internal/content"
+	"github.com/davidzech/Battletech/internal/hangar"
+	"github.com/davidzech/Battletech/internal/mekbay"
 )
 
 // Scenario 000 hands every cadet one of four standard machines instead of letting them bring their own.
 var scenario000Pool = []string{"BMBlackHawk_Prime", "BMRyoken_Prime", "BMShadowCat_Prime", "BMPouncer_Prime", "BMGrendel_Prime"}
 
 func TestProvidedForce(t *testing.T) {
-	sc := &Scenario{ProvidedUnits: scenario000Pool}
-	if !sc.provides() || (&Scenario{}).provides() || (*Scenario)(nil).provides() {
+	sc := &content.Scenario{ProvidedUnits: scenario000Pool}
+	if !sc.Provides() || (&content.Scenario{}).Provides() || (*content.Scenario)(nil).Provides() {
 		t.Fatal("provides() is true only for a scenario that lists units")
 	}
 	h := providedForce(sc)
@@ -24,11 +29,11 @@ func TestProvidedForce(t *testing.T) {
 	}
 	ids := map[string]bool{}
 	for i, u := range h.Units {
-		cat, ok := unitByName(u.Unit)
+		cat, ok := catalog.ByName(u.Unit)
 		if !ok || cat.Type != "Mek" {
 			t.Errorf("%s is not a mech in the catalog", u.Unit)
 		}
-		if u.Unit != scenario000Pool[i] || !strings.HasPrefix(u.ID, providedPrefix) || ids[u.ID] || !unitPristine(u) || u.Pilot != "" {
+		if u.Unit != scenario000Pool[i] || !strings.HasPrefix(u.ID, providedPrefix) || ids[u.ID] || !hangar.Pristine(u) || u.Pilot != "" {
 			t.Errorf("a provided unit is new, unique and uncrewed: %+v", u)
 		}
 		ids[u.ID] = true
@@ -42,13 +47,13 @@ func TestProvidedForce(t *testing.T) {
 
 // Scenario 000's own front matter lists the four mechs, and every provided unit of every scenario is a real mech.
 func TestScenario000ProvidesItsOwnMechs(t *testing.T) {
-	lib := Library{Root: "../../campaigns"}
+	lib := content.Library{Root: "../../campaigns"}
 	c, _ := lib.Campaign("refusalwar")
 	sc, ok := c.Scenario("scenario_000")
 	if !ok || strings.Join(sc.ProvidedUnits, ",") != strings.Join(scenario000Pool, ",") {
 		t.Fatalf("Scenario 000 should provide Nova, Stormcrow, Shadow Cat, Pouncer and Mongrel (Grendel) Primes: %+v", sc.ProvidedUnits)
 	}
-	if sc1, _ := c.Scenario("scenario_001"); sc1.provides() {
+	if sc1, _ := c.Scenario("scenario_001"); sc1.Provides() {
 		t.Error("Sortie 001 uses the player's hangar")
 	}
 	camps, err := lib.Campaigns()
@@ -58,7 +63,7 @@ func TestScenario000ProvidesItsOwnMechs(t *testing.T) {
 	for _, camp := range camps {
 		for _, s := range camp.Scenarios {
 			for _, name := range s.ProvidedUnits {
-				if u, ok := unitByName(name); !ok || u.Type != "Mek" {
+				if u, ok := catalog.ByName(name); !ok || u.Type != "Mek" {
 					t.Errorf("%s provides %q, which is not a mech in the catalog", s.Slug, name)
 				}
 			}
@@ -77,7 +82,7 @@ func TestProvidedScenarioDeploy(t *testing.T) {
 	}
 	id := playthroughID("wolfpack2026")
 	// A MekBay that can't be reached must not matter: the provided mechs are not read from it, and the hangar isn't touched.
-	fake.setHangar(HangarForce{}, errors.New("MekBay must not be read for a provided force"))
+	fake.setHangar(mekbay.HangarForce{}, errors.New("MekBay must not be read for a provided force"))
 	const hangarPath = "/api/mekbay/hangar?campaign=refusalwar&scenario=scenario_000"
 	r := get(t, srv, hangarPath, cookie)
 	var view struct {
@@ -128,33 +133,33 @@ func TestProvidedScenarioDeploy(t *testing.T) {
 
 // Scenario 000 allows two mechs in all, each with a named pilot, and has no BV limit.
 func TestScenarioRules(t *testing.T) {
-	sc := &Scenario{UnitLimit: 2, PilotsRequired: true}
-	crew := func(units ...string) []CrewAssignment {
-		var out []CrewAssignment
+	sc := &content.Scenario{UnitLimit: 2, PilotsRequired: true}
+	crew := func(units ...string) []mekbay.CrewAssignment {
+		var out []mekbay.CrewAssignment
 		for _, u := range units {
-			out = append(out, CrewAssignment{UnitID: u, Name: "Alrek"})
+			out = append(out, mekbay.CrewAssignment{UnitID: u, Name: "Alrek"})
 		}
 		return out
 	}
 	for name, c := range map[string]struct {
 		units [][]string
-		crews [][]CrewAssignment
+		crews [][]mekbay.CrewAssignment
 		bad   bool
 	}{
-		"two mechs, both crewed":      {[][]string{{"a", "b"}}, [][]CrewAssignment{crew("a", "b")}, false},
-		"one each for two players":    {[][]string{{"a"}, {"b"}}, [][]CrewAssignment{crew("a"), crew("b")}, false},
-		"three mechs is over":         {[][]string{{"a", "b"}, {"c"}}, [][]CrewAssignment{crew("a", "b"), crew("c")}, true},
-		"a mech without a pilot":      {[][]string{{"a", "b"}}, [][]CrewAssignment{crew("a")}, true},
-		"a pilot sent empty":          {[][]string{{"a"}}, [][]CrewAssignment{{{UnitID: "a"}}}, true},
+		"two mechs, both crewed":      {[][]string{{"a", "b"}}, [][]mekbay.CrewAssignment{crew("a", "b")}, false},
+		"one each for two players":    {[][]string{{"a"}, {"b"}}, [][]mekbay.CrewAssignment{crew("a"), crew("b")}, false},
+		"three mechs is over":         {[][]string{{"a", "b"}, {"c"}}, [][]mekbay.CrewAssignment{crew("a", "b"), crew("c")}, true},
+		"a mech without a pilot":      {[][]string{{"a", "b"}}, [][]mekbay.CrewAssignment{crew("a")}, true},
+		"a pilot sent empty":          {[][]string{{"a"}}, [][]mekbay.CrewAssignment{{{UnitID: "a"}}}, true},
 		"no assignments at all":       {[][]string{{"a"}}, nil, true},
-		"another player's pilot only": {[][]string{{"a"}, {"b"}}, [][]CrewAssignment{crew("b"), crew("b")}, true},
+		"another player's pilot only": {[][]string{{"a"}, {"b"}}, [][]mekbay.CrewAssignment{crew("b"), crew("b")}, true},
 	} {
-		if msg := sc.rulesProblem(c.units, c.crews); (msg != "") != c.bad {
+		if msg := sc.RulesProblem(c.units, c.crews); (msg != "") != c.bad {
 			t.Errorf("%s: %q", name, msg)
 		}
 	}
 	// No rules, no problems.
-	if msg := (&Scenario{}).rulesProblem([][]string{{"a", "b", "c"}}, nil); msg != "" {
+	if msg := (&content.Scenario{}).RulesProblem([][]string{{"a", "b", "c"}}, nil); msg != "" {
 		t.Errorf("a scenario without rules: %q", msg)
 	}
 }
@@ -167,7 +172,7 @@ func TestScenario000EnforcesItsRules(t *testing.T) {
 	if r := post(t, srv, "/api/campaign/start", startForm(goodHangar, "Alrek", "Katarina"), cookie, srv.URL); r.StatusCode != http.StatusNoContent {
 		t.Fatalf("start: %d", r.StatusCode)
 	}
-	pool := providedForce(&Scenario{ProvidedUnits: scenario000Pool})
+	pool := providedForce(&content.Scenario{ProvidedUnits: scenario000Pool})
 	id := func(i int) string { return pool.Units[i].ID }
 	plan := func(kv ...string) int {
 		v := url.Values{"campaign": {"refusalwar"}, "scenario": {"scenario_000"}, "players": {"1"}}

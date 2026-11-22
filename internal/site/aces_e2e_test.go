@@ -11,6 +11,10 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/davidzech/Battletech/internal/content"
+	"github.com/davidzech/Battletech/internal/mekbay"
+	"github.com/davidzech/Battletech/internal/storage"
 )
 
 // The whole Aces-style flow on a scratch copy of Refusal War whose Scenario 000 is replaced by an Aces-style mission: four pilots, two active (one of them killed),
@@ -56,11 +60,11 @@ outcomes:
 	write("Scenario_001/Setup.md", "---\nid: scenario_001\ntitle: Next\n---\n# Next\n")
 
 	fake := &fakeMekBay{hangar: startingHangar()}
-	store, err := OpenSQLite(t.TempDir() + "/aces.db")
+	store, err := storage.OpenSQLite(t.TempDir() + "/aces.db")
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { store.db.Close() })
+	t.Cleanup(func() { store.DB().Close() })
 	srv := newTestServerAt(t, root, store, fake)
 	ctx := context.Background()
 	cookie := post(t, srv, "/api/seed", url.Values{"seed": {"wolfpack2026"}}, nil, "").Cookies()[0]
@@ -86,18 +90,18 @@ outcomes:
 	if !strings.Contains(page, `id="outcome-open"`) || !strings.Contains(page, "Destroy the depot") || !strings.Contains(page, "400 SP") || !strings.Contains(page, "Escape with the data") {
 		t.Fatalf("an Aces-style mission completes by reporting; its objectives reach the dialog: %.500s", page)
 	}
-	report := func(depot, data bool, entries ...OutcomeEntry) url.Values {
-		b, _ := json.Marshal(OutcomeInputs{Pilots: entries, Mission: map[string]any{"depot": depot, "data": data}})
+	report := func(depot, data bool, entries ...content.OutcomeEntry) url.Values {
+		b, _ := json.Marshal(content.OutcomeInputs{Pilots: entries, Mission: map[string]any{"depot": depot, "data": data}})
 		return url.Values{"campaign": {"refusalwar"}, "scenario": {"scenario_000"}, "inputs": {string(b)}}
 	}
-	entries := []OutcomeEntry{
+	entries := []content.OutcomeEntry{
 		{PilotID: pid["Alrek"], TookPart: true}, {PilotID: pid["Katarina"], TookPart: true, Killed: true},
 		{PilotID: pid["Jarek"], TookPart: true, MVP: true}, {PilotID: pid["Sybille"], TookPart: false},
 	}
 	// Preview: 600 SP pool; Alrek 80, Katarina (killed) 0, Jarek 80, Sybille (benched) 40 = 200 from the pool, 400 to the warchest. Jarek, the MVP, earns 20 more
 	// for free: it doesn't come out of the pool. Only Alrek and Jarek took part and stay, so only they could be the MVP.
 	r := post(t, srv, "/api/campaign/scenario-outcome", report(true, true, entries...), cookie, srv.URL)
-	var res OutcomeResult
+	var res content.OutcomeResult
 	if r.StatusCode != http.StatusOK || json.NewDecoder(r.Body).Decode(&res) != nil {
 		t.Fatalf("preview: %d", r.StatusCode)
 	}
@@ -105,13 +109,13 @@ outcomes:
 		t.Fatalf("preview: %+v (%s)", res, sps(res))
 	}
 	// Every mission has an MVP: a report without one is refused (the preview above works without one, so the dialog can offer the candidates).
-	noMVP := append([]OutcomeEntry(nil), entries...)
+	noMVP := append([]content.OutcomeEntry(nil), entries...)
 	noMVP[2].MVP = false
 	if got := post(t, srv, "/api/campaign/scenario-outcome/commit", report(true, true, noMVP...), cookie, srv.URL).StatusCode; got != http.StatusBadRequest {
 		t.Fatalf("a commit without the MVP: %d", got)
 	}
 	// With a battle in progress, the battle's units are written back into the hangar before the mission is completed: if that fails, nothing is completed.
-	if err := store.SaveMekBayOperation(ctx, id, "refusalwar", "scenario_000", MekBayOperation{OpForInstance: "opfor", OperationID: "op-1"}); err != nil {
+	if err := store.SaveMekBayOperation(ctx, id, "refusalwar", "scenario_000", storage.MekBayOperation{OpForInstance: "opfor", OperationID: "op-1"}); err != nil {
 		t.Fatal(err)
 	}
 	fake.mu.Lock()
@@ -130,7 +134,7 @@ outcomes:
 		t.Fatalf("commit: %d", got)
 	}
 	fake.mu.Lock()
-	if len(fake.commits) != 2 || fake.commits[1].OperationID != "op-1" || fake.commits[1].HangarInstance != run0.HangarInstance || fake.commits[1].OwnerUID != accountUID("wolfpack2026", SlotHangar) {
+	if len(fake.commits) != 2 || fake.commits[1].OperationID != "op-1" || fake.commits[1].HangarInstance != run0.HangarInstance || fake.commits[1].OwnerUID != mekbay.AccountUID("wolfpack2026", mekbay.SlotHangar) {
 		t.Errorf("the hangar was written back from the battle's operation: %+v", fake.commits)
 	}
 	fake.mu.Unlock()
@@ -167,7 +171,7 @@ outcomes:
 }
 
 // newTestServerAt serves the campaigns found under root with the given store and MekBay.
-func newTestServerAt(t *testing.T, root string, store *Store, mb MekBay) *httptest.Server {
+func newTestServerAt(t *testing.T, root string, store *storage.Store, mb mekbay.MekBay) *httptest.Server {
 	t.Helper()
 	srv := httptest.NewServer(NewHandler(root, store, WithMekBay(mb)))
 	t.Cleanup(srv.Close)

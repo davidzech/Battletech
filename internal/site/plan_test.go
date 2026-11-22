@@ -7,13 +7,16 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+
+	"github.com/davidzech/Battletech/internal/content"
+	"github.com/davidzech/Battletech/internal/pilot"
 )
 
 func TestPlayerRange(t *testing.T) {
 	for _, c := range []struct {
 		lo, hi, wantLo, wantHi int
 	}{{1, 2, 1, 2}, {0, 0, 1, 1}, {2, 4, 2, 4}, {3, 9, 3, 4}, {5, 2, 1, 2}, {0, 3, 1, 3}} {
-		if lo, hi := playerRange(&Campaign{MinPlayers: c.lo, MaxPlayers: c.hi}); lo != c.wantLo || hi != c.wantHi {
+		if lo, hi := playerRange(&content.Campaign{MinPlayers: c.lo, MaxPlayers: c.hi}); lo != c.wantLo || hi != c.wantHi {
 			t.Errorf("min %d max %d: %d-%d, want %d-%d", c.lo, c.hi, lo, hi, c.wantLo, c.wantHi)
 		}
 	}
@@ -53,7 +56,7 @@ func TestDeployPlanEndpoint(t *testing.T) {
 	}
 	id := playthroughID("wolfpack2026")
 	pilots, _ := store.Pilots(t.Context(), id, "refusalwar")
-	var alrek NamedPilot
+	var alrek pilot.NamedPilot
 	for _, p := range pilots {
 		if p.Name == "Alrek" {
 			alrek = p

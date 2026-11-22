@@ -7,6 +7,9 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+
+	"github.com/davidzech/Battletech/internal/mekbay"
+	"github.com/davidzech/Battletech/internal/storage"
 )
 
 const (
@@ -62,7 +65,7 @@ func TestParseHangar(t *testing.T) {
 		"the enemy listed first":         "https://mekbay.com/?instance=enemy:01a12f98-8a21-7d12-b43d-52bb70872376," + goodInstance,
 		"several enemies around ours":    "https://mekbay.com/?instance=enemy:01a12f98-8a21-7d12-b43d-52bb70872376, " + goodInstance + ",enemy:01a12f98-8a21-7d12-b43d-52bb70872377",
 	} {
-		h, err := parseHangar(in)
+		h, err := mekbay.ParseHangarLink(in)
 		if err != nil || h.Instance != goodInstance || h.URL != goodHangarURL {
 			t.Errorf("%s: parseHangar(%q) = %+v, %v; want %s", name, in, h, err, goodHangarURL)
 		}
@@ -81,11 +84,11 @@ func TestParseHangar(t *testing.T) {
 		"a bad first friendly one": "https://mekbay.com/?instance=nope," + goodInstance,
 		"an operation link":        "https://mekbay.com/?operation=01a1e329-5a80-76bb-8f8c-5443d79bcd02",
 	} {
-		if h, err := parseHangar(bad); err == nil {
+		if h, err := mekbay.ParseHangarLink(bad); err == nil {
 			t.Errorf("%s: parseHangar(%q) should fail, got %+v", name, bad, h)
 		}
 	}
-	if _, err := parseHangar("https://mekbay.com/?operation=01a1e329-5a80-76bb-8f8c-5443d79bcd02"); err == nil || !strings.Contains(err.Error(), "operation link") {
+	if _, err := mekbay.ParseHangarLink("https://mekbay.com/?operation=01a1e329-5a80-76bb-8f8c-5443d79bcd02"); err == nil || !strings.Contains(err.Error(), "operation link") {
 		t.Errorf("an operation link should say so, got %v", err)
 	}
 }
@@ -113,7 +116,7 @@ func TestParseAccountName(t *testing.T) {
 
 // newTestServer is a site with a fake MekBay whose hangar meets Refusal War's starting conditions, so tests that
 // start campaigns never touch the network.
-func newTestServer(t *testing.T) (*httptest.Server, *Store) {
+func newTestServer(t *testing.T) (*httptest.Server, *storage.Store) {
 	t.Helper()
 	return newMekBayTestServer(t, &fakeMekBay{hangar: startingHangar()})
 }
@@ -194,7 +197,7 @@ func TestSeedAndCampaignFlow(t *testing.T) {
 	}
 	// The stored key must not be the seed.
 	var raw string
-	_ = store.db.QueryRow(`SELECT id FROM playthroughs`).Scan(&raw)
+	_ = store.DB().QueryRow(`SELECT id FROM playthroughs`).Scan(&raw)
 	if strings.Contains(raw, "wolfpack") {
 		t.Fatal("seed must not be stored")
 	}
@@ -315,7 +318,7 @@ func TestSeedAndCampaignFlow(t *testing.T) {
 		t.Fatalf("starting again: got %d", r.StatusCode)
 	}
 	var runs int
-	_ = store.db.QueryRow(`SELECT COUNT(*) FROM campaign_runs`).Scan(&runs)
+	_ = store.DB().QueryRow(`SELECT COUNT(*) FROM campaign_runs`).Scan(&runs)
 	if run, _, _ := store.Run(ctx, id, "refusalwar"); runs != 1 || run.HangarInstance != before.HangarInstance || run.SourceURL != before.SourceURL {
 		t.Fatalf("the one run keeps its hangar: %d runs, %+v", runs, run)
 	}
@@ -338,7 +341,7 @@ func TestAccountSettingsAskForNoMekBayIDs(t *testing.T) {
 		t.Fatalf("a name, with a stray ID field: %d", r.StatusCode)
 	}
 	var n int
-	if err := store.db.QueryRow(`SELECT count(*) FROM sqlite_master WHERE name = 'player_accounts'`).Scan(&n); err != nil || n != 0 {
+	if err := store.DB().QueryRow(`SELECT count(*) FROM sqlite_master WHERE name = 'player_accounts'`).Scan(&n); err != nil || n != 0 {
 		t.Errorf("there is nowhere to keep a player's own ID: %d %v", n, err)
 	}
 }

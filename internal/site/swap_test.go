@@ -2,81 +2,14 @@ package site
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/url"
 	"testing"
-	"time"
+
+	"github.com/davidzech/Battletech/internal/catalog"
+	"github.com/davidzech/Battletech/internal/hangar"
+	"github.com/davidzech/Battletech/internal/mekbay"
 )
-
-func TestSwapPriceAndOptions(t *testing.T) {
-	prime, ok := unitByName("BMDasher_Prime")
-	if !ok || prime.Omni == 0 {
-		t.Fatal("the Fire Moth Prime should be an omnimech in the catalog")
-	}
-	opts := swapOptions(prime)
-	if len(opts) < 2 {
-		t.Fatalf("a Fire Moth has several variants: %+v", opts)
-	}
-	var up, down *swapOption
-	for i, o := range opts {
-		v, _ := unitByName(o.Unit)
-		if v.Chassis != prime.Chassis || o.Unit == prime.Name || v.Omni == 0 {
-			t.Errorf("an option must be another omni variant of the same chassis: %+v", o)
-		}
-		switch {
-		case o.BV > prime.BV && up == nil:
-			up = &opts[i]
-		case o.BV < prime.BV && down == nil:
-			down = &opts[i]
-		}
-	}
-	if up == nil || down == nil {
-		t.Fatalf("expected a dearer and a cheaper variant: %+v", opts)
-	}
-	// Half the tonnage (20t: 10 SP) plus half the BV gained; a cheaper variant costs only the half tonnage.
-	if want := 10 + (up.BV-prime.BV)/2; up.Cost != want {
-		t.Errorf("up cost = %d, want %d", up.Cost, want)
-	}
-	if down.Cost != 10 {
-		t.Errorf("down cost = %d, want 10 and no refund", down.Cost)
-	}
-	// An odd tonnage rounds the half up.
-	if got := swapPrice(Unit{Tons: 55, BV: 1000}, Unit{BV: 1000}); got != 28 {
-		t.Errorf("55t swap = %d, want 28", got)
-	}
-	// Being an omnimech is an advantage over selling and buying: the swap is cheaper than the new BV less half the old one.
-	if up.Cost >= up.BV-prime.BV/2 {
-		t.Errorf("swapping (%d) should beat selling and rebuying (%d)", up.Cost, up.BV-prime.BV/2)
-	}
-	// And swapping up then selling a clean unit never makes money.
-	if sellValue(up.BV, true)-sellValue(prime.BV, true)-up.Cost >= 0 {
-		t.Error("swap up and sell must lose the half tonnage at least")
-	}
-	// A unit that is not an omnimech has no variants to swap to.
-	grizzly, _ := unitByName("BMGrizzly")
-	if grizzly.Omni != 0 || swapOptions(grizzly) != nil {
-		t.Errorf("the Grizzly is not an omnimech: %+v", swapOptions(grizzly))
-	}
-}
-
-func TestSwapUnitState(t *testing.T) {
-	var src map[string]any
-	if err := json.Unmarshal([]byte(wornForce), &src); err != nil {
-		t.Fatal(err)
-	}
-	if err := swapUnitState(src, "u1", "BMMadCat_A", time.Now()); err != nil {
-		t.Fatal(err)
-	}
-	um := src["groups"].([]any)[0].(map[string]any)["units"].([]any)[0].(map[string]any)
-	st := um["state"].(map[string]any)
-	if um["unit"] != "BMMadCat_A" || len(st["locations"].(map[string]any)) != 0 || len(st["crits"].([]any)) != 0 || st["destroyed"] != false {
-		t.Errorf("the unit should be the new variant, fresh: %+v", um)
-	}
-	if swapUnitState(src, "nope", "x", time.Now()) == nil {
-		t.Error("a unit that isn't in the force can't be swapped")
-	}
-}
 
 func TestSwapUnitEndpoint(t *testing.T) {
 	fake := &fakeMekBay{hangar: startingHangar()}
@@ -88,13 +21,13 @@ func TestSwapUnitEndpoint(t *testing.T) {
 		t.Fatalf("start: %d", r.StatusCode)
 	}
 	// These tests are about prices, not the campaign's starting funds: give them a round balance.
-	if _, err := store.db.Exec(`UPDATE campaign_runs SET warchest = 4500`); err != nil {
+	if _, err := store.DB().Exec(`UPDATE campaign_runs SET warchest = 4500`); err != nil {
 		t.Fatal(err)
 	}
 	id := playthroughID("wolfpack2026")
-	prime, _ := unitByName("BMDasher_Prime")
-	var up swapOption
-	for _, o := range swapOptions(prime) {
+	prime, _ := catalog.ByName("BMDasher_Prime")
+	var up hangar.SwapOption
+	for _, o := range hangar.SwapOptions(prime) {
 		if o.BV > prime.BV {
 			up = o
 		}
@@ -136,7 +69,7 @@ func TestSwapUnitEndpoint(t *testing.T) {
 	if got := swap("ua", up.Unit); got != http.StatusOK || funds() != 4500-up.Cost {
 		t.Fatalf("swap: %d, funds %d (want %d)", got, funds(), 4500-up.Cost)
 	}
-	if len(fake.swaps) != 1 || fake.swaps[0].UnitID != "ua" || fake.swaps[0].To != up.Unit || fake.swaps[0].OwnerUID != MekBayUID("wolfpack2026", SlotHangar) {
+	if len(fake.swaps) != 1 || fake.swaps[0].UnitID != "ua" || fake.swaps[0].To != up.Unit || fake.swaps[0].OwnerUID != mekbay.MekBayUID("wolfpack2026", mekbay.SlotHangar) {
 		t.Errorf("MekBay was asked: %+v", fake.swaps)
 	}
 	// A failure in MekBay refunds, and too little in the warchest refuses.

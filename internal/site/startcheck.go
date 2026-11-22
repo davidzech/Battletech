@@ -6,6 +6,11 @@ import (
 	"log"
 	"net/http"
 	"strings"
+
+	"github.com/davidzech/Battletech/internal/catalog"
+	"github.com/davidzech/Battletech/internal/content"
+	"github.com/davidzech/Battletech/internal/format"
+	"github.com/davidzech/Battletech/internal/mekbay"
 )
 
 // A campaign can require its starting hangar to hold at least so many mechs, totalling at most so much BV (Intro.md
@@ -40,18 +45,18 @@ type startCheck struct {
 
 // checkStartingHangar counts a hangar's mechs and BV and lists what keeps it from meeting the campaign's starting
 // conditions.
-func checkStartingHangar(h HangarForce, c *Campaign) startCheck {
+func checkStartingHangar(h mekbay.HangarForce, c *content.Campaign) startCheck {
 	res := startCheck{Units: []startCheckUnit{}, Problems: []string{}, MaxBV: c.StartingBV, MinMechs: c.StartingMinMechs}
 	var unknown []string
 	for _, hu := range h.Units {
-		u, ok := unitByName(hu.Unit)
+		u, ok := catalog.ByName(hu.Unit)
 		if !ok {
-			res.Units = append(res.Units, startCheckUnit{Name: hu.Unit, Icon: defaultIconURL(""), Gunnery: hu.Gunnery, Piloting: hu.Piloting, Unknown: true})
+			res.Units = append(res.Units, startCheckUnit{Name: hu.Unit, Icon: catalog.DefaultIconURL(""), Gunnery: hu.Gunnery, Piloting: hu.Piloting, Unknown: true})
 			unknown = append(unknown, hu.Unit)
 			continue
 		}
-		name, model := unitNames(u)
-		cu := startCheckUnit{Name: name, Model: model, Role: roleLabel(u), Icon: iconURL(u), Tons: u.Tons, BV: u.BV, Gunnery: hu.Gunnery, Piloting: hu.Piloting, Mech: u.Type == "Mek"}
+		name, model := catalog.Names(u)
+		cu := startCheckUnit{Name: name, Model: model, Role: catalog.RoleLabel(u), Icon: catalog.IconURL(u), Tons: u.Tons, BV: u.BV, Gunnery: hu.Gunnery, Piloting: hu.Piloting, Mech: u.Type == "Mek"}
 		res.Units = append(res.Units, cu)
 		res.BV += cu.BV
 		if cu.Mech {
@@ -65,7 +70,7 @@ func checkStartingHangar(h HangarForce, c *Campaign) startCheck {
 		res.Problems = append(res.Problems, fmt.Sprintf("You need at least %d mechs in your hangar (you have %d).", res.MinMechs, res.Mechs))
 	}
 	if res.MaxBV > 0 && res.BV > res.MaxBV {
-		res.Problems = append(res.Problems, fmt.Sprintf("Your hangar totals %s BV, over the %s BV starting limit.", withCommas(res.BV), withCommas(res.MaxBV)))
+		res.Problems = append(res.Problems, fmt.Sprintf("Your hangar totals %s BV, over the %s BV starting limit.", format.Commas(res.BV), format.Commas(res.MaxBV)))
 	}
 	res.OK = len(res.Problems) == 0
 	return res
@@ -104,10 +109,10 @@ func (s *Server) hangarCheck(w http.ResponseWriter, r *http.Request) {
 	} else if units != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Cache-Control", "no-store")
-		_ = json.NewEncoder(w).Encode(checkStartingHangar(draftHangar(units), c))
+		_ = json.NewEncoder(w).Encode(checkStartingHangar(mekbay.DraftHangar(units), c))
 		return
 	}
-	link, err := parseHangar(r.FormValue("hangar"))
+	link, err := mekbay.ParseHangarLink(r.FormValue("hangar"))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -121,13 +126,4 @@ func (s *Server) hangarCheck(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	_ = json.NewEncoder(w).Encode(checkStartingHangar(h, c))
-}
-
-// withCommas formats a number with thousands separators, e.g. 6000 as "6,000".
-func withCommas(n int) string {
-	digits := fmt.Sprint(n)
-	for i := len(digits) - 3; i > 0; i -= 3 {
-		digits = digits[:i] + "," + digits[i:]
-	}
-	return digits
 }

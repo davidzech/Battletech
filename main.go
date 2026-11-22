@@ -10,7 +10,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/davidzech/Battletech/internal/mekbayproxy"
 	"github.com/davidzech/Battletech/internal/site"
+	"github.com/davidzech/Battletech/internal/storage"
 )
 
 // defaultAddr listens on every interface, except under `go run`, where it stays on localhost so
@@ -30,15 +32,15 @@ func main() {
 	flag.Parse()
 
 	var (
-		store *site.Store
+		store *storage.Store
 		err   error
 		desc  string
 	)
 	if *pgURL != "" {
-		store, err = site.OpenPostgres(*pgURL)
+		store, err = storage.OpenPostgres(*pgURL)
 		desc = "postgres"
 	} else {
-		store, err = site.OpenSQLite(*dbPath)
+		store, err = storage.OpenSQLite(*dbPath)
 		desc = "sqlite " + *dbPath
 	}
 	if err != nil {
@@ -49,7 +51,7 @@ func main() {
 	go func() { // a MekBay release that changes what the proxy relies on shows here, not as a player's broken table link
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
-		if err := site.CheckMekBay(ctx); err != nil {
+		if err := mekbayproxy.CheckMekBay(ctx); err != nil {
 			log.Printf("warning: the MekBay proxy may not work with the current mekbay.com: %v", err)
 		} else {
 			log.Printf("MekBay proxy check: ok")

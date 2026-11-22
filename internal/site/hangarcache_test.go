@@ -6,54 +6,12 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
-	"reflect"
 	"strings"
 	"testing"
-)
 
-// hangarCacheStore checks the cache table on both databases, in a campaign of its own (run from storeContract).
-func hangarCacheStore(t *testing.T, s *Store, id string) {
-	t.Helper()
-	ctx := context.Background()
-	const camp, inst = "cachecamp", "01a12f9e-188f-7158-ad67-3fc9700ec733"
-	if _, _, ok, err := s.CachedHangar(ctx, id, camp, inst); err != nil || ok {
-		t.Fatalf("nothing cached yet: %v %v", ok, err)
-	}
-	h := hangarOf("BMKoshi_E", "BMGrizzly")
-	h.Units[1].Pilot, h.Units[1].Damaged = "Alrek", true
-	if err := s.SaveHangarCache(ctx, id, camp, inst, h); err != nil {
-		t.Fatal(err)
-	}
-	got, at, ok, err := s.CachedHangar(ctx, id, camp, inst)
-	if err != nil || !ok || got.Name != "Test Hangar" || len(got.Units) != 2 || !reflect.DeepEqual(got.Units[1], h.Units[1]) || at.IsZero() {
-		t.Fatalf("cached hangar: %+v at %v ok %v err %v", got, at, ok, err)
-	}
-	// A copy belongs to the hangar link it was read from.
-	if _, _, ok, _ := s.CachedHangar(ctx, id, camp, "another-instance"); ok {
-		t.Error("a different hangar link must not see the old copy")
-	}
-	// Saving again replaces it (one row per run), including its link.
-	h2 := hangarOf("BMMadCat_H")
-	if err := s.SaveHangarCache(ctx, id, camp, "another-instance", h2); err != nil {
-		t.Fatal(err)
-	}
-	if got, _, ok, _ := s.CachedHangar(ctx, id, camp, "another-instance"); !ok || len(got.Units) != 1 || got.Units[0].Unit != "BMMadCat_H" {
-		t.Errorf("the copy should have been replaced: %+v", got)
-	}
-	if _, _, ok, _ := s.CachedHangar(ctx, id, camp, inst); ok {
-		t.Error("the replaced copy's old link is gone")
-	}
-	// Other campaigns are separate, and deleting the run clears its copy.
-	if _, _, ok, _ := s.CachedHangar(ctx, id, "othercamp", "another-instance"); ok {
-		t.Error("another campaign's cache")
-	}
-	if _, err := s.DeleteRun(ctx, id, camp); err != nil {
-		t.Fatal(err)
-	}
-	if _, _, ok, _ := s.CachedHangar(ctx, id, camp, "another-instance"); ok {
-		t.Error("deleting the run should clear its cached hangar")
-	}
-}
+	"github.com/davidzech/Battletech/internal/catalog"
+	"github.com/davidzech/Battletech/internal/mekbay"
+)
 
 // The pages paint the last hangar read from MekBay straight away, so a visit never starts from an empty "reading" state.
 func TestHangarCachePullThrough(t *testing.T) {
@@ -113,7 +71,7 @@ func TestHangarCachePullThrough(t *testing.T) {
 		t.Errorf("the live read should have replaced the cached copy: %.300s", attr)
 	}
 	// A failed read keeps the last copy, so the page still has something to show.
-	fake.setHangar(HangarForce{}, errors.New("mekbay is down"))
+	fake.setHangar(mekbay.HangarForce{}, errors.New("mekbay is down"))
 	if r := get(t, srv, "/api/campaign/force?campaign=refusalwar", cookie); r.StatusCode != http.StatusBadGateway {
 		t.Errorf("a failed read: %d", r.StatusCode)
 	}
@@ -133,7 +91,7 @@ func TestHangarCachePullThrough(t *testing.T) {
 
 	// A run pointing at another hangar force (as a rollback past a re-made hangar would) makes the old copy meaningless: it is not shown for the new one.
 	other := "01a12f98-8a21-7d12-b43d-52bb70872376"
-	if err := store.StartRun(ctx, id, "refusalwar", Hangar{URL: "https://mekbay.com/?instance=" + other, Instance: other, Source: "https://mekbay.com/?instance=" + other}); err != nil {
+	if err := store.StartRun(ctx, id, "refusalwar", mekbay.Hangar{URL: "https://mekbay.com/?instance=" + other, Instance: other, Source: "https://mekbay.com/?instance=" + other}); err != nil {
 		t.Fatal(err)
 	}
 	if attr := cachedAttr(body(t, srv, "/refusalwar/", cookie)); attr != "" {
@@ -165,7 +123,7 @@ func TestUnitPageURL(t *testing.T) {
 		"BM Odd&Name=1#": "https://mekbay.com/?gs=cbt&shareUnit=BM+Odd%26Name%3D1%23&tab=General",
 		"":               "",
 	} {
-		if got := unitPageURL(in); got != want {
+		if got := catalog.PageURL(in); got != want {
 			t.Errorf("unitPageURL(%q) = %q, want %q", in, got, want)
 		}
 	}

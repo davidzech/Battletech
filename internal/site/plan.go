@@ -7,6 +7,10 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+
+	"github.com/davidzech/Battletech/internal/content"
+	"github.com/davidzech/Battletech/internal/mekbay"
+	"github.com/davidzech/Battletech/internal/storage"
 )
 
 // The deployment plan: which mechs and pilots each player takes on a sortie. The Deploy wizard steps through the players one at a time, each choosing from what
@@ -15,12 +19,12 @@ import (
 // is still in the code but is not used by the wizard.
 
 // playerRange is how many players a campaign can be deployed with (Intro.md min_players and max_players); a campaign that doesn't say is a one-player campaign.
-func playerRange(c *Campaign) (lo, hi int) {
+func playerRange(c *content.Campaign) (lo, hi int) {
 	lo, hi = c.MinPlayers, c.MaxPlayers
 	if hi <= 0 {
 		return 1, 1
 	}
-	hi = min(hi, maxPlayers)
+	hi = min(hi, mekbay.MaxPlayers)
 	if lo <= 0 || lo > hi {
 		lo = 1
 	}
@@ -56,38 +60,8 @@ type planResult struct {
 	Deployed bool         `json:"deployed"` // always false for now: nothing was sent to MekBay
 }
 
-// rulesProblem checks a plan against the scenario's own rules, beyond the BV limit: the most mechs in all (unit_limit), and a named pilot on every mech
-// (pilots_required). units[i] and crews[i] are player i+1's mech IDs and pilot assignments. It returns the first problem as a sentence, or "".
-func (sc *Scenario) rulesProblem(units [][]string, crews [][]CrewAssignment) string {
-	total := 0
-	for _, u := range units {
-		total += len(u)
-	}
-	if sc.UnitLimit > 0 && total > sc.UnitLimit {
-		return fmt.Sprintf("This mission allows at most %d mechs in all; you chose %d.", sc.UnitLimit, total)
-	}
-	if sc.PilotsRequired {
-		for i, u := range units {
-			named := map[string]bool{}
-			if i < len(crews) {
-				for _, a := range crews[i] {
-					if a.Name != "" {
-						named[a.UnitID] = true
-					}
-				}
-			}
-			for _, id := range u {
-				if !named[id] {
-					return "Every mech on this mission needs a named pilot: assign one to each."
-				}
-			}
-		}
-	}
-	return ""
-}
-
 // planProblem checks a whole plan against the hangar and returns the first problem as a sentence, or "". units[i] is player i+1's mech IDs.
-func planProblem(h HangarForce, units [][]string, bvLimit int) string {
+func planProblem(h mekbay.HangarForce, units [][]string, bvLimit int) string {
 	var all []string
 	for i, u := range units {
 		if len(u) == 0 {
@@ -102,14 +76,14 @@ func planProblem(h HangarForce, units [][]string, bvLimit int) string {
 
 // builtPlan is a deployment plan that has passed every check.
 type builtPlan struct {
-	pt    Playthrough
-	run   CampaignRun
-	c     *Campaign
-	sc    *Scenario
-	h     HangarForce // the force the players take their mechs from (the hangar, or the scenario's provided mechs)
+	pt    storage.Playthrough
+	run   storage.CampaignRun
+	c     *content.Campaign
+	sc    *content.Scenario
+	h     mekbay.HangarForce // the force the players take their mechs from (the hangar, or the scenario's provided mechs)
 	views map[string]hangarUnitView
 	units [][]string // each player's mechs
-	crews [][]CrewAssignment
+	crews [][]mekbay.CrewAssignment
 	res   planResult
 }
 
@@ -164,7 +138,7 @@ func (s *Server) checkPlan(w http.ResponseWriter, r *http.Request) (*builtPlan, 
 	}
 	res := planResult{Players: []planPlayer{}, Limit: sc.BVLimit}
 	pilotUsed := map[string]int{}
-	crews := make([][]CrewAssignment, n)
+	crews := make([][]mekbay.CrewAssignment, n)
 	for i := 0; i < n; i++ {
 		num := i + 1
 		pre := "p" + strconv.Itoa(num) + "_"
@@ -200,7 +174,7 @@ func (s *Server) checkPlan(w http.ResponseWriter, r *http.Request) (*builtPlan, 
 		res.Players = append(res.Players, pp)
 		res.TotalBV += pp.BV
 	}
-	if msg := sc.rulesProblem(units, crews); msg != "" {
+	if msg := sc.RulesProblem(units, crews); msg != "" {
 		http.Error(w, msg, http.StatusBadRequest)
 		return nil, false
 	}

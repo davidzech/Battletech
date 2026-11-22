@@ -54,4 +54,8 @@ Visitors pick or generate a **seed** in a popup (no login) and give their MekBay
 ## Notes
 
 - Guidance for working on this repo with Claude Code is in [CLAUDE.md](CLAUDE.md).
-- This is an unofficial fan project. BattleTech and MechWarrior are trademarks of their respective owners. Unit data comes from [MekBay](https://github.com/MegaMek/mekbay) and the [MegaMek](https://megamek.org) project; see their repositories for licensing.
+- This is an unofficial fan project. BattleTech and MechWarrior are trademarks of their respective owners.
+
+## License
+
+The website's code is licensed under the [GNU General Public License v3.0 or later](LICENSE). The unit data and icons (from [MekBay](https://github.com/MegaMek/mekbay) and [MegaMek Data](https://github.com/MegaMek/mm-data), CC BY-NC-SA 4.0), the pilot portraits, the font and the campaign content keep their own terms; see [NOTICE.md](NOTICE.md).

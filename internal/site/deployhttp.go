@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+
+	"github.com/davidzech/Battletech/internal/content"
+	"github.com/davidzech/Battletech/internal/storage"
 )
 
 // The Deploy popup's endpoints: what every MekBay endpoint needs first, and the hangar as the popup lists it.
@@ -11,7 +14,7 @@ import (
 // mekbayRequest is what both MekBay endpoints need first: the seed's playthrough, the campaign and scenario named by
 // the request, and the playthrough's run of that campaign (which holds its hangar). It writes the error response
 // itself and reports ok=false.
-func (s *Server) mekbayRequest(w http.ResponseWriter, r *http.Request) (pt Playthrough, run CampaignRun, c *Campaign, sc *Scenario, ok bool) {
+func (s *Server) mekbayRequest(w http.ResponseWriter, r *http.Request) (pt storage.Playthrough, run storage.CampaignRun, c *content.Campaign, sc *content.Scenario, ok bool) {
 	seed := currentSeed(r)
 	if seed == "" {
 		http.Error(w, "Choose a seed first.", http.StatusBadRequest)
@@ -48,11 +51,11 @@ func (s *Server) hangarJSON(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not load operation", http.StatusInternalServerError)
 		return
 	}
-	if !sc.provides() { // the scenario's own mechs are not the hangar, so they are never cached as it
+	if !sc.Provides() { // the scenario's own mechs are not the hangar, so they are never cached as it
 		s.cacheHangar(r.Context(), pt.ID, c.Slug, run.HangarInstance, h)
 	}
 	out := deployData(h, sc.BVLimit, run.Owned(), hasOp)
-	out["provided"] = sc.provides()
+	out["provided"] = sc.Provides()
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	_ = json.NewEncoder(w).Encode(out)

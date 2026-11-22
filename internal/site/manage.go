@@ -6,6 +6,8 @@ import (
 	"errors"
 	"log"
 	"net/http"
+
+	"github.com/davidzech/Battletech/internal/content"
 )
 
 // manage serves /<campaign>/manage/, the page for managing a started campaign's force: hangar link, named pilots and
@@ -112,7 +114,7 @@ func (s *Server) setForceName(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	name, err := parseForceName(r.PostFormValue("name"))
+	name, err := content.ParseForceName(r.PostFormValue("name"))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return

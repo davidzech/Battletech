@@ -2,9 +2,7 @@ package site
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -13,202 +11,17 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/davidzech/Battletech/internal/content"
+	"github.com/davidzech/Battletech/internal/mekbay"
+	"github.com/davidzech/Battletech/internal/pilot"
+	"github.com/davidzech/Battletech/internal/storage"
 )
 
-func TestLadders(t *testing.T) {
-	for _, c := range []struct {
-		l         ladder
-		sp, level int
-	}{
-		// Gunnery starts at 4 and improves one step at a time as cumulative SP is reached.
-		{gunneryLadder, 0, 4},
-		{gunneryLadder, 299, 4},
-		{gunneryLadder, 300, 3},
-		{gunneryLadder, 699, 3},
-		{gunneryLadder, 700, 2},
-		{gunneryLadder, 1200, 1},
-		{gunneryLadder, 2200, 0},
-		{gunneryLadder, 99999, 0}, // the top of the ladder holds
-		// Piloting starts at 5 and stops at 1.
-		{pilotingLadder, 99, 5},
-		{pilotingLadder, 100, 4},
-		{pilotingLadder, 200, 3},
-		{pilotingLadder, 700, 2},
-		{pilotingLadder, 1200, 1},
-		{pilotingLadder, 5000, 1},
-		// Edge tokens start at 1.
-		{edgeTokensLadder, 59, 1},
-		{edgeTokensLadder, 60, 2},
-		{edgeTokensLadder, 120, 3},
-		{edgeTokensLadder, 560, 7},
-		{edgeTokensLadder, 1100, 10},
-		// Edge abilities start at none.
-		{edgeAbilitiesLadder, 59, 0},
-		{edgeAbilitiesLadder, 60, 1},
-		{edgeAbilitiesLadder, 180, 2},
-		{edgeAbilitiesLadder, 900, 5},
-		{edgeAbilitiesLadder, 5000, 5},
-	} {
-		if got := c.l.at(c.sp); got.Level != c.level {
-			t.Errorf("%s at %d SP = level %d, want level %d", c.l.Name, c.sp, got.Level, c.level)
-		}
-	}
-	if n, ok := gunneryLadder.next(0); !ok || n.SP != 300 || n.Level != 3 {
-		t.Errorf("next gunnery step from 0 = %+v, %v", n, ok)
-	}
-	if n, ok := gunneryLadder.next(300); !ok || n.SP != 700 {
-		t.Errorf("next gunnery step from 300 = %+v, %v", n, ok)
-	}
-	if _, ok := gunneryLadder.next(2200); ok {
-		t.Error("there is nothing above Gunnery 0")
-	}
-	// Every ladder's SP costs must rise, or a cheaper step could be skipped.
-	for _, l := range []ladder{gunneryLadder, pilotingLadder, edgeTokensLadder, edgeAbilitiesLadder} {
-		for i := 1; i < len(l.Rows); i++ {
-			if l.Rows[i].SP <= l.Rows[i-1].SP {
-				t.Errorf("%s: row %d (%+v) must cost more than the one before", l.Name, i, l.Rows[i])
-			}
-		}
-	}
-}
-
-// TestKirbyExample replays the worked example in the book (Hot Spots: Draconis Reach, p. 34): Kirby puts 120 SP into
-// Edge tokens and 30 into Edge abilities, then later 60 more into abilities.
-func TestKirbyExample(t *testing.T) {
-	kirby := NamedPilot{Name: "Kirby", SP: SPAllocation{EdgeTokens: 120, EdgeAbilities: 30}, TotalSP: 150}
-	if kirby.EdgeTokens() != 3 || kirby.EdgeAbilities() != 0 || kirby.Earned() != 150 {
-		t.Fatalf("Kirby after 150 SP: tokens %d, abilities %d, earned %d (the book says 3, 0, 150)", kirby.EdgeTokens(), kirby.EdgeAbilities(), kirby.Earned())
-	}
-	kirby.SP.EdgeAbilities += 60
-	if kirby.SP.EdgeAbilities != 90 || kirby.EdgeAbilities() != 1 {
-		t.Fatalf("Kirby after 60 more: abilities SP %d, abilities %d (the book says 90, 1)", kirby.SP.EdgeAbilities, kirby.EdgeAbilities())
-	}
-	// A brand new pilot is a standard 4/5 pilot with one Edge token and no abilities.
-	if p := (NamedPilot{}); p.Gunnery() != 4 || p.Piloting() != 5 || p.EdgeTokens() != 1 || p.EdgeAbilities() != 0 {
-		t.Errorf("new pilot = %d/%d, edge %d, abilities %d", p.Gunnery(), p.Piloting(), p.EdgeTokens(), p.EdgeAbilities())
-	}
-}
-
-func TestPilotView(t *testing.T) {
-	views, alive := pilotViews([]NamedPilot{
-		{ID: "a", Name: "Alrek", SP: SPAllocation{Gunnery: 300, Piloting: 50}, TotalSP: 400},
-		{ID: "b", Name: "Katarina", Fallen: true, Rank: "High"},
-	}, []string{"Low", "High"})
-	if alive != 1 || len(views) != 2 || views[0].Rank != "Low" || views[1].Rank != "High" {
-		t.Fatalf("alive %d of %d", alive, len(views))
-	}
-	a := views[0]
-	if a.Gunnery != 3 || a.Piloting != 5 || a.Earned != 400 || a.Unallocated != 50 || !views[1].Fallen {
-		t.Errorf("view = %+v", a)
-	}
-	g, p := a.Columns[0], a.Columns[1]
-	if g.Name != "Gunnery" || g.SP != 300 || !g.HasNext || g.NextAt != 700 || g.NextLvl != 2 {
-		t.Errorf("gunnery column = %+v", g)
-	}
-	if p.SP != 50 || p.NextAt != 100 || p.NextLvl != 4 {
-		t.Errorf("piloting column = %+v", p)
-	}
-}
-
-func TestParsePilotName(t *testing.T) {
-	for _, good := range []string{"Alrek", "Star Captain Alrek", "Ulric d'Aleshire"} {
-		if got, err := parsePilotName(good); err != nil || got != good {
-			t.Errorf("parsePilotName(%q) = %q, %v", good, got, err)
-		}
-	}
-	for _, bad := range []string{"", "  ", "<b>", strings.Repeat("a", 31), "a\x00b"} {
-		if _, err := parsePilotName(bad); err == nil {
-			t.Errorf("parsePilotName(%q) should fail", bad)
-		}
-	}
-}
-
 func TestRefusalWarStartsWithTwoNamedPilots(t *testing.T) {
-	c, ok := (Library{Root: "../../campaigns"}).Campaign("refusalwar")
+	c, ok := (content.Library{Root: "../../campaigns"}).Campaign("refusalwar")
 	if !ok || c.StartingNamedPilots != 2 || c.StartingPilotSP != 150 || c.StartingBV != 10000 || c.StartingMinMechs != 5 {
 		t.Fatalf("Refusal War starts with two named pilots (150 SP each) and a 10000 BV force: %+v", c)
-	}
-}
-
-// pilotStore exercises the named pilot queries; it is run for both databases from storeContract.
-func pilotStore(t *testing.T, s *Store, id string) {
-	t.Helper()
-	ctx := context.Background()
-	if ps, err := s.Pilots(ctx, id, "refusalwar"); err != nil || len(ps) != 0 {
-		t.Fatalf("no pilots yet: %v %v", ps, err)
-	}
-	a, err := s.AddPilot(ctx, id, "refusalwar", "Alrek", "", SPAllocation{Gunnery: 150}, 2)
-	if err != nil || a.ID == "" || a.Name != "Alrek" {
-		t.Fatalf("add pilot: %+v, %v", a, err)
-	}
-	b, err := s.AddPilot(ctx, id, "refusalwar", "Katarina", "", SPAllocation{}, 2)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.AddPilot(ctx, id, "refusalwar", "Third", "", SPAllocation{}, 2); !errors.Is(err, ErrPilotLimit) {
-		t.Fatalf("the limit should refuse a third pilot, got %v", err)
-	}
-	// Another campaign has its own pilots.
-	if _, err := s.AddPilot(ctx, id, "another", "Elsewhere", "", SPAllocation{}, 2); err != nil {
-		t.Fatalf("pilots belong to a campaign: %v", err)
-	}
-	ps, err := s.Pilots(ctx, id, "refusalwar")
-	if err != nil || len(ps) != 2 || ps[0].ID != a.ID || ps[1].ID != b.ID || ps[0].SP.Gunnery != 150 || ps[0].Fallen {
-		t.Fatalf("pilots = %+v, %v", ps, err)
-	}
-
-	// SP adds to the columns.
-	if err := s.AwardSP(ctx, id, "refusalwar", a.ID, SPAllocation{Gunnery: 150, EdgeTokens: 60}); err != nil {
-		t.Fatal(err)
-	}
-	ps, _ = s.Pilots(ctx, id, "refusalwar")
-	if ps[0].SP != (SPAllocation{Gunnery: 300, EdgeTokens: 60}) || ps[0].Gunnery() != 3 || ps[0].EdgeTokens() != 2 {
-		t.Fatalf("after award: %+v", ps[0])
-	}
-	if err := s.AwardSP(ctx, id, "refusalwar", "no-such-pilot", SPAllocation{Gunnery: 1}); !errors.Is(err, sql.ErrNoRows) {
-		t.Fatalf("unknown pilot: %v", err)
-	}
-	if err := s.AwardSP(ctx, id, "another", a.ID, SPAllocation{Gunnery: 1}); !errors.Is(err, sql.ErrNoRows) {
-		t.Fatalf("another campaign's pilot: %v", err)
-	}
-
-	// A fallen pilot frees their place, keeps their record, and can no longer earn SP.
-	if err := s.MarkFallen(ctx, id, "refusalwar", b.ID); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.MarkFallen(ctx, id, "refusalwar", b.ID); !errors.Is(err, sql.ErrNoRows) {
-		t.Fatalf("already fallen: %v", err)
-	}
-	if err := s.AwardSP(ctx, id, "refusalwar", b.ID, SPAllocation{Gunnery: 1}); !errors.Is(err, sql.ErrNoRows) {
-		t.Fatalf("the fallen earn nothing: %v", err)
-	}
-	if _, err := s.AddPilot(ctx, id, "refusalwar", "Replacement", "", SPAllocation{}, 2); err != nil {
-		t.Fatalf("a fallen pilot should free a place: %v", err)
-	}
-	if ps, _ := s.Pilots(ctx, id, "refusalwar"); len(ps) != 3 || !ps[1].Fallen {
-		t.Fatalf("the fallen pilot should stay on record: %+v", ps)
-	}
-
-	// Starting a campaign creates its run and pilots together, and only once.
-	start := []NewPilot{{Name: "Alrek", SP: SPAllocation{Gunnery: 90, EdgeTokens: 60}}, {Name: "Katarina", SP: SPAllocation{Piloting: 100, EdgeTokens: 50}}}
-	hangar := Hangar{URL: goodHangarURL, Instance: goodInstance}
-	if err := s.StartRunWithPilots(ctx, id, "wizard", hangar, start, 4500, 1, "Test Force"); err != nil {
-		t.Fatal(err)
-	}
-	if r, ok, _ := s.Run(ctx, id, "wizard"); !ok || r.HangarInstance != goodInstance || r.Warchest != 4500 || r.WarchestText() != "4,500" {
-		t.Fatalf("run not started: %+v", r)
-	}
-	if ps, _ := s.Pilots(ctx, id, "wizard"); len(ps) != 2 || ps[0].Name != "Alrek" || ps[0].SP != start[0].SP || ps[1].SP != start[1].SP || ps[1].Piloting() != 4 {
-		t.Fatalf("starting pilots = %+v", ps)
-	}
-	if err := s.StartRunWithPilots(ctx, id, "wizard", hangar, start, 4500, 1, "Test Force"); !errors.Is(err, ErrAlreadyStarted) {
-		t.Fatalf("starting twice should be refused, got %v", err)
-	}
-	if ps, _ := s.Pilots(ctx, id, "wizard"); len(ps) != 2 {
-		t.Fatalf("a refused start must not add pilots: %+v", ps)
-	}
-	if err := s.StartRunWithPilots(ctx, "no-such-playthrough", "wizard", hangar, start, 4500, 1, "Test Force"); err == nil {
-		t.Fatal("a run needs a playthrough")
 	}
 }
 
@@ -226,7 +39,7 @@ func startForm(hangar string, names ...string) url.Values {
 }
 
 // startedCompany sets up a test server with a company that has started Refusal War.
-func startedCompany(t *testing.T) (*httptest.Server, *Store, *http.Cookie) {
+func startedCompany(t *testing.T) (*httptest.Server, *storage.Store, *http.Cookie) {
 	t.Helper()
 	srv, store := newTestServer(t)
 	cookie := post(t, srv, "/api/seed", url.Values{"seed": {"wolfpack2026"}}, nil, "").Cookies()[0]
@@ -267,10 +80,10 @@ func TestNamedPilotsFlow(t *testing.T) {
 	}
 	id := playthroughID("wolfpack2026")
 	// A campaign started without pilots (before they were part of starting one) has to name them afterwards.
-	if err := store.StartRun(ctx, id, "refusalwar", Hangar{URL: goodHangarURL, Instance: goodInstance}); err != nil {
+	if err := store.StartRun(ctx, id, "refusalwar", mekbay.Hangar{URL: goodHangarURL, Instance: goodInstance}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.db.Exec(`UPDATE campaign_runs SET warchest = 5000`); err != nil { // recruiting costs SP
+	if _, err := store.DB().Exec(`UPDATE campaign_runs SET warchest = 5000`); err != nil { // recruiting costs SP
 		t.Fatal(err)
 	}
 
@@ -319,11 +132,11 @@ func TestNamedPilotsFlow(t *testing.T) {
 	}
 
 	// SP earned and allocated (the allocate endpoint, with its validation, is covered by TestSPEndpoints).
-	if err := store.AwardSP(ctx, id, "refusalwar", alrek.ID, SPAllocation{Gunnery: 300, EdgeTokens: 60}); err != nil {
+	if err := store.AwardSP(ctx, id, "refusalwar", alrek.ID, pilot.SPAllocation{Gunnery: 300, EdgeTokens: 60}); err != nil {
 		t.Fatalf("award: %v", err)
 	}
 	ps, _ = store.Pilots(ctx, id, "refusalwar")
-	if ps[0].SP != (SPAllocation{Gunnery: 300, EdgeTokens: 60}) {
+	if ps[0].SP != (pilot.SPAllocation{Gunnery: 300, EdgeTokens: 60}) {
 		t.Fatalf("allocation = %+v", ps[0].SP)
 	}
 	c = body(t, srv, "/refusalwar/manage/", cookie)
@@ -423,8 +236,8 @@ func TestStartWizardSubmission(t *testing.T) {
 		t.Fatalf("good start: %d", r.StatusCode)
 	}
 	ps, _ := store.Pilots(ctx, id, "refusalwar")
-	if len(ps) != 2 || ps[0].Name != "Alrek" || ps[0].SP != (SPAllocation{Gunnery: 90, EdgeTokens: 60}) ||
-		ps[1].Name != "Katarina" || ps[1].SP != (SPAllocation{Piloting: 100, EdgeAbilities: 50}) {
+	if len(ps) != 2 || ps[0].Name != "Alrek" || ps[0].SP != (pilot.SPAllocation{Gunnery: 90, EdgeTokens: 60}) ||
+		ps[1].Name != "Katarina" || ps[1].SP != (pilot.SPAllocation{Piloting: 100, EdgeAbilities: 50}) {
 		t.Fatalf("pilots = %+v", ps)
 	}
 	if ps[0].EdgeTokens() != 2 || ps[1].Piloting() != 4 || ps[1].EdgeAbilities() != 0 {
@@ -448,71 +261,6 @@ func TestStartedCompanyHelper(t *testing.T) {
 	_, store, _ := startedCompany(t)
 	if run, ok, _ := store.Run(context.Background(), playthroughID("wolfpack2026"), "refusalwar"); !ok || !run.Started() {
 		t.Fatal("helper should start the campaign")
-	}
-}
-
-func TestPortraits(t *testing.T) {
-	all := portraits()
-	if len(all) < 70 {
-		t.Fatalf("only %d portraits embedded", len(all))
-	}
-	for _, p := range all {
-		if !validPortrait(p.File) || p.Group == "" || p.Label == "" {
-			t.Errorf("bad portrait %+v", p)
-		}
-	}
-	if validPortrait("../x.png") || validPortrait("") || validPortrait("nope.png") {
-		t.Error("invalid names accepted")
-	}
-	// Legacy pilots (no stored portrait) get a stable one; a picked one wins.
-	if first := portraitOf("abc", ""); first != portraitOf("abc", "") || !validPortrait(first) {
-		t.Error("fallback portrait not stable or invalid")
-	}
-	if portraitOf("abc", all[3].File) != all[3].File {
-		t.Error("picked portrait ignored")
-	}
-	// A random pick avoids the taken ones.
-	taken := map[string]bool{}
-	for _, p := range all[1:] {
-		taken[p.File] = true
-	}
-	if randomPortrait(taken) != all[0].File {
-		t.Error("random pick used a taken portrait")
-	}
-}
-
-// portraitStore checks the portrait rules on a store (run for both databases from storeContract, in a campaign of its own).
-func portraitStore(t *testing.T, s *Store, id string) {
-	t.Helper()
-	ctx := context.Background()
-	pa, pb := portraits()[0].File, portraits()[1].File
-	a, err := s.AddPilot(ctx, id, "portraitcamp", "Alrek", pa, SPAllocation{}, 4)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.AddPilot(ctx, id, "portraitcamp", "Katarina", pa, SPAllocation{}, 4); !errors.Is(err, ErrPortraitTaken) {
-		t.Fatalf("same portrait: %v", err)
-	}
-	b, err := s.AddPilot(ctx, id, "portraitcamp", "Katarina", pb, SPAllocation{}, 4)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := s.SetPilotPortrait(ctx, id, "portraitcamp", b.ID, pa); !errors.Is(err, ErrPortraitTaken) {
-		t.Fatalf("change to a taken one: %v", err)
-	}
-	pc := portraits()[2].File
-	if err := s.SetPilotPortrait(ctx, id, "portraitcamp", b.ID, pc); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.SetPilotPortrait(ctx, id, "portraitcamp", "nobody", portraits()[3].File); !errors.Is(err, sql.ErrNoRows) {
-		t.Fatalf("unknown pilot: %v", err)
-	}
-	// A fallen pilot frees their portrait.
-	if err := s.MarkFallen(ctx, id, "portraitcamp", a.ID); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.AddPilot(ctx, id, "portraitcamp", "Heir", pa, SPAllocation{}, 4); err != nil {
-		t.Fatalf("fallen pilot's portrait should be free: %v", err)
 	}
 }
 
@@ -632,104 +380,14 @@ func TestManageNeedsAStartedCampaign(t *testing.T) {
 	}
 }
 
-// spStore checks earning and allocating SP, in a campaign of its own (run for both databases from storeContract).
-func spStore(t *testing.T, s *Store, id string) {
-	t.Helper()
-	ctx := context.Background()
-	const camp = "spcamp"
-	a, err := s.AddPilot(ctx, id, camp, "Alrek", "", SPAllocation{Gunnery: 90, EdgeTokens: 60}, 4)
-	if err != nil {
-		t.Fatal(err)
-	}
-	get := func() NamedPilot {
-		ps, _ := s.Pilots(ctx, id, camp)
-		for _, p := range ps {
-			if p.ID == a.ID {
-				return p
-			}
-		}
-		t.Fatal("pilot vanished")
-		return NamedPilot{}
-	}
-	if p := get(); p.TotalSP != 150 || p.Unallocated() != 0 {
-		t.Fatalf("a new pilot has allocated every starting SP: %+v", p)
-	}
-	if err := s.EarnSP(ctx, id, camp, a.ID, 300); err != nil {
-		t.Fatal(err)
-	}
-	if p := get(); p.TotalSP != 450 || p.Unallocated() != 300 || p.SP.Total() != 150 {
-		t.Fatalf("after earning 300: %+v", p)
-	}
-	// Allocating spends only what is unallocated.
-	if err := s.AllocateSP(ctx, id, camp, a.ID, SPAllocation{Gunnery: 200, Piloting: 101}); !errors.Is(err, ErrNotEnoughSP) {
-		t.Fatalf("301 of 300: %v", err)
-	}
-	if p := get(); p.Unallocated() != 300 {
-		t.Fatalf("a refused allocation changed the pilot: %+v", p)
-	}
-	if err := s.AllocateSP(ctx, id, camp, a.ID, SPAllocation{Gunnery: 200, Piloting: 50}); err != nil {
-		t.Fatal(err)
-	}
-	if p := get(); p.SP != (SPAllocation{Gunnery: 290, Piloting: 50, EdgeTokens: 60}) || p.TotalSP != 450 || p.Unallocated() != 50 {
-		t.Fatalf("after allocating 250: %+v", p)
-	}
-	if err := s.AllocateSP(ctx, id, camp, a.ID, SPAllocation{EdgeAbilities: 50}); err != nil {
-		t.Fatalf("the last 50: %v", err)
-	}
-	if err := s.AllocateSP(ctx, id, camp, a.ID, SPAllocation{Gunnery: 1}); !errors.Is(err, ErrNotEnoughSP) {
-		t.Fatalf("nothing left: %v", err)
-	}
-	// Earned SP and an allocation commit together, or not at all.
-	if err := s.ApplySP(ctx, id, camp, a.ID, 100, SPAllocation{Gunnery: 101}); !errors.Is(err, ErrNotEnoughSP) {
-		t.Fatalf("101 of 100 earned: %v", err)
-	}
-	if p := get(); p.TotalSP != 450 {
-		t.Fatalf("a refused apply changed the total: %+v", p)
-	}
-	if err := s.ApplySP(ctx, id, camp, a.ID, 100, SPAllocation{Gunnery: 60, Piloting: 40}); err != nil {
-		t.Fatal(err)
-	}
-	if p := get(); p.TotalSP != 550 || p.Unallocated() != 0 || p.SP.Gunnery != 350 || p.SP.Piloting != 90 {
-		t.Fatalf("after earning 100 and allocating it: %+v", p)
-	}
-	if err := s.ApplySP(ctx, id, camp, a.ID, 25, SPAllocation{}); err != nil {
-		t.Fatalf("earning without allocating: %v", err)
-	}
-	if p := get(); p.TotalSP != 575 || p.Unallocated() != 25 {
-		t.Fatalf("after earning 25: %+v", p)
-	}
-	if err := s.AllocateSP(ctx, id, camp, a.ID, SPAllocation{Gunnery: 25}); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.AllocateSP(ctx, id, camp, "nobody", SPAllocation{Gunnery: 1}); !errors.Is(err, sql.ErrNoRows) {
-		t.Fatalf("unknown pilot: %v", err)
-	}
-	if err := s.EarnSP(ctx, id, "another", a.ID, 5); !errors.Is(err, sql.ErrNoRows) {
-		t.Fatalf("another campaign's pilot: %v", err)
-	}
-	// The direct award (used by /api/pilots/sp) raises the total along with the columns, leaving nothing unallocated.
-	if err := s.AwardSP(ctx, id, camp, a.ID, SPAllocation{Gunnery: 10}); err != nil {
-		t.Fatal(err)
-	}
-	if p := get(); p.TotalSP != 585 || p.Unallocated() != 0 {
-		t.Fatalf("after a direct award: %+v", p)
-	}
-	if err := s.MarkFallen(ctx, id, camp, a.ID); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.EarnSP(ctx, id, camp, a.ID, 5); !errors.Is(err, sql.ErrNoRows) {
-		t.Fatalf("the fallen earn nothing: %v", err)
-	}
-}
-
 func TestSPEndpoints(t *testing.T) {
 	srv, store, cookie := startedCompany(t)
 	ctx := context.Background()
 	id := playthroughID("wolfpack2026")
 	ps, _ := store.Pilots(ctx, id, "refusalwar")
-	pilot := ps[0].ID
+	pl := ps[0].ID
 	form := func(kv ...string) url.Values {
-		v := url.Values{"campaign": {"refusalwar"}, "pilot": {pilot}}
+		v := url.Values{"campaign": {"refusalwar"}, "pilot": {pl}}
 		for i := 0; i+1 < len(kv); i += 2 {
 			v.Set(kv[i], kv[i+1])
 		}
@@ -794,7 +452,7 @@ func TestSPEndpoints(t *testing.T) {
 // A database from before pilots had a total gets one: every SP they had was allocated, so the total is the columns' sum.
 func TestMigrateSPTotal(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "old.db")
-	s, err := OpenSQLite(path)
+	s, err := storage.OpenSQLite(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -804,11 +462,11 @@ func TestMigrateSPTotal(t *testing.T) {
 		t.Fatal(err)
 	}
 	// An old row: the columns hold SP, the total was never written.
-	if _, err := s.db.Exec(`INSERT INTO named_pilots (id, playthrough_id, campaign, name, sp_gunnery, sp_edge_tokens) VALUES ('p1', ?, 'refusalwar', 'Alrek', 90, 60)`, id); err != nil {
+	if _, err := s.DB().Exec(`INSERT INTO named_pilots (id, playthrough_id, campaign, name, sp_gunnery, sp_edge_tokens) VALUES ('p1', ?, 'refusalwar', 'Alrek', 90, 60)`, id); err != nil {
 		t.Fatal(err)
 	}
 	s.Close()
-	s, err = OpenSQLite(path) // opening again runs the schema fix-ups
+	s, err = storage.OpenSQLite(path) // opening again runs the schema fix-ups
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -822,7 +480,7 @@ func TestMigrateSPTotal(t *testing.T) {
 		t.Fatal(err)
 	}
 	s.Close()
-	if s, err = OpenSQLite(path); err != nil {
+	if s, err = storage.OpenSQLite(path); err != nil {
 		t.Fatal(err)
 	}
 	defer s.Close()
@@ -837,7 +495,7 @@ func TestReviveAndDeletePilots(t *testing.T) {
 	id := playthroughID("wolfpack2026")
 	ps, _ := store.Pilots(ctx, id, "refusalwar")
 	a, b := ps[0], ps[1]
-	form := func(pilot string) url.Values { return url.Values{"campaign": {"refusalwar"}, "pilot": {pilot}} }
+	form := func(pl string) url.Values { return url.Values{"campaign": {"refusalwar"}, "pilot": {pl}} }
 	do := func(path, pilot string) int { return post(t, srv, path, form(pilot), cookie, srv.URL).StatusCode }
 
 	if got := post(t, srv, "/api/pilots/revive", form(a.ID), cookie, "https://evil.example").StatusCode; got != http.StatusForbidden {
@@ -867,26 +525,26 @@ func TestReviveAndDeletePilots(t *testing.T) {
 	if got := do("/api/pilots/fallen", a.ID); got != http.StatusNoContent {
 		t.Fatal(got)
 	}
-	if _, err := store.db.Exec(`UPDATE named_pilots SET portrait = ? WHERE id = ?`, a.Portrait, b.ID); err != nil {
+	if _, err := store.DB().Exec(`UPDATE named_pilots SET portrait = ? WHERE id = ?`, a.Portrait, b.ID); err != nil {
 		t.Fatal(err)
 	}
 	if got := do("/api/pilots/revive", a.ID); got != http.StatusNoContent {
 		t.Fatalf("revive with a clash: %d", got)
 	}
 	ps, _ = store.Pilots(ctx, id, "refusalwar")
-	if ps[0].Portrait == ps[1].Portrait || !validPortrait(ps[0].Portrait) {
+	if ps[0].Portrait == ps[1].Portrait || !pilot.ValidPortrait(ps[0].Portrait) {
 		t.Errorf("portraits after a clash: %q %q", ps[0].Portrait, ps[1].Portrait)
 	}
 	// The limit of living pilots still holds.
 	for _, n := range []string{"C", "D"} {
-		if _, err := store.AddPilot(ctx, id, "refusalwar", n, "", SPAllocation{}, maxNamedPilots); err != nil {
+		if _, err := store.AddPilot(ctx, id, "refusalwar", n, "", pilot.SPAllocation{}, pilot.MaxNamedPilots); err != nil {
 			t.Fatal(err)
 		}
 	}
 	if got := do("/api/pilots/fallen", a.ID); got != http.StatusNoContent {
 		t.Fatal(got)
 	}
-	if _, err := store.AddPilot(ctx, id, "refusalwar", "E", "", SPAllocation{}, maxNamedPilots); err != nil {
+	if _, err := store.AddPilot(ctx, id, "refusalwar", "E", "", pilot.SPAllocation{}, pilot.MaxNamedPilots); err != nil {
 		t.Fatal(err)
 	}
 	if got := do("/api/pilots/revive", a.ID); got != http.StatusBadRequest {
@@ -910,86 +568,14 @@ func TestReviveAndDeletePilots(t *testing.T) {
 	}
 }
 
-// repairStore checks the factory reset and the total override, in a campaign of its own (run for both databases).
-func repairStore(t *testing.T, s *Store, id string) {
-	t.Helper()
-	ctx := context.Background()
-	const camp = "repaircamp"
-	a, err := s.AddPilot(ctx, id, camp, "Alrek", "", SPAllocation{Gunnery: 90, EdgeTokens: 60}, 4)
-	if err != nil {
-		t.Fatal(err)
-	}
-	get := func() NamedPilot {
-		ps, _ := s.Pilots(ctx, id, camp)
-		for _, p := range ps {
-			if p.ID == a.ID {
-				return p
-			}
-		}
-		t.Fatal("pilot vanished")
-		return NamedPilot{}
-	}
-	// Raising the total leaves the allocation alone.
-	if err := s.SetPilotTotal(ctx, id, camp, a.ID, 500, false); err != nil {
-		t.Fatal(err)
-	}
-	if p := get(); p.TotalSP != 500 || p.SP.Total() != 150 || p.Unallocated() != 350 {
-		t.Fatalf("raised total: %+v", p)
-	}
-	// Down to exactly what is allocated is fine; below it needs to reset the allocation.
-	if err := s.SetPilotTotal(ctx, id, camp, a.ID, 150, false); err != nil {
-		t.Fatalf("down to the allocated amount: %v", err)
-	}
-	if err := s.SetPilotTotal(ctx, id, camp, a.ID, 149, false); !errors.Is(err, ErrTotalBelowAllocated) {
-		t.Fatalf("below the allocation without agreeing: %v", err)
-	}
-	if p := get(); p.TotalSP != 150 || p.SP.Total() != 150 {
-		t.Fatalf("a refused override changed the pilot: %+v", p)
-	}
-	if err := s.SetPilotTotal(ctx, id, camp, a.ID, 100, true); err != nil {
-		t.Fatal(err)
-	}
-	if p := get(); p.TotalSP != 100 || p.SP.Total() != 0 || p.Unallocated() != 100 || p.Gunnery() != 4 {
-		t.Fatalf("total below the allocation, reset: %+v", p)
-	}
-	if err := s.SetPilotTotal(ctx, id, camp, "nobody", 10, false); !errors.Is(err, sql.ErrNoRows) {
-		t.Fatalf("unknown pilot: %v", err)
-	}
-	// The factory reset keeps the total and frees everything, for living and killed pilots alike.
-	if err := s.AllocateSP(ctx, id, camp, a.ID, SPAllocation{Gunnery: 70, Piloting: 30}); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.ResetPilotSP(ctx, id, camp, a.ID); err != nil {
-		t.Fatal(err)
-	}
-	if p := get(); p.TotalSP != 100 || p.SP.Total() != 0 || p.Unallocated() != 100 {
-		t.Fatalf("after the reset: %+v", p)
-	}
-	if err := s.AllocateSP(ctx, id, camp, a.ID, SPAllocation{Gunnery: 100}); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.MarkFallen(ctx, id, camp, a.ID); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.ResetPilotSP(ctx, id, camp, a.ID); err != nil {
-		t.Fatalf("resetting a killed pilot: %v", err)
-	}
-	if p := get(); p.SP.Total() != 0 || p.TotalSP != 100 {
-		t.Fatalf("a killed pilot after the reset: %+v", p)
-	}
-	if err := s.ResetPilotSP(ctx, id, "another", a.ID); !errors.Is(err, sql.ErrNoRows) {
-		t.Fatalf("another campaign's pilot: %v", err)
-	}
-}
-
 func TestRepairEndpoints(t *testing.T) {
 	srv, store, cookie := startedCompany(t)
 	ctx := context.Background()
 	id := playthroughID("wolfpack2026")
 	ps, _ := store.Pilots(ctx, id, "refusalwar")
-	pilot := ps[0].ID
+	pl := ps[0].ID
 	form := func(kv ...string) url.Values {
-		v := url.Values{"campaign": {"refusalwar"}, "pilot": {pilot}}
+		v := url.Values{"campaign": {"refusalwar"}, "pilot": {pl}}
 		for i := 0; i+1 < len(kv); i += 2 {
 			v.Set(kv[i], kv[i+1])
 		}
@@ -1054,8 +640,8 @@ func TestRenamePilots(t *testing.T) {
 	id := playthroughID("wolfpack2026")
 	ps, _ := store.Pilots(ctx, id, "refusalwar")
 	a, b := ps[0], ps[1]
-	rename := func(pilot, name string) int {
-		return post(t, srv, "/api/pilots/rename", url.Values{"campaign": {"refusalwar"}, "pilot": {pilot}, "name": {name}}, cookie, srv.URL).StatusCode
+	rename := func(pl, name string) int {
+		return post(t, srv, "/api/pilots/rename", url.Values{"campaign": {"refusalwar"}, "pilot": {pl}, "name": {name}}, cookie, srv.URL).StatusCode
 	}
 	if got := post(t, srv, "/api/pilots/rename", url.Values{"campaign": {"refusalwar"}, "pilot": {a.ID}, "name": {"X"}}, cookie, "https://evil.example").StatusCode; got != http.StatusForbidden {
 		t.Errorf("cross-origin rename: %d", got)
@@ -1108,26 +694,11 @@ func TestStatBoxCaptions(t *testing.T) {
 	if !strings.Contains(page, `stat-next">0/100 SP<`) || strings.Contains(page, "top level") || strings.Contains(page, "next:") || strings.Contains(page, " at 100 SP") {
 		t.Errorf("captions should read next: SP/needed SP: %.1500s", page)
 	}
-	if err := store.AwardSP(ctx, id, "refusalwar", ps[0].ID, SPAllocation{Gunnery: 1000000}); err != nil {
+	if err := store.AwardSP(ctx, id, "refusalwar", ps[0].ID, pilot.SPAllocation{Gunnery: 1000000}); err != nil {
 		t.Fatal(err)
 	}
 	if page := body(t, srv, "/refusalwar/manage/", cookie); !strings.Contains(page, `stat-next">max<`) {
 		t.Error("a column at its top level should say max")
-	}
-}
-
-func TestRankHelpers(t *testing.T) {
-	ranks := []string{"MechWarrior", "Star Commander", "Khan"}
-	for stored, want := range map[string]string{"": "MechWarrior", "Khan": "Khan", "Star Commander": "Star Commander", "General": "MechWarrior", "khan": "MechWarrior"} {
-		if got := rankFor(ranks, stored); got != want {
-			t.Errorf("rankFor(%q) = %q, want %q", stored, got, want)
-		}
-	}
-	if rankFor(nil, "Khan") != "" {
-		t.Error("a campaign without ranks shows none")
-	}
-	if !validRank(ranks, "Khan") || validRank(ranks, "khan") || validRank(ranks, "") || validRank(nil, "Khan") {
-		t.Error("validRank")
 	}
 }
 
@@ -1140,10 +711,10 @@ func TestCampaignFactionAndRanks(t *testing.T) {
 	}
 	// The returned ladders are copies: changing one never changes the faction.
 	rw.Ranks[0] = "X"
-	if factionRanks("clan")[0] != "MechWarrior" {
+	if pilot.FactionRanks("clan")[0] != "MechWarrior" {
 		t.Error("factionRanks should hand out copies")
 	}
-	if factionRanks("nope") != nil || factionRanks("") != nil {
+	if pilot.FactionRanks("nope") != nil || pilot.FactionRanks("") != nil {
 		t.Error("an unknown or empty faction has no ranks")
 	}
 
@@ -1160,7 +731,7 @@ func TestCampaignFactionAndRanks(t *testing.T) {
 	mk("plain", "---\nmin_players: 1\n---\n")
 	mk("unknown", "---\nfaction: martians\n---\n")
 	mk("custom", "---\nfaction: clan\nranks:\n  - Sergeant\n  - Lieutenant\n  - Captain\n---\n")
-	lib := Library{Root: root}
+	lib := content.Library{Root: root}
 	if c, ok := lib.Campaign("plain"); !ok || c.Ranks != nil || c.Faction != "" {
 		t.Errorf("a campaign with no faction has no ranks: %+v", c)
 	}
@@ -1172,44 +743,14 @@ func TestCampaignFactionAndRanks(t *testing.T) {
 	}
 }
 
-// rankStore checks the rank column on both databases, in a campaign of its own.
-func rankStore(t *testing.T, s *Store, id string) {
-	t.Helper()
-	ctx := context.Background()
-	const camp = "rankcamp"
-	a, err := s.AddPilot(ctx, id, camp, "Alrek", "", SPAllocation{}, 4)
-	if err != nil {
-		t.Fatal(err)
-	}
-	get := func() NamedPilot {
-		ps, _ := s.Pilots(ctx, id, camp)
-		return ps[0]
-	}
-	if got := get().Rank; got != "" {
-		t.Fatalf("a new pilot has no stored rank (the lowest is shown): %q", got)
-	}
-	if err := s.SetPilotRank(ctx, id, camp, a.ID, "Star Captain"); err != nil {
-		t.Fatal(err)
-	}
-	if got := get().Rank; got != "Star Captain" {
-		t.Fatalf("rank = %q", got)
-	}
-	if err := s.SetPilotRank(ctx, id, camp, "nobody", "Khan"); !errors.Is(err, sql.ErrNoRows) {
-		t.Fatalf("unknown pilot: %v", err)
-	}
-	if err := s.SetPilotRank(ctx, id, "another", a.ID, "Khan"); !errors.Is(err, sql.ErrNoRows) {
-		t.Fatalf("another campaign's pilot: %v", err)
-	}
-}
-
 func TestPilotRanksEndToEnd(t *testing.T) {
 	srv, store, cookie := startedCompany(t)
 	ctx := context.Background()
 	id := playthroughID("wolfpack2026")
 	ps, _ := store.Pilots(ctx, id, "refusalwar")
-	pilot := ps[0]
+	pl := ps[0]
 	form := func(kv ...string) url.Values {
-		v := url.Values{"campaign": {"refusalwar"}, "pilot": {pilot.ID}}
+		v := url.Values{"campaign": {"refusalwar"}, "pilot": {pl.ID}}
 		for i := 0; i+1 < len(kv); i += 2 {
 			v.Set(kv[i], kv[i+1])
 		}
@@ -1325,7 +866,7 @@ func TestRecruitNewPilot(t *testing.T) {
 	}
 
 	free := ""
-	for _, p := range portraits() {
+	for _, p := range pilot.Portraits() {
 		if p.File != ps[0].Portrait && p.File != ps[1].Portrait {
 			free = p.File
 			break
@@ -1338,7 +879,7 @@ func TestRecruitNewPilot(t *testing.T) {
 	if len(ps) != 3 || ps[2].Name != "Jarek" || ps[2].Portrait != free || ps[2].Rank != "Star Captain" || ps[2].TotalSP != 150 || ps[2].SP.Total() != 0 || ps[2].Unallocated() != 150 {
 		t.Fatalf("the new pilot: %+v", ps)
 	}
-	if v := ps[2].view(factionRanks("clan")); v.Gunnery != 4 || v.Piloting != 5 || v.EdgeTokens != 1 || v.Abilities != 0 {
+	if v := ps[2].View(pilot.FactionRanks("clan")); v.Gunnery != 4 || v.Piloting != 5 || v.EdgeTokens != 1 || v.Abilities != 0 {
 		t.Errorf("a recruit with nothing allocated is a standard 4/5 pilot with 1 Edge token: %+v", v)
 	}
 	// The 150 starting SP can be spent on the way in, in part or in full, but not exceeded.
@@ -1358,7 +899,7 @@ func TestRecruitNewPilot(t *testing.T) {
 		t.Fatalf("recruit with an allocation: %d", got)
 	}
 	ps, _ = store.Pilots(ctx, id, "refusalwar")
-	if s := ps[3]; s.Name != "Sybille" || s.TotalSP != 150 || s.SP != (SPAllocation{Gunnery: 50, EdgeTokens: 60}) || s.Unallocated() != 40 {
+	if s := ps[3]; s.Name != "Sybille" || s.TotalSP != 150 || s.SP != (pilot.SPAllocation{Gunnery: 50, EdgeTokens: 60}) || s.Unallocated() != 40 {
 		t.Fatalf("a recruit that spent 110 of 150 SP: %+v", s)
 	}
 	if err := store.DeletePilot(ctx, id, "refusalwar", ps[3].ID); err != nil {
@@ -1379,7 +920,7 @@ func TestRecruitNewPilot(t *testing.T) {
 		t.Fatalf("recruit with defaults: %d", got)
 	}
 	ps, _ = store.Pilots(ctx, id, "refusalwar")
-	if len(ps) != 4 || ps[3].Rank != "" || !validPortrait(ps[3].Portrait) || ps[3].Portrait == ps[0].Portrait || ps[3].Portrait == ps[1].Portrait || ps[3].Portrait == ps[2].Portrait {
+	if len(ps) != 4 || ps[3].Rank != "" || !pilot.ValidPortrait(ps[3].Portrait) || ps[3].Portrait == ps[0].Portrait || ps[3].Portrait == ps[1].Portrait || ps[3].Portrait == ps[2].Portrait {
 		t.Fatalf("defaults: %+v", ps[3])
 	}
 	// A command holds four living pilots: the button is disabled, and the server refuses a fifth.
@@ -1432,7 +973,7 @@ func TestSetWarchest(t *testing.T) {
 }
 
 func TestRecruitStatus(t *testing.T) {
-	c := &Campaign{MaxNamedPilots: 4, RecruitCost: 300}
+	c := &content.Campaign{MaxNamedPilots: 4, RecruitCost: 300}
 	for _, tc := range []struct {
 		warchest, free, alive int
 		can                   bool
@@ -1443,7 +984,7 @@ func TestRecruitStatus(t *testing.T) {
 		{0, 1, 2, true, "A replacement pilot is free: recruiting costs no SP."},
 		{1000, 1, 4, false, "Your command is full: 4 of 4 pilots."},
 	} {
-		can, note := recruitStatus(c, CampaignRun{Warchest: tc.warchest, FreeRecruits: tc.free}, tc.alive)
+		can, note := recruitStatus(c, storage.CampaignRun{Warchest: tc.warchest, FreeRecruits: tc.free}, tc.alive)
 		if can != tc.can || note != tc.note {
 			t.Errorf("%+v: %v %q", tc, can, note)
 		}
@@ -1458,7 +999,7 @@ func TestStartWizardKnowsTheFirstRank(t *testing.T) {
 	if p := body(t, srv, "/refusalwar/", cookie); !strings.Contains(p, `data-first-rank="MechWarrior"`) || !strings.Contains(p, "/static/pilotcard.js") {
 		t.Error("the wizard knows the first rank and loads the compact pilot cards")
 	}
-	if (&Campaign{}).FirstRank() != "" {
+	if (&content.Campaign{}).FirstRank() != "" {
 		t.Error("a campaign with no ranks has no first rank")
 	}
 }

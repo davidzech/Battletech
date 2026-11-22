@@ -1,47 +1,16 @@
 package site
 
 import (
-	"context"
 	"encoding/json"
 	"log"
 	"net/http"
+
+	"github.com/davidzech/Battletech/internal/content"
 )
 
 // The campaign log: which of a campaign's scenarios the run has completed. The first scenario (000) is available from the start, and completing a scenario
 // makes the ones it branches to available (Scenario.Branches). Locked scenarios are left out of the lists and menus; a "Show all scenarios" box on the campaign page
 // reveals them, and the scenario page's own link still opens any of them.
-
-// Completions returns the slugs of the scenarios a playthrough has completed in a campaign.
-func (s *Store) Completions(ctx context.Context, playthroughID, campaign string) (map[string]bool, error) {
-	rows, err := s.db.QueryContext(ctx, s.q(`SELECT scenario_id FROM scenario_completions WHERE playthrough_id = ? AND campaign = ?`), playthroughID, campaign)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := map[string]bool{}
-	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		out[id] = true
-	}
-	return out, rows.Err()
-}
-
-// SetScenarioCompleted marks a scenario completed or not.
-func (s *Store) SetScenarioCompleted(ctx context.Context, playthroughID, campaign, scenario string, done bool) error {
-	if !done {
-		_, err := s.db.ExecContext(ctx, s.q(`DELETE FROM scenario_completions WHERE playthrough_id = ? AND campaign = ? AND scenario_id = ?`), playthroughID, campaign, scenario)
-		return err
-	}
-	if _, err := s.db.ExecContext(ctx, s.q(`INSERT INTO scenario_completions (playthrough_id, campaign, scenario_id) VALUES (?, ?, ?)
-		ON CONFLICT (playthrough_id, campaign, scenario_id) DO NOTHING`), playthroughID, campaign, scenario); err != nil {
-		return err
-	}
-	_, err := s.DeleteMekBayOperation(ctx, playthroughID, campaign, scenario) // a completed mission has no battle in progress
-	return err
-}
 
 // scenarioState is how a scenario shows in the lists: completed, available (gray) or locked (hidden until "Show all scenarios").
 func scenarioState(slug string, completed, available map[string]bool) string {
@@ -55,7 +24,7 @@ func scenarioState(slug string, completed, available map[string]bool) string {
 }
 
 // progress loads the visitor's completed scenarios for a campaign (none without a seed or a started campaign) and the set that makes available.
-func (s *Server) progress(r *http.Request, c *Campaign) (completed, available map[string]bool) {
+func (s *Server) progress(r *http.Request, c *content.Campaign) (completed, available map[string]bool) {
 	completed = map[string]bool{}
 	if seed := currentSeed(r); seed != "" {
 		id := playthroughID(seed)
@@ -121,7 +90,7 @@ func (s *Server) setScenarioCompleted(w http.ResponseWriter, r *http.Request) {
 }
 
 // recordedOutcome is the stored report of a completed scenario's outcome, for the scenario page (nil if there is none).
-func (s *Server) recordedOutcome(r *http.Request, c *Campaign, sc *Scenario, completed map[string]bool) *OutcomeResult {
+func (s *Server) recordedOutcome(r *http.Request, c *content.Campaign, sc *content.Scenario, completed map[string]bool) *content.OutcomeResult {
 	seed := currentSeed(r)
 	if seed == "" || !sc.HasOutcome() || !completed[sc.Slug] {
 		return nil

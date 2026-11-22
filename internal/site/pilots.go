@@ -8,11 +8,16 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+
+	"github.com/davidzech/Battletech/internal/content"
+	"github.com/davidzech/Battletech/internal/format"
+	"github.com/davidzech/Battletech/internal/pilot"
+	"github.com/davidzech/Battletech/internal/storage"
 )
 
 // pilotRequest checks what every endpoint that changes a campaign needs (see runRequest) and returns the playthrough and the campaign. It writes the error
 // response itself and reports ok=false.
-func (s *Server) pilotRequest(w http.ResponseWriter, r *http.Request) (pt Playthrough, c *Campaign, ok bool) {
+func (s *Server) pilotRequest(w http.ResponseWriter, r *http.Request) (pt storage.Playthrough, c *content.Campaign, ok bool) {
 	pt, c, _, ok = s.runRequest(w, r)
 	return pt, c, ok
 }
@@ -23,13 +28,13 @@ func (s *Server) addPilot(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	name, err := parsePilotName(r.PostFormValue("name"))
+	name, err := pilot.ParsePilotName(r.PostFormValue("name"))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	portrait := r.PostFormValue("portrait")
-	if portrait != "" && !validPortrait(portrait) {
+	if portrait != "" && !pilot.ValidPortrait(portrait) {
 		http.Error(w, "Pick a portrait from the list.", http.StatusBadRequest)
 		return
 	}
@@ -39,15 +44,15 @@ func (s *Server) addPilot(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "could not load named pilots", http.StatusInternalServerError)
 			return
 		}
-		portrait = randomPortrait(livingPortraits(existing))
+		portrait = pilot.RandomPortrait(livingPortraits(existing))
 	}
 	rank := r.PostFormValue("rank")
-	if rank != "" && !validRank(c.Ranks, rank) {
+	if rank != "" && !pilot.ValidRank(c.Ranks, rank) {
 		http.Error(w, "Pick a rank from the list.", http.StatusBadRequest)
 		return
 	}
 	// A recruit starts with the campaign's starting SP (150 in Refusal War), spent as the player chose and the rest unallocated.
-	var start SPAllocation
+	var start pilot.SPAllocation
 	for field, dst := range map[string]*int{
 		"gunnery": &start.Gunnery, "piloting": &start.Piloting, "edge_tokens": &start.EdgeTokens, "edge_abilities": &start.EdgeAbilities,
 	} {
@@ -75,7 +80,7 @@ func (s *Server) addPilot(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if cost > 0 {
-		if err := s.store.SpendWarchest(r.Context(), pt.ID, c.Slug, cost); errors.Is(err, ErrInsufficientFunds) {
+		if err := s.store.SpendWarchest(r.Context(), pt.ID, c.Slug, cost); errors.Is(err, storage.ErrInsufficientFunds) {
 			http.Error(w, fmt.Sprintf("Not enough in the warchest: recruiting a pilot costs %d SP.", cost), http.StatusConflict)
 			return
 		} else if err != nil {
@@ -95,15 +100,15 @@ func (s *Server) addPilot(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	if _, err := s.store.AddPilotWithRank(r.Context(), pt.ID, c.Slug, name, portrait, rank, start, c.StartingPilotSP, c.PilotLimit()); errors.Is(err, ErrPilotLimit) {
+	if _, err := s.store.AddPilotWithRank(r.Context(), pt.ID, c.Slug, name, portrait, rank, start, c.StartingPilotSP, c.PilotLimit()); errors.Is(err, pilot.ErrPilotLimit) {
 		refund()
 		http.Error(w, fmt.Sprintf("You can have at most %d named pilots at a time.", c.PilotLimit()), http.StatusBadRequest)
 		return
-	} else if errors.Is(err, ErrNameTaken) {
+	} else if errors.Is(err, storage.ErrNameTaken) {
 		refund()
 		http.Error(w, "Another pilot already has that name.", http.StatusBadRequest)
 		return
-	} else if errors.Is(err, ErrPortraitTaken) {
+	} else if errors.Is(err, pilot.ErrPortraitTaken) {
 		refund()
 		http.Error(w, "Another pilot already has that portrait.", http.StatusBadRequest)
 		return
@@ -150,13 +155,13 @@ func (s *Server) pilotFallen(w http.ResponseWriter, r *http.Request) {
 // parseStartingPilots reads the pilots a campaign's start wizard submits (fields pilot0_name, pilot0_gunnery, ...):
 // exactly the campaign's number of starting pilots, each with a name of their own, and every one allocating all of
 // the campaign's starting SP, as the book has a pilot allocate SP the moment they earn it.
-func parseStartingPilots(r *http.Request, c *Campaign) ([]NewPilot, error) {
-	var out []NewPilot
+func parseStartingPilots(r *http.Request, c *content.Campaign) ([]pilot.NewPilot, error) {
+	var out []pilot.NewPilot
 	seen := map[string]bool{}
 	takenPortraits := map[string]bool{}
 	for i := 0; i < c.StartingNamedPilots; i++ {
 		prefix := "pilot" + strconv.Itoa(i) + "_"
-		name, err := parsePilotName(r.PostFormValue(prefix + "name"))
+		name, err := pilot.ParsePilotName(r.PostFormValue(prefix + "name"))
 		if err != nil {
 			return nil, fmt.Errorf("Named pilot %d: %w", i+1, err)
 		}
@@ -164,7 +169,7 @@ func parseStartingPilots(r *http.Request, c *Campaign) ([]NewPilot, error) {
 			return nil, errors.New("Two of your pilots can't share a name.")
 		}
 		seen[strings.ToLower(name)] = true
-		var a SPAllocation
+		var a pilot.SPAllocation
 		for field, dst := range map[string]*int{
 			"gunnery": &a.Gunnery, "piloting": &a.Piloting, "edge_tokens": &a.EdgeTokens, "edge_abilities": &a.EdgeAbilities,
 		} {
@@ -178,7 +183,7 @@ func parseStartingPilots(r *http.Request, c *Campaign) ([]NewPilot, error) {
 			return nil, fmt.Errorf("%s must allocate exactly %d SP (%d allocated).", name, c.StartingPilotSP, a.Total())
 		}
 		portrait := r.PostFormValue(prefix + "portrait")
-		if portrait != "" && !validPortrait(portrait) {
+		if portrait != "" && !pilot.ValidPortrait(portrait) {
 			return nil, fmt.Errorf("%s: pick a portrait from the list.", name)
 		}
 		if portrait != "" && takenPortraits[portrait] {
@@ -189,12 +194,12 @@ func parseStartingPilots(r *http.Request, c *Campaign) ([]NewPilot, error) {
 		}
 		// A starting pilot who already reaches an Edge abilities level has to choose that many abilities now, all different.
 		abilities := r.PostForm[prefix+"ability"]
-		if want := edgeAbilitiesLadder.at(a.EdgeAbilities).Level; len(abilities) != want {
+		if want := pilot.EdgeAbilitiesLadder.At(a.EdgeAbilities).Level; len(abilities) != want {
 			return nil, fmt.Errorf("%s must choose %d Edge abilities (%d chosen).", name, want, len(abilities))
 		}
 		chosen := map[string]bool{}
 		for _, id := range abilities {
-			if _, ok := edgeAbilityByID(id); !ok {
+			if _, ok := pilot.AbilityByID(id); !ok {
 				return nil, fmt.Errorf("%s: unknown Edge ability.", name)
 			}
 			if chosen[id] {
@@ -202,12 +207,12 @@ func parseStartingPilots(r *http.Request, c *Campaign) ([]NewPilot, error) {
 			}
 			chosen[id] = true
 		}
-		out = append(out, NewPilot{Name: name, Portrait: portrait, SP: a, Abilities: abilities})
+		out = append(out, pilot.NewPilot{Name: name, Portrait: portrait, SP: a, Abilities: abilities})
 	}
 	// A pilot sent without a portrait (not something the wizard does) is given a random free one.
 	for i := range out {
 		if out[i].Portrait == "" {
-			out[i].Portrait = randomPortrait(takenPortraits)
+			out[i].Portrait = pilot.RandomPortrait(takenPortraits)
 			takenPortraits[out[i].Portrait] = true
 		}
 	}
@@ -215,7 +220,7 @@ func parseStartingPilots(r *http.Request, c *Campaign) ([]NewPilot, error) {
 }
 
 // livingPortraits are the portraits the living pilots in the list have picked.
-func livingPortraits(pilots []NamedPilot) map[string]bool {
+func livingPortraits(pilots []pilot.NamedPilot) map[string]bool {
 	taken := map[string]bool{}
 	for _, p := range pilots {
 		if !p.Fallen && p.Portrait != "" {
@@ -232,14 +237,14 @@ func (s *Server) setPortrait(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	portrait := r.PostFormValue("portrait")
-	if !validPortrait(portrait) {
+	if !pilot.ValidPortrait(portrait) {
 		http.Error(w, "Pick a portrait from the list.", http.StatusBadRequest)
 		return
 	}
 	if err := s.store.SetPilotPortrait(r.Context(), pt.ID, c.Slug, r.PostFormValue("pilot"), portrait); errors.Is(err, sql.ErrNoRows) {
 		http.Error(w, "No such living pilot.", http.StatusNotFound)
 		return
-	} else if errors.Is(err, ErrPortraitTaken) {
+	} else if errors.Is(err, pilot.ErrPortraitTaken) {
 		http.Error(w, "Another pilot already has that portrait.", http.StatusBadRequest)
 		return
 	} else if err != nil {
@@ -272,7 +277,7 @@ func (s *Server) allocateSP(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	var a SPAllocation
+	var a pilot.SPAllocation
 	for field, dst := range map[string]*int{
 		"gunnery": &a.Gunnery, "piloting": &a.Piloting, "edge_tokens": &a.EdgeTokens, "edge_abilities": &a.EdgeAbilities,
 	} {
@@ -295,7 +300,7 @@ func (s *Server) allocateSP(w http.ResponseWriter, r *http.Request) {
 	if err := s.store.ApplySP(r.Context(), pt.ID, c.Slug, r.PostFormValue("pilot"), earned, a); errors.Is(err, sql.ErrNoRows) {
 		http.Error(w, "No such living pilot.", http.StatusNotFound)
 		return
-	} else if errors.Is(err, ErrNotEnoughSP) {
+	} else if errors.Is(err, storage.ErrNotEnoughSP) {
 		http.Error(w, "That is more SP than the pilot has unallocated.", http.StatusBadRequest)
 		return
 	} else if err != nil {
@@ -316,11 +321,11 @@ func (s *Server) revivePilot(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not load named pilots", http.StatusInternalServerError)
 		return
 	}
-	alt := randomPortrait(livingPortraits(existing))
+	alt := pilot.RandomPortrait(livingPortraits(existing))
 	if err := s.store.RevivePilot(r.Context(), pt.ID, c.Slug, r.PostFormValue("pilot"), alt, c.PilotLimit()); errors.Is(err, sql.ErrNoRows) {
 		http.Error(w, "No such pilot killed in action.", http.StatusNotFound)
 		return
-	} else if errors.Is(err, ErrPilotLimit) {
+	} else if errors.Is(err, pilot.ErrPilotLimit) {
 		http.Error(w, fmt.Sprintf("You already have %d living named pilots.", c.PilotLimit()), http.StatusBadRequest)
 		return
 	} else if err != nil {
@@ -382,7 +387,7 @@ func (s *Server) setPilotTotal(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
 		http.Error(w, "No such pilot.", http.StatusNotFound)
-	case errors.Is(err, ErrTotalBelowAllocated):
+	case errors.Is(err, storage.ErrTotalBelowAllocated):
 		http.Error(w, "That total is below the SP already allocated. Setting it resets the pilot's allocation.", http.StatusConflict)
 	case err != nil:
 		http.Error(w, "could not save the total", http.StatusInternalServerError)
@@ -418,7 +423,7 @@ func (s *Server) renamePilot(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	name, err := parsePilotName(r.PostFormValue("name"))
+	name, err := pilot.ParsePilotName(r.PostFormValue("name"))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -426,7 +431,7 @@ func (s *Server) renamePilot(w http.ResponseWriter, r *http.Request) {
 	switch err := s.store.RenamePilot(r.Context(), pt.ID, c.Slug, r.PostFormValue("pilot"), name); {
 	case errors.Is(err, sql.ErrNoRows):
 		http.Error(w, "No such pilot.", http.StatusNotFound)
-	case errors.Is(err, ErrNameTaken):
+	case errors.Is(err, storage.ErrNameTaken):
 		http.Error(w, "Another pilot already has that name.", http.StatusBadRequest)
 	case err != nil:
 		http.Error(w, "could not rename the pilot", http.StatusInternalServerError)
@@ -442,7 +447,7 @@ func (s *Server) setRank(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rank := r.PostFormValue("rank")
-	if !validRank(c.Ranks, rank) {
+	if !pilot.ValidRank(c.Ranks, rank) {
 		http.Error(w, "Pick a rank from the list.", http.StatusBadRequest)
 		return
 	}
@@ -466,13 +471,13 @@ func (s *Server) learnAbilities(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
 		http.Error(w, "No such living pilot.", http.StatusNotFound)
-	case errors.Is(err, ErrNoPendingAbilities):
+	case errors.Is(err, storage.ErrNoPendingAbilities):
 		http.Error(w, "This pilot has no new Edge ability to choose.", http.StatusBadRequest)
-	case errors.Is(err, ErrAbilityCount):
+	case errors.Is(err, storage.ErrAbilityCount):
 		http.Error(w, "Choose an Edge ability for each one the pilot has earned.", http.StatusBadRequest)
-	case errors.Is(err, ErrUnknownAbility):
+	case errors.Is(err, storage.ErrUnknownAbility):
 		http.Error(w, "Pick the Edge abilities from the list.", http.StatusBadRequest)
-	case errors.Is(err, ErrAbilityLearned):
+	case errors.Is(err, storage.ErrAbilityLearned):
 		http.Error(w, "Each Edge ability can be learned once.", http.StatusBadRequest)
 	case err != nil:
 		http.Error(w, "could not save the Edge abilities", http.StatusInternalServerError)
@@ -499,7 +504,7 @@ func (s *Server) resetEdgeAbilities(w http.ResponseWriter, r *http.Request) {
 
 // recruitStatus says whether the command can recruit a named pilot now, and the brief note shown under the Recruit button: why not (a full command, too little in
 // the warchest), or what it costs.
-func recruitStatus(c *Campaign, run CampaignRun, alive int) (can bool, note string) {
+func recruitStatus(c *content.Campaign, run storage.CampaignRun, alive int) (can bool, note string) {
 	limit, cost, free := c.PilotLimit(), c.RecruitCost, run.FreeRecruits > 0
 	can = alive < limit && (free || run.Warchest >= cost)
 	switch {
@@ -508,9 +513,9 @@ func recruitStatus(c *Campaign, run CampaignRun, alive int) (can bool, note stri
 	case free:
 		note = "A replacement pilot is free: recruiting costs no SP."
 	case run.Warchest < cost:
-		note = fmt.Sprintf("Recruiting costs %s SP (warchest: %s).", withCommas(cost), withCommas(run.Warchest))
+		note = fmt.Sprintf("Recruiting costs %s SP (warchest: %s).", format.Commas(cost), format.Commas(run.Warchest))
 	case cost > 0:
-		note = fmt.Sprintf("Recruiting costs %s SP.", withCommas(cost))
+		note = fmt.Sprintf("Recruiting costs %s SP.", format.Commas(cost))
 	}
 	return can, note
 }

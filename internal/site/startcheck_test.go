@@ -8,31 +8,36 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+
+	"github.com/davidzech/Battletech/internal/catalog"
+	"github.com/davidzech/Battletech/internal/content"
+	"github.com/davidzech/Battletech/internal/format"
+	"github.com/davidzech/Battletech/internal/mekbay"
 )
 
 // hangarOf builds a hangar of standard 4/5 units from MekBay unit IDs.
-func hangarOf(names ...string) HangarForce {
-	h := HangarForce{Name: "Test Hangar", Timestamp: "t"}
+func hangarOf(names ...string) mekbay.HangarForce {
+	h := mekbay.HangarForce{Name: "Test Hangar", Timestamp: "t"}
 	for i, n := range names {
-		h.Units = append(h.Units, HangarUnit{ID: "u" + string(rune('a'+i)), Unit: n, Group: "Hangar", Gunnery: 4, Piloting: 5})
+		h.Units = append(h.Units, mekbay.HangarUnit{ID: "u" + string(rune('a'+i)), Unit: n, Group: "Hangar", Gunnery: 4, Piloting: 5})
 	}
 	return h
 }
 
 // startingHangar is a hangar that meets Refusal War's starting conditions: five mechs, under 10,000 BV.
-func startingHangar() HangarForce {
+func startingHangar() mekbay.HangarForce {
 	return hangarOf("BMKoshi_E", "BMUller_J", "BMDasher_Prime", "BMGrizzly", "BMLoki_Prime")
 }
 
-func (f *fakeMekBay) setHangar(h HangarForce, err error) {
+func (f *fakeMekBay) setHangar(h mekbay.HangarForce, err error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.hangar, f.err = h, err
 }
 
-func refusalWar(t *testing.T) *Campaign {
+func refusalWar(t *testing.T) *content.Campaign {
 	t.Helper()
-	c, ok := (Library{Root: "../../campaigns"}).Campaign("refusalwar")
+	c, ok := (content.Library{Root: "../../campaigns"}).Campaign("refusalwar")
 	if !ok || c.StartingBV != 10000 || c.StartingMinMechs != 5 {
 		t.Fatalf("Refusal War should start with at least 5 mechs and up to 10000 BV: %+v", c)
 	}
@@ -41,7 +46,7 @@ func refusalWar(t *testing.T) *Campaign {
 
 func TestWithCommas(t *testing.T) {
 	for n, want := range map[int]string{0: "0", 999: "999", 1000: "1,000", 6000: "6,000", 12500: "12,500", 1234567: "1,234,567"} {
-		if got := withCommas(n); got != want {
+		if got := format.Commas(n); got != want {
 			t.Errorf("withCommas(%d) = %q, want %q", n, got, want)
 		}
 	}
@@ -90,7 +95,7 @@ func TestCheckStartingHangar(t *testing.T) {
 	if both := checkStartingHangar(hangarOf("BMMadCat_Prime", "BMBlackHawk_Prime", "BMVulture_Prime", "BMLoki_Prime"), c); len(both.Problems) != 2 {
 		t.Errorf("both problems should be reported: %+v", both.Problems)
 	}
-	if empty := checkStartingHangar(HangarForce{}, c); empty.OK || empty.Mechs != 0 || empty.Units == nil || empty.Problems == nil {
+	if empty := checkStartingHangar(mekbay.HangarForce{}, c); empty.OK || empty.Mechs != 0 || empty.Units == nil || empty.Problems == nil {
 		t.Errorf("an empty hangar: %+v", empty)
 	}
 	// A unit we can't price can't be checked.
@@ -98,7 +103,7 @@ func TestCheckStartingHangar(t *testing.T) {
 		t.Errorf("an unknown unit: %+v", odd)
 	}
 	// A campaign with no starting conditions accepts anything.
-	if r := checkStartingHangar(HangarForce{}, &Campaign{}); !r.OK {
+	if r := checkStartingHangar(mekbay.HangarForce{}, &content.Campaign{}); !r.OK {
 		t.Errorf("no conditions, no problems: %+v", r)
 	}
 }
@@ -108,8 +113,8 @@ func TestNonMechsCountForBVButNotAsMechs(t *testing.T) {
 	for _, u := range []string{"BMKoshi_E"} {
 		_ = u
 	}
-	loadUnits()
-	for name, u := range unitsByName {
+	for _, u := range catalog.All() {
+		name := u.Name
 		if u.Type == "Tank" && u.BV > 0 && u.BV < 800 {
 			tank = name
 			break
@@ -163,7 +168,7 @@ func TestHangarCheckEndpoint(t *testing.T) {
 		t.Fatalf("a failing hangar: %d %+v", r.StatusCode, res)
 	}
 	// MekBay trouble reaches the player.
-	fake.setHangar(HangarForce{}, errors.New("MekBay has no force for your hangar link; check that the link is saved in MekBay"))
+	fake.setHangar(mekbay.HangarForce{}, errors.New("MekBay has no force for your hangar link; check that the link is saved in MekBay"))
 	if r := check(cookie, goodHangar); r.StatusCode != http.StatusBadGateway {
 		t.Fatalf("mekbay error: %d", r.StatusCode)
 	}
@@ -181,14 +186,14 @@ func TestStartingEnforcesTheHangarConditions(t *testing.T) {
 	}
 
 	for name, c := range map[string]struct {
-		hangar HangarForce
+		hangar mekbay.HangarForce
 		err    error
 		status int
 		says   string
 	}{
 		"too few mechs": {hangarOf("BMKoshi_E", "BMUller_J", "BMDasher_Prime"), nil, http.StatusBadRequest, "at least 5 mechs"},
 		"too much BV":   {hangarOf("BMKoshi_E", "BMUller_J", "BMDasher_Prime", "BMGrizzly", "BMLoki_Prime", "BMMadCat_H"), nil, http.StatusBadRequest, "10,000 BV starting limit"},
-		"mekbay down":   {HangarForce{}, errors.New("could not reach MekBay: boom"), http.StatusBadGateway, "could not reach MekBay"},
+		"mekbay down":   {mekbay.HangarForce{}, errors.New("could not reach MekBay: boom"), http.StatusBadGateway, "could not reach MekBay"},
 	} {
 		fake.setHangar(c.hangar, c.err)
 		r := start()

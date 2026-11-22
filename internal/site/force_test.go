@@ -6,26 +6,29 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+
+	"github.com/davidzech/Battletech/internal/content"
+	"github.com/davidzech/Battletech/internal/storage"
 )
 
 func TestForceNames(t *testing.T) {
 	for raw, want := range map[string]string{"  Wolf's   Dragoons ": "Wolf's Dragoons", "1st Somerset Strikers": "1st Somerset Strikers", "Kell Hounds": "Kell Hounds"} {
-		if got, err := parseForceName(raw); err != nil || got != want {
+		if got, err := content.ParseForceName(raw); err != nil || got != want {
 			t.Errorf("parseForceName(%q) = %q, %v", raw, got, err)
 		}
 	}
 	for _, bad := range []string{"", "   ", "<b>", strings.Repeat("x", 41), "-leading"} {
-		if _, err := parseForceName(bad); err == nil {
+		if _, err := content.ParseForceName(bad); err == nil {
 			t.Errorf("parseForceName(%q) should fail", bad)
 		}
 	}
-	if _, err := parseForceName(""); err == nil || !strings.Contains(err.Error(), "force") {
+	if _, err := content.ParseForceName(""); err == nil || !strings.Contains(err.Error(), "force") {
 		t.Errorf("the message says what is being named: %v", err)
 	}
 	if _, err := parseAccountName(""); err == nil || !strings.Contains(err.Error(), "account") {
 		t.Errorf("and for an account: %v", err)
 	}
-	if (CampaignRun{}).ForceLabel() != "Your force" || (CampaignRun{ForceName: "Kell Hounds"}).ForceLabel() != "Kell Hounds" {
+	if (storage.CampaignRun{}).ForceLabel() != "Your force" || (storage.CampaignRun{ForceName: "Kell Hounds"}).ForceLabel() != "Kell Hounds" {
 		t.Error("a run from before forces were named is just 'Your force'")
 	}
 }
