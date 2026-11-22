@@ -8,8 +8,8 @@ The Topps Company, Catalyst Game Labs, Microsoft, Piranha Games, the MegaMek Tea
 
 The website's code (the Go server and its generators, templates, stylesheets and scripts) is licensed under the
 **GNU General Public License v3.0 or later**; see [LICENSE](LICENSE). Parts of it follow MekBay's own code (the
-crippled-unit rules in `internal/site/condition.go` and the firepower and range figures worked out by
-`internal/site/gen_units.go`), which is also GPL-3.0.
+crippled-unit rules in `internal/mekbay/condition.go` and the firepower and range figures worked out by
+`internal/catalog/gen_units.go`), which is also GPL-3.0.
 
 The GPL does not cover the material listed below, which keeps its own license.
 
@@ -18,10 +18,10 @@ The GPL does not cover the material listed below, which keeps its own license.
 | What | Where | Source | License |
 |---|---|---|---|
 | Unit catalog, factions and eras | `data/units.json`, `data/factions.json`, `data/eras.json` | [MekBay](https://mekbay.com) (`db.mekbay.com`), built from [MegaMek Data](https://github.com/MegaMek/mm-data) | [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/), as MegaMek Data |
-| Unit index and availability generated from that catalog | `internal/site/units_index.json`, `internal/site/availability.json` | derived from the files above | [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/) |
-| Unit icons | `internal/site/icons/` | [MegaMek Data](https://github.com/MegaMek/mm-data), `data/images/units` | [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/); see `internal/site/icons/NOTICE.md` |
+| Unit index and availability generated from that catalog | `internal/catalog/units_index.json`, `internal/catalog/availability.json` | derived from the files above | [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/) |
+| Unit icons | `internal/catalog/icons/` | [MegaMek Data](https://github.com/MegaMek/mm-data), `data/images/units` | [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/); see `internal/catalog/icons/NOTICE.md` |
 | Weapon type icons | `internal/site/static/weapon-*.svg` | [MekBay](https://github.com/MegaMek/mekbay) | GPL-3.0-or-later; see `internal/site/static/weapon-icons-NOTICE.txt` |
-| Pilot portraits | `internal/site/portraits/` | MechWarrior 5 (Piranha Games / Microsoft) | used under Microsoft's [Game Content Usage Rules](https://www.xbox.com/en-US/developers/rules); see `internal/site/portraits/NOTICE.md` |
+| Pilot portraits | `internal/pilot/portraits/` | MechWarrior 5 (Piranha Games / Microsoft) | used under Microsoft's [Game Content Usage Rules](https://www.xbox.com/en-US/developers/rules); see `internal/pilot/portraits/NOTICE.md` |
 | QR code generator | `internal/site/static/qrcode.js` | qrcode-generator, (C) 2009 Kazuhiko Arase | MIT; see `internal/site/static/qrcode-LICENSE.txt` |
 | BattleTech old-style font | `internal/site/static/bt_oldstyle.ttf` | "Battletech" font, version 1.00 (2004); its author is not named in the file | not covered by the GPL; its author's terms |
 | Campaign content | `campaigns/`, `Pages/` | the campaign author | not licensed under the GPL; all rights reserved by the author |
@@ -31,8 +31,8 @@ this material, must not be used commercially.
 
 ## MekBay's web app (the proxy)
 
-The site's MekBay proxy (`internal/site/mekbayproxy.go`) serves MekBay's web app to its visitors, fetched from
+The site's MekBay proxy (`internal/mekbayproxy/proxy.go`) serves MekBay's web app to its visitors, fetched from
 mekbay.com and modified in one way: the WebSocket address in its JavaScript (`` `wss://mekbay.com/ws` ``) is replaced
 with the proxy's own `/ws`, and its service workers are replaced with stubs that unregister themselves. MekBay is
 Copyright (C) The MegaMek Team and licensed under the GNU General Public License v3.0; its source code is at
-<https://github.com/MegaMek/mekbay>, and the modification is the code in `mekbayproxy.go`.
+<https://github.com/MegaMek/mekbay>, and the modification is the code in `internal/mekbayproxy/proxy.go`.
