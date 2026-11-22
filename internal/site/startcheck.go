@@ -6,6 +6,8 @@ import (
 	"log"
 	"net/http"
 	"strings"
+
+	"github.com/davidzech/Battletech/internal/catalog"
 )
 
 // A campaign can require its starting hangar to hold at least so many mechs, totalling at most so much BV (Intro.md
@@ -44,14 +46,14 @@ func checkStartingHangar(h HangarForce, c *Campaign) startCheck {
 	res := startCheck{Units: []startCheckUnit{}, Problems: []string{}, MaxBV: c.StartingBV, MinMechs: c.StartingMinMechs}
 	var unknown []string
 	for _, hu := range h.Units {
-		u, ok := unitByName(hu.Unit)
+		u, ok := catalog.ByName(hu.Unit)
 		if !ok {
-			res.Units = append(res.Units, startCheckUnit{Name: hu.Unit, Icon: defaultIconURL(""), Gunnery: hu.Gunnery, Piloting: hu.Piloting, Unknown: true})
+			res.Units = append(res.Units, startCheckUnit{Name: hu.Unit, Icon: catalog.DefaultIconURL(""), Gunnery: hu.Gunnery, Piloting: hu.Piloting, Unknown: true})
 			unknown = append(unknown, hu.Unit)
 			continue
 		}
-		name, model := unitNames(u)
-		cu := startCheckUnit{Name: name, Model: model, Role: roleLabel(u), Icon: iconURL(u), Tons: u.Tons, BV: u.BV, Gunnery: hu.Gunnery, Piloting: hu.Piloting, Mech: u.Type == "Mek"}
+		name, model := catalog.Names(u)
+		cu := startCheckUnit{Name: name, Model: model, Role: catalog.RoleLabel(u), Icon: catalog.IconURL(u), Tons: u.Tons, BV: u.BV, Gunnery: hu.Gunnery, Piloting: hu.Piloting, Mech: u.Type == "Mek"}
 		res.Units = append(res.Units, cu)
 		res.BV += cu.BV
 		if cu.Mech {

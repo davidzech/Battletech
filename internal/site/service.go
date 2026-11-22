@@ -10,6 +10,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/davidzech/Battletech/internal/catalog"
 )
 
 // Repairing and rearming a hangar unit between sorties, from Hot Spots: Draconis Reach, the SP Activity Cost Table (printed p. 33).
@@ -116,7 +118,7 @@ type ammoLine struct {
 // ammoBreakdown lists what a rearm would refill, by ammo type, alphabetically. Each used bin is a ton; its capacity is the unit's shots for
 // that ammo in that location divided by its slots there (the catalog knows that, MekBay only records the shots used). A bin the catalog doesn't
 // list is still counted, with an unknown (zero) capacity.
-func ammoBreakdown(hu HangarUnit, u Unit) []ammoLine {
+func ammoBreakdown(hu HangarUnit, u catalog.Unit) []ammoLine {
 	var out []ammoLine
 	index := map[string]int{}
 	for _, use := range hu.AmmoUsed2 {
@@ -301,7 +303,7 @@ func (s *Server) serviceUnit(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "That unit is no longer in your hangar.", http.StatusNotFound)
 		return
 	}
-	cat, known := unitByName(hu.Unit)
+	cat, known := catalog.ByName(hu.Unit)
 	if !known || cat.Type != "Mek" {
 		http.Error(w, "Only mechs in the catalog can be serviced here.", http.StatusBadRequest)
 		return

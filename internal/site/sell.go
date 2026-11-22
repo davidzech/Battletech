@@ -7,6 +7,8 @@ import (
 	"log"
 	"net/http"
 	"time"
+
+	"github.com/davidzech/Battletech/internal/catalog"
 )
 
 // Selling units. A unit sells for half its base BV in SP (this campaign counts BV as SP, as purchasing does), but only a unit that is fully repaired and
@@ -85,7 +87,7 @@ func (s *Server) sellUnit(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "That unit is no longer in your hangar.", http.StatusNotFound)
 		return
 	}
-	cat, known := unitByName(hu.Unit)
+	cat, known := catalog.ByName(hu.Unit)
 	if !known || cat.Type != "Mek" {
 		http.Error(w, "Only mechs in the catalog can be sold here.", http.StatusBadRequest)
 		return

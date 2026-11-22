@@ -8,6 +8,8 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+
+	"github.com/davidzech/Battletech/internal/catalog"
 )
 
 // hangarOf builds a hangar of standard 4/5 units from MekBay unit IDs.
@@ -108,8 +110,8 @@ func TestNonMechsCountForBVButNotAsMechs(t *testing.T) {
 	for _, u := range []string{"BMKoshi_E"} {
 		_ = u
 	}
-	loadUnits()
-	for name, u := range unitsByName {
+	for _, u := range catalog.All() {
+		name := u.Name
 		if u.Type == "Tank" && u.BV > 0 && u.BV < 800 {
 			tank = name
 			break

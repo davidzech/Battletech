@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+
+	"github.com/davidzech/Battletech/internal/catalog"
 )
 
 // Building the starting hangar on the site. Instead of linking a force they made in MekBay, the player picks the mechs of their starting force from the same unit
@@ -27,7 +29,7 @@ func parseStartingUnits(r *http.Request) ([]string, error) {
 		return nil, fmt.Errorf("A starting force can hold at most %d mechs.", maxStartingUnits)
 	}
 	for _, id := range ids {
-		if u, ok := unitByName(id); !ok || u.Type != "Mek" {
+		if u, ok := catalog.ByName(id); !ok || u.Type != "Mek" {
 			return nil, fmt.Errorf("%q is not a mech in the unit catalog.", id)
 		}
 	}
@@ -69,7 +71,7 @@ func (s *Server) buildHangar(ctx context.Context, seed, name string, ids []strin
 	units := make([]UnitDraft, len(ids))
 	for i, id := range ids {
 		units[i] = UnitDraft{Unit: id, Gunnery: defaultGunnery, Piloting: defaultPiloting}
-		if u, ok := unitByName(id); ok {
+		if u, ok := catalog.ByName(id); ok {
 			units[i].BV = u.BV // the force's BV as MekBay would total it (a 4/5 pilot leaves the base BV as it is)
 		}
 	}

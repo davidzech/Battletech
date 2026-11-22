@@ -1,9 +1,10 @@
-package site
+package catalog
 
 import (
 	_ "embed"
 	"encoding/json"
 	"math"
+	"sort"
 	"sync"
 )
 
@@ -86,16 +87,16 @@ func loadUnits() {
 	})
 }
 
-// lookupUnit finds a unit by the chassis and model strings a MegaMek/MekBay .mul file uses,
+// Lookup finds a unit by the chassis and model strings a MegaMek/MekBay .mul file uses,
 // e.g. ("Mad Cat (Timber Wolf)", "H") or ("Grizzly", "").
-func lookupUnit(chassis, model string) (Unit, bool) {
+func Lookup(chassis, model string) (Unit, bool) {
 	loadUnits()
 	u, ok := unitsByCM[[2]string{chassis, model}]
 	return u, ok
 }
 
-// unitByName finds a unit by its MekBay unit ID, e.g. "BMMadCat_H" (what a saved force stores).
-func unitByName(name string) (Unit, bool) {
+// ByName finds a unit by its MekBay unit ID, e.g. "BMMadCat_H" (what a saved force stores).
+func ByName(name string) (Unit, bool) {
 	loadUnits()
 	u, ok := unitsByName[name]
 	return u, ok
@@ -114,8 +115,19 @@ var bvSkillMatrix = [9][9]float64{
 	{1.10, 0.99, 0.95, 0.90, 0.83, 0.75, 0.71, 0.68, 0.64},
 }
 
-// adjustedBV is a unit's battle value with its pilot's skills applied, rounded the way MekBay does.
-func adjustedBV(base, gunnery, piloting int) int {
+// AdjustedBV is a unit's battle value with its pilot's skills applied, rounded the way MekBay does.
+func AdjustedBV(base, gunnery, piloting int) int {
 	clamp := func(n int) int { return max(0, min(8, n)) }
 	return int(math.Round(float64(base) * bvSkillMatrix[clamp(gunnery)][clamp(piloting)]))
+}
+
+// All lists every unit in the catalog, sorted by MekBay unit ID.
+func All() []Unit {
+	loadUnits()
+	all := make([]Unit, 0, len(unitsByName))
+	for _, u := range unitsByName {
+		all = append(all, u)
+	}
+	sort.Slice(all, func(i, j int) bool { return all[i].Name < all[j].Name })
+	return all
 }

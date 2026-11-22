@@ -7,10 +7,12 @@ import (
 	"net/url"
 	"testing"
 	"time"
+
+	"github.com/davidzech/Battletech/internal/catalog"
 )
 
 func TestSwapPriceAndOptions(t *testing.T) {
-	prime, ok := unitByName("BMDasher_Prime")
+	prime, ok := catalog.ByName("BMDasher_Prime")
 	if !ok || prime.Omni == 0 {
 		t.Fatal("the Fire Moth Prime should be an omnimech in the catalog")
 	}
@@ -20,7 +22,7 @@ func TestSwapPriceAndOptions(t *testing.T) {
 	}
 	var up, down *swapOption
 	for i, o := range opts {
-		v, _ := unitByName(o.Unit)
+		v, _ := catalog.ByName(o.Unit)
 		if v.Chassis != prime.Chassis || o.Unit == prime.Name || v.Omni == 0 {
 			t.Errorf("an option must be another omni variant of the same chassis: %+v", o)
 		}
@@ -42,7 +44,7 @@ func TestSwapPriceAndOptions(t *testing.T) {
 		t.Errorf("down cost = %d, want 10 and no refund", down.Cost)
 	}
 	// An odd tonnage rounds the half up.
-	if got := swapPrice(Unit{Tons: 55, BV: 1000}, Unit{BV: 1000}); got != 28 {
+	if got := swapPrice(catalog.Unit{Tons: 55, BV: 1000}, catalog.Unit{BV: 1000}); got != 28 {
 		t.Errorf("55t swap = %d, want 28", got)
 	}
 	// Being an omnimech is an advantage over selling and buying: the swap is cheaper than the new BV less half the old one.
@@ -54,7 +56,7 @@ func TestSwapPriceAndOptions(t *testing.T) {
 		t.Error("swap up and sell must lose the half tonnage at least")
 	}
 	// A unit that is not an omnimech has no variants to swap to.
-	grizzly, _ := unitByName("BMGrizzly")
+	grizzly, _ := catalog.ByName("BMGrizzly")
 	if grizzly.Omni != 0 || swapOptions(grizzly) != nil {
 		t.Errorf("the Grizzly is not an omnimech: %+v", swapOptions(grizzly))
 	}
@@ -92,7 +94,7 @@ func TestSwapUnitEndpoint(t *testing.T) {
 		t.Fatal(err)
 	}
 	id := playthroughID("wolfpack2026")
-	prime, _ := unitByName("BMDasher_Prime")
+	prime, _ := catalog.ByName("BMDasher_Prime")
 	var up swapOption
 	for _, o := range swapOptions(prime) {
 		if o.BV > prime.BV {

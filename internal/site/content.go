@@ -13,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/davidzech/Battletech/internal/catalog"
+
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/extension"
 	"gopkg.in/yaml.v3"
@@ -360,7 +362,7 @@ func renderMarkdown(src string, stripTitle bool) template.HTML {
 	}
 	// External links (MekBay etc.) open in a new tab.
 	out := externalLink.ReplaceAllString(buf.String(), `<a href="$1" target="_blank" rel="noopener noreferrer"`)
-	return template.HTML(annotateUnitLinks(out)) // a link to a unit's MekBay page carries the unit's details for its hover card (unitlinks.go)
+	return template.HTML(catalog.AnnotateUnitLinks(out)) // a link to a unit's MekBay page carries the unit's details for its hover card (unitlinks.go)
 }
 
 // Campaigns lists every campaign, sorted by folder name.
@@ -508,7 +510,7 @@ func (c *Campaign) checkScenarios() {
 		if sc.OutcomeError != "" {
 			c.Problems = append(c.Problems, sc.Slug+"/Outcome.md: "+sc.OutcomeError)
 		}
-		for _, id := range unknownUnitLinks(string(sc.BriefingHTML) + string(sc.SetupHTML)) {
+		for _, id := range catalog.UnknownUnitLinks(string(sc.BriefingHTML) + string(sc.SetupHTML)) {
 			c.Problems = append(c.Problems, fmt.Sprintf("%s/Setup.md: links to the MekBay unit %q, which is not in the unit catalog", sc.Slug, id))
 		}
 		for _, b := range sc.Branches {

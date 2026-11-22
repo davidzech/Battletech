@@ -9,6 +9,8 @@ import (
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/davidzech/Battletech/internal/catalog"
 )
 
 // Reconfiguring omnimechs. The SP Activity Cost Table prices it at half the unit's tonnage, but in this campaign BV is SP, so that alone would make a cheap variant
@@ -43,7 +45,7 @@ type swapOption struct {
 func markSwapAvailability(views []hangarUnitView, c *Campaign) {
 	var available map[string]bool
 	if c != nil && c.AvailabilityFaction != "" && c.AvailabilityEra != "" {
-		available = availableUnits(c.AvailabilityFaction, c.AvailabilityEra)
+		available = catalog.Available(c.AvailabilityFaction, c.AvailabilityEra)
 	}
 	for i := range views {
 		for j := range views[i].SwapOptions {
@@ -55,14 +57,13 @@ func markSwapAvailability(views []hangarUnitView, c *Campaign) {
 
 var (
 	omniOnce     sync.Once
-	omniVariants map[string][]Unit // omnimech variants by chassis
+	omniVariants map[string][]catalog.Unit // omnimech variants by chassis
 )
 
 func loadOmniVariants() {
 	omniOnce.Do(func() {
-		loadUnits()
-		omniVariants = map[string][]Unit{}
-		for _, u := range unitsByName {
+		omniVariants = map[string][]catalog.Unit{}
+		for _, u := range catalog.All() {
 			if u.Type == "Mek" && u.Omni != 0 {
 				omniVariants[u.Chassis] = append(omniVariants[u.Chassis], u)
 			}
@@ -79,7 +80,7 @@ func loadOmniVariants() {
 }
 
 // swapPrice is the SP to reconfigure an omnimech from one variant to another: half the tonnage (rounded up) and half the BV gained (rounded down).
-func swapPrice(from, to Unit) int {
+func swapPrice(from, to catalog.Unit) int {
 	cost := int(math.Ceil(from.Tons / 2))
 	if gain := to.BV - from.BV; gain > 0 {
 		cost += gain / 2
@@ -88,7 +89,7 @@ func swapPrice(from, to Unit) int {
 }
 
 // swapOptions lists the other variants of an omnimech, cheapest BV first; none for a unit that isn't an omnimech.
-func swapOptions(u Unit) []swapOption {
+func swapOptions(u catalog.Unit) []swapOption {
 	if u.Type != "Mek" || u.Omni == 0 {
 		return nil
 	}
@@ -96,8 +97,8 @@ func swapOptions(u Unit) []swapOption {
 	var out []swapOption
 	for _, v := range omniVariants[u.Chassis] {
 		if v.Name != u.Name {
-			name, model := unitNames(v)
-			out = append(out, swapOption{Unit: v.Name, Model: model, BV: v.BV, Cost: swapPrice(u, v), Name: name, Class: v.Class, Role: roleLabel(v), Tons: v.Tons, Icon: iconURL(v), MekBayURL: unitPageURL(v.Name)})
+			name, model := catalog.Names(v)
+			out = append(out, swapOption{Unit: v.Name, Model: model, BV: v.BV, Cost: swapPrice(u, v), Name: name, Class: v.Class, Role: catalog.RoleLabel(v), Tons: v.Tons, Icon: catalog.IconURL(v), MekBayURL: catalog.PageURL(v.Name)})
 		}
 	}
 	return out
@@ -164,7 +165,7 @@ func (s *Server) swapUnit(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "That unit is no longer in your hangar.", http.StatusNotFound)
 		return
 	}
-	cat, known := unitByName(hu.Unit)
+	cat, known := catalog.ByName(hu.Unit)
 	if !known || cat.Type != "Mek" || cat.Omni == 0 {
 		http.Error(w, "Only omnimechs can be reconfigured.", http.StatusBadRequest)
 		return

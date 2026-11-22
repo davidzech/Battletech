@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/davidzech/Battletech/internal/catalog"
 )
 
 // hangarGroup is the name of the group a hangar force's units sit in, where a purchase adds new units.
@@ -84,7 +86,7 @@ func purchaseCost(ids []string) (int, error) {
 	}
 	total := 0
 	for _, id := range ids {
-		u, ok := unitByName(id)
+		u, ok := catalog.ByName(id)
 		if !ok || u.Type != "Mek" {
 			return 0, fmt.Errorf("%q is not a mech in the unit list.", id)
 		}

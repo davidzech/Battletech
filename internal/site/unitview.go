@@ -2,9 +2,8 @@ package site
 
 import (
 	"fmt"
-	"net/url"
-	"regexp"
-	"strings"
+
+	"github.com/davidzech/Battletech/internal/catalog"
 )
 
 // How a unit is shown: its name (the Clan name first), role label and mech-row view, for every list of mechs on the site.
@@ -49,43 +48,7 @@ type hangarUnitView struct {
 	// SwapOptions are the other variants an omnimech can be reconfigured to, with their prices (see swap.go); empty for any other unit.
 	SwapOptions []swapOption `json:"swapOptions,omitempty"`
 	// Card is the unit's catalog card, the same as a scenario's unit links show (unitlinks.go), for the overview's hover card; nil for an unknown unit.
-	Card *unitCard `json:"card,omitempty"`
-}
-
-var chassisNames = regexp.MustCompile(`^(.*?)\s*\((.+)\)$`)
-
-// unitNames returns the name to show for a unit and its model. A design with two names is written "Inner Sphere
-// name (Clan name)" in the catalog, and the Clan name always wins: "Vulture (Mad Dog)" is shown as "Mad Dog". Only
-// Clan-tech designs follow that pattern; the few Inner Sphere ones with a parenthesis ("Katana (Crockett)") have no
-// Clan name, so they keep their first name.
-func unitNames(u Unit) (name, model string) {
-	name = u.Chassis
-	if m := chassisNames.FindStringSubmatch(u.Chassis); m != nil {
-		if u.TechBase == "Clan" {
-			name = m[2]
-		} else {
-			name = m[1]
-		}
-	}
-	return name, u.Model
-}
-
-// roleLabel is the role shown in a mech row's band. The catalog gives a few mechs the role "None", which would read
-// as a label in its own right, so those show their weight class instead (the first part of it, for the few classes
-// that are long lists).
-func roleLabel(u Unit) string {
-	if r := strings.TrimSpace(u.Role); r != "" && !strings.EqualFold(r, "none") {
-		return r
-	}
-	// A few classes are long lists ("Ultra Light/PA(L)/Exoskeleton"): the first part is the label.
-	class, _, _ := strings.Cut(u.Class, "/")
-	return strings.TrimSpace(class)
-}
-
-// displayName is a unit's name and model on one line, e.g. "Mad Dog Prime".
-func displayName(u Unit) string {
-	name, model := unitNames(u)
-	return strings.TrimSpace(name + " " + model)
+	Card *catalog.UnitCard `json:"card,omitempty"`
 }
 
 // deployedGroup is the hangar group whose units the Deploy wizard gives Player 1 to start with (a group the player may have made in MekBay).
@@ -95,23 +58,23 @@ const deployedGroup = "Deployed"
 func hangarViews(h HangarForce) []hangarUnitView {
 	views := make([]hangarUnitView, 0, len(h.Units))
 	for _, hu := range h.Units {
-		v := hangarUnitView{MekBayURL: unitPageURL(hu.Unit), ID: hu.ID, Pilot: hu.Pilot, PilotDead: hu.PilotDead, Gunnery: hu.Gunnery, Piloting: hu.Piloting, Damaged: hu.Damaged, Destroyed: hu.Destroyed, InDeployed: sameGroupName(hu.Group, deployedGroup)}
-		if u, ok := unitByName(hu.Unit); ok {
-			v.Name, v.Model = unitNames(u)
-			v.Class, v.Role, v.Tons, v.Icon = u.Class, roleLabel(u), u.Tons, iconURL(u)
+		v := hangarUnitView{MekBayURL: catalog.PageURL(hu.Unit), ID: hu.ID, Pilot: hu.Pilot, PilotDead: hu.PilotDead, Gunnery: hu.Gunnery, Piloting: hu.Piloting, Damaged: hu.Damaged, Destroyed: hu.Destroyed, InDeployed: sameGroupName(hu.Group, deployedGroup)}
+		if u, ok := catalog.ByName(hu.Unit); ok {
+			v.Name, v.Model = catalog.Names(u)
+			v.Class, v.Role, v.Tons, v.Icon = u.Class, catalog.RoleLabel(u), u.Tons, catalog.IconURL(u)
 			v.BV = u.BV // base BV: this campaign ignores pilot skills, so skill can never be a way to game the BV cap
-			v.Card = catalogCard(u)
+			v.Card = catalog.CardFor(u)
 		} else {
-			v.Name, v.Unknown, v.Icon = hu.Unit, true, defaultIconURL("")
+			v.Name, v.Unknown, v.Icon = hu.Unit, true, catalog.DefaultIconURL("")
 		}
 		var tons float64
 		var engine string
-		if u, ok := unitByName(hu.Unit); ok {
+		if u, ok := catalog.ByName(hu.Unit); ok {
 			tons, engine = u.Tons, u.Engine
 		}
 		c, note := conditionOf(hu, tons, engine)
 		v.Condition, v.ConditionNote, v.AmmoExpended = string(c), note, hu.AmmoUsed > 0
-		if u, ok := unitByName(hu.Unit); ok && u.Type == "Mek" {
+		if u, ok := catalog.ByName(hu.Unit); ok && u.Type == "Mek" {
 			v.RepairLevels, v.RepairCosts, v.RearmCost = repairOptions(hu, c, u.Tons), repairCosts(u.Tons, u.TechBase), rearmCost(hu.AmmoBins)
 			v.AmmoBreakdown = ammoBreakdown(hu, u)
 			v.SellFull = unitPristine(hu)
@@ -154,13 +117,4 @@ func deployProblem(h HangarForce, ids []string, bvLimit int) string {
 		return fmt.Sprintf("The force is %d BV, over this scenario's limit of %d.", total, bvLimit)
 	}
 	return ""
-}
-
-// unitPageURL is the link to a unit's page on mekbay.com, from its MekBay unit ID (e.g. BMMadCat_H): the General tab of that design's page,
-// not a unit in anyone's force. "" if there is no ID.
-func unitPageURL(unitID string) string {
-	if unitID == "" {
-		return ""
-	}
-	return "https://mekbay.com/?" + url.Values{"gs": {"cbt"}, "shareUnit": {unitID}, "tab": {"General"}}.Encode()
 }

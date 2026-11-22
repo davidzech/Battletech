@@ -6,6 +6,8 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+
+	"github.com/davidzech/Battletech/internal/catalog"
 )
 
 func TestSellValue(t *testing.T) {
@@ -72,9 +74,9 @@ func TestSellUnitEndpoint(t *testing.T) {
 	sell := func(unit string) int {
 		return post(t, srv, "/api/hangar/sell", url.Values{"campaign": {"refusalwar"}, "unit": {unit}}, cookie, srv.URL).StatusCode
 	}
-	madCat, _ := unitByName("BMMadCat_H")
-	dasher, _ := unitByName("BMDasher_Prime")
-	koshi, _ := unitByName("BMKoshi_E")
+	madCat, _ := catalog.ByName("BMMadCat_H")
+	dasher, _ := catalog.ByName("BMDasher_Prime")
+	koshi, _ := catalog.ByName("BMKoshi_E")
 
 	if got := post(t, srv, "/api/hangar/sell", url.Values{"campaign": {"refusalwar"}, "unit": {"ua"}}, cookie, "https://evil.example").StatusCode; got != http.StatusForbidden {
 		t.Errorf("cross-origin: %d", got)

@@ -9,6 +9,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/davidzech/Battletech/internal/catalog"
 )
 
 // hangarCacheStore checks the cache table on both databases, in a campaign of its own (run from storeContract).
@@ -165,7 +167,7 @@ func TestUnitPageURL(t *testing.T) {
 		"BM Odd&Name=1#": "https://mekbay.com/?gs=cbt&shareUnit=BM+Odd%26Name%3D1%23&tab=General",
 		"":               "",
 	} {
-		if got := unitPageURL(in); got != want {
+		if got := catalog.PageURL(in); got != want {
 			t.Errorf("unitPageURL(%q) = %q, want %q", in, got, want)
 		}
 	}

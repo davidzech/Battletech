@@ -8,6 +8,8 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+
+	"github.com/davidzech/Battletech/internal/catalog"
 )
 
 func TestRepairCostsFollowTheSPActivityCostTable(t *testing.T) {
@@ -255,7 +257,7 @@ func TestServiceCostsInTheHangarViews(t *testing.T) {
 }
 
 func TestAmmoBreakdown(t *testing.T) {
-	baboon, ok := unitByName("BMBaboon")
+	baboon, ok := catalog.ByName("BMBaboon")
 	if !ok || len(baboon.Ammo) == 0 {
 		t.Fatalf("the unit index should carry the Howler's ammunition: %+v", baboon)
 	}
@@ -270,7 +272,7 @@ func TestAmmoBreakdown(t *testing.T) {
 		t.Errorf("Howler: %+v", got)
 	}
 	// Two bins of one type add up, and different types are listed apart, in name order; a bin the catalog doesn't know is still a ton.
-	grizzly, _ := unitByName("BMGrizzly")
+	grizzly, _ := catalog.ByName("BMGrizzly")
 	hu = HangarUnit{AmmoBins: 4, AmmoUsed2: []AmmoUse{
 		{Name: "Clan Ammo LRM-10", Loc: "LT", Used: 4}, {Name: "Clan Gauss Ammo", Loc: "RA", Used: 3}, {Name: "Clan Gauss Ammo", Loc: "RA", Used: 5}, {Name: "Mystery Ammo", Loc: "CT", Used: 2},
 	}}

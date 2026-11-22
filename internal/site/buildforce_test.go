@@ -8,6 +8,8 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"github.com/davidzech/Battletech/internal/catalog"
 )
 
 // startWithUnits is the start wizard's form for a force built on the site: the mechs picked, and no hangar link.
@@ -31,7 +33,7 @@ func TestStartWithABuiltForce(t *testing.T) {
 	heavy := []string{"BMMadCat_Prime", "BMMadCat_Prime", "BMMadCat_Prime", "BMMadCat_Prime", "BMMadCat_Prime"}
 	bv := func(ids []string) (n int) {
 		for _, id := range ids {
-			u, _ := unitByName(id)
+			u, _ := catalog.ByName(id)
 			n += u.BV
 		}
 		return n

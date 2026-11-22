@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/davidzech/Battletech/internal/catalog"
 )
 
 // A scenario's OpFor and operation as the battle builds them in MekBay (see battle.go).
@@ -25,11 +27,11 @@ func opForDraft(c *Campaign, sc *Scenario) (ForceDraft, error) {
 		}
 		g := GroupDraft{Name: f.Label}
 		for _, e := range entities {
-			u, ok := lookupUnit(e.Chassis, e.Model)
+			u, ok := catalog.Lookup(e.Chassis, e.Model)
 			if !ok {
 				return ForceDraft{}, fmt.Errorf("%s: %s %s is not in the unit catalog", f.File, e.Chassis, e.Model)
 			}
-			g.Units = append(g.Units, UnitDraft{Unit: u.Name, BV: adjustedBV(u.BV, e.Gunnery, e.Piloting), Pilot: e.Pilot, Gunnery: e.Gunnery, Piloting: e.Piloting})
+			g.Units = append(g.Units, UnitDraft{Unit: u.Name, BV: catalog.AdjustedBV(u.BV, e.Gunnery, e.Piloting), Pilot: e.Pilot, Gunnery: e.Gunnery, Piloting: e.Piloting})
 		}
 		d.Groups = append(d.Groups, g)
 	}

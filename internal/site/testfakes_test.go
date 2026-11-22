@@ -14,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/davidzech/Battletech/internal/catalog"
+
 	"github.com/coder/websocket"
 )
 
@@ -25,14 +27,14 @@ func TestLookupUnitAndParseMul(t *testing.T) {
 		{"Grizzly", "", "BMGrizzly"},
 		{"Mad Cat (Timber Wolf)", "H", "BMMadCat_H"},
 	} {
-		if u, ok := lookupUnit(c.chassis, c.model); !ok || u.Name != c.name || u.BV <= 0 || u.Tons <= 0 || u.Class == "" {
+		if u, ok := catalog.Lookup(c.chassis, c.model); !ok || u.Name != c.name || u.BV <= 0 || u.Tons <= 0 || u.Class == "" {
 			t.Errorf("lookupUnit(%q, %q) = %+v, %v; want %s", c.chassis, c.model, u, ok, c.name)
 		}
 	}
-	if u, ok := unitByName("BMVulture_Prime"); !ok || u.BV != 2351 || displayName(u) != "Mad Dog Prime" {
-		t.Errorf("unitByName(BMVulture_Prime) = %+v, %v, display %q", u, ok, displayName(u))
+	if u, ok := catalog.ByName("BMVulture_Prime"); !ok || u.BV != 2351 || catalog.DisplayName(u) != "Mad Dog Prime" {
+		t.Errorf("unitByName(BMVulture_Prime) = %+v, %v, display %q", u, ok, catalog.DisplayName(u))
 	}
-	if _, ok := lookupUnit("No Such Mech", "X"); ok {
+	if _, ok := catalog.Lookup("No Such Mech", "X"); ok {
 		t.Error("unknown unit should not be found")
 	}
 
@@ -60,7 +62,7 @@ func TestAdjustedBV(t *testing.T) {
 		{1000, 9, 9, 640}, // skills past 8 count as 8
 		{2351, 4, 5, 2351},
 	} {
-		if got := adjustedBV(c.base, c.g, c.p); got != c.want {
+		if got := catalog.AdjustedBV(c.base, c.g, c.p); got != c.want {
 			t.Errorf("adjustedBV(%d, %d, %d) = %d, want %d", c.base, c.g, c.p, got, c.want)
 		}
 	}

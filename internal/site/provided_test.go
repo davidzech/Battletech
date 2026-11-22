@@ -8,6 +8,8 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+
+	"github.com/davidzech/Battletech/internal/catalog"
 )
 
 // Scenario 000 hands every cadet one of four standard machines instead of letting them bring their own.
@@ -24,7 +26,7 @@ func TestProvidedForce(t *testing.T) {
 	}
 	ids := map[string]bool{}
 	for i, u := range h.Units {
-		cat, ok := unitByName(u.Unit)
+		cat, ok := catalog.ByName(u.Unit)
 		if !ok || cat.Type != "Mek" {
 			t.Errorf("%s is not a mech in the catalog", u.Unit)
 		}
@@ -58,7 +60,7 @@ func TestScenario000ProvidesItsOwnMechs(t *testing.T) {
 	for _, camp := range camps {
 		for _, s := range camp.Scenarios {
 			for _, name := range s.ProvidedUnits {
-				if u, ok := unitByName(name); !ok || u.Type != "Mek" {
+				if u, ok := catalog.ByName(name); !ok || u.Type != "Mek" {
 					t.Errorf("%s provides %q, which is not a mech in the catalog", s.Slug, name)
 				}
 			}

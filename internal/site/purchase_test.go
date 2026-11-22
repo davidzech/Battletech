@@ -9,11 +9,13 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/davidzech/Battletech/internal/catalog"
 )
 
 func TestPurchaseCost(t *testing.T) {
-	madCat, _ := unitByName("BMMadCat_H")
-	koshi, _ := unitByName("BMKoshi_E")
+	madCat, _ := catalog.ByName("BMMadCat_H")
+	koshi, _ := catalog.ByName("BMKoshi_E")
 	if got, err := purchaseCost([]string{"BMMadCat_H", "BMKoshi_E"}); err != nil || got != madCat.BV+koshi.BV || got == 0 {
 		t.Errorf("cost of two mechs: %d %v (want %d)", got, err, madCat.BV+koshi.BV)
 	}
@@ -74,8 +76,8 @@ func TestPurchaseEndpoint(t *testing.T) {
 		v := url.Values{"campaign": {"refusalwar"}, "unit": units}
 		return post(t, srv, "/api/hangar/purchase", v, cookie, srv.URL).StatusCode
 	}
-	madCat, _ := unitByName("BMMadCat_H")
-	koshi, _ := unitByName("BMKoshi_E")
+	madCat, _ := catalog.ByName("BMMadCat_H")
+	koshi, _ := catalog.ByName("BMKoshi_E")
 
 	if got := post(t, srv, "/api/hangar/purchase", url.Values{"campaign": {"refusalwar"}, "unit": {"BMMadCat_H"}}, cookie, "https://evil.example").StatusCode; got != http.StatusForbidden {
 		t.Errorf("cross-origin: %d", got)
