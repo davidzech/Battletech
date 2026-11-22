@@ -79,6 +79,14 @@ func (s *Server) commitOutcome(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if res.MVPRefused != "" {
+		http.Error(w, res.MVPRefused+" leaves the campaign after this mission, so they cannot be the MVP.", http.StatusBadRequest)
+		return
+	}
+	if res.MVPMissing() {
+		http.Error(w, "Choose the mission's MVP: every mission has one when a named pilot took part and stays in the campaign.", http.StatusBadRequest)
+		return
+	}
 	if !s.writeBackBattle(w, r, pt, c, sc) {
 		return
 	}

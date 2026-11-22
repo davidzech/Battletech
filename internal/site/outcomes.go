@@ -284,6 +284,25 @@ type OutcomeResult struct {
 	FreeRecruits int            `json:"freeRecruits"` // recruits that cost no SP
 	Keywords     []string       `json:"keywords"`     // keywords added to the campaign ledger
 	Notes        []string       `json:"notes"`        // notes about the mission as a whole
+	// MVPCandidates are the pilots who can be the mission's MVP (IDs, in report order): every pilot who took part and stays in the campaign. When there are any, one
+	// of them must be chosen before the mission can be committed (MVPMissing); the MVP's SP is free, not drawn from the pool.
+	MVPCandidates []string `json:"mvpCandidates"`
+	// MVPRefused names a pilot reported as the MVP whom the rules remove from the campaign (Scenario 000's pilot with no kills): the preview simply drops them as
+	// the MVP, so the dialog can offer the candidates again, but a commit with one is refused.
+	MVPRefused string `json:"-"`
+}
+
+// MVPMissing says whether the mission still needs its MVP chosen: it has candidates and none of the pilots is the MVP.
+func (res OutcomeResult) MVPMissing() bool {
+	if len(res.MVPCandidates) == 0 {
+		return false
+	}
+	for _, p := range res.Pilots {
+		if p.MVP {
+			return false
+		}
+	}
+	return true
 }
 
 // outcomeValue turns a reported value into a number within the input's range: a number must be whole, a bool is true or false.
@@ -358,7 +377,7 @@ func (sc *Scenario) entered(values map[string]any, scope string) []string {
 // EvaluateOutcome applies the scenario's rules to what the players reported. names maps a living named pilot's ID to their name; an entry for any other pilot is
 // refused. Every pilot listed is in the result: active ones go through the rules, benched ones get their half share of the pilot SP, killed ones nothing.
 func (sc *Scenario) EvaluateOutcome(in OutcomeInputs, names map[string]string) (OutcomeResult, error) {
-	res := OutcomeResult{Pilots: []PilotOutcome{}, Keywords: []string{}, Notes: []string{}}
+	res := OutcomeResult{Pilots: []PilotOutcome{}, Keywords: []string{}, Notes: []string{}, MVPCandidates: []string{}}
 	mission, err := sc.inputValues("mission", in.Mission)
 	if err != nil {
 		return res, err
@@ -513,6 +532,14 @@ func (sc *Scenario) EvaluateOutcome(in OutcomeInputs, names map[string]string) (
 		if p.Status == "killed" && !p.KIA {
 			p.KIA = true
 			p.Notes = append(p.Notes, "Killed in Action.")
+		}
+		// A rule can remove a pilot who lived (Scenario 000 removes one with no kills): they leave the campaign, so they can't be its MVP either.
+		if p.MVP && p.KIA {
+			p.MVP = false
+			res.MVPRefused = p.Name
+		}
+		if sc.MVPSP > 0 && p.Status == "active" && !p.KIA {
+			res.MVPCandidates = append(res.MVPCandidates, p.PilotID)
 		}
 	}
 	// The pilots' shares come out of the pool: the pilot SP to each active pilot, half to each benched one, nothing to a pilot who was killed. What is left goes to

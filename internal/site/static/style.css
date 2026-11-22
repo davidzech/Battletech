@@ -1397,6 +1397,8 @@ dialog.outcome { width: min(46rem, calc(100vw - 2rem)); }
 .outcome-good { color: #5fc47e; }
 .outcome-bad { color: #e5594f; }
 .outcome-mission { margin: 0.9rem 0 0; }
+.outcome-mvp-label { display: block; font-size: 0.85rem; text-transform: none; letter-spacing: 0; font-family: inherit; }
+.outcome-summary .outcome-mvp-badge { margin-left: 0.5rem; font: 700 0.75rem var(--display); letter-spacing: 0.1em; color: var(--accent); }
 .outcome-summary { flex-basis: 100%; margin: 0.3rem 0 0; padding: 0; list-style: none; }
 .outcome-summary li { margin: 0.25rem 0; }
 .outcome-summary .outcome-note { margin-left: 0.5rem; font: 700 0.85rem var(--display); letter-spacing: 0.05em; text-transform: uppercase; color: #5fc47e; }
