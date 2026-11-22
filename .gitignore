@@ -5,3 +5,5 @@ dist/
 *.db
 *.db-wal
 *.db-shm
+# MekBay account UIDs are credentials
+uid.txt
