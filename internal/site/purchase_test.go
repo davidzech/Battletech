@@ -8,9 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/davidzech/Battletech/internal/mekbay"
-
 	"github.com/davidzech/Battletech/internal/catalog"
+	"github.com/davidzech/Battletech/internal/mekbay"
 )
 
 func TestPurchaseEndpoint(t *testing.T) {

@@ -9,9 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/davidzech/Battletech/internal/storage"
-
 	"github.com/davidzech/Battletech/internal/pilot"
+	"github.com/davidzech/Battletech/internal/storage"
 )
 
 func TestCheckpointsAndRollback(t *testing.T) {

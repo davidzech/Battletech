@@ -14,13 +14,11 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/davidzech/Battletech/internal/storage"
-
 	"github.com/davidzech/Battletech/internal/content"
-
 	"github.com/davidzech/Battletech/internal/mekbay"
-
+	"github.com/davidzech/Battletech/internal/mekbayproxy"
 	"github.com/davidzech/Battletech/internal/pilot"
+	"github.com/davidzech/Battletech/internal/storage"
 )
 
 //go:embed templates/*.html static/*
@@ -102,8 +100,8 @@ type Server struct {
 
 	// The MekBay proxy (mekbayproxy.go), served on the hosts mekbay-<link id>.<site host> (and mekbay.localhost).
 	upstream *[3]string // web, WebSocket and Origin of the MekBay to proxy; tests replace it
-	proxy    *mekbayProxy
-	onProxy  func(*mekbayProxy) // tests take hold of the proxy here
+	proxy    *mekbayproxy.Proxy
+	onProxy  func(*mekbayproxy.Proxy) // tests take hold of the proxy here
 }
 
 // Option customizes the handler returned by NewHandler.
@@ -119,9 +117,9 @@ func NewHandler(contentRoot string, store *storage.Store, opts ...Option) http.H
 	for _, o := range opts {
 		o(s)
 	}
-	s.proxy = newMekBayProxy(store)
+	s.proxy = mekbayproxy.New(store)
 	if s.upstream != nil {
-		s.proxy.web, s.proxy.ws, s.proxy.origin = s.upstream[0], s.upstream[1], s.upstream[2]
+		s.proxy.Web, s.proxy.WS, s.proxy.Origin = s.upstream[0], s.upstream[1], s.upstream[2]
 	}
 	if s.onProxy != nil {
 		s.onProxy(s.proxy)
@@ -189,7 +187,7 @@ func NewHandler(contentRoot string, store *storage.Store, opts ...Option) http.H
 	mux.HandleFunc("GET /{campaign}/{scenario}/forces/{file}", s.force)
 	mux.HandleFunc("/", s.notFound)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if isMekBayHost(r.Host) {
+		if mekbayproxy.IsHost(r.Host) {
 			s.proxy.ServeHTTP(w, r)
 			return
 		}

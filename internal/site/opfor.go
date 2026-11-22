@@ -5,11 +5,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/davidzech/Battletech/internal/content"
-
-	"github.com/davidzech/Battletech/internal/mekbay"
-
 	"github.com/davidzech/Battletech/internal/catalog"
+	"github.com/davidzech/Battletech/internal/content"
+	"github.com/davidzech/Battletech/internal/mekbay"
 )
 
 // A scenario's OpFor and operation as the battle builds them in MekBay (see battle.go).

@@ -3,11 +3,9 @@ package site
 import (
 	"fmt"
 
-	"github.com/davidzech/Battletech/internal/hangar"
-
-	"github.com/davidzech/Battletech/internal/mekbay"
-
 	"github.com/davidzech/Battletech/internal/catalog"
+	"github.com/davidzech/Battletech/internal/hangar"
+	"github.com/davidzech/Battletech/internal/mekbay"
 )
 
 // How a unit is shown: its name (the Clan name first), role label and mech-row view, for every list of mechs on the site.

@@ -6,11 +6,9 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/davidzech/Battletech/internal/storage"
-
 	"github.com/davidzech/Battletech/internal/content"
-
 	"github.com/davidzech/Battletech/internal/mekbay"
+	"github.com/davidzech/Battletech/internal/storage"
 )
 
 // The outcome engine's endpoints: previewing and committing a mission's outcome (see outcomes.go).

@@ -6,11 +6,9 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/davidzech/Battletech/internal/hangar"
-
-	"github.com/davidzech/Battletech/internal/mekbay"
-
 	"github.com/davidzech/Battletech/internal/catalog"
+	"github.com/davidzech/Battletech/internal/hangar"
+	"github.com/davidzech/Battletech/internal/mekbay"
 )
 
 func TestSwapUnitEndpoint(t *testing.T) {

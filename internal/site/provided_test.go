@@ -9,13 +9,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/davidzech/Battletech/internal/content"
-
-	"github.com/davidzech/Battletech/internal/hangar"
-
-	"github.com/davidzech/Battletech/internal/mekbay"
-
 	"github.com/davidzech/Battletech/internal/catalog"
+	"github.com/davidzech/Battletech/internal/content"
+	"github.com/davidzech/Battletech/internal/hangar"
+	"github.com/davidzech/Battletech/internal/mekbay"
 )
 
 // Scenario 000 hands every cadet one of four standard machines instead of letting them bring their own.

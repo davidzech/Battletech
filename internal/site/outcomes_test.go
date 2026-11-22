@@ -8,11 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/davidzech/Battletech/internal/storage"
-
 	"github.com/davidzech/Battletech/internal/content"
-
 	"github.com/davidzech/Battletech/internal/pilot"
+	"github.com/davidzech/Battletech/internal/storage"
 )
 
 func scenario000(t *testing.T) *content.Scenario {

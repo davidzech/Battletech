@@ -9,6 +9,17 @@ import (
 	"github.com/davidzech/Battletech/internal/mekbay"
 )
 
+// Repairing and rearming a hangar unit between sorties, from Hot Spots: Draconis Reach, the SP Activity Cost Table (printed p. 33).
+//
+//	Repair (armor damage only)                = tonnage / 2
+//	Repair (structure and/or critical damage) = tonnage x 2
+//	Repair (crippled)                         = tonnage x 3
+//	Repair (destroyed)                        = tonnage x 5
+//	Rearm, per ton of ammunition              = 10
+//
+// Only the highest repair level that applies is paid, and it covers every level beneath it. Clan and Mixed tech cost half again as much
+// (x1.5, rounded up). A unit whose center torso structure is gone is truly destroyed and can't be repaired at all.
+
 // repairLevels lists the levels with their cost multipliers on tonnage.
 var repairLevels = []struct {
 	ID   string

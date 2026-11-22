@@ -9,13 +9,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/davidzech/Battletech/internal/storage"
-
 	"github.com/davidzech/Battletech/internal/content"
-
 	"github.com/davidzech/Battletech/internal/format"
-
 	"github.com/davidzech/Battletech/internal/pilot"
+	"github.com/davidzech/Battletech/internal/storage"
 )
 
 // pilotRequest checks what every endpoint that changes a campaign needs (see runRequest) and returns the playthrough and the campaign. It writes the error

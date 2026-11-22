@@ -7,13 +7,10 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/davidzech/Battletech/internal/content"
-
-	"github.com/davidzech/Battletech/internal/format"
-
-	"github.com/davidzech/Battletech/internal/mekbay"
-
 	"github.com/davidzech/Battletech/internal/catalog"
+	"github.com/davidzech/Battletech/internal/content"
+	"github.com/davidzech/Battletech/internal/format"
+	"github.com/davidzech/Battletech/internal/mekbay"
 )
 
 // A campaign can require its starting hangar to hold at least so many mechs, totalling at most so much BV (Intro.md

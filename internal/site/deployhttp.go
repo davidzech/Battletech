@@ -5,9 +5,8 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/davidzech/Battletech/internal/storage"
-
 	"github.com/davidzech/Battletech/internal/content"
+	"github.com/davidzech/Battletech/internal/storage"
 )
 
 // The Deploy popup's endpoints: what every MekBay endpoint needs first, and the hangar as the popup lists it.

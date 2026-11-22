@@ -5,9 +5,8 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/davidzech/Battletech/internal/mekbay"
-
 	"github.com/davidzech/Battletech/internal/catalog"
+	"github.com/davidzech/Battletech/internal/mekbay"
 )
 
 // Building the starting hangar on the site. Instead of linking a force they made in MekBay, the player picks the mechs of their starting force from the same unit

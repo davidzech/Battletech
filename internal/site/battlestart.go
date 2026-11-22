@@ -9,9 +9,8 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/davidzech/Battletech/internal/storage"
-
 	"github.com/davidzech/Battletech/internal/mekbay"
+	"github.com/davidzech/Battletech/internal/storage"
 )
 
 // battleResponse is what Start battle answers: the one link the whole table opens.

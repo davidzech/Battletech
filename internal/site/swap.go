@@ -4,23 +4,13 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/davidzech/Battletech/internal/content"
-
-	"github.com/davidzech/Battletech/internal/hangar"
-
-	"github.com/davidzech/Battletech/internal/mekbay"
-
 	"github.com/davidzech/Battletech/internal/catalog"
+	"github.com/davidzech/Battletech/internal/content"
+	"github.com/davidzech/Battletech/internal/hangar"
+	"github.com/davidzech/Battletech/internal/mekbay"
 )
 
-// Reconfiguring omnimechs. The SP Activity Cost Table prices it at half the unit's tonnage, but in this campaign BV is SP, so that alone would make a cheap variant
-// a bargain way to get a better one (and, sold, a way to farm SP). A swap therefore costs half the tonnage plus half the BV gained; swapping to a variant worth less
-// costs only the half tonnage and refunds nothing. That is still cheaper than selling the unit and buying the other variant (which costs the new BV minus half the
-// old one), so being an omnimech is a real advantage, and swapping up then selling a clean unit always loses the half tonnage, so it can't be farmed.
-//
-// The unit has to be fully repaired and rearmed first, because the old variant's critical slots and ammunition don't map onto the new one's, and only omnimechs can
-// be swapped, and only to variants of their own chassis. The swap replaces the unit's design in the hangar force with a pristine copy of the new one. Crews are a
-// per-scenario matter (assigned when deploying), so nothing about the crew is carried over.
+// Reconfiguring omnimechs: the price and the variants offered are package hangar (swap.go), the edit to the force package mekbay.
 
 // markSwapAvailability marks each unit's reconfigure options as available or not to the campaign's faction in its era.
 func markSwapAvailability(views []hangarUnitView, c *content.Campaign) {

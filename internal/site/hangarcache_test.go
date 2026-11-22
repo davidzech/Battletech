@@ -9,9 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/davidzech/Battletech/internal/mekbay"
-
 	"github.com/davidzech/Battletech/internal/catalog"
+	"github.com/davidzech/Battletech/internal/mekbay"
 )
 
 // The pages paint the last hangar read from MekBay straight away, so a visit never starts from an empty "reading" state.

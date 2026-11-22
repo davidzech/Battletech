@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/davidzech/Battletech/internal/mekbay"
-
 	"github.com/google/uuid"
+
+	"github.com/davidzech/Battletech/internal/mekbay"
 )
 
 // MekBay links: what makes a browser act as a MekBay account (see mekbayproxy.go). A link is a long random id that appears as the first label of

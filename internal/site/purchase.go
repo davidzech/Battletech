@@ -4,7 +4,6 @@ import (
 	"net/http"
 
 	"github.com/davidzech/Battletech/internal/hangar"
-
 	"github.com/davidzech/Battletech/internal/mekbay"
 )
 

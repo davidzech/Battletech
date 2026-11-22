@@ -10,13 +10,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/davidzech/Battletech/internal/storage"
-
 	"github.com/davidzech/Battletech/internal/content"
-
 	"github.com/davidzech/Battletech/internal/mekbay"
-
 	"github.com/davidzech/Battletech/internal/pilot"
+	"github.com/davidzech/Battletech/internal/storage"
 )
 
 // parseAccountName validates the account's name: whatever the player likes to call their account.

@@ -12,11 +12,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/davidzech/Battletech/internal/storage"
-
 	"github.com/davidzech/Battletech/internal/content"
-
 	"github.com/davidzech/Battletech/internal/mekbay"
+	"github.com/davidzech/Battletech/internal/storage"
 )
 
 // The whole Aces-style flow on a scratch copy of Refusal War whose Scenario 000 is replaced by an Aces-style mission: four pilots, two active (one of them killed),

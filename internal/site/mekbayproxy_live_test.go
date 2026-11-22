@@ -12,11 +12,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/davidzech/Battletech/internal/storage"
+	"github.com/coder/websocket"
 
 	"github.com/davidzech/Battletech/internal/mekbay"
-
-	"github.com/coder/websocket"
+	"github.com/davidzech/Battletech/internal/mekbayproxy"
+	"github.com/davidzech/Battletech/internal/storage"
 )
 
 // TestMekBayProxyLive runs the proxy against the real mekbay.com with throwaway accounts (random UUIDs, one tiny force). It only runs when
@@ -38,8 +38,8 @@ func TestMekBayProxyLive(t *testing.T) {
 	if _, err := store.EnsurePlaythrough(ctx, "pt"); err != nil {
 		t.Fatal(err)
 	}
-	var proxy *mekbayProxy
-	site := httptest.NewServer(NewHandler(t.TempDir(), store, withMekBayProxyHook(func(p *mekbayProxy) { proxy = p })))
+	var proxy *mekbayproxy.Proxy
+	site := httptest.NewServer(NewHandler(t.TempDir(), store, withMekBayProxyHook(func(p *mekbayproxy.Proxy) { proxy = p })))
 	defer site.Close()
 	addr := strings.TrimPrefix(site.URL, "http://")
 	_, port, _ := net.SplitHostPort(addr)
@@ -84,7 +84,7 @@ func TestMekBayProxyLive(t *testing.T) {
 
 	// 3. A throwaway owner saves a tiny force, directly.
 	instance := mekbay.NewID()
-	own, err := mekbay.Dial(ctx, mekbayWSURL, owner)
+	own, err := mekbay.Dial(ctx, mekbayproxy.UpstreamWS, owner)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -167,7 +167,7 @@ func TestCheckMekBayLive(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	if err := CheckMekBay(ctx); err != nil {
+	if err := mekbayproxy.CheckMekBay(ctx); err != nil {
 		t.Fatal(err)
 	}
 }

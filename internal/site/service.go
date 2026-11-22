@@ -4,23 +4,12 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/davidzech/Battletech/internal/hangar"
-
-	"github.com/davidzech/Battletech/internal/mekbay"
-
 	"github.com/davidzech/Battletech/internal/catalog"
+	"github.com/davidzech/Battletech/internal/hangar"
+	"github.com/davidzech/Battletech/internal/mekbay"
 )
 
-// Repairing and rearming a hangar unit between sorties, from Hot Spots: Draconis Reach, the SP Activity Cost Table (printed p. 33).
-//
-//	Repair (armor damage only)                = tonnage / 2
-//	Repair (structure and/or critical damage) = tonnage x 2
-//	Repair (crippled)                         = tonnage x 3
-//	Repair (destroyed)                        = tonnage x 5
-//	Rearm, per ton of ammunition              = 10
-//
-// Only the highest repair level that applies is paid, and it covers every level beneath it. Clan and Mixed tech cost half again as much
-// (x1.5, rounded up). A unit whose center torso structure is gone is truly destroyed and can't be repaired at all.
+// Repairing and rearming hangar units: the prices and which repairs apply are package hangar (repair.go), the edit to the force package mekbay.
 
 // serviceUnit is POST /api/hangar/service: repair or rearm one unit of the hangar, paid for from the warchest. It needs modify mode, since
 // the change is made in MekBay. The server works out the unit's condition and the price itself; a repair names the level the page showed, and

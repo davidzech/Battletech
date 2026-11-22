@@ -4,11 +4,9 @@ import (
 	"context"
 	"strings"
 
-	"github.com/davidzech/Battletech/internal/storage"
-
 	"github.com/davidzech/Battletech/internal/content"
-
 	"github.com/davidzech/Battletech/internal/mekbay"
+	"github.com/davidzech/Battletech/internal/storage"
 )
 
 // Provided forces. A scenario can set the mechs its players fly instead of letting them bring their own, for story reasons (Scenario 000, the Trial of Position,

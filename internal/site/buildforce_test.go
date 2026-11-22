@@ -7,9 +7,8 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/davidzech/Battletech/internal/mekbay"
-
 	"github.com/davidzech/Battletech/internal/catalog"
+	"github.com/davidzech/Battletech/internal/mekbay"
 )
 
 // startWithUnits is the start wizard's form for a force built on the site: the mechs picked, and no hangar link.

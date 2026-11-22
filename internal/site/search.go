@@ -9,11 +9,7 @@ import (
 	"github.com/davidzech/Battletech/internal/catalog"
 )
 
-// Searching the unit list to buy from. MekBay's catalog (units_index.json, here) is searched by the site itself: MekBay offers no embeddable search
-// or way to hand a chosen unit back, but its data is public, and its search is simple (typed words matched, punctuation ignored, against a unit's
-// chassis and model) and easy to match over about ten thousand units. Each campaign can also name a faction and an era (Intro.md
-// availability_faction and availability_era); the search then offers only the units MekBay lists as available to that faction in that era,
-// unless the player asks for everything. See availability.json, built by gen_units.go from MekBay's faction and era files.
+// The unit search endpoint: the search itself and the faction and era filter are package catalog (search.go, availability.go).
 
 // searchResult is what a search returns: the units shown, how many matched in all, and what filter was applied.
 type searchResult struct {

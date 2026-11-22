@@ -7,9 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/davidzech/Battletech/internal/storage"
-
 	"github.com/davidzech/Battletech/internal/content"
+	"github.com/davidzech/Battletech/internal/storage"
 )
 
 func TestForceNames(t *testing.T) {

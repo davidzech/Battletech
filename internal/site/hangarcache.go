@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/davidzech/Battletech/internal/content"
-
 	"github.com/davidzech/Battletech/internal/mekbay"
 )
 

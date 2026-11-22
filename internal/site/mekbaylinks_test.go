@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/davidzech/Battletech/internal/mekbayproxy"
 	"github.com/davidzech/Battletech/internal/storage"
 )
 
@@ -33,7 +34,7 @@ func TestMekBayLinksSurviveARestart(t *testing.T) {
 	}
 	r := httptest.NewRequest("GET", "/", nil)
 	r.Host = storage.LinkPrefix + id + ".localhost"
-	if acct, status, _ := newMekBayProxy(again).account(r); status != 0 || acct != testAccount {
+	if acct, status, _ := mekbayproxy.New(again).Account(r); status != 0 || acct != testAccount {
 		t.Errorf("the link still acts as its account: %q %d", acct, status)
 	}
 

@@ -8,14 +8,12 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/davidzech/Battletech/internal/format"
-
-	"github.com/davidzech/Battletech/internal/mekbay"
-
-	"github.com/davidzech/Battletech/internal/pilot"
-
 	_ "github.com/jackc/pgx/v5/stdlib" // pure-Go PostgreSQL driver
 	_ "modernc.org/sqlite"             // pure-Go SQLite driver
+
+	"github.com/davidzech/Battletech/internal/format"
+	"github.com/davidzech/Battletech/internal/mekbay"
+	"github.com/davidzech/Battletech/internal/pilot"
 )
 
 // Store is the database holding playthrough state: a local SQLite file, or PostgreSQL when the site is hosted

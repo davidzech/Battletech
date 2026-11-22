@@ -14,11 +14,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/davidzech/Battletech/internal/storage"
+	"github.com/coder/websocket"
 
 	"github.com/davidzech/Battletech/internal/mekbay"
-
-	"github.com/coder/websocket"
+	"github.com/davidzech/Battletech/internal/mekbayproxy"
+	"github.com/davidzech/Battletech/internal/storage"
 )
 
 const (
@@ -111,7 +111,7 @@ func (f *fakeUpstream) sent() []string {
 type proxyFixture struct {
 	fake   *fakeUpstream
 	site   *httptest.Server
-	proxy  *mekbayProxy
+	proxy  *mekbayproxy.Proxy
 	store  *storage.Store
 	client *http.Client
 	port   string
@@ -128,10 +128,10 @@ func newProxyFixture(t *testing.T) *proxyFixture {
 	if _, err := store.EnsurePlaythrough(context.Background(), "pt"); err != nil {
 		t.Fatal(err)
 	}
-	var proxy *mekbayProxy
+	var proxy *mekbayproxy.Proxy
 	site := httptest.NewServer(NewHandler(t.TempDir(), store,
 		withMekBayUpstream(fake.URL, "ws"+strings.TrimPrefix(fake.URL, "http")+"/ws", "https://mekbay.com"),
-		withMekBayProxyHook(func(p *mekbayProxy) { proxy = p })))
+		withMekBayProxyHook(func(p *mekbayproxy.Proxy) { proxy = p })))
 	t.Cleanup(site.Close)
 	addr := strings.TrimPrefix(site.URL, "http://")
 	_, port, _ := net.SplitHostPort(addr)
@@ -192,46 +192,6 @@ func whoIs(t *testing.T, conn *websocket.Conn) string {
 	var m struct{ UUID string }
 	_ = json.Unmarshal([]byte(strings.TrimPrefix(string(b), "echo:")), &m)
 	return m.UUID
-}
-
-func TestMekBayHostParsing(t *testing.T) {
-	id := storage.NewLinkID()
-	for _, c := range []struct {
-		host string
-		id   string
-		kind mekbayHostKind
-	}{
-		{"mekbay-" + id + ".battletech.zech.io", id, linkHost},
-		{"mekbay-" + id + ".localhost:8080", id, linkHost},
-		{"MekBay-" + strings.ToUpper(id) + ".Example.com", id, linkHost},
-		{"mekbay-short.battletech.zech.io", "", linkHost},
-		{"mekbay-" + id + "x.battletech.zech.io", "", linkHost},
-		{"mekbay-" + strings.ReplaceAll(id, id[:1], "1") + ".x.io", "", linkHost}, // 1 is not a base32 character here
-		{"mekbay.localhost:8080", "", sandboxHost},
-		{"mekbay.battletech.zech.io", "", sandboxHost},
-		{"battletech.zech.io", "", notMekBayHost},
-		{"localhost:8080", "", notMekBayHost},
-		{"notmekbay.example.com", "", notMekBayHost},
-		{"x.mekbay.example.com", "", notMekBayHost},
-		{"mekbayfoo.example.com", "", notMekBayHost},
-	} {
-		if gid, kind := parseMekBayHost(c.host); gid != c.id || kind != c.kind {
-			t.Errorf("parseMekBayHost(%q) = %q, %v; want %q, %v", c.host, gid, kind, c.id, c.kind)
-		}
-	}
-	if !isMekBayHost("mekbay.localhost") || isMekBayHost("battletech.zech.io") {
-		t.Error("isMekBayHost follows the kind")
-	}
-	for host, want := range map[string]string{
-		"mekbay-" + id + ".battletech.zech.io": "battletech.zech.io",
-		"mekbay.localhost:8080":                "localhost:8080",
-		"battletech.zech.io":                   "battletech.zech.io",
-		"localhost:8080":                       "localhost:8080",
-	} {
-		if got := siteHost(host); got != want {
-			t.Errorf("siteHost(%q) = %q, want %q", host, got, want)
-		}
-	}
 }
 
 func TestMekBayProxyServesAndRewrites(t *testing.T) {
@@ -354,7 +314,7 @@ func TestMekBayProxyCachesAndSurvivesAnOutage(t *testing.T) {
 		t.Errorf("a fresh file is fetched once, not %d times", n)
 	}
 	// Let the copy go stale and take MekBay down: the old copy is served instead of an error.
-	p.proxy.now = func() time.Time { return time.Now().Add(3 * time.Hour) }
+	p.proxy.Now = func() time.Time { return time.Now().Add(3 * time.Hour) }
 	p.fake.Close()
 	resp, body := p.get(t, host, "/assets/data.json")
 	if resp.StatusCode != 200 || body != `{"ok":true}` {
@@ -520,10 +480,10 @@ func TestMekBayRelaySandbox(t *testing.T) {
 			t.Errorf("%s gets no sandbox: %v %v", name, resp, err)
 		}
 	}
-	if sandboxAllowed(&http.Request{Host: "mekbay.localhost:8080", RemoteAddr: "203.0.113.9:5000", Header: http.Header{}}) {
+	if mekbayproxy.SandboxAllowed(&http.Request{Host: "mekbay.localhost:8080", RemoteAddr: "203.0.113.9:5000", Header: http.Header{}}) {
 		t.Error("a remote client can't claim localhost with its Host header")
 	}
-	if !sandboxAllowed(&http.Request{Host: "mekbay.localhost:8080", RemoteAddr: "[::1]:5000", Header: http.Header{}}) || !sandboxAllowed(&http.Request{Host: "mekbay-x.localhost", RemoteAddr: "127.0.0.1:5000", Header: http.Header{}}) {
+	if !mekbayproxy.SandboxAllowed(&http.Request{Host: "mekbay.localhost:8080", RemoteAddr: "[::1]:5000", Header: http.Header{}}) || !mekbayproxy.SandboxAllowed(&http.Request{Host: "mekbay-x.localhost", RemoteAddr: "127.0.0.1:5000", Header: http.Header{}}) {
 		t.Error("loopback clients on *.localhost are allowed, IPv6 included")
 	}
 	if n := len(p.fake.sent()); n != 3 {
@@ -533,8 +493,8 @@ func TestMekBayRelaySandbox(t *testing.T) {
 
 func TestMekBayCheck(t *testing.T) {
 	p := newProxyFixture(t)
-	pr := newMekBayProxy(p.store)
-	pr.web = p.fake.URL
+	pr := mekbayproxy.New(p.store)
+	pr.Web = p.fake.URL
 	if err := pr.Check(context.Background()); err != nil {
 		t.Errorf("a MekBay that names its WebSocket the expected way passes: %v", err)
 	}
@@ -544,25 +504,9 @@ func TestMekBayCheck(t *testing.T) {
 	if err := pr.Check(context.Background()); err == nil || !strings.Contains(err.Error(), "any more") {
 		t.Errorf("a MekBay that renamed it fails the check: %v", err)
 	}
-	pr.web = "http://127.0.0.1:1"
+	pr.Web = "http://127.0.0.1:1"
 	if err := pr.Check(context.Background()); err == nil {
 		t.Error("an unreachable MekBay fails the check")
-	}
-}
-
-func TestSwapUUID(t *testing.T) {
-	const acct = testAccount
-	for in, want := range map[string]string{
-		`{"action":"x"}`:                      `{"action":"x"}`,
-		`{"uuid":"a"}`:                        `{"uuid":"` + acct + `"}`,
-		`{"a":1,"uuid":"a","b":{"uuid":"n"}}`: `{"a":1,"b":{"uuid":"n"},"uuid":"` + acct + `"}`,
-		`[{"uuid":"a"}]`:                      `[{"uuid":"a"}]`,
-		`{"note":"has \"uuid\" in text"}`:     `{"note":"has \"uuid\" in text"}`,
-		`{"uuid":"a","data":{"n":1.50}}`:      `{"data":{"n":1.50},"uuid":"` + acct + `"}`,
-	} {
-		if got := string(swapUUID([]byte(in), acct)); got != want {
-			t.Errorf("swapUUID(%s)\n got %s\nwant %s", in, got, want)
-		}
 	}
 }
 
@@ -576,7 +520,7 @@ func TestMekBayLinkBuilder(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := &Server{store: store}
-	s.proxy = newMekBayProxy(store)
+	s.proxy = mekbayproxy.New(store)
 	re := regexp.MustCompile(`^(https?)://mekbay-([a-z2-7]{32})\.(.+?)/(\?.*)?$`)
 	for _, c := range []struct{ host, proto, wantScheme, wantSite string }{
 		{"battletech.zech.io", "https", "https", "battletech.zech.io"},

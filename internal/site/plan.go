@@ -8,11 +8,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/davidzech/Battletech/internal/storage"
-
 	"github.com/davidzech/Battletech/internal/content"
-
 	"github.com/davidzech/Battletech/internal/mekbay"
+	"github.com/davidzech/Battletech/internal/storage"
 )
 
 // The deployment plan: which mechs and pilots each player takes on a sortie. The Deploy wizard steps through the players one at a time, each choosing from what

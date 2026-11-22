@@ -9,11 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/davidzech/Battletech/internal/hangar"
-
-	"github.com/davidzech/Battletech/internal/mekbay"
-
 	"github.com/davidzech/Battletech/internal/catalog"
+	"github.com/davidzech/Battletech/internal/hangar"
+	"github.com/davidzech/Battletech/internal/mekbay"
 )
 
 // The Howler's raw state from the live hangar (2026-11-16): crippled, with one spent ammo bin.

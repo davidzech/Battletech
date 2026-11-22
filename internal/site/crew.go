@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/davidzech/Battletech/internal/mekbay"
-
 	"github.com/davidzech/Battletech/internal/pilot"
 )
 

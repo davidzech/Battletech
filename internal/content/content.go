@@ -14,15 +14,13 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/davidzech/Battletech/internal/format"
-
-	"github.com/davidzech/Battletech/internal/pilot"
-
-	"github.com/davidzech/Battletech/internal/catalog"
-
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/extension"
 	"gopkg.in/yaml.v3"
+
+	"github.com/davidzech/Battletech/internal/catalog"
+	"github.com/davidzech/Battletech/internal/format"
+	"github.com/davidzech/Battletech/internal/pilot"
 )
 
 // Scenario is one Scenario_NNN folder.

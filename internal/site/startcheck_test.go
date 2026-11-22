@@ -9,13 +9,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/davidzech/Battletech/internal/content"
-
-	"github.com/davidzech/Battletech/internal/format"
-
-	"github.com/davidzech/Battletech/internal/mekbay"
-
 	"github.com/davidzech/Battletech/internal/catalog"
+	"github.com/davidzech/Battletech/internal/content"
+	"github.com/davidzech/Battletech/internal/format"
+	"github.com/davidzech/Battletech/internal/mekbay"
 )
 
 // hangarOf builds a hangar of standard 4/5 units from MekBay unit IDs.

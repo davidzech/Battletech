@@ -6,7 +6,6 @@ import (
 	"errors"
 
 	"github.com/davidzech/Battletech/internal/mekbay"
-
 	"github.com/davidzech/Battletech/internal/pilot"
 )
 
