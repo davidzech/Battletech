@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/davidzech/Battletech/internal/hangar"
+
 	"github.com/davidzech/Battletech/internal/mekbay"
 
 	"github.com/davidzech/Battletech/internal/catalog"
@@ -32,7 +34,7 @@ func TestProvidedForce(t *testing.T) {
 		if !ok || cat.Type != "Mek" {
 			t.Errorf("%s is not a mech in the catalog", u.Unit)
 		}
-		if u.Unit != scenario000Pool[i] || !strings.HasPrefix(u.ID, providedPrefix) || ids[u.ID] || !unitPristine(u) || u.Pilot != "" {
+		if u.Unit != scenario000Pool[i] || !strings.HasPrefix(u.ID, providedPrefix) || ids[u.ID] || !hangar.Pristine(u) || u.Pilot != "" {
 			t.Errorf("a provided unit is new, unique and uncrewed: %+v", u)
 		}
 		ids[u.ID] = true

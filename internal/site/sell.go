@@ -5,6 +5,8 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/davidzech/Battletech/internal/hangar"
+
 	"github.com/davidzech/Battletech/internal/mekbay"
 
 	"github.com/davidzech/Battletech/internal/catalog"
@@ -14,20 +16,6 @@ import (
 // rearmed gets that: any damage or spent ammunition halves the price again, rounded down, so a worn unit fetches about a quarter of its BV. A truly destroyed
 // mech (see CondTruly) can't be repaired, so selling it is the only thing left to do with it, and it always sells at the reduced price. The sale takes the unit
 // out of the hangar force (crew and all) and pays the warchest.
-
-// unitPristine reports whether a unit is fully repaired and rearmed: no recorded damage, not destroyed, no spent ammunition.
-func unitPristine(hu mekbay.HangarUnit) bool {
-	return !hu.Damaged && !hu.Destroyed && hu.AmmoUsed == 0 && hu.AmmoBins == 0 && len(hu.Locations) == 0 && len(hu.Crits) == 0
-}
-
-// sellValue is the SP a unit with this base BV sells for: half its BV when pristine, otherwise half of that, rounding down each time.
-func sellValue(bv int, pristine bool) int {
-	v := bv / 2
-	if !pristine {
-		v /= 2
-	}
-	return v
-}
 
 // sellUnit is POST /api/hangar/sell: sell the hangar unit named by `unit`. The server works out the price itself from the unit's state. The unit is taken out of
 // the hangar first and the warchest paid after, so a failure in MekBay never pays for a unit the player still has.
@@ -58,7 +46,7 @@ func (s *Server) sellUnit(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Only mechs in the catalog can be sold here.", http.StatusBadRequest)
 		return
 	}
-	value := sellValue(cat.BV, unitPristine(hu))
+	value := hangar.SellValue(cat.BV, hangar.Pristine(hu))
 	if err := s.mekbay.SellUnit(r.Context(), mekbay.SellRequest{OwnerUID: mekbay.AccountUID(currentSeed(r), mekbay.SlotHangar), Instance: run.HangarInstance, UnitID: hu.ID}); err != nil {
 		log.Printf("sell a unit in MekBay: %v", err) // never log the owner UID
 		http.Error(w, err.Error(), http.StatusBadGateway)

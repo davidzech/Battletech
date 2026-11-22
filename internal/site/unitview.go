@@ -3,6 +3,8 @@ package site
 import (
 	"fmt"
 
+	"github.com/davidzech/Battletech/internal/hangar"
+
 	"github.com/davidzech/Battletech/internal/mekbay"
 
 	"github.com/davidzech/Battletech/internal/catalog"
@@ -43,12 +45,12 @@ type hangarUnitView struct {
 	RepairCosts  map[string]int `json:"repairCosts,omitempty"`
 	RearmCost    int            `json:"rearmCost"`
 	// AmmoBreakdown says what a rearm would refill: tons of each ammo type and the shots used out of the shots those tons hold.
-	AmmoBreakdown []ammoLine `json:"ammoBreakdown"`
+	AmmoBreakdown []hangar.AmmoLine `json:"ammoBreakdown"`
 	// SellValue is the SP the unit sells for (see sell.go), and SellFull whether that is the full price, which only a fully repaired and rearmed unit gets.
 	SellValue int  `json:"sellValue"`
 	SellFull  bool `json:"sellFull"`
 	// SwapOptions are the other variants an omnimech can be reconfigured to, with their prices (see swap.go); empty for any other unit.
-	SwapOptions []swapOption `json:"swapOptions,omitempty"`
+	SwapOptions []hangar.SwapOption `json:"swapOptions,omitempty"`
 	// Card is the unit's catalog card, the same as a scenario's unit links show (unitlinks.go), for the overview's hover card; nil for an unknown unit.
 	Card *catalog.UnitCard `json:"card,omitempty"`
 }
@@ -77,11 +79,11 @@ func hangarViews(h mekbay.HangarForce) []hangarUnitView {
 		c, note := mekbay.ConditionOf(hu, tons, engine)
 		v.Condition, v.ConditionNote, v.AmmoExpended = string(c), note, hu.AmmoUsed > 0
 		if u, ok := catalog.ByName(hu.Unit); ok && u.Type == "Mek" {
-			v.RepairLevels, v.RepairCosts, v.RearmCost = repairOptions(hu, c, u.Tons), repairCosts(u.Tons, u.TechBase), rearmCost(hu.AmmoBins)
-			v.AmmoBreakdown = ammoBreakdown(hu, u)
-			v.SellFull = unitPristine(hu)
-			v.SellValue = sellValue(u.BV, v.SellFull)
-			v.SwapOptions = swapOptions(u)
+			v.RepairLevels, v.RepairCosts, v.RearmCost = hangar.RepairOptions(hu, c, u.Tons), hangar.RepairCosts(u.Tons, u.TechBase), hangar.RearmCost(hu.AmmoBins)
+			v.AmmoBreakdown = hangar.AmmoBreakdown(hu, u)
+			v.SellFull = hangar.Pristine(hu)
+			v.SellValue = hangar.SellValue(u.BV, v.SellFull)
+			v.SwapOptions = hangar.SwapOptions(u)
 		}
 		views = append(views, v)
 	}

@@ -9,60 +9,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/davidzech/Battletech/internal/hangar"
+
 	"github.com/davidzech/Battletech/internal/mekbay"
 
 	"github.com/davidzech/Battletech/internal/catalog"
 )
-
-func TestRepairCostsFollowTheSPActivityCostTable(t *testing.T) {
-	cases := []struct {
-		level string
-		tons  float64
-		tech  string
-		want  int
-	}{
-		{mekbay.RepairArmor, 20, "Inner Sphere", 10}, {mekbay.RepairStructure, 20, "Inner Sphere", 40},
-		{mekbay.RepairCrippled, 20, "Inner Sphere", 60}, {mekbay.RepairDestroyed, 20, "Inner Sphere", 100},
-		{mekbay.RepairArmor, 20, "Clan", 15}, {mekbay.RepairStructure, 20, "Clan", 60}, {mekbay.RepairCrippled, 20, "Clan", 90}, {mekbay.RepairDestroyed, 20, "Clan", 150},
-		{mekbay.RepairArmor, 25, "Mixed", 19},        // 12.5 x 1.5 = 18.75, rounded up
-		{mekbay.RepairArmor, 25, "Inner Sphere", 13}, // 12.5 rounded up
-		{mekbay.RepairDestroyed, 100, "Clan", 750},
-	}
-	for _, c := range cases {
-		if got := repairCost(c.level, c.tons, c.tech); got != c.want {
-			t.Errorf("%s %vt %s: %d, want %d", c.level, c.tons, c.tech, got, c.want)
-		}
-	}
-	if rearmCost(3) != 30 {
-		t.Errorf("rearm of three bins: %d", rearmCost(3))
-	}
-}
-
-func TestRepairOptions(t *testing.T) {
-	loc := func(m map[string]mekbay.LocationLoss) mekbay.HangarUnit { return mekbay.HangarUnit{Locations: m} }
-	cases := []struct {
-		name string
-		hu   mekbay.HangarUnit
-		cond mekbay.Condition
-		want string
-	}{
-		{"undamaged", mekbay.HangarUnit{}, mekbay.CondOK, ""},
-		{"armor only", loc(map[string]mekbay.LocationLoss{"CT": {Armor: 4}}), mekbay.CondArmor, "armor"},
-		{"structure only, no armor lost", loc(map[string]mekbay.LocationLoss{"CT": {Internal: 2}}), mekbay.CondStructure, "structure"},
-		{"armor and structure", loc(map[string]mekbay.LocationLoss{"CT": {Armor: 4, Internal: 2}}), mekbay.CondStructure, "armor,structure"},
-		{"a crit in a living location is structure-level", mekbay.HangarUnit{Crits: []mekbay.CritDamage{{Loc: "RT"}}}, mekbay.CondStructure, "structure"},
-		{"crippled by destroyed limbs, armor also lost", loc(map[string]mekbay.LocationLoss{"LL": {Internal: 4}, "RA": {Armor: 5, Internal: 3}}), mekbay.CondCrippled, "armor,crippled"},
-		{"crippled with surviving structure damage too", loc(map[string]mekbay.LocationLoss{"LL": {Internal: 4}, "RA": {Internal: 3}, "CT": {Internal: 1}}), mekbay.CondCrippled, "structure,crippled"},
-		{"crippled by engine hits only", mekbay.HangarUnit{EngineHits: 2, Crits: []mekbay.CritDamage{{Loc: "CT", Engine: true}}}, mekbay.CondCrippled, "crippled"},
-		{"destroyed", mekbay.HangarUnit{Destroyed: true, Locations: map[string]mekbay.LocationLoss{"HD": {Armor: 1, Internal: 3}}}, mekbay.CondDestroyed, "armor,crippled,destroyed"},
-		{"truly destroyed", loc(map[string]mekbay.LocationLoss{"CT": {Internal: 6}}), mekbay.CondTruly, ""},
-	}
-	for _, c := range cases {
-		if got := strings.Join(repairOptions(c.hu, c.cond, 20), ","); got != c.want {
-			t.Errorf("%s: %q, want %q", c.name, got, c.want)
-		}
-	}
-}
 
 // The Howler's raw state from the live hangar (2026-11-16): crippled, with one spent ammo bin.
 const crippledForce = `{"name":"t","groups":[{"name":"","units":[{"id":"c","unit":"BMBaboon","updatedTs":1,"state":{"destroyed":false,
@@ -202,8 +154,8 @@ func TestAmmoBreakdown(t *testing.T) {
 		t.Fatal(err)
 	}
 	hu := readBack(t, f)
-	got := ammoBreakdown(hu, baboon)
-	if len(got) != 1 || got[0] != (ammoLine{Name: "LRM 5 Ammo", Tons: 1, Used: 5, Capacity: 24}) {
+	got := hangar.AmmoBreakdown(hu, baboon)
+	if len(got) != 1 || got[0] != (hangar.AmmoLine{Name: "LRM 5 Ammo", Tons: 1, Used: 5, Capacity: 24}) {
 		t.Errorf("Howler: %+v", got)
 	}
 	// Two bins of one type add up, and different types are listed apart, in name order; a bin the catalog doesn't know is still a ton.
@@ -211,8 +163,8 @@ func TestAmmoBreakdown(t *testing.T) {
 	hu = mekbay.HangarUnit{AmmoBins: 4, AmmoUsed2: []mekbay.AmmoUse{
 		{Name: "Clan Ammo LRM-10", Loc: "LT", Used: 4}, {Name: "Clan Gauss Ammo", Loc: "RA", Used: 3}, {Name: "Clan Gauss Ammo", Loc: "RA", Used: 5}, {Name: "Mystery Ammo", Loc: "CT", Used: 2},
 	}}
-	got = ammoBreakdown(hu, grizzly)
-	want := []ammoLine{{"Gauss Ammo", 2, 8, 16}, {"LRM 10 Ammo", 1, 4, 12}, {"Mystery Ammo", 1, 2, 0}}
+	got = hangar.AmmoBreakdown(hu, grizzly)
+	want := []hangar.AmmoLine{{Name: "Gauss Ammo", Tons: 2, Used: 8, Capacity: 16}, {Name: "LRM 10 Ammo", Tons: 1, Used: 4, Capacity: 12}, {Name: "Mystery Ammo", Tons: 1, Used: 2, Capacity: 0}}
 	if len(got) != 3 || got[0] != want[0] || got[1] != want[1] || got[2] != want[2] {
 		t.Errorf("Grizzly: %+v, want %+v", got, want)
 	}
