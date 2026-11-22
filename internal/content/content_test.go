@@ -1,8 +1,12 @@
 package content
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/davidzech/Battletech/internal/pilot"
 )
 
 func TestStartingBVText(t *testing.T) {
@@ -98,5 +102,66 @@ func TestScenarioPlanetFromFrontMatter(t *testing.T) {
 	sc, ok := c.Scenario("scenario_000")
 	if !ok || sc.Planet != "Strana Mechty" {
 		t.Fatalf("scenario_000 planet = %q", sc.Planet)
+	}
+}
+
+func TestRefusalWarStartsWithTwoNamedPilots(t *testing.T) {
+	c, ok := (Library{Root: "../../campaigns"}).Campaign("refusalwar")
+	if !ok || c.StartingNamedPilots != 2 || c.StartingPilotSP != 150 || c.StartingBV != 10000 || c.StartingMinMechs != 5 {
+		t.Fatalf("Refusal War starts with two named pilots (150 SP each) and a 10000 BV force: %+v", c)
+	}
+}
+
+// Each campaign picks its faction (and so its ranks) in Intro.md; a campaign may also list its own ranks.
+func TestCampaignFactionAndRanks(t *testing.T) {
+	rw := refusalWar(t)
+	want := []string{"MechWarrior", "Star Commander", "Star Captain", "Star Colonel", "Galaxy Commander", "saKhan", "Khan"}
+	if rw.Faction != "clan" || strings.Join(rw.Ranks, "|") != strings.Join(want, "|") {
+		t.Fatalf("Refusal War: faction %q, ranks %v", rw.Faction, rw.Ranks)
+	}
+	// The returned ladders are copies: changing one never changes the faction.
+	rw.Ranks[0] = "X"
+	if pilot.FactionRanks("clan")[0] != "MechWarrior" {
+		t.Error("factionRanks should hand out copies")
+	}
+	if pilot.FactionRanks("nope") != nil || pilot.FactionRanks("") != nil {
+		t.Error("an unknown or empty faction has no ranks")
+	}
+
+	root := t.TempDir()
+	mk := func(slug, intro string) {
+		dir := filepath.Join(root, slug)
+		if err := os.MkdirAll(filepath.Join(dir, "Scenario_000"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "Intro.md"), []byte(intro), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mk("plain", "---\nmin_players: 1\n---\n")
+	mk("unknown", "---\nfaction: martians\n---\n")
+	mk("custom", "---\nfaction: clan\nranks:\n  - Sergeant\n  - Lieutenant\n  - Captain\n---\n")
+	lib := Library{Root: root}
+	if c, ok := lib.Campaign("plain"); !ok || c.Ranks != nil || c.Faction != "" {
+		t.Errorf("a campaign with no faction has no ranks: %+v", c)
+	}
+	if c, ok := lib.Campaign("unknown"); !ok || c.Ranks != nil {
+		t.Errorf("an unknown faction turns ranks off: %+v", c)
+	}
+	if c, ok := lib.Campaign("custom"); !ok || strings.Join(c.Ranks, "|") != "Sergeant|Lieutenant|Captain" {
+		t.Errorf("a campaign's own ranks replace its faction's: %+v", c)
+	}
+}
+
+func TestScenarioBVLimit(t *testing.T) {
+	c, ok := (Library{Root: "../../campaigns"}).Campaign("refusalwar")
+	if !ok {
+		t.Fatal("no campaign")
+	}
+	if sc, _ := c.Scenario("scenario_001"); sc.BVLimit != 7500 {
+		t.Errorf("scenario 001 BV limit = %d, want 7500", sc.BVLimit)
+	}
+	if sc, _ := c.Scenario("scenario_000"); sc.BVLimit != 0 {
+		t.Errorf("scenario 000 should have no BV limit, got %d", sc.BVLimit)
 	}
 }

@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -17,13 +16,6 @@ import (
 	"github.com/davidzech/Battletech/internal/pilot"
 	"github.com/davidzech/Battletech/internal/storage"
 )
-
-func TestRefusalWarStartsWithTwoNamedPilots(t *testing.T) {
-	c, ok := (content.Library{Root: "../../campaigns"}).Campaign("refusalwar")
-	if !ok || c.StartingNamedPilots != 2 || c.StartingPilotSP != 150 || c.StartingBV != 10000 || c.StartingMinMechs != 5 {
-		t.Fatalf("Refusal War starts with two named pilots (150 SP each) and a 10000 BV force: %+v", c)
-	}
-}
 
 // startForm is what the start wizard posts: the hangar link plus, for each name, a pilot who allocates all 150 of
 // their starting SP (90 to Gunnery, 60 to Edge tokens).
@@ -699,47 +691,6 @@ func TestStatBoxCaptions(t *testing.T) {
 	}
 	if page := body(t, srv, "/refusalwar/manage/", cookie); !strings.Contains(page, `stat-next">max<`) {
 		t.Error("a column at its top level should say max")
-	}
-}
-
-// Each campaign picks its faction (and so its ranks) in Intro.md; a campaign may also list its own ranks.
-func TestCampaignFactionAndRanks(t *testing.T) {
-	rw := refusalWar(t)
-	want := []string{"MechWarrior", "Star Commander", "Star Captain", "Star Colonel", "Galaxy Commander", "saKhan", "Khan"}
-	if rw.Faction != "clan" || strings.Join(rw.Ranks, "|") != strings.Join(want, "|") {
-		t.Fatalf("Refusal War: faction %q, ranks %v", rw.Faction, rw.Ranks)
-	}
-	// The returned ladders are copies: changing one never changes the faction.
-	rw.Ranks[0] = "X"
-	if pilot.FactionRanks("clan")[0] != "MechWarrior" {
-		t.Error("factionRanks should hand out copies")
-	}
-	if pilot.FactionRanks("nope") != nil || pilot.FactionRanks("") != nil {
-		t.Error("an unknown or empty faction has no ranks")
-	}
-
-	root := t.TempDir()
-	mk := func(slug, intro string) {
-		dir := filepath.Join(root, slug)
-		if err := os.MkdirAll(filepath.Join(dir, "Scenario_000"), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(filepath.Join(dir, "Intro.md"), []byte(intro), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	mk("plain", "---\nmin_players: 1\n---\n")
-	mk("unknown", "---\nfaction: martians\n---\n")
-	mk("custom", "---\nfaction: clan\nranks:\n  - Sergeant\n  - Lieutenant\n  - Captain\n---\n")
-	lib := content.Library{Root: root}
-	if c, ok := lib.Campaign("plain"); !ok || c.Ranks != nil || c.Faction != "" {
-		t.Errorf("a campaign with no faction has no ranks: %+v", c)
-	}
-	if c, ok := lib.Campaign("unknown"); !ok || c.Ranks != nil {
-		t.Errorf("an unknown faction turns ranks off: %+v", c)
-	}
-	if c, ok := lib.Campaign("custom"); !ok || strings.Join(c.Ranks, "|") != "Sergeant|Lieutenant|Captain" {
-		t.Errorf("a campaign's own ranks replace its faction's: %+v", c)
 	}
 }
 

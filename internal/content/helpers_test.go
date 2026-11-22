@@ -53,3 +53,6 @@ func refusalWar(t *testing.T) *Campaign {
 	}
 	return c
 }
+
+// Scenario 000 hands every cadet one of four standard machines instead of letting them bring their own.
+var scenario000Pool = []string{"BMBlackHawk_Prime", "BMRyoken_Prime", "BMShadowCat_Prime", "BMPouncer_Prime", "BMGrendel_Prime"}

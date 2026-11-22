@@ -13,8 +13,6 @@ const wornForce = `{"instanceId":"src","owned":true,"name":"Mine","groups":[{"id
   "crew":[{"id":0,"name":"Alrek","gunnerySkill":2,"pilotingSkill":3,"hits":3,"state":1}]}},
  {"id":"u2","unit":"BMKoshi_E"}]}]}`
 
-const goodInstance = "01a12f9e-188f-7158-ad67-3fc9700ec733"
-
 // The Howler's raw state from the live hangar (2026-11-16): crippled, with one spent ammo bin.
 const crippledForce = `{"name":"t","groups":[{"name":"","units":[{"id":"c","unit":"BMBaboon","updatedTs":1,"state":{"destroyed":false,
  "locations":{"LL":{"armor":0,"internal":4},"LT":{"armor":0,"internal":5},"RA":{"armor":5,"internal":3}},
@@ -30,3 +28,11 @@ func readBack(t *testing.T, force map[string]any) HangarUnit {
 	}
 	return h.Units[0]
 }
+
+const (
+	goodInstance = "01a12f9e-188f-7158-ad67-3fc9700ec733"
+	goodSel      = "01a12f9d-a79b-717d-8c84-d5da73d2f9a5"
+	// goodHangar is a link as a player pastes it, with a unit selection; the site keeps only goodHangarURL.
+	goodHangar    = "https://mekbay.com/?instance=" + goodInstance + "&sel=" + goodSel
+	goodHangarURL = "https://mekbay.com/?instance=" + goodInstance
+)
