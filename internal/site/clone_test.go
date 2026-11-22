@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/davidzech/Battletech/internal/pilot"
 )
 
 // A force as MekBay saves it, with every kind of wear: lost armor and structure, a destroyed flag, a critical hit, spent ammo, heat, a torso check, and a
@@ -134,10 +136,10 @@ func TestStartChoosesEdgeAbilities(t *testing.T) {
 		v["pilot0_ability"] = abilities
 		return v
 	}
-	good := edgeAbilities[0].ID
+	good := pilot.AbilityCatalog[0].ID
 	for name, v := range map[string]url.Values{
 		"none chosen":         form(),
-		"too many":            form(good, edgeAbilities[1].ID),
+		"too many":            form(good, pilot.AbilityCatalog[1].ID),
 		"an unknown one":      form("no-such-ability"),
 		"for a level-0 pilot": func() url.Values { v := form(good); v["pilot1_ability"] = []string{good}; return v }(),
 	} {

@@ -4,13 +4,15 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+
+	"github.com/davidzech/Battletech/internal/pilot"
 )
 
 // The named pilots' queries: their SP, ranks, portraits, Edge abilities and the Advanced Management corrections (see pilot.go for the rules).
 
 const pilotColumns = `id, name, portrait, rank, fallen, sp_gunnery, sp_piloting, sp_edge_tokens, sp_edge_abilities, sp_total`
 
-func scanPilot(row interface{ Scan(...any) error }) (p NamedPilot, err error) {
+func scanPilot(row interface{ Scan(...any) error }) (p pilot.NamedPilot, err error) {
 	var fallen int
 	err = row.Scan(&p.ID, &p.Name, &p.Portrait, &p.Rank, &fallen, &p.SP.Gunnery, &p.SP.Piloting, &p.SP.EdgeTokens, &p.SP.EdgeAbilities, &p.TotalSP)
 	p.Fallen = fallen != 0
@@ -18,7 +20,7 @@ func scanPilot(row interface{ Scan(...any) error }) (p NamedPilot, err error) {
 }
 
 // Pilots lists a campaign run's named pilots, oldest first, fallen ones included.
-func (s *Store) Pilots(ctx context.Context, playthroughID, campaign string) ([]NamedPilot, error) {
+func (s *Store) Pilots(ctx context.Context, playthroughID, campaign string) ([]pilot.NamedPilot, error) {
 	rows, err := s.db.QueryContext(ctx,
 		s.q(`SELECT `+pilotColumns+` FROM named_pilots WHERE playthrough_id = ? AND campaign = ? ORDER BY created_at, id`),
 		playthroughID, campaign)
@@ -26,7 +28,7 @@ func (s *Store) Pilots(ctx context.Context, playthroughID, campaign string) ([]N
 		return nil, err
 	}
 	defer rows.Close()
-	var out []NamedPilot
+	var out []pilot.NamedPilot
 	for rows.Next() {
 		p, err := scanPilot(rows)
 		if err != nil {
@@ -63,60 +65,60 @@ func (s *Store) Pilots(ctx context.Context, playthroughID, campaign string) ([]N
 // AddPilot names a new pilot with the given starting SP. A command may have at most max living named pilots
 // (ErrPilotLimit otherwise).
 // AddPilot adds a pilot with the lowest rank and every SP allocated (see AddPilotWithRank).
-func (s *Store) AddPilot(ctx context.Context, playthroughID, campaign, name, portrait string, start SPAllocation, limit int) (NamedPilot, error) {
+func (s *Store) AddPilot(ctx context.Context, playthroughID, campaign, name, portrait string, start pilot.SPAllocation, limit int) (pilot.NamedPilot, error) {
 	return s.AddPilotWithRank(ctx, playthroughID, campaign, name, portrait, "", start, start.Total(), limit)
 }
 
 // AddPilotWithRank adds a living named pilot to a campaign run with the given rank ("" is the lowest) and starting SP, refusing
 // it when the command already has max living pilots (ErrPilotLimit), another living pilot has the portrait (ErrPortraitTaken) or
 // the name is taken (ErrNameTaken, ignoring case).
-func (s *Store) AddPilotWithRank(ctx context.Context, playthroughID, campaign, name, portrait, rank string, start SPAllocation, total, limit int) (NamedPilot, error) {
+func (s *Store) AddPilotWithRank(ctx context.Context, playthroughID, campaign, name, portrait, rank string, start pilot.SPAllocation, total, limit int) (pilot.NamedPilot, error) {
 	total = max(total, start.Total()) // the total can't be below what is allocated; any more is unallocated
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return NamedPilot{}, err
+		return pilot.NamedPilot{}, err
 	}
 	defer tx.Rollback()
 	var alive int
 	if err := tx.QueryRowContext(ctx,
 		s.q(`SELECT COUNT(*) FROM named_pilots WHERE playthrough_id = ? AND campaign = ? AND fallen = 0`),
 		playthroughID, campaign).Scan(&alive); err != nil {
-		return NamedPilot{}, err
+		return pilot.NamedPilot{}, err
 	}
 	if alive >= limit {
-		return NamedPilot{}, ErrPilotLimit
+		return pilot.NamedPilot{}, pilot.ErrPilotLimit
 	}
 	if portrait != "" {
 		var same int
 		if err := tx.QueryRowContext(ctx,
 			s.q(`SELECT COUNT(*) FROM named_pilots WHERE playthrough_id = ? AND campaign = ? AND fallen = 0 AND portrait = ?`),
 			playthroughID, campaign, portrait).Scan(&same); err != nil {
-			return NamedPilot{}, err
+			return pilot.NamedPilot{}, err
 		}
 		if same > 0 {
-			return NamedPilot{}, ErrPortraitTaken
+			return pilot.NamedPilot{}, pilot.ErrPortraitTaken
 		}
 	}
 	var named int
 	if err := tx.QueryRowContext(ctx,
 		s.q(`SELECT COUNT(*) FROM named_pilots WHERE playthrough_id = ? AND campaign = ? AND LOWER(name) = LOWER(?)`),
 		playthroughID, campaign, name).Scan(&named); err != nil {
-		return NamedPilot{}, err
+		return pilot.NamedPilot{}, err
 	}
 	if named > 0 {
-		return NamedPilot{}, ErrNameTaken
+		return pilot.NamedPilot{}, ErrNameTaken
 	}
-	p := NamedPilot{ID: newID(), Name: name, Portrait: portrait, Rank: rank, SP: start, TotalSP: total}
+	p := pilot.NamedPilot{ID: newID(), Name: name, Portrait: portrait, Rank: rank, SP: start, TotalSP: total}
 	if _, err := tx.ExecContext(ctx,
 		s.q(`INSERT INTO named_pilots (id, playthrough_id, campaign, name, portrait, rank, sp_gunnery, sp_piloting, sp_edge_tokens, sp_edge_abilities, sp_total) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`),
 		p.ID, playthroughID, campaign, name, portrait, rank, start.Gunnery, start.Piloting, start.EdgeTokens, start.EdgeAbilities, total); err != nil {
-		return NamedPilot{}, err
+		return pilot.NamedPilot{}, err
 	}
 	return p, tx.Commit()
 }
 
 // AwardSP adds SP to a living pilot's columns (sql.ErrNoRows if there is no such pilot, or they have fallen).
-func (s *Store) AwardSP(ctx context.Context, playthroughID, campaign, pilotID string, a SPAllocation) error {
+func (s *Store) AwardSP(ctx context.Context, playthroughID, campaign, pilotID string, a pilot.SPAllocation) error {
 	res, err := s.db.ExecContext(ctx,
 		s.q(`UPDATE named_pilots SET sp_gunnery = sp_gunnery + ?, sp_piloting = sp_piloting + ?, sp_edge_tokens = sp_edge_tokens + ?, sp_edge_abilities = sp_edge_abilities + ?, sp_total = sp_total + ?
 		     WHERE id = ? AND playthrough_id = ? AND campaign = ? AND fallen = 0`),
@@ -151,7 +153,7 @@ func (s *Store) EarnSP(ctx context.Context, playthroughID, campaign, pilotID str
 // AllocateSP spends a living pilot's unallocated SP: a is added to their four columns, and may not exceed what is
 // unallocated (total minus the columns' sum), checked in the same statement that writes it so two requests can't both
 // spend the same SP. sql.ErrNoRows if there is no such living pilot, ErrNotEnoughSP if a is too much.
-func (s *Store) AllocateSP(ctx context.Context, playthroughID, campaign, pilotID string, a SPAllocation) error {
+func (s *Store) AllocateSP(ctx context.Context, playthroughID, campaign, pilotID string, a pilot.SPAllocation) error {
 	return s.ApplySP(ctx, playthroughID, campaign, pilotID, 0, a)
 }
 
@@ -159,7 +161,7 @@ func (s *Store) AllocateSP(ctx context.Context, playthroughID, campaign, pilotID
 // Manage SP dialog can stage earned SP and an allocation and commit them together or not at all. The allocation may use
 // the pilot's unallocated SP including the SP being earned. sql.ErrNoRows if there is no such living pilot, ErrNotEnoughSP
 // if a is more than that.
-func (s *Store) ApplySP(ctx context.Context, playthroughID, campaign, pilotID string, earned int, a SPAllocation) error {
+func (s *Store) ApplySP(ctx context.Context, playthroughID, campaign, pilotID string, earned int, a pilot.SPAllocation) error {
 	res, err := s.db.ExecContext(ctx,
 		s.q(`UPDATE named_pilots SET sp_total = sp_total + ?,
 		       sp_gunnery = sp_gunnery + ?, sp_piloting = sp_piloting + ?, sp_edge_tokens = sp_edge_tokens + ?, sp_edge_abilities = sp_edge_abilities + ?
@@ -214,7 +216,7 @@ func (s *Store) SetPilotPortrait(ctx context.Context, playthroughID, campaign, p
 		return err
 	}
 	if same > 0 {
-		return ErrPortraitTaken
+		return pilot.ErrPortraitTaken
 	}
 	res, err := tx.ExecContext(ctx,
 		s.q(`UPDATE named_pilots SET portrait = ? WHERE id = ? AND playthrough_id = ? AND campaign = ? AND fallen = 0`),
@@ -250,7 +252,7 @@ func (s *Store) RevivePilot(ctx context.Context, playthroughID, campaign, pilotI
 		return err
 	}
 	if alive >= limit {
-		return ErrPilotLimit
+		return pilot.ErrPilotLimit
 	}
 	if portrait != "" {
 		var same int
@@ -438,7 +440,7 @@ func (s *Store) LearnAbilities(ctx context.Context, playthroughID, campaign, pil
 	if err := tx.QueryRowContext(ctx, s.q(`SELECT COUNT(*) FROM pilot_abilities WHERE pilot_id = ?`), pilotID).Scan(&learned); err != nil {
 		return err
 	}
-	pending := edgeAbilitiesLadder.at(sp).Level - learned
+	pending := pilot.EdgeAbilitiesLadder.At(sp).Level - learned
 	if pending <= 0 {
 		return ErrNoPendingAbilities
 	}
@@ -460,7 +462,7 @@ func (s *Store) LearnAbilities(ctx context.Context, playthroughID, campaign, pil
 	}
 	rows.Close()
 	for _, id := range ids {
-		if _, ok := edgeAbilityByID(id); !ok {
+		if _, ok := pilot.AbilityByID(id); !ok {
 			return ErrUnknownAbility
 		}
 		if have[id] {

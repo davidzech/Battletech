@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+
+	"github.com/davidzech/Battletech/internal/pilot"
 )
 
 // Assigning named pilots to mechs. MekBay already stores a crew on every unit (a name and Gunnery and Piloting skills), so an assignment is just
@@ -100,12 +102,12 @@ func applyCrew(force map[string]any, crew []CrewAssignment) error {
 
 // parseCrew reads the pairs of assign_unit and assign_pilot fields a deploy carries into assignments, checking them against the hangar and the
 // campaign's living named pilots. The skills come from the pilot's current levels, never from the request.
-func parseCrew(r *http.Request, h HangarForce, pilots []NamedPilot) ([]CrewAssignment, error) {
+func parseCrew(r *http.Request, h HangarForce, pilots []pilot.NamedPilot) ([]CrewAssignment, error) {
 	return parseCrewPairs(r.PostForm["assign_unit"], r.PostForm["assign_pilot"], h, pilots)
 }
 
 // parseCrewPairs is parseCrew over already-split fields: units[i] gets the pilot names[i] (empty clears it).
-func parseCrewPairs(units, names []string, h HangarForce, pilots []NamedPilot) ([]CrewAssignment, error) {
+func parseCrewPairs(units, names []string, h HangarForce, pilots []pilot.NamedPilot) ([]CrewAssignment, error) {
 	if len(units) != len(names) {
 		return nil, errors.New("The pilot assignments are incomplete.")
 	}
@@ -116,7 +118,7 @@ func parseCrewPairs(units, names []string, h HangarForce, pilots []NamedPilot) (
 	for _, u := range h.Units {
 		inHangar[u.ID] = true
 	}
-	byName := map[string]NamedPilot{}
+	byName := map[string]pilot.NamedPilot{}
 	for _, p := range pilots {
 		if !p.Fallen {
 			byName[strings.ToLower(p.Name)] = p

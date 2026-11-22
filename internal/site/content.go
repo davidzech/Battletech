@@ -13,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/davidzech/Battletech/internal/pilot"
+
 	"github.com/davidzech/Battletech/internal/catalog"
 
 	"github.com/yuin/goldmark"
@@ -174,7 +176,7 @@ func (c *Campaign) PilotLimit() int {
 	if c.MaxNamedPilots > 0 {
 		return c.MaxNamedPilots
 	}
-	return maxNamedPilots
+	return pilot.MaxNamedPilots
 }
 
 // keywordBullet matches a keyword's bullet in Keywords.md: a lowercase snake_case ID in backticks at the start.
@@ -494,7 +496,7 @@ func (c *Campaign) applyIntro(meta introMeta) {
 	c.AvailabilityFaction, c.AvailabilityEra = meta.AvailabilityFaction, meta.AvailabilityEra
 	c.Faction = meta.Faction
 	if c.Ranks = meta.Ranks; len(c.Ranks) == 0 {
-		c.Ranks = factionRanks(meta.Faction)
+		c.Ranks = pilot.FactionRanks(meta.Faction)
 	}
 	c.MissionTerm = strings.TrimSpace(meta.MissionTerm)
 	if c.MissionTerm == "" {

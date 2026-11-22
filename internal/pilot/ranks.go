@@ -1,4 +1,4 @@
-package site
+package pilot
 
 // A Faction is the side a campaign's player force fights for. It decides the cosmetic flavour of the player's named pilots,
 // starting with their ranks. Each campaign names its faction in Intro.md front matter (`faction: clan`), so campaigns can
@@ -31,8 +31,8 @@ var factions = map[string]Faction{
 	},
 }
 
-// factionRanks is a faction's rank ladder, or nil for an unknown or empty faction ID (which turns ranks off).
-func factionRanks(id string) []string {
+// FactionRanks is a faction's rank ladder, or nil for an unknown or empty faction ID (which turns ranks off).
+func FactionRanks(id string) []string {
 	f, ok := factions[id]
 	if !ok {
 		return nil
@@ -54,8 +54,8 @@ func rankFor(ranks []string, stored string) string {
 	return ranks[0]
 }
 
-// validRank reports whether the campaign has this rank.
-func validRank(ranks []string, rank string) bool {
+// ValidRank reports whether the campaign has this rank.
+func ValidRank(ranks []string, rank string) bool {
 	for _, r := range ranks {
 		if r == rank {
 			return true

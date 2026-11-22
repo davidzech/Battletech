@@ -6,6 +6,8 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+
+	"github.com/davidzech/Battletech/internal/pilot"
 )
 
 // A force of three mechs: u1 crewed by the named pilot Alrek (3/4), u2 by an unnamed 4/5 crew, u3 by a named pilot with no new assignment.
@@ -75,9 +77,9 @@ func TestApplyCrew(t *testing.T) {
 }
 
 func TestParseCrew(t *testing.T) {
-	pilots := []NamedPilot{
-		{Name: "Alrek", SP: SPAllocation{Gunnery: 90, Piloting: 100}},
-		{Name: "Katarina", SP: SPAllocation{Gunnery: 90}},
+	pilots := []pilot.NamedPilot{
+		{Name: "Alrek", SP: pilot.SPAllocation{Gunnery: 90, Piloting: 100}},
+		{Name: "Katarina", SP: pilot.SPAllocation{Gunnery: 90}},
 		{Name: "Dead Dan", Fallen: true},
 	}
 	h := hangarOf("BMMadCat_H", "BMKoshi_E", "BMGrizzly") // ua, ub, uc

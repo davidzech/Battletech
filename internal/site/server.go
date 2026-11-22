@@ -13,6 +13,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"time"
+
+	"github.com/davidzech/Battletech/internal/pilot"
 )
 
 //go:embed templates/*.html static/*
@@ -53,19 +55,19 @@ type Page struct {
 	OnManagePage       bool // the Manage force page itself, which has no Manage force button in its header
 	Scenario           *Scenario
 	Cards              []Card
-	HasLocked          bool           // some scenario cards are locked, so the campaign page offers 'Show all scenarios'
-	ScenarioState      string         // on a scenario page: completed, available or locked
-	NextScenarios      []Scenario     // on a completed scenario's page: the scenarios it leads to, which are now available
-	Ledger             []LedgerEntry  // the keywords the campaign has been granted (on the keywords page)
-	Outcome            *OutcomeResult // on a completed scenario page: the recorded report of its outcome
-	Images             []string       // URLs of the scenario's images
-	Seed               string         // the visitor's seed ("" if none chosen yet)
-	Play               Playthrough    // the visitor's playthrough (zero value if no seed)
-	Run                CampaignRun    // the playthrough's run of this page's campaign (zero value until it is started)
-	Pilots             []PilotView    // the run's named pilots
-	CanRecruit         bool           // the command has room for another living named pilot, and the warchest can pay for them
-	RecruitNote        string         // the short gray note under Recruit New Pilot: why it is unavailable, or what it costs
-	MaxPilots          int            // most living named pilots a command may have
+	HasLocked          bool              // some scenario cards are locked, so the campaign page offers 'Show all scenarios'
+	ScenarioState      string            // on a scenario page: completed, available or locked
+	NextScenarios      []Scenario        // on a completed scenario's page: the scenarios it leads to, which are now available
+	Ledger             []LedgerEntry     // the keywords the campaign has been granted (on the keywords page)
+	Outcome            *OutcomeResult    // on a completed scenario page: the recorded report of its outcome
+	Images             []string          // URLs of the scenario's images
+	Seed               string            // the visitor's seed ("" if none chosen yet)
+	Play               Playthrough       // the visitor's playthrough (zero value if no seed)
+	Run                CampaignRun       // the playthrough's run of this page's campaign (zero value until it is started)
+	Pilots             []pilot.PilotView // the run's named pilots
+	CanRecruit         bool              // the command has room for another living named pilot, and the warchest can pay for them
+	RecruitNote        string            // the short gray note under Recruit New Pilot: why it is unavailable, or what it costs
+	MaxPilots          int               // most living named pilots a command may have
 	// CachedHangar is the hangar last read from MekBay for this run (nil if none yet), and CachedAt when; the campaign and scenario
 	// pages embed it so they can paint the hangar before the live read finishes (see hangarcache.go).
 	CachedHangar *HangarForce
@@ -200,7 +202,7 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name
 		} else {
 			p.Play = pt
 			if p.Campaign != nil {
-				p.Ladders, p.Portraits, p.Abilities = laddersJSON, portraitsJSON(), edgeAbilitiesJSON
+				p.Ladders, p.Portraits, p.Abilities = pilot.LaddersJSON, pilot.PortraitsJSON(), pilot.AbilitiesJSON
 				if run, _, err := s.store.Run(r.Context(), id, p.Campaign.Slug); err != nil {
 					log.Printf("load campaign run: %v", err)
 				} else {
@@ -212,7 +214,7 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name
 						log.Printf("load named pilots: %v", err)
 					}
 					var alive int
-					p.Pilots, alive = pilotViews(pilots, p.Campaign.Ranks)
+					p.Pilots, alive = pilot.Views(pilots, p.Campaign.Ranks)
 					p.CanRecruit, p.RecruitNote = recruitStatus(p.Campaign, p.Run, alive)
 					limit := p.Campaign.PilotLimit()
 					p.Ranks = p.Campaign.Ranks

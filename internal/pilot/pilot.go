@@ -1,4 +1,4 @@
-package site
+package pilot
 
 import (
 	"encoding/json"
@@ -11,8 +11,8 @@ import (
 // columns (Gunnery, Piloting, Edge tokens, Edge abilities), and a column's level is however far its cumulative SP
 // reaches along that column's ladder in the book's Named Pilot Improvement Table.
 
-// maxNamedPilots is how many named pilots a command may have at once (a fallen pilot doesn't count).
-const maxNamedPilots = 4
+// MaxNamedPilots is how many named pilots a command may have at once (a fallen pilot doesn't count).
+const MaxNamedPilots = 4
 
 // ladderRow is one step of an improvement ladder: reaching Level costs SP in total (cumulative, not per step).
 // (The book also gives each step a handicap, used to balance opposing forces; this campaign doesn't track it.)
@@ -37,12 +37,12 @@ var (
 	edgeTokensLadder = ladder{"edge_tokens", "Edge tokens", 1, []ladderRow{
 		{2, 60}, {3, 120}, {4, 200}, {5, 300}, {6, 420}, {7, 560}, {8, 720}, {9, 900}, {10, 1100},
 	}}
-	edgeAbilitiesLadder = ladder{"edge_abilities", "Edge abilities", 0, []ladderRow{{1, 60}, {2, 180}, {3, 360}, {4, 600}, {5, 900}}}
+	EdgeAbilitiesLadder = ladder{"edge_abilities", "Edge abilities", 0, []ladderRow{{1, 60}, {2, 180}, {3, 360}, {4, 600}, {5, 900}}}
 )
 
 // at is the step a column has reached with sp allocated to it: the highest row it can afford, or the base level
 // if none.
-func (l ladder) at(sp int) ladderRow {
+func (l ladder) At(sp int) ladderRow {
 	reached := ladderRow{Level: l.Base}
 	for _, r := range l.Rows {
 		if sp >= r.SP {
@@ -62,7 +62,7 @@ func (l ladder) next(sp int) (r ladderRow, ok bool) {
 	return ladderRow{}, false
 }
 
-// laddersJSON is the four ladders as JSON, handed to the campaign page so the pilot builder can preview levels with
+// LaddersJSON is the four ladders as JSON, handed to the campaign page so the pilot builder can preview levels with
 // exactly the rules the server uses.
 // boxLabels are shorter names for the stat boxes, where "Edge abilities" would wrap onto two lines. Everywhere else (the slider
 // rows, for instance) a column keeps its full name.
@@ -82,9 +82,9 @@ type ladderView struct {
 	Short string `json:"short"`
 }
 
-var laddersJSON = func() string {
+var LaddersJSON = func() string {
 	var views []ladderView
-	for _, l := range []ladder{gunneryLadder, pilotingLadder, edgeTokensLadder, edgeAbilitiesLadder} {
+	for _, l := range []ladder{gunneryLadder, pilotingLadder, edgeTokensLadder, EdgeAbilitiesLadder} {
 		views = append(views, ladderView{l, boxLabel(l)})
 	}
 	b, err := json.Marshal(views)
@@ -136,16 +136,16 @@ func (p NamedPilot) Earned() int { return p.TotalSP }
 func (p NamedPilot) Unallocated() int { return max(0, p.TotalSP-p.SP.Total()) }
 
 // Gunnery is the pilot's current Gunnery skill (lower is better).
-func (p NamedPilot) Gunnery() int { return gunneryLadder.at(p.SP.Gunnery).Level }
+func (p NamedPilot) Gunnery() int { return gunneryLadder.At(p.SP.Gunnery).Level }
 
 // Piloting is the pilot's current Piloting skill (lower is better).
-func (p NamedPilot) Piloting() int { return pilotingLadder.at(p.SP.Piloting).Level }
+func (p NamedPilot) Piloting() int { return pilotingLadder.At(p.SP.Piloting).Level }
 
 // EdgeTokens is how many Edge tokens the pilot starts each sortie with.
-func (p NamedPilot) EdgeTokens() int { return edgeTokensLadder.at(p.SP.EdgeTokens).Level }
+func (p NamedPilot) EdgeTokens() int { return edgeTokensLadder.At(p.SP.EdgeTokens).Level }
 
 // EdgeAbilities is how many Edge abilities the pilot has earned.
-func (p NamedPilot) EdgeAbilities() int { return edgeAbilitiesLadder.at(p.SP.EdgeAbilities).Level }
+func (p NamedPilot) EdgeAbilities() int { return EdgeAbilitiesLadder.At(p.SP.EdgeAbilities).Level }
 
 // pilotColumn is one column of a pilot as the campaign page shows it.
 type pilotColumn struct {
@@ -172,9 +172,9 @@ type PilotView struct {
 	Columns                                  []pilotColumn
 }
 
-func (p NamedPilot) view(ranks []string) PilotView {
+func (p NamedPilot) View(ranks []string) PilotView {
 	col := func(l ladder, sp int) pilotColumn {
-		c := pilotColumn{Name: l.Name, Label: boxLabel(l), SP: sp, Level: l.at(sp).Level}
+		c := pilotColumn{Name: l.Name, Label: boxLabel(l), SP: sp, Level: l.At(sp).Level}
 		c.Percent = 100
 		if n, ok := l.next(sp); ok {
 			c.HasNext, c.NextAt, c.NextLvl = true, n.SP, n.Level
@@ -189,15 +189,15 @@ func (p NamedPilot) view(ranks []string) PilotView {
 		EdgeLearned: edgeAbilityList(p.Learned), EdgePending: p.PendingAbilities(),
 		Columns: []pilotColumn{
 			col(gunneryLadder, p.SP.Gunnery), col(pilotingLadder, p.SP.Piloting),
-			col(edgeTokensLadder, p.SP.EdgeTokens), col(edgeAbilitiesLadder, p.SP.EdgeAbilities),
+			col(edgeTokensLadder, p.SP.EdgeTokens), col(EdgeAbilitiesLadder, p.SP.EdgeAbilities),
 		},
 	}
 }
 
-// pilotViews prepares a campaign's pilots for display and counts how many are still alive.
-func pilotViews(pilots []NamedPilot, ranks []string) (views []PilotView, alive int) {
+// Views prepares a campaign's pilots for display and counts how many are still alive.
+func Views(pilots []NamedPilot, ranks []string) (views []PilotView, alive int) {
 	for _, p := range pilots {
-		views = append(views, p.view(ranks))
+		views = append(views, p.View(ranks))
 		if !p.Fallen {
 			alive++
 		}
@@ -220,9 +220,9 @@ var ErrPortraitTaken = errors.New("another pilot already has that portrait")
 // ErrPilotLimit is returned when a command already has the most named pilots it may have.
 var ErrPilotLimit = errors.New("you can have at most four named pilots at a time")
 
-// parsePilotName validates a named pilot's name: 1 to 30 characters, in the same style as an account or force name.
-func parsePilotName(raw string) (string, error) {
-	name, err := parseName(raw, "pilot")
+// ParsePilotName validates a named pilot's name: 1 to 30 characters, in the same style as an account or force name.
+func ParsePilotName(raw string) (string, error) {
+	name, err := ParseName(raw, "pilot")
 	if err != nil || utf8.RuneCountInString(name) > 30 {
 		return "", errors.New("Give your pilot a name of 1 to 30 letters, numbers and spaces (apostrophes, hyphens and a few marks are fine).")
 	}

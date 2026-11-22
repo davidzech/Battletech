@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/davidzech/Battletech/internal/pilot"
+
 	_ "github.com/jackc/pgx/v5/stdlib" // pure-Go PostgreSQL driver
 	_ "modernc.org/sqlite"             // pure-Go SQLite driver
 )
@@ -493,7 +495,7 @@ var ErrAlreadyStarted = errors.New("this campaign has already been started")
 
 // StartRunWithPilots starts a campaign and creates its starting named pilots, all or nothing. It refuses
 // (ErrAlreadyStarted) if the campaign was already started, so submitting the wizard twice can't make duplicate pilots.
-func (s *Store) StartRunWithPilots(ctx context.Context, playthroughID, campaign string, h Hangar, pilots []NewPilot, warchest, players int, forceName string) error {
+func (s *Store) StartRunWithPilots(ctx context.Context, playthroughID, campaign string, h Hangar, pilots []pilot.NewPilot, warchest, players int, forceName string) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err

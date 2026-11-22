@@ -1,4 +1,4 @@
-package site
+package pilot
 
 import "encoding/json"
 
@@ -13,8 +13,8 @@ type EdgeAbility struct {
 	Text     string `json:"text"`
 }
 
-// edgeAbilities are all of them, in the order the book lists them.
-var edgeAbilities = []EdgeAbility{
+// AbilityCatalog are all of them, in the order the book lists them.
+var AbilityCatalog = []EdgeAbility{
 	{"assassin", "Assassin", "Attack", `Before rolling to attack a target in its rear arc: Spend 1 Edge to increase your damage rating by 1 (in addition to the bonus 1 damage for attacking the target in the rear). (TW: You may add or subtract 1 from your hit location roll if the result would be rear torso armor.)`},
 	{"forward_observer", "Forward Observer", "Indirect Fire", `When spotting: Spend 1 Edge to also attack this Combat Phase without incurring the +1 penalty to the Target Number for you or any ally benefitting from your spotting.`},
 	{"marksman", "Marksman", "Attack", `After rolling for an attack: spend 1 Edge to cause one attack roll of 11 that hits to also inflict a critical hit. (TW: Add 1 to your roll on the Determining Critical Hits Table.)`},
@@ -31,14 +31,14 @@ var edgeAbilities = []EdgeAbility{
 
 var edgeAbilityByIDMap = func() map[string]EdgeAbility {
 	m := map[string]EdgeAbility{}
-	for _, a := range edgeAbilities {
+	for _, a := range AbilityCatalog {
 		m[a.ID] = a
 	}
 	return m
 }()
 
-// edgeAbilityByID looks an ability up by its stable ID.
-func edgeAbilityByID(id string) (EdgeAbility, bool) {
+// AbilityByID looks an ability up by its stable ID.
+func AbilityByID(id string) (EdgeAbility, bool) {
 	a, ok := edgeAbilityByIDMap[id]
 	return a, ok
 }
@@ -47,16 +47,16 @@ func edgeAbilityByID(id string) (EdgeAbility, bool) {
 func edgeAbilityList(ids []string) []EdgeAbility {
 	var out []EdgeAbility
 	for _, id := range ids {
-		if a, ok := edgeAbilityByID(id); ok {
+		if a, ok := AbilityByID(id); ok {
 			out = append(out, a)
 		}
 	}
 	return out
 }
 
-// edgeAbilitiesJSON is the catalog as JSON, for the picker on the Manage page.
-var edgeAbilitiesJSON = func() string {
-	b, err := json.Marshal(edgeAbilities)
+// AbilitiesJSON is the catalog as JSON, for the picker on the Manage page.
+var AbilitiesJSON = func() string {
+	b, err := json.Marshal(AbilityCatalog)
 	if err != nil {
 		panic(err)
 	}

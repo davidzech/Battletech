@@ -7,6 +7,8 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+
+	"github.com/davidzech/Battletech/internal/pilot"
 )
 
 func TestPlayerRange(t *testing.T) {
@@ -53,7 +55,7 @@ func TestDeployPlanEndpoint(t *testing.T) {
 	}
 	id := playthroughID("wolfpack2026")
 	pilots, _ := store.Pilots(t.Context(), id, "refusalwar")
-	var alrek NamedPilot
+	var alrek pilot.NamedPilot
 	for _, p := range pilots {
 		if p.Name == "Alrek" {
 			alrek = p

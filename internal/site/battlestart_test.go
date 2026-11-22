@@ -10,6 +10,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/davidzech/Battletech/internal/pilot"
 )
 
 func readBattle(t *testing.T, res *http.Response) battleResponse {
@@ -40,7 +42,7 @@ func TestStartBattleEndpoint(t *testing.T) {
 	id := playthroughID(seed)
 	run, _, _ := store.Run(ctx, id, "refusalwar")
 	pilots, _ := store.Pilots(ctx, id, "refusalwar")
-	var alrek NamedPilot
+	var alrek pilot.NamedPilot
 	for _, p := range pilots {
 		if p.Name == "Alrek" {
 			alrek = p
@@ -176,7 +178,7 @@ func TestStartBattleWithProvidedMechs(t *testing.T) {
 		t.Fatalf("start: %d", r.StatusCode)
 	}
 	pilots, _ := store.Pilots(ctx, playthroughID(seed), "refusalwar")
-	levels := map[string]NamedPilot{}
+	levels := map[string]pilot.NamedPilot{}
 	for _, p := range pilots {
 		levels[p.Name] = p
 	}

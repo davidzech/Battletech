@@ -3,55 +3,14 @@ package site
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"net/url"
 	"strings"
 	"testing"
-)
 
-// The twelve abilities of Hot Spots: Draconis Reach, printed p. 166.
-func TestEdgeAbilityCatalog(t *testing.T) {
-	want := []string{"Assassin", "Forward Observer", "Marksman", "Jumping Jack", "Patient", "Cautious", "Protector", "Coolant Flush", "Bulwark", "Melee Specialist", "Nimble", "Speed Demon"}
-	if len(edgeAbilities) != len(want) {
-		t.Fatalf("%d abilities, want %d", len(edgeAbilities), len(want))
-	}
-	ids := map[string]bool{}
-	for i, a := range edgeAbilities {
-		if a.Name != want[i] {
-			t.Errorf("ability %d is %q, want %q", i, a.Name, want[i])
-		}
-		if a.ID == "" || ids[a.ID] || a.Category == "" || len(a.Text) < 30 {
-			t.Errorf("bad ability %+v", a)
-		}
-		ids[a.ID] = true
-		if got, ok := edgeAbilityByID(a.ID); !ok || got != a {
-			t.Errorf("edgeAbilityByID(%q)", a.ID)
-		}
-	}
-	if _, ok := edgeAbilityByID("nope"); ok {
-		t.Error("unknown ability found")
-	}
-	cats := map[string]int{}
-	for _, a := range edgeAbilities {
-		cats[a.Category]++
-	}
-	if cats["Attack"] != 4 || cats["Defense"] != 2 || cats["Melee"] != 2 || cats["Movement"] != 2 || cats["Heat"] != 1 || cats["Indirect Fire"] != 1 {
-		t.Errorf("categories: %v", cats)
-	}
-	// Spot-check the book's wording, and that the catalog travels to the page as JSON.
-	if a, _ := edgeAbilityByID("marksman"); !strings.Contains(a.Text, "inflict a critical hit") || !strings.Contains(a.Text, "(TW: Add 1 to your roll") {
-		t.Errorf("Marksman: %q", a.Text)
-	}
-	var back []EdgeAbility
-	if err := json.Unmarshal([]byte(edgeAbilitiesJSON), &back); err != nil || len(back) != 12 {
-		t.Errorf("catalog JSON: %v %d", err, len(back))
-	}
-	if got := edgeAbilityList([]string{"nimble", "gone", "marksman"}); len(got) != 2 || got[0].ID != "nimble" || got[1].ID != "marksman" {
-		t.Errorf("edgeAbilityList keeps the order and skips unknown IDs: %+v", got)
-	}
-}
+	"github.com/davidzech/Battletech/internal/pilot"
+)
 
 // abilityStore checks choosing and resetting Edge abilities on both databases, in a campaign of its own (run from storeContract).
 func abilityStore(t *testing.T, s *Store, id string) {
@@ -59,11 +18,11 @@ func abilityStore(t *testing.T, s *Store, id string) {
 	ctx := context.Background()
 	const camp = "skillcamp"
 	// 180 SP in Edge abilities is level 2, so two abilities to choose.
-	a, err := s.AddPilot(ctx, id, camp, "Alrek", "", SPAllocation{EdgeAbilities: 180}, 4)
+	a, err := s.AddPilot(ctx, id, camp, "Alrek", "", pilot.SPAllocation{EdgeAbilities: 180}, 4)
 	if err != nil {
 		t.Fatal(err)
 	}
-	get := func() NamedPilot {
+	get := func() pilot.NamedPilot {
 		ps, _ := s.Pilots(ctx, id, camp)
 		for _, p := range ps {
 			if p.ID == a.ID {
@@ -71,7 +30,7 @@ func abilityStore(t *testing.T, s *Store, id string) {
 			}
 		}
 		t.Fatal("pilot vanished")
-		return NamedPilot{}
+		return pilot.NamedPilot{}
 	}
 	if p := get(); p.EdgeAbilities() != 2 || p.PendingAbilities() != 2 || len(p.Learned) != 0 {
 		t.Fatalf("two abilities earned, none chosen: %+v", p)
@@ -103,7 +62,7 @@ func abilityStore(t *testing.T, s *Store, id string) {
 		t.Fatalf("nothing pending: %v", err)
 	}
 	// A new level brings a new choice; an ability can only be learned once.
-	if err := s.AwardSP(ctx, id, camp, a.ID, SPAllocation{EdgeAbilities: 180}); err != nil { // 360: level 3
+	if err := s.AwardSP(ctx, id, camp, a.ID, pilot.SPAllocation{EdgeAbilities: 180}); err != nil { // 360: level 3
 		t.Fatal(err)
 	}
 	if p := get(); p.PendingAbilities() != 1 {
@@ -126,7 +85,7 @@ func abilityStore(t *testing.T, s *Store, id string) {
 		t.Fatalf("an SP reset forgets learned abilities: %+v level %d pending %d", p.Learned, p.EdgeAbilities(), p.PendingAbilities())
 	}
 	// Setting the total: at or above the allocation touches nothing, refused below it, and below it with the reset agreed forgets them.
-	if err := s.AwardSP(ctx, id, camp, a.ID, SPAllocation{EdgeAbilities: 360}); err != nil { // level 3
+	if err := s.AwardSP(ctx, id, camp, a.ID, pilot.SPAllocation{EdgeAbilities: 360}); err != nil { // level 3
 		t.Fatal(err)
 	}
 	if err := s.LearnAbilities(ctx, id, camp, a.ID, []string{"nimble", "marksman", "patient"}); err != nil {
@@ -148,7 +107,7 @@ func abilityStore(t *testing.T, s *Store, id string) {
 		t.Fatalf("a total below the allocation, with the reset, forgets the abilities: %+v", p)
 	}
 	// The explicit reset forgets them, for the pilot to choose again.
-	if err := s.AwardSP(ctx, id, camp, a.ID, SPAllocation{EdgeAbilities: 360}); err != nil {
+	if err := s.AwardSP(ctx, id, camp, a.ID, pilot.SPAllocation{EdgeAbilities: 360}); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.LearnAbilities(ctx, id, camp, a.ID, []string{"nimble", "marksman", "patient"}); err != nil {
@@ -196,7 +155,7 @@ func abilityStore(t *testing.T, s *Store, id string) {
 	if err := s.LearnAbilities(ctx, id, camp, a.ID, []string{"nimble"}); !errors.Is(err, sql.ErrNoRows) {
 		t.Fatal("still fallen")
 	}
-	b, err := s.AddPilot(ctx, id, camp, "Katarina", "", SPAllocation{EdgeAbilities: 60}, 4)
+	b, err := s.AddPilot(ctx, id, camp, "Katarina", "", pilot.SPAllocation{EdgeAbilities: 60}, 4)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -210,7 +169,7 @@ func abilityStore(t *testing.T, s *Store, id string) {
 	if err := s.db.QueryRow(s.q(`SELECT COUNT(*) FROM pilot_abilities WHERE pilot_id = ?`), b.ID).Scan(&n); err != nil || n != 0 {
 		t.Fatalf("a deleted pilot's abilities: %d %v", n, err)
 	}
-	c, err := s.AddPilot(ctx, id, camp, "Jarek", "", SPAllocation{EdgeAbilities: 60}, 4)
+	c, err := s.AddPilot(ctx, id, camp, "Jarek", "", pilot.SPAllocation{EdgeAbilities: 60}, 4)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -230,7 +189,7 @@ func TestEdgeAbilitiesThroughThePages(t *testing.T) {
 	ctx := context.Background()
 	id := playthroughID("wolfpack2026")
 	ps, _ := store.Pilots(ctx, id, "refusalwar")
-	pilot := ps[0]
+	pl := ps[0]
 	learn := func(pilotID string, ids ...string) int {
 		v := url.Values{"campaign": {"refusalwar"}, "pilot": {pilotID}}
 		for _, a := range ids {
@@ -250,19 +209,19 @@ func TestEdgeAbilitiesThroughThePages(t *testing.T) {
 	if strings.Contains(p, `class="button skill-pick"`) || strings.Contains(p, ">Reset abilities<") {
 		t.Error("nothing to choose yet, and the SP reset has been renamed")
 	}
-	if got := learn(pilot.ID, "marksman"); got != http.StatusBadRequest {
+	if got := learn(pl.ID, "marksman"); got != http.StatusBadRequest {
 		t.Errorf("choosing with nothing earned: %d", got)
 	}
 
 	// Level 1 in Edge abilities: one ability to choose.
-	if err := store.AwardSP(ctx, id, "refusalwar", pilot.ID, SPAllocation{EdgeAbilities: 60}); err != nil {
+	if err := store.AwardSP(ctx, id, "refusalwar", pl.ID, pilot.SPAllocation{EdgeAbilities: 60}); err != nil {
 		t.Fatal(err)
 	}
 	p = page()
 	if !strings.Contains(p, `class="button skill-pick">Choose a new Edge ability</button>`) || !strings.Contains(p, `data-edge-pending="1"`) {
 		t.Error("a pilot with a new Edge abilities level is offered a choice")
 	}
-	if got := post(t, srv, "/api/pilots/abilities", url.Values{"campaign": {"refusalwar"}, "pilot": {pilot.ID}, "ability": {"marksman"}}, cookie, "https://evil.example").StatusCode; got != http.StatusForbidden {
+	if got := post(t, srv, "/api/pilots/abilities", url.Values{"campaign": {"refusalwar"}, "pilot": {pl.ID}, "ability": {"marksman"}}, cookie, "https://evil.example").StatusCode; got != http.StatusForbidden {
 		t.Errorf("cross-origin: %d", got)
 	}
 	for name, c := range map[string][]string{
@@ -271,21 +230,21 @@ func TestEdgeAbilitiesThroughThePages(t *testing.T) {
 		"unknown": {"nope"},
 		"blank":   {""},
 	} {
-		if got := learn(pilot.ID, c...); got != http.StatusBadRequest {
+		if got := learn(pl.ID, c...); got != http.StatusBadRequest {
 			t.Errorf("%s: %d", name, got)
 		}
 	}
 	if got := learn("nobody", "marksman"); got != http.StatusNotFound {
 		t.Errorf("unknown pilot: %d", got)
 	}
-	if got := learn(pilot.ID, "marksman"); got != http.StatusNoContent {
+	if got := learn(pl.ID, "marksman"); got != http.StatusNoContent {
 		t.Fatalf("choose: %d", got)
 	}
 	p = page()
 	if !strings.Contains(p, `>Marksman</span>`) || strings.Contains(p, `class="button skill-pick"`) || !strings.Contains(p, `data-learned="marksman "`) || !strings.Contains(p, "<b class=\"rec-n-skills\">Marksman</b>") {
 		t.Error("the chosen ability shows as a chip, the choice is gone, and the records row lists it")
 	}
-	if got := learn(pilot.ID, "nimble"); got != http.StatusBadRequest {
+	if got := learn(pl.ID, "nimble"); got != http.StatusBadRequest {
 		t.Errorf("nothing pending any more: %d", got)
 	}
 	// The chip names its ability for the hover card script, and carries no native tooltip (that would double up with ours).
@@ -294,7 +253,7 @@ func TestEdgeAbilitiesThroughThePages(t *testing.T) {
 	}
 
 	// More levels, more choices at once; each only once.
-	if err := store.AwardSP(ctx, id, "refusalwar", pilot.ID, SPAllocation{EdgeAbilities: 540}); err != nil { // 600: level 4
+	if err := store.AwardSP(ctx, id, "refusalwar", pl.ID, pilot.SPAllocation{EdgeAbilities: 540}); err != nil { // 600: level 4
 		t.Fatal(err)
 	}
 	if !strings.Contains(page(), "Choose 3 new Edge abilities") {
@@ -305,11 +264,11 @@ func TestEdgeAbilitiesThroughThePages(t *testing.T) {
 		"the same twice":  {"nimble", "nimble", "patient"},
 		"too few":         {"nimble", "patient"},
 	} {
-		if got := learn(pilot.ID, c...); got != http.StatusBadRequest {
+		if got := learn(pl.ID, c...); got != http.StatusBadRequest {
 			t.Errorf("%s: %d", name, got)
 		}
 	}
-	if got := learn(pilot.ID, "nimble", "patient", "bulwark"); got != http.StatusNoContent {
+	if got := learn(pl.ID, "nimble", "patient", "bulwark"); got != http.StatusNoContent {
 		t.Fatalf("choose three: %d", got)
 	}
 	ps, _ = store.Pilots(ctx, id, "refusalwar")
@@ -318,7 +277,7 @@ func TestEdgeAbilitiesThroughThePages(t *testing.T) {
 	}
 
 	// A pilot Killed in Action shows their abilities in the memorial and can have them reset.
-	if got := post(t, srv, "/api/pilots/fallen", url.Values{"campaign": {"refusalwar"}, "pilot": {pilot.ID}}, cookie, srv.URL).StatusCode; got != http.StatusNoContent {
+	if got := post(t, srv, "/api/pilots/fallen", url.Values{"campaign": {"refusalwar"}, "pilot": {pl.ID}}, cookie, srv.URL).StatusCode; got != http.StatusNoContent {
 		t.Fatal(got)
 	}
 	p = page()
@@ -332,20 +291,20 @@ func TestEdgeAbilitiesThroughThePages(t *testing.T) {
 	reset := func(pid string) int {
 		return post(t, srv, "/api/pilots/abilities/reset", url.Values{"campaign": {"refusalwar"}, "pilot": {pid}}, cookie, srv.URL).StatusCode
 	}
-	if got := post(t, srv, "/api/pilots/abilities/reset", url.Values{"campaign": {"refusalwar"}, "pilot": {pilot.ID}}, cookie, "https://evil.example").StatusCode; got != http.StatusForbidden {
+	if got := post(t, srv, "/api/pilots/abilities/reset", url.Values{"campaign": {"refusalwar"}, "pilot": {pl.ID}}, cookie, "https://evil.example").StatusCode; got != http.StatusForbidden {
 		t.Errorf("cross-origin reset: %d", got)
 	}
 	if got := reset("nobody"); got != http.StatusNotFound {
 		t.Errorf("reset of an unknown pilot: %d", got)
 	}
-	if got := reset(pilot.ID); got != http.StatusNoContent {
+	if got := reset(pl.ID); got != http.StatusNoContent {
 		t.Fatalf("reset: %d", got)
 	}
 	if ps, _ := store.Pilots(ctx, id, "refusalwar"); len(ps[0].Learned) != 0 {
 		t.Errorf("after the reset: %v", ps[0].Learned)
 	}
 	// Revived, the pilot is owed the choices again, since their level is untouched.
-	if got := post(t, srv, "/api/pilots/revive", url.Values{"campaign": {"refusalwar"}, "pilot": {pilot.ID}}, cookie, srv.URL).StatusCode; got != http.StatusNoContent {
+	if got := post(t, srv, "/api/pilots/revive", url.Values{"campaign": {"refusalwar"}, "pilot": {pl.ID}}, cookie, srv.URL).StatusCode; got != http.StatusNoContent {
 		t.Fatal(got)
 	}
 	if !strings.Contains(page(), "Choose 4 new Edge abilities") {
@@ -359,9 +318,9 @@ func TestSPResetForgetsEdgeAbilities(t *testing.T) {
 	ctx := context.Background()
 	id := playthroughID("wolfpack2026")
 	ps, _ := store.Pilots(ctx, id, "refusalwar")
-	pilot := ps[0]
+	pl := ps[0]
 	form := func(kv ...string) url.Values {
-		v := url.Values{"campaign": {"refusalwar"}, "pilot": {pilot.ID}}
+		v := url.Values{"campaign": {"refusalwar"}, "pilot": {pl.ID}}
 		for i := 0; i+1 < len(kv); i += 2 {
 			v.Set(kv[i], kv[i+1])
 		}
@@ -369,10 +328,10 @@ func TestSPResetForgetsEdgeAbilities(t *testing.T) {
 	}
 	setUp := func() {
 		t.Helper()
-		if err := store.AwardSP(ctx, id, "refusalwar", pilot.ID, SPAllocation{EdgeAbilities: 60}); err != nil {
+		if err := store.AwardSP(ctx, id, "refusalwar", pl.ID, pilot.SPAllocation{EdgeAbilities: 60}); err != nil {
 			t.Fatal(err)
 		}
-		if err := store.LearnAbilities(ctx, id, "refusalwar", pilot.ID, []string{"marksman"}); err != nil {
+		if err := store.LearnAbilities(ctx, id, "refusalwar", pl.ID, []string{"marksman"}); err != nil {
 			t.Fatal(err)
 		}
 	}

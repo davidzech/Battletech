@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+
+	"github.com/davidzech/Battletech/internal/pilot"
 )
 
 // NameIdeas are a campaign's own example names (its Names.md front matter), offered as the placeholders of the force and pilot name boxes so the suggestions
@@ -32,9 +34,9 @@ func (c *Campaign) loadNames(dir string) {
 		}
 	}
 	check(n.Forces, "force_names", parseForceName)
-	check(n.Male, "male_pilot_names", parsePilotName)
-	check(n.Female, "female_pilot_names", parsePilotName)
-	check(n.Neutral, "neutral_pilot_names", parsePilotName)
+	check(n.Male, "male_pilot_names", pilot.ParsePilotName)
+	check(n.Female, "female_pilot_names", pilot.ParsePilotName)
+	check(n.Neutral, "neutral_pilot_names", pilot.ParsePilotName)
 	c.Names = n
 }
 

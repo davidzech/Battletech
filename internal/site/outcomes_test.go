@@ -7,6 +7,8 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+
+	"github.com/davidzech/Battletech/internal/pilot"
 )
 
 func scenario000(t *testing.T) *Scenario {
@@ -158,7 +160,7 @@ func TestMissionOutcomeEndToEnd(t *testing.T) {
 	commit := func(v url.Values) int {
 		return post(t, srv, "/api/campaign/scenario-outcome/commit", v, cookie, srv.URL).StatusCode
 	}
-	state := func() (alrek, katarina NamedPilot, run CampaignRun) {
+	state := func() (alrek, katarina pilot.NamedPilot, run CampaignRun) {
 		ps, _ := store.Pilots(ctx, id, "refusalwar")
 		for _, p := range ps {
 			if p.Name == "Alrek" {

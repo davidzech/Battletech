@@ -11,7 +11,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"unicode/utf8"
+
+	"github.com/davidzech/Battletech/internal/pilot"
 )
 
 // Hangar is a MekBay hangar link reduced to what the site needs: the force's instance ID. Whatever else a pasted link
@@ -67,23 +68,11 @@ func parseHangar(raw string) (Hangar, error) {
 	return Hangar{URL: "https://mekbay.com/?instance=" + instance, Instance: instance}, nil
 }
 
-// nameStyle allows the kinds of names the lore uses ("Wolf's Dragoons", "1st Somerset Strikers", "Kell Hounds").
-var nameStyle = regexp.MustCompile(`^[\p{L}\p{N}][\p{L}\p{N} '’.,&:!()\-]*$`)
-
-// parseName validates and tidies a name: 1 to 40 characters, with runs of spaces collapsed. what ("account", "force") is only for the message.
-func parseName(raw, what string) (string, error) {
-	name := strings.Join(strings.Fields(raw), " ")
-	if n := utf8.RuneCountInString(name); n < 1 || n > 40 || !nameStyle.MatchString(name) {
-		return "", errors.New("Name your " + what + " with 1 to 40 letters, numbers and spaces (apostrophes, hyphens and a few marks are fine).")
-	}
-	return name, nil
-}
-
 // parseAccountName validates the account's name: whatever the player likes to call their account.
-func parseAccountName(raw string) (string, error) { return parseName(raw, "account") }
+func parseAccountName(raw string) (string, error) { return pilot.ParseName(raw, "account") }
 
 // parseForceName validates a campaign's force name, e.g. "Wolf's Dragoons": each campaign's force has its own, to suit that campaign's theme.
-func parseForceName(raw string) (string, error) { return parseName(raw, "force") }
+func parseForceName(raw string) (string, error) { return pilot.ParseName(raw, "force") }
 
 // setAccount saves the account's name and the players' optional MekBay user IDs for the visitor's playthrough.
 func (s *Server) setAccount(w http.ResponseWriter, r *http.Request) {

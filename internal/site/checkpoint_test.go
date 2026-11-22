@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/davidzech/Battletech/internal/pilot"
 )
 
 func TestCheckpointsAndRollback(t *testing.T) {
@@ -205,9 +207,9 @@ func TestRollbackUndoesAdvancedManagement(t *testing.T) {
 		}
 		return v
 	}
-	pilots := func() map[string]NamedPilot {
+	pilots := func() map[string]pilot.NamedPilot {
 		ps, _ := store.Pilots(ctx, id, "refusalwar")
-		out := map[string]NamedPilot{}
+		out := map[string]pilot.NamedPilot{}
 		for _, p := range ps {
 			out[p.ID] = p
 		}

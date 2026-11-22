@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+
+	"github.com/davidzech/Battletech/internal/pilot"
 )
 
 // pilotRequest checks what every endpoint that changes a campaign needs (see runRequest) and returns the playthrough and the campaign. It writes the error
@@ -23,13 +25,13 @@ func (s *Server) addPilot(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	name, err := parsePilotName(r.PostFormValue("name"))
+	name, err := pilot.ParsePilotName(r.PostFormValue("name"))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	portrait := r.PostFormValue("portrait")
-	if portrait != "" && !validPortrait(portrait) {
+	if portrait != "" && !pilot.ValidPortrait(portrait) {
 		http.Error(w, "Pick a portrait from the list.", http.StatusBadRequest)
 		return
 	}
@@ -39,15 +41,15 @@ func (s *Server) addPilot(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "could not load named pilots", http.StatusInternalServerError)
 			return
 		}
-		portrait = randomPortrait(livingPortraits(existing))
+		portrait = pilot.RandomPortrait(livingPortraits(existing))
 	}
 	rank := r.PostFormValue("rank")
-	if rank != "" && !validRank(c.Ranks, rank) {
+	if rank != "" && !pilot.ValidRank(c.Ranks, rank) {
 		http.Error(w, "Pick a rank from the list.", http.StatusBadRequest)
 		return
 	}
 	// A recruit starts with the campaign's starting SP (150 in Refusal War), spent as the player chose and the rest unallocated.
-	var start SPAllocation
+	var start pilot.SPAllocation
 	for field, dst := range map[string]*int{
 		"gunnery": &start.Gunnery, "piloting": &start.Piloting, "edge_tokens": &start.EdgeTokens, "edge_abilities": &start.EdgeAbilities,
 	} {
@@ -95,7 +97,7 @@ func (s *Server) addPilot(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	if _, err := s.store.AddPilotWithRank(r.Context(), pt.ID, c.Slug, name, portrait, rank, start, c.StartingPilotSP, c.PilotLimit()); errors.Is(err, ErrPilotLimit) {
+	if _, err := s.store.AddPilotWithRank(r.Context(), pt.ID, c.Slug, name, portrait, rank, start, c.StartingPilotSP, c.PilotLimit()); errors.Is(err, pilot.ErrPilotLimit) {
 		refund()
 		http.Error(w, fmt.Sprintf("You can have at most %d named pilots at a time.", c.PilotLimit()), http.StatusBadRequest)
 		return
@@ -103,7 +105,7 @@ func (s *Server) addPilot(w http.ResponseWriter, r *http.Request) {
 		refund()
 		http.Error(w, "Another pilot already has that name.", http.StatusBadRequest)
 		return
-	} else if errors.Is(err, ErrPortraitTaken) {
+	} else if errors.Is(err, pilot.ErrPortraitTaken) {
 		refund()
 		http.Error(w, "Another pilot already has that portrait.", http.StatusBadRequest)
 		return
@@ -150,13 +152,13 @@ func (s *Server) pilotFallen(w http.ResponseWriter, r *http.Request) {
 // parseStartingPilots reads the pilots a campaign's start wizard submits (fields pilot0_name, pilot0_gunnery, ...):
 // exactly the campaign's number of starting pilots, each with a name of their own, and every one allocating all of
 // the campaign's starting SP, as the book has a pilot allocate SP the moment they earn it.
-func parseStartingPilots(r *http.Request, c *Campaign) ([]NewPilot, error) {
-	var out []NewPilot
+func parseStartingPilots(r *http.Request, c *Campaign) ([]pilot.NewPilot, error) {
+	var out []pilot.NewPilot
 	seen := map[string]bool{}
 	takenPortraits := map[string]bool{}
 	for i := 0; i < c.StartingNamedPilots; i++ {
 		prefix := "pilot" + strconv.Itoa(i) + "_"
-		name, err := parsePilotName(r.PostFormValue(prefix + "name"))
+		name, err := pilot.ParsePilotName(r.PostFormValue(prefix + "name"))
 		if err != nil {
 			return nil, fmt.Errorf("Named pilot %d: %w", i+1, err)
 		}
@@ -164,7 +166,7 @@ func parseStartingPilots(r *http.Request, c *Campaign) ([]NewPilot, error) {
 			return nil, errors.New("Two of your pilots can't share a name.")
 		}
 		seen[strings.ToLower(name)] = true
-		var a SPAllocation
+		var a pilot.SPAllocation
 		for field, dst := range map[string]*int{
 			"gunnery": &a.Gunnery, "piloting": &a.Piloting, "edge_tokens": &a.EdgeTokens, "edge_abilities": &a.EdgeAbilities,
 		} {
@@ -178,7 +180,7 @@ func parseStartingPilots(r *http.Request, c *Campaign) ([]NewPilot, error) {
 			return nil, fmt.Errorf("%s must allocate exactly %d SP (%d allocated).", name, c.StartingPilotSP, a.Total())
 		}
 		portrait := r.PostFormValue(prefix + "portrait")
-		if portrait != "" && !validPortrait(portrait) {
+		if portrait != "" && !pilot.ValidPortrait(portrait) {
 			return nil, fmt.Errorf("%s: pick a portrait from the list.", name)
 		}
 		if portrait != "" && takenPortraits[portrait] {
@@ -189,12 +191,12 @@ func parseStartingPilots(r *http.Request, c *Campaign) ([]NewPilot, error) {
 		}
 		// A starting pilot who already reaches an Edge abilities level has to choose that many abilities now, all different.
 		abilities := r.PostForm[prefix+"ability"]
-		if want := edgeAbilitiesLadder.at(a.EdgeAbilities).Level; len(abilities) != want {
+		if want := pilot.EdgeAbilitiesLadder.At(a.EdgeAbilities).Level; len(abilities) != want {
 			return nil, fmt.Errorf("%s must choose %d Edge abilities (%d chosen).", name, want, len(abilities))
 		}
 		chosen := map[string]bool{}
 		for _, id := range abilities {
-			if _, ok := edgeAbilityByID(id); !ok {
+			if _, ok := pilot.AbilityByID(id); !ok {
 				return nil, fmt.Errorf("%s: unknown Edge ability.", name)
 			}
 			if chosen[id] {
@@ -202,12 +204,12 @@ func parseStartingPilots(r *http.Request, c *Campaign) ([]NewPilot, error) {
 			}
 			chosen[id] = true
 		}
-		out = append(out, NewPilot{Name: name, Portrait: portrait, SP: a, Abilities: abilities})
+		out = append(out, pilot.NewPilot{Name: name, Portrait: portrait, SP: a, Abilities: abilities})
 	}
 	// A pilot sent without a portrait (not something the wizard does) is given a random free one.
 	for i := range out {
 		if out[i].Portrait == "" {
-			out[i].Portrait = randomPortrait(takenPortraits)
+			out[i].Portrait = pilot.RandomPortrait(takenPortraits)
 			takenPortraits[out[i].Portrait] = true
 		}
 	}
@@ -215,7 +217,7 @@ func parseStartingPilots(r *http.Request, c *Campaign) ([]NewPilot, error) {
 }
 
 // livingPortraits are the portraits the living pilots in the list have picked.
-func livingPortraits(pilots []NamedPilot) map[string]bool {
+func livingPortraits(pilots []pilot.NamedPilot) map[string]bool {
 	taken := map[string]bool{}
 	for _, p := range pilots {
 		if !p.Fallen && p.Portrait != "" {
@@ -232,14 +234,14 @@ func (s *Server) setPortrait(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	portrait := r.PostFormValue("portrait")
-	if !validPortrait(portrait) {
+	if !pilot.ValidPortrait(portrait) {
 		http.Error(w, "Pick a portrait from the list.", http.StatusBadRequest)
 		return
 	}
 	if err := s.store.SetPilotPortrait(r.Context(), pt.ID, c.Slug, r.PostFormValue("pilot"), portrait); errors.Is(err, sql.ErrNoRows) {
 		http.Error(w, "No such living pilot.", http.StatusNotFound)
 		return
-	} else if errors.Is(err, ErrPortraitTaken) {
+	} else if errors.Is(err, pilot.ErrPortraitTaken) {
 		http.Error(w, "Another pilot already has that portrait.", http.StatusBadRequest)
 		return
 	} else if err != nil {
@@ -272,7 +274,7 @@ func (s *Server) allocateSP(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	var a SPAllocation
+	var a pilot.SPAllocation
 	for field, dst := range map[string]*int{
 		"gunnery": &a.Gunnery, "piloting": &a.Piloting, "edge_tokens": &a.EdgeTokens, "edge_abilities": &a.EdgeAbilities,
 	} {
@@ -316,11 +318,11 @@ func (s *Server) revivePilot(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not load named pilots", http.StatusInternalServerError)
 		return
 	}
-	alt := randomPortrait(livingPortraits(existing))
+	alt := pilot.RandomPortrait(livingPortraits(existing))
 	if err := s.store.RevivePilot(r.Context(), pt.ID, c.Slug, r.PostFormValue("pilot"), alt, c.PilotLimit()); errors.Is(err, sql.ErrNoRows) {
 		http.Error(w, "No such pilot killed in action.", http.StatusNotFound)
 		return
-	} else if errors.Is(err, ErrPilotLimit) {
+	} else if errors.Is(err, pilot.ErrPilotLimit) {
 		http.Error(w, fmt.Sprintf("You already have %d living named pilots.", c.PilotLimit()), http.StatusBadRequest)
 		return
 	} else if err != nil {
@@ -418,7 +420,7 @@ func (s *Server) renamePilot(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	name, err := parsePilotName(r.PostFormValue("name"))
+	name, err := pilot.ParsePilotName(r.PostFormValue("name"))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -442,7 +444,7 @@ func (s *Server) setRank(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rank := r.PostFormValue("rank")
-	if !validRank(c.Ranks, rank) {
+	if !pilot.ValidRank(c.Ranks, rank) {
 		http.Error(w, "Pick a rank from the list.", http.StatusBadRequest)
 		return
 	}
