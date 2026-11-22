@@ -65,8 +65,11 @@ body {
   text-transform: uppercase;
   color: var(--accent);
   text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
 }
-.brand .mark { font-size: 0.8em; margin-right: 0.3em; }
+.brand .mark { width: 2rem; height: 2rem; flex: none; }
 
 .crumbs {
   flex: 1;

@@ -120,6 +120,8 @@ type Campaign struct {
 	MissionTerm string
 	// MVPSP is the extra SP the most valuable pilot of a mission earns (Intro.md mvp_sp; 0 means the campaign has no MVP). A scenario's Outcome.md can override it.
 	MVPSP int
+	// Names are the campaign's own example force and pilot names (Names.md), which replace the site's baseline suggestions; see names.go.
+	Names NameIdeas
 	// Problems lists what is wrong with the campaign's files (front matter that doesn't parse or has unknown keys, outcome rules that don't compile, branches to
 	// scenarios that don't exist), so an author sees them on the campaign page rather than a setting silently ignored. TestCampaignFilesAreValid keeps it empty.
 	Problems  []string
@@ -474,6 +476,7 @@ func (l Library) load(name string) (*Campaign, bool) {
 	c.IntroHTML = renderMarkdown(intro, false)
 	c.KeywordsHTML = renderMarkdown(kw, true)
 	c.Keywords = keywordIDs(kw)
+	c.loadNames(dir)
 	c.checkGrants()
 	c.checkScenarios()
 	return c, true
