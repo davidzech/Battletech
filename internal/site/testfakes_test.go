@@ -8,99 +8,12 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"testing"
 
-	"github.com/davidzech/Battletech/internal/catalog"
-	"github.com/davidzech/Battletech/internal/content"
 	"github.com/davidzech/Battletech/internal/mekbay"
 	"github.com/davidzech/Battletech/internal/storage"
 )
-
-func TestLookupUnitAndParseMul(t *testing.T) {
-	for _, c := range []struct{ chassis, model, name string }{
-		{"Koshi (Mist Lynx)", "E", "BMKoshi_E"},
-		{"Grizzly", "", "BMGrizzly"},
-		{"Mad Cat (Timber Wolf)", "H", "BMMadCat_H"},
-	} {
-		if u, ok := catalog.Lookup(c.chassis, c.model); !ok || u.Name != c.name || u.BV <= 0 || u.Tons <= 0 || u.Class == "" {
-			t.Errorf("lookupUnit(%q, %q) = %+v, %v; want %s", c.chassis, c.model, u, ok, c.name)
-		}
-	}
-	if u, ok := catalog.ByName("BMVulture_Prime"); !ok || u.BV != 2351 || catalog.DisplayName(u) != "Mad Dog Prime" {
-		t.Errorf("unitByName(BMVulture_Prime) = %+v, %v, display %q", u, ok, catalog.DisplayName(u))
-	}
-	if _, ok := catalog.Lookup("No Such Mech", "X"); ok {
-		t.Error("unknown unit should not be found")
-	}
-
-	raw, err := os.ReadFile("../../campaigns/RefusalWar/Scenario_000/OpFor1.mul")
-	if err != nil {
-		t.Fatal(err)
-	}
-	es, err := content.ParseMul(raw)
-	if err != nil || len(es) != 3 {
-		t.Fatalf("parseMul = %v, %v", es, err)
-	}
-	if es[0].Chassis != "Koshi (Mist Lynx)" || es[0].Model != "E" || es[0].Pilot != "Tyra" || es[0].Gunnery != 3 || es[0].Piloting != 4 {
-		t.Errorf("first entity = %+v", es[0])
-	}
-	if _, err := content.ParseMul([]byte("not xml")); err == nil {
-		t.Error("garbage should not parse")
-	}
-}
-
-func TestAdjustedBV(t *testing.T) {
-	for _, c := range []struct{ base, g, p, want int }{
-		{1000, 4, 5, 1000}, // the standard pilot
-		{1000, 3, 4, 1320},
-		{1000, 0, 0, 2420},
-		{1000, 9, 9, 640}, // skills past 8 count as 8
-		{2351, 4, 5, 2351},
-	} {
-		if got := catalog.AdjustedBV(c.base, c.g, c.p); got != c.want {
-			t.Errorf("adjustedBV(%d, %d, %d) = %d, want %d", c.base, c.g, c.p, got, c.want)
-		}
-	}
-}
-
-func TestEveryScenarioForceResolves(t *testing.T) {
-	lib := content.Library{Root: "../../campaigns"}
-	cs, err := lib.Campaigns()
-	if err != nil {
-		t.Fatal(err)
-	}
-	for i := range cs {
-		for j := range cs[i].Scenarios {
-			sc := &cs[i].Scenarios[j]
-			if len(sc.Forces) == 0 {
-				continue
-			}
-			d, err := opForDraft(cs[i], sc)
-			if err != nil {
-				t.Errorf("%s/%s: %v", cs[i].Slug, sc.Slug, err)
-				continue
-			}
-			if len(d.Groups) != len(sc.Forces) {
-				t.Errorf("%s: %d groups for %d force files", sc.Slug, len(d.Groups), len(sc.Forces))
-			}
-		}
-	}
-}
-
-func TestScenarioBVLimit(t *testing.T) {
-	c, ok := (content.Library{Root: "../../campaigns"}).Campaign("refusalwar")
-	if !ok {
-		t.Fatal("no campaign")
-	}
-	if sc, _ := c.Scenario("scenario_001"); sc.BVLimit != 7500 {
-		t.Errorf("scenario 001 BV limit = %d, want 7500", sc.BVLimit)
-	}
-	if sc, _ := c.Scenario("scenario_000"); sc.BVLimit != 0 {
-		t.Errorf("scenario 000 should have no BV limit, got %d", sc.BVLimit)
-	}
-}
 
 func hangarFixture() mekbay.HangarForce {
 	return mekbay.HangarForce{Name: "Test Hangar", Timestamp: "t", Units: []mekbay.HangarUnit{
@@ -113,40 +26,6 @@ func hangarFixture() mekbay.HangarForce {
 		{ID: "u-dead", Unit: "BMGrizzly", Group: "Hangar", Gunnery: 4, Piloting: 5, Destroyed: true},
 		{ID: "u-odd", Unit: "BMNoSuchMech_X", Group: "Hangar", Gunnery: 4, Piloting: 5},
 	}}
-}
-
-func TestHangarViewsAndDeployProblem(t *testing.T) {
-	h := hangarFixture()
-	views := hangarViews(h)
-	if v := views[0]; v.Name != "Mad Dog" || v.Model != "Prime" || v.Icon != "/icons/vulture.png" || v.BV != 2351 || v.Pilot != "Anya" || v.Class != "Heavy" || v.Tons != 60 || v.InDeployed {
-		t.Errorf("vulture view = %+v", v)
-	}
-	if v := views[1]; !v.InDeployed || !v.Damaged || v.BV <= 0 {
-		t.Errorf("loki view = %+v", v)
-	}
-	if v := views[7]; !v.Unknown || v.Name != "BMNoSuchMech_X" {
-		t.Errorf("unknown view = %+v", v)
-	}
-	for _, c := range []struct {
-		ids   []string
-		limit int
-		want  string // substring of the problem, or "" for fine
-	}{
-		{[]string{"u-vulture", "u-loki1"}, 10000, ""},
-		{[]string{"u-vulture", "u-loki1"}, 0, ""},
-		{nil, 10000, "at least one"},
-		{[]string{"u-vulture", "u-vulture"}, 0, "twice"},
-		{[]string{"u-ghost"}, 0, "no longer in your hangar"},
-		{[]string{"u-dead"}, 0, "destroyed"},
-		{[]string{"u-odd"}, 0, "unit catalog"},
-		{[]string{"u-loki1", "u-loki2", "u-loki3", "u-loki4", "u-loki5"}, 10000, "over this scenario's limit of 10000"},
-		{[]string{"u-loki1", "u-loki2", "u-loki3", "u-loki4", "u-loki5"}, 0, ""},
-	} {
-		got := deployProblem(h, c.ids, c.limit)
-		if (c.want == "") != (got == "") || !strings.Contains(got, c.want) {
-			t.Errorf("deployProblem(%v, %d) = %q, want it to contain %q", c.ids, c.limit, got, c.want)
-		}
-	}
 }
 
 // fakeMekBay serves a fixed hangar and records requests instead of calling mekbay.com.

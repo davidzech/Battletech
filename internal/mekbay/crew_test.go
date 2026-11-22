@@ -70,3 +70,26 @@ func TestApplyCrew(t *testing.T) {
 		t.Error("no assignments is a no-op")
 	}
 }
+
+// MekBay counts a pilot dead when the cockpit is gone, whatever the crew's stored state: the cockpit slot destroyed, or the head with no structure left.
+func TestPilotDeadFromTheCockpit(t *testing.T) {
+	reply := func(state string) string {
+		return `{"action":"forceData","data":{"name":"F","timestamp":"t","groups":[{"name":"G","units":[{"id":"u1","unit":"BMKoshi_E","state":{` + state + `,"crew":[{"name":"Alrek","gunnerySkill":3,"pilotingSkill":4,"hits":1,"state":0}]}}]}]}}`
+	}
+	for name, c := range map[string]struct {
+		state string
+		dead  bool
+	}{
+		"nothing":        {`"x":1`, false},
+		"cockpit crit":   {`"crits":[{"name":"Cockpit","loc":"HD","slot":2,"destroyed":1}]`, true},
+		"cockpit intact": {`"crits":[{"name":"Cockpit","loc":"HD","slot":2}]`, false},
+		"command":        {`"crits":[{"name":"Command Console","loc":"HD","slot":2,"destroyed":1}]`, false},
+		"head gone":      {`"locations":{"HD":{"armor":9,"internal":3}}`, true},
+		"head hurt":      {`"locations":{"HD":{"armor":9,"internal":2}}`, false},
+	} {
+		h, err := ParseHangarForce(json.RawMessage(reply(c.state)))
+		if err != nil || len(h.Units) != 1 || h.Units[0].PilotDead != c.dead {
+			t.Errorf("%s: %+v %v", name, h.Units, err)
+		}
+	}
+}

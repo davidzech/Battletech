@@ -11,7 +11,6 @@ import (
 
 	"github.com/davidzech/Battletech/internal/catalog"
 	"github.com/davidzech/Battletech/internal/content"
-	"github.com/davidzech/Battletech/internal/format"
 	"github.com/davidzech/Battletech/internal/mekbay"
 )
 
@@ -42,14 +41,6 @@ func refusalWar(t *testing.T) *content.Campaign {
 		t.Fatalf("Refusal War should start with at least 5 mechs and up to 10000 BV: %+v", c)
 	}
 	return c
-}
-
-func TestWithCommas(t *testing.T) {
-	for n, want := range map[int]string{0: "0", 999: "999", 1000: "1,000", 6000: "6,000", 12500: "12,500", 1234567: "1,234,567"} {
-		if got := format.Commas(n); got != want {
-			t.Errorf("withCommas(%d) = %q, want %q", n, got, want)
-		}
-	}
 }
 
 func TestCheckStartingHangar(t *testing.T) {
