@@ -14,11 +14,11 @@ objectives:
   - id: firebase_inspected
     label: "Secondary: inspect the firebase"
     sp: 450
-  - id: waypoint_a
-    label: "Waypoint A: occupy a hex adjacent to the supply transport"
+  - id: objective_1
+    label: "Objective 1: occupy a hex adjacent to the supply transport"
     sp: 100
-  - id: waypoint_e
-    label: "Waypoint E: destroy the firebase remains"
+  - id: objective_5
+    label: "Objective 5: destroy the firebase remains"
     sp: 100
 inputs:
   - id: falcon_mechs
@@ -42,5 +42,5 @@ Objectives met fill the mission's pool of SP. Each pilot who took part draws a f
 | Primary: destroy the chemical plant, small building          | 250        |
 | Secondary: inspect the firebase                              | 450        |
 | Each Jade Falcon mech crippled or destroyed                  | 200        |
-| Waypoint A: occupy an adjacent hex                           | 100        |
-| Waypoint E: destroy the firebase remains                     | 100        |
+| Objective 1: occupy an adjacent hex                           | 100        |
+| Objective 5: destroy the firebase remains                     | 100        |

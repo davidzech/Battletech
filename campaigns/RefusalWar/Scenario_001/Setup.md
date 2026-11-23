@@ -52,7 +52,7 @@ Use the Mountain Lake battlemap.
 
 **Firebase:** hex 1402.
 
-**Waypoints:** shuffle **Waypoint A**, **B**, **C** and **D**, and place them face down on hexes 1007, 1908, 1315 and 2616. Shuffle **Waypoint E** and **F** and stack them face down on the firebase, hex 1402. Shuffle **Waypoint G** and **H** and place them on turns 4 and 5 of the turn tracker.
+**Objectives:** shuffle **Objective 1**, **2**, **3** and **4**, and place them face down on hexes 1007, 1908, 1315 and 2616. Shuffle **Objective 5** and **6** and stack them face down on the firebase, hex 1402. Shuffle **Objective 7** and **8** and place them on turns 4 and 5 of the turn tracker.
 
 ## Forces
 
@@ -74,7 +74,7 @@ Field any force up to 7,500 BV.
 
 ### OpFor 2
 
-**Deployment:** reserve. They enter the map when **Waypoint H** is revealed (see Waypoints).
+**Deployment:** reserve. They enter the map when **Objective 8** is revealed (see Objectives).
 
 - [Howler](https://mekbay.com/?gs=cbt&shareUnit=BMBaboon&tab=General) (3/4) Missile Boat: Rurik
 - [Kit Fox Prime](https://mekbay.com/?gs=cbt&shareUnit=BMUller_Prime&tab=General) (3/4) Sniper: Sybille
@@ -90,49 +90,49 @@ Field any force up to 7,500 BV.
 
 **Time limit:** the sortie ends after 8 rounds (one turn past the front side of the turn tracker). Mechs must have extracted by then.
 
-**Waypoints:** a waypoint is revealed when a unit has line of sight to it from within 3 hexes.
+**Objectives:** an objective is revealed when a unit has line of sight to it from within 3 hexes.
 
-## Waypoints
+## Objectives
 
-### Waypoint A
+### Objective 1
 
 You happen upon a supply transport vehicle. Your scanner indicates a high level of protium in the truck bed. Its front left wheel has completely detached, and the crew is eerily missing. They must have left to recover the vehicle at a later time. No matter, it belongs to Clan Wolf now.
 
 **+100 SP** if you occupy an adjacent hex.
 
-### Waypoint B
+### Objective 2
 
 You notice a trio of large mechanical footprints, without a doubt battlemechs. You immediately recognize one of the patterns to be those of a Fire Moth. You radio your star mates to brace themselves, it won't be long until reinforcements arrive.
 
-Reveal **Waypoint G** and **H** on the turn tracker, remove **Waypoint G** and place **Waypoint H** on turn 4. Only do this if turn 3 hasn't been reached yet. Roll 1d6 to predetermine which edge the reinforcements will arrive on turn 4.
+Reveal **Objective 7** and **8** on the turn tracker, remove **Objective 7** and place **Objective 8** on turn 4. Only do this if turn 3 hasn't been reached yet. Roll 1d6 to predetermine which edge the reinforcements will arrive on turn 4.
 
-### Waypoint C
+### Objective 3
 
 You notice a pipeline snaking in and out of the uneven terrain leading to the central chemical plant building. It seems to be a gas line, oddly an antiquated form of fuel. With the right hit, it should level the whole building.
 
 You may now choose to make an aimed shot at the "head" of the central chemical plant building with your weapons. If you deal 10 or more damage at once with a weapon, the plant explodes, causing 120 damage in a 3 hex radius. Like a normal aimed shot for the head, you no longer receive the -4 modifier. If the attack hits, like a normal aimed shot, a 6, 7 or 8 means it hit the location. Otherwise, apply damage to the building as normal.
 
-### Waypoint D
+### Objective 4
 
 You have discovered the enemy firebase, or what little of it remains. The aerospace fighters fulfilled their duty.
 
-### Waypoint E
+### Objective 5
 
 You have discovered the enemy firebase, battered but still standing.
 
 Destroy the remains and fulfill what the aerospace fighters could not. The building has CF 15. +100 SP.
 
-### Waypoint F
+### Objective 6
 
-If **Waypoint F** has already been revealed, nothing happens.
+If **Objective 6** has already been revealed, nothing happens.
 
 Your radar begins detecting pips in the far distance. One... two... now three. It dawns on you that a full Jade Falcon Star is tasked with defending this plant. Such is the way of the Clans.
 
-### Waypoint G
+### Objective 7
 
 3 pips appear on your radar. Reinforcements will be here soon.
 
-### Waypoint H
+### Objective 8
 
 Spawns the reserve mechs (OpFor 2). Roll 1d6 for the edge they enter from: 1-2 north, 3-4 east, 5-6 south. The mechs enter in the order listed, on these hexes:
 

@@ -131,7 +131,7 @@ func TestScenario001Outcome(t *testing.T) {
 	names := map[string]string{"a": "Alrek", "b": "Katarina"}
 	res, err := sc.EvaluateOutcome(OutcomeInputs{
 		Pilots:  []OutcomeEntry{{PilotID: "a", TookPart: true}, {PilotID: "b", TookPart: true, Killed: true}},
-		Mission: map[string]any{"plant_large": true, "plant_small": true, "firebase_inspected": true, "waypoint_a": false, "waypoint_e": false, "falcon_mechs": float64(3)},
+		Mission: map[string]any{"plant_large": true, "plant_small": true, "firebase_inspected": true, "objective_1": false, "objective_5": false, "falcon_mechs": float64(3)},
 	}, names)
 	if err != nil {
 		t.Fatal(err)
@@ -146,7 +146,7 @@ func TestScenario001Outcome(t *testing.T) {
 func TestScenario001PrimaryObjectivesAreRequired(t *testing.T) {
 	sc, _ := refusalWar(t).Scenario("scenario_001")
 	for _, missing := range []string{"plant_large", "plant_small"} {
-		mission := map[string]any{"plant_large": true, "plant_small": true, "firebase_inspected": false, "waypoint_a": false, "waypoint_e": false, "falcon_mechs": float64(0)}
+		mission := map[string]any{"plant_large": true, "plant_small": true, "firebase_inspected": false, "objective_1": false, "objective_5": false, "falcon_mechs": float64(0)}
 		mission[missing] = false
 		_, err := sc.EvaluateOutcome(OutcomeInputs{Pilots: []OutcomeEntry{{PilotID: "a", TookPart: true}}, Mission: mission}, map[string]string{"a": "Alrek"})
 		if err == nil || !strings.Contains(err.Error(), "required") {

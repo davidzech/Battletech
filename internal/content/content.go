@@ -34,7 +34,7 @@ type Scenario struct {
 	Planet    string
 	Images    []string
 	Readout   []ReadoutRow // planet readout overlaid on the first image
-	Waypoints []Waypoint   // from the `## Waypoints` section of Setup.md
+	Waypoints []Waypoint   // from the `## Objectives` section of Setup.md
 	Forces    []ForceFile  // downloadable .mul files from front matter
 	// ProvidedUnits, when set (front matter provided_units: MekBay unit IDs), replace the player's hangar for this scenario: the players pick from this fixed pool
 	// instead, for story reasons. The units exist only for this scenario and never touch the hangar (see provided.go).
@@ -71,11 +71,11 @@ type ReadoutRow struct {
 	Value string
 }
 
-// Waypoint is one entry of a scenario's `## Waypoints` section: a hidden event or objective that is only
+// Waypoint is one entry of a scenario's `## Objectives` section: a hidden event or objective that is only
 // read when the game calls for it, so the page shows it redacted until the player reveals it.
 type Waypoint struct {
-	Name string        // e.g. "Waypoint A"
-	ID   string        // anchor-safe, e.g. "waypoint-a"
+	Name string        // e.g. "Objective 1"
+	ID   string        // anchor-safe, e.g. "objective-1"
 	HTML template.HTML // the rules text, with each text run wrapped for redaction
 }
 
@@ -547,7 +547,7 @@ var (
 	}
 )
 
-// splitWaypoints removes the `## Waypoints` section from a Setup.md body and returns the rest of the body plus
+// splitWaypoints removes the `## Objectives` section from a Setup.md body and returns the rest of the body plus
 // one Waypoint per `### ` heading inside that section. Text between the section heading and the first
 // waypoint is dropped.
 func splitWaypoints(body string) (rest string, wps []Waypoint) {
@@ -567,7 +567,7 @@ func splitWaypoints(body string) (rest string, wps []Waypoint) {
 	}
 	for _, line := range strings.Split(strings.ReplaceAll(body, "\r\n", "\n"), "\n") {
 		switch {
-		case strings.TrimSpace(line) == "## Waypoints":
+		case strings.TrimSpace(line) == "## Objectives":
 			inSection = true
 		case inSection && strings.HasPrefix(line, "## "):
 			flush()
