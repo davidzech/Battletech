@@ -30,6 +30,8 @@ type SwapOption struct {
 	Tons      float64 `json:"tons"`
 	Icon      string  `json:"icon"`
 	MekBayURL string  `json:"mekbayUrl"`
+	// Card is the variant's unit card, shown when its row in the Reconfigure dialog is hovered (the same card as everywhere else, see catalog.CardFor).
+	Card *catalog.UnitCard `json:"card,omitempty"`
 	// Available is whether the campaign's faction fields this variant in its era (availability_faction and availability_era in Intro.md, the same
 	// list the purchase search filters by); the Reconfigure dialog offers only these unless the player unticks the box. A campaign that names no
 	// faction and era leaves every variant available. Set by markSwapAvailability, which knows the campaign.
@@ -79,7 +81,7 @@ func SwapOptions(u catalog.Unit) []SwapOption {
 	for _, v := range omniVariants[u.Chassis] {
 		if v.Name != u.Name {
 			name, model := catalog.Names(v)
-			out = append(out, SwapOption{Unit: v.Name, Model: model, BV: v.BV, Cost: swapPrice(u, v), Name: name, Class: v.Class, Role: catalog.RoleLabel(v), Tons: v.Tons, Icon: catalog.IconURL(v), MekBayURL: catalog.PageURL(v.Name)})
+			out = append(out, SwapOption{Unit: v.Name, Model: model, BV: v.BV, Cost: swapPrice(u, v), Name: name, Class: v.Class, Role: catalog.RoleLabel(v), Tons: v.Tons, Icon: catalog.IconURL(v), MekBayURL: catalog.PageURL(v.Name), Card: catalog.CardFor(v)})
 		}
 	}
 	return out

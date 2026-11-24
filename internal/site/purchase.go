@@ -24,7 +24,7 @@ func (s *Server) purchaseUnits(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	s.payForHangarChange(w, r, pt, c, run, cost, "buy units", func() error {
+	s.payForHangarChange(w, r, pt, c, run, cost, "buy units", func() (mekbay.HangarForce, error) {
 		return s.mekbay.PurchaseUnits(r.Context(), mekbay.PurchaseRequest{OwnerUID: mekbay.AccountUID(currentSeed(r), mekbay.SlotHangar), Instance: run.HangarInstance, Units: ids})
 	})
 }

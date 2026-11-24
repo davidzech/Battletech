@@ -93,13 +93,14 @@ type MekBay interface {
 	// CreateForce saves a new force built from a draft under the owner's account (a starting hangar built on the site, see buildforce.go).
 	CreateForce(ctx context.Context, owner, instance string, d ForceDraft) (HangarForce, error)
 	// ServiceUnit repairs or rearms one unit of the player's hangar force (modify mode only).
-	ServiceUnit(ctx context.Context, req ServiceRequest) error
+	// These four edits each return the hangar force as it was saved, for the site's cached copy (see editForce).
+	ServiceUnit(ctx context.Context, req ServiceRequest) (HangarForce, error)
 	// PurchaseUnits adds bought units to the player's hangar force (modify mode only).
-	PurchaseUnits(ctx context.Context, req PurchaseRequest) error
+	PurchaseUnits(ctx context.Context, req PurchaseRequest) (HangarForce, error)
 	// SellUnit removes a sold unit from the player's hangar force.
-	SellUnit(ctx context.Context, req SellRequest) error
+	SellUnit(ctx context.Context, req SellRequest) (HangarForce, error)
 	// SwapUnit reconfigures an omnimech of the player's hangar force to another variant.
-	SwapUnit(ctx context.Context, req SwapRequest) error
+	SwapUnit(ctx context.Context, req SwapRequest) (HangarForce, error)
 	// StartBattle builds the players' forces and the OpFor's and one operation that pairs them (see battle.go).
 	StartBattle(ctx context.Context, req BattleRequest) (BattleResult, error)
 	// ReadBattle reads an operation and every force in it, anonymously, for the battle's live status.
@@ -361,26 +362,35 @@ func (s *Session) saveForce(ctx context.Context, force map[string]any, now time.
 
 // editForce reads one of the owner's forces, changes it with edit and saves it, on one connection. It is how every change to the site's copy of a hangar is
 // made (repairs, rearms, purchases, sales, swaps).
-func (c *Client) editForce(ctx context.Context, owner, instance string, edit func(force map[string]any, now time.Time) error) error {
+//
+// It returns the force as it was saved, read the way a live read reads it, so the site can keep its cached copy current without reading MekBay again.
+func (c *Client) editForce(ctx context.Context, owner, instance string, edit func(force map[string]any, now time.Time) error) (HangarForce, error) {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	s, err := Dial(ctx, c.url(), owner)
 	if err != nil {
-		return err
+		return HangarForce{}, err
 	}
 	defer s.Close()
 	force, err := s.getForce(ctx, instance, false)
 	if err != nil {
-		return err
+		return HangarForce{}, err
 	}
 	if force == nil {
-		return errNoHangarForce
+		return HangarForce{}, errNoHangarForce
 	}
 	now := time.Now()
 	if err := edit(force, now); err != nil {
-		return err
+		return HangarForce{}, err
 	}
-	return s.saveForce(ctx, force, now)
+	if err := s.saveForce(ctx, force, now); err != nil {
+		return HangarForce{}, err
+	}
+	raw, err := json.Marshal(map[string]any{"data": force})
+	if err != nil {
+		return HangarForce{}, err
+	}
+	return ParseHangarForce(raw)
 }
 
 // NewID returns a new version 7 UUID, the kind MekBay uses for force and operation IDs.

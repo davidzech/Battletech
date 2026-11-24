@@ -57,7 +57,7 @@ func addUnitsToForce(force map[string]any, unitIDs []string, now time.Time) {
 }
 
 // PurchaseUnits adds units to the player's hangar force. It needs the owner's UID, because MekBay only accepts the owner's saves.
-func (c *Client) PurchaseUnits(ctx context.Context, req PurchaseRequest) error {
+func (c *Client) PurchaseUnits(ctx context.Context, req PurchaseRequest) (HangarForce, error) {
 	return c.editForce(ctx, req.OwnerUID, req.Instance, func(force map[string]any, now time.Time) error {
 		addUnitsToForce(force, req.Units, now)
 		return nil

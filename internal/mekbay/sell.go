@@ -30,7 +30,7 @@ type SellRequest struct {
 }
 
 // SellUnit removes a unit from the hangar force. It needs the owner's UID, because MekBay only accepts the owner's saves.
-func (c *Client) SellUnit(ctx context.Context, req SellRequest) error {
+func (c *Client) SellUnit(ctx context.Context, req SellRequest) (HangarForce, error) {
 	return c.editForce(ctx, req.OwnerUID, req.Instance, func(force map[string]any, _ time.Time) error {
 		if !removeUnitFromForce(force, req.UnitID) {
 			return errors.New("that unit is no longer in your hangar force")

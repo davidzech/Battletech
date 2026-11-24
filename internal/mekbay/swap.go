@@ -37,7 +37,7 @@ type SwapRequest struct {
 }
 
 // SwapUnit reconfigures a unit in the hangar force. It needs the owner's UID, because MekBay only accepts the owner's saves.
-func (c *Client) SwapUnit(ctx context.Context, req SwapRequest) error {
+func (c *Client) SwapUnit(ctx context.Context, req SwapRequest) (HangarForce, error) {
 	return c.editForce(ctx, req.OwnerUID, req.Instance, func(force map[string]any, now time.Time) error {
 		return swapUnitState(force, req.UnitID, req.To, now)
 	})

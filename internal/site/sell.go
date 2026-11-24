@@ -42,11 +42,13 @@ func (s *Server) sellUnit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	value := hangar.SellValue(cat.BV, hangar.Pristine(hu))
-	if err := s.mekbay.SellUnit(r.Context(), mekbay.SellRequest{OwnerUID: mekbay.AccountUID(currentSeed(r), mekbay.SlotHangar), Instance: run.HangarInstance, UnitID: hu.ID}); err != nil {
+	after, err := s.mekbay.SellUnit(r.Context(), mekbay.SellRequest{OwnerUID: mekbay.AccountUID(currentSeed(r), mekbay.SlotHangar), Instance: run.HangarInstance, UnitID: hu.ID})
+	if err != nil {
 		log.Printf("sell a unit in MekBay: %v", err) // never log the owner UID
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
+	s.cacheHangar(r.Context(), pt.ID, c.Slug, run.HangarInstance, after) // the page that reloads next shows the unit gone at once
 	if err := s.store.RefundWarchest(r.Context(), pt.ID, c.Slug, value); err != nil {
 		log.Printf("could not pay %d SP for a sold unit: %v", value, err)
 		http.Error(w, "The unit was sold but the warchest could not be paid. Set the funds under Advanced Management.", http.StatusInternalServerError)

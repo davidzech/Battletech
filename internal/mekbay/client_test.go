@@ -109,7 +109,7 @@ func TestMekBayClientReportsRefusals(t *testing.T) {
 	}))
 	defer ts.Close()
 	cl := &Client{URL: "ws" + strings.TrimPrefix(ts.URL, "http")}
-	err := cl.SellUnit(context.Background(), SellRequest{OwnerUID: ownerUID, Instance: goodInstance, UnitID: "u1"})
+	_, err := cl.SellUnit(context.Background(), SellRequest{OwnerUID: ownerUID, Instance: goodInstance, UnitID: "u1"})
 	if err == nil || !strings.Contains(err.Error(), "doesn't own") {
 		t.Fatalf("expected a not-owner error, got %v", err)
 	}

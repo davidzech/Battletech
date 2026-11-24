@@ -45,14 +45,11 @@
         return { label: a.name, value: a.tons + (a.tons === 1 ? ' ton' : ' tons') + ' \u00b7 ' + a.used + (a.capacity ? ' of ' + a.capacity : '') + ' shots used' };
       }),
       detail: 'Cost ' + u.rearmCost + ' SP. Warchest ' + commas(warchest) + ' \u2192 ' + commas(after) + ' SP.',
-      confirmLabel: 'Rearm for ' + u.rearmCost + ' SP'
-    }).then(function (yes) {
-      if (!yes) return;
-      service({ kind: 'rearm', unit: u.id }).then(function (r) {
-        if (r.ok) location.reload();
-        else Confirm.ask({ title: 'Could not rearm', message: r.message, confirmLabel: 'OK', cancelLabel: 'Close' });
-      });
-    });
+      confirmLabel: 'Rearm for ' + u.rearmCost + ' SP',
+      busyLabel: 'Rearming',
+      // The dialog stays open until the rearm is saved, then closes and the page shows the updated hangar; a refusal is shown in it.
+      action: function () { return service({ kind: 'rearm', unit: u.id }).then(function (r) { return r.ok ? '' : r.message; }); }
+    }).then(function (yes) { if (yes) location.reload(); });
   }
 
   // Sell: one confirmation. A fully repaired and rearmed unit sells for half its BV, any other for a quarter; the server works the price out again.
@@ -77,17 +74,18 @@
       message: fullName(u) + ' leaves your hangar for good, crew and all.' + (!u.sellFull && u.condition !== 'truly' ? ' Repair and rearm it first and it sells for ' + commas(half) + ' SP.' : u.condition === 'truly' ? ' A truly destroyed unit can’t be repaired, so this is all it is worth.' : ''),
       items: items,
       detail: 'Warchest ' + commas(warchest) + ' → ' + commas(after) + ' SP.',
-      confirmLabel: 'Sell for ' + u.sellValue + ' SP', danger: true
-    }).then(function (yes) {
-      if (!yes) return;
-      fetch('/api/hangar/sell', {
-        method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, credentials: 'same-origin',
-        body: 'campaign=' + encodeURIComponent(section.dataset.campaign) + '&unit=' + encodeURIComponent(u.id)
-      }).then(function (res) {
-        if (res.ok) { location.reload(); return; }
-        return res.text().then(function (t) { Confirm.ask({ title: 'Could not sell', message: t.trim() || 'Something went wrong.', confirmLabel: 'OK', cancelLabel: 'Close' }); });
-      }, function () { Confirm.ask({ title: 'Could not sell', message: 'Could not reach the server.', confirmLabel: 'OK', cancelLabel: 'Close' }); });
-    });
+      confirmLabel: 'Sell for ' + u.sellValue + ' SP', danger: true,
+      busyLabel: 'Selling',
+      // The dialog stays open until the sale is saved (the unit removed in MekBay, then the warchest paid), then closes and the page shows the updated hangar.
+      action: function () {
+        return fetch('/api/hangar/sell', {
+          method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, credentials: 'same-origin',
+          body: 'campaign=' + encodeURIComponent(section.dataset.campaign) + '&unit=' + encodeURIComponent(u.id)
+        }).then(function (res) {
+          return res.ok ? '' : res.text().then(function (t) { return t.trim() || 'Something went wrong.'; });
+        }, function () { return 'Could not reach the server.'; });
+      }
+    }).then(function (yes) { if (yes) location.reload(); });
   }
 
   // Repair: a dialog listing only the repairs that would fix something on this unit. Any one can be chosen on its own (a crippled unit can have just
@@ -144,6 +142,16 @@
     });
   }
 
+  // Gives a mech row its unit card (build() makes it): shown on hover or focus under the row, right-aligned with it, the row lit while it is open. The row's
+  // status pills have cards of their own, so coming back off a pill onto the row brings the unit's card back.
+  function withCard(r, build) {
+    MechRow.attachTip(r, { focusable: false, align: 'right', build: build });
+    r.addEventListener('mouseover', function (e) {
+      var own = e.target.closest && e.target.closest('[aria-describedby]');
+      if ((!own || own === r) && !r.classList.contains('tip-open')) r.dispatchEvent(new Event('mouseenter'));
+    });
+  }
+
   // Reconfigure (omnimechs only): a dialog listing the unit's other variants with their prices, like the repair dialog.
   var swapDlg = document.getElementById('swap-dialog');
   var swapUnitRow = null;
@@ -152,10 +160,14 @@
     return (swapUnitRow.swapOptions || []).filter(function (o) { return o.unit === to; })[0];
   }
   // The dialog shows the unit as its full row, then, once another variant is chosen, an arrow with what changes and the variant's own row: a flow from one to the other.
-  function swapRow(box, v) {
+  // Each row shows its unit card on hover or focus, like a Hangar row, right-aligned with the row: the current unit's (with its condition pills) and the chosen
+  // variant's (as it would be after the swap).
+  function swapRow(box, v, card) {
     var row = { name: v.name, model: v.model, role: v.role, icon: v.icon, class: v.class, tons: v.tons, bv: v.bv };
     if (v.mekbayUrl) row.externalUrl = v.mekbayUrl;
-    box.appendChild(MechRow.build(row));
+    var built = MechRow.build(row);
+    if (card && typeof UnitCard !== 'undefined') withCard(built, card);
+    box.appendChild(built);
   }
   function swapCostText() {
     var o = swapOption(), u = swapUnitRow, cost = o ? o.cost : 0, after = warchest - cost;
@@ -164,7 +176,7 @@
     var sub = document.getElementById('swap-sub');
     sub.textContent = '';
     sub.appendChild(el('div', 'swap-label', o ? 'From' : 'Current variant'));
-    swapRow(sub, u);
+    swapRow(sub, u, function () { return UnitCard.forUnit(u); });
     if (o) {
       var dir = o.bv > u.bv ? 'up' : o.bv < u.bv ? 'down' : 'same', diff = o.bv - u.bv;
       var flow = el('div', 'swap-flow swap-' + dir);
@@ -174,7 +186,7 @@
       flow.appendChild(el('span', 'swap-flow-cost', o.cost + ' SP'));
       sub.appendChild(flow);
       sub.appendChild(el('div', 'swap-label', 'To'));
-      swapRow(sub, o);
+      swapRow(sub, o, function () { return o.card ? UnitCard.build(o.card) : UnitCard.unknown(o.name); });
     }
     // The price as a short breakdown: half the tonnage, plus half the BV gained (nothing for a variant worth less).
     var bd = document.getElementById('swap-breakdown');
@@ -299,15 +311,7 @@
       // Hovering the row (or focusing it) shows the unit's card, the same card as the overview's and a scenario's unit links, under the row and
       // right-aligned with it, so the mechs listed on the left stay in view; the row keeps its yellow border while the card is open
       // (.mech-row.tip-open). Its status pills have cards of their own, so coming back off a pill onto the row brings the row's card back.
-      if (typeof UnitCard !== 'undefined') {
-        (function (r) {
-          MechRow.attachTip(r, { focusable: false, align: 'right', build: function () { return UnitCard.forUnit(u); } });
-          r.addEventListener('mouseover', function (e) {
-            var own = e.target.closest && e.target.closest('[aria-describedby]');
-            if ((!own || own === r) && !r.classList.contains('tip-open')) r.dispatchEvent(new Event('mouseenter'));
-          });
-        })(built);
-      }
+      if (typeof UnitCard !== 'undefined') withCard(built, function () { return UnitCard.forUnit(u); });
       list.appendChild(built);
     });
   }

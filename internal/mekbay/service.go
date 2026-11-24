@@ -140,7 +140,7 @@ func repairState(state map[string]any, crits []any, level string, tons float64) 
 }
 
 // ServiceUnit repairs or rearms a unit in the player's hangar force. It needs the owner's UID, because MekBay only accepts the owner's saves.
-func (c *Client) ServiceUnit(ctx context.Context, req ServiceRequest) error {
+func (c *Client) ServiceUnit(ctx context.Context, req ServiceRequest) (HangarForce, error) {
 	return c.editForce(ctx, req.OwnerUID, req.Instance, func(force map[string]any, _ time.Time) error {
 		return serviceUnitState(force, req.UnitID, req.Kind, req.Level, req.Tons)
 	})

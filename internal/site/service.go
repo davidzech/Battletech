@@ -80,7 +80,7 @@ func (s *Server) serviceUnit(w http.ResponseWriter, r *http.Request) {
 		}
 		cost = hangar.RearmCost(hu.AmmoBins)
 	}
-	s.payForHangarChange(w, r, pt, c, run, cost, kind+" a unit", func() error {
+	s.payForHangarChange(w, r, pt, c, run, cost, kind+" a unit", func() (mekbay.HangarForce, error) {
 		return s.mekbay.ServiceUnit(r.Context(), mekbay.ServiceRequest{OwnerUID: mekbay.AccountUID(currentSeed(r), mekbay.SlotHangar), Instance: run.HangarInstance, UnitID: hu.ID, Kind: kind, Level: level, Tons: cat.Tons})
 	})
 }

@@ -155,32 +155,58 @@ func (f *fakeMekBay) ReadBattle(_ context.Context, operationID string) (mekbay.B
 	return f.status, f.statusErr
 }
 
-func (f *fakeMekBay) SellUnit(_ context.Context, req mekbay.SellRequest) error {
+// The fake's edits save and return the hangar as it would be after them: a sale without the unit sold, a purchase with the units bought; repairs and swaps
+// leave it as is.
+func (f *fakeMekBay) edited(change func(h *mekbay.HangarForce)) (mekbay.HangarForce, error) {
+	if f.serviceErr != nil {
+		return mekbay.HangarForce{}, f.serviceErr
+	}
+	h := f.hangar
+	h.Units = append([]mekbay.HangarUnit(nil), f.hangar.Units...)
+	if change != nil {
+		change(&h)
+	}
+	f.hangar = h // MekBay keeps what was saved, so the next read or edit starts from it
+	return h, nil
+}
+
+func (f *fakeMekBay) SellUnit(_ context.Context, req mekbay.SellRequest) (mekbay.HangarForce, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.sales = append(f.sales, req)
-	return f.serviceErr
+	return f.edited(func(h *mekbay.HangarForce) {
+		for i, u := range h.Units {
+			if u.ID == req.UnitID {
+				h.Units = append(h.Units[:i], h.Units[i+1:]...)
+				break
+			}
+		}
+	})
 }
 
-func (f *fakeMekBay) SwapUnit(_ context.Context, req mekbay.SwapRequest) error {
+func (f *fakeMekBay) SwapUnit(_ context.Context, req mekbay.SwapRequest) (mekbay.HangarForce, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.swaps = append(f.swaps, req)
-	return f.serviceErr
+	return f.edited(nil)
 }
 
-func (f *fakeMekBay) ServiceUnit(_ context.Context, req mekbay.ServiceRequest) error {
+func (f *fakeMekBay) ServiceUnit(_ context.Context, req mekbay.ServiceRequest) (mekbay.HangarForce, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.services = append(f.services, req)
-	return f.serviceErr
+	return f.edited(nil)
 }
 
-func (f *fakeMekBay) PurchaseUnits(_ context.Context, req mekbay.PurchaseRequest) error {
+func (f *fakeMekBay) PurchaseUnits(_ context.Context, req mekbay.PurchaseRequest) (mekbay.HangarForce, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.purchases = append(f.purchases, req)
-	return f.serviceErr
+	return f.edited(func(h *mekbay.HangarForce) {
+		for i, id := range req.Units {
+			h.Units = append(h.Units, mekbay.HangarUnit{ID: fmt.Sprintf("bought-%d", i), Unit: id, Group: "Hangar", Gunnery: 4, Piloting: 5})
+		}
+	})
 }
 
 func newMekBayTestServer(t *testing.T, mb mekbay.MekBay) (*httptest.Server, *storage.Store) {
