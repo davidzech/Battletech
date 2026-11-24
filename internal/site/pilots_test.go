@@ -709,21 +709,21 @@ func TestPilotRanksEndToEnd(t *testing.T) {
 	}
 	status := func(v url.Values) int { return post(t, srv, "/api/pilots/rank", v, cookie, srv.URL).StatusCode }
 
-	// The starting pilots are cadets, shown as a plain label under the portrait: the rank is changed only in Advanced Management (Danger zone), whose picker
-	// offers Refusal War's eight ranks for each of the two pilots. The Recruit dialog has no picker: recruits join as MechWarriors.
+	// The starting pilots are cadets, shown as a plain label under the portrait: the rank is changed only in Advanced Management (Danger zone), where each
+	// pilot's rank button opens the Change rank dialog with Refusal War's eight ranks. The Recruit dialog has no picker: recruits join as MechWarriors.
 	page := body(t, srv, "/refusalwar/manage/", cookie)
-	for _, want := range []string{`<span class="rank-label">Cadet</span>`, `class="rec-rank-select"`, `<option value="Cadet" selected>`, `<option value="Star Captain">`, `<option value="Khan">`, `data-rank="Cadet"`, "Joins as MechWarrior."} {
+	for _, want := range []string{`<span class="rank-label">Cadet</span>`, `class="rank-btn rec-rank-btn"`, `aria-label="Change Alrek&rsquo;s rank">Cadet</button>`, `id="rank-dialog"`, `<option value="Star Captain">`, `<option value="Khan">`, `data-rank="Cadet"`, "Joins as MechWarrior."} {
 		if !strings.Contains(page, want) {
 			t.Errorf("the manage page is missing %q", want)
 		}
 	}
-	for _, gone := range []string{`class="rank-btn"`, `id="rank-dialog"`, `id="recruit-rank"`} {
+	for _, gone := range []string{`class="rank-btn"`, `id="recruit-rank"`} {
 		if strings.Contains(page, gone) {
 			t.Errorf("the rank is no longer edited on the cards or chosen when recruiting: %q", gone)
 		}
 	}
-	if strings.Count(page, "<option value=") != 16 {
-		t.Errorf("Advanced Management lists the eight ranks for each of the two pilots (16 options), got %d", strings.Count(page, "<option value="))
+	if strings.Count(page, "<option value=") != 8 {
+		t.Errorf("the Change rank dialog lists the eight ranks once, got %d options", strings.Count(page, "<option value="))
 	}
 
 	if got := post(t, srv, "/api/pilots/rank", form("rank", "Khan"), cookie, "https://evil.example").StatusCode; got != http.StatusForbidden {
@@ -749,7 +749,7 @@ func TestPilotRanksEndToEnd(t *testing.T) {
 		t.Fatalf("set rank: %d", got)
 	}
 	page = body(t, srv, "/refusalwar/manage/", cookie)
-	if !strings.Contains(page, `<span class="rank-label">Star Captain</span>`) || !strings.Contains(page, `<option value="Star Captain" selected>`) || !strings.Contains(page, `data-rank="Star Captain"`) {
+	if !strings.Contains(page, `<span class="rank-label">Star Captain</span>`) || !strings.Contains(page, `&rsquo;s rank">Star Captain</button>`) || !strings.Contains(page, `data-rank="Star Captain"`) {
 		t.Error("the card should show the new rank")
 	}
 	if over := body(t, srv, "/refusalwar/", cookie); !strings.Contains(over, "Star Captain &middot; ") {
