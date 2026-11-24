@@ -10,3 +10,6 @@ uid.txt
 
 # air (live reload) build output
 /tmp/
+
+# macOS Finder metadata
+.DS_Store
