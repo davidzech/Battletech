@@ -21,7 +21,7 @@ var ErrOutcomePilot = errors.New("a pilot in the outcome is no longer a living n
 var ErrOutcomeFunds = errors.New("the outcome would take the warchest below zero")
 
 // CompleteWithOutcome applies a mission's outcome and records the mission as completed, all in one transaction: SP to the pilots who earned it, pilots killed in
-// action, the warchest and the free recruits, the keywords granted (into the campaign ledger), and the completion row holding the report. It fails with ErrAlreadyCompleted if the mission was already completed, so
+// action, promotions (a pilot's Rank, as ResolvePromotions settled it), the warchest and the free recruits, the keywords granted (into the campaign ledger), and the completion row holding the report. It fails with ErrAlreadyCompleted if the mission was already completed, so
 // the rewards can never be given twice.
 func (s *Store) CompleteWithOutcome(ctx context.Context, playthroughID, campaign, scenario string, res content.OutcomeResult) error {
 	record, err := json.Marshal(res)
@@ -43,6 +43,15 @@ func (s *Store) CompleteWithOutcome(ctx context.Context, playthroughID, campaign
 	for _, p := range res.Pilots {
 		if p.SP > 0 {
 			r, err := tx.ExecContext(ctx, s.q(`UPDATE named_pilots SET sp_total = sp_total + ? WHERE id = ? AND playthrough_id = ? AND campaign = ? AND fallen = 0`), p.SP, p.PilotID, playthroughID, campaign)
+			if err != nil {
+				return err
+			}
+			if c, _ := r.RowsAffected(); c == 0 {
+				return ErrOutcomePilot
+			}
+		}
+		if p.Rank != "" && !p.KIA {
+			r, err := tx.ExecContext(ctx, s.q(`UPDATE named_pilots SET rank = ? WHERE id = ? AND playthrough_id = ? AND campaign = ? AND fallen = 0`), p.Rank, p.PilotID, playthroughID, campaign)
 			if err != nil {
 				return err
 			}
@@ -142,4 +151,51 @@ func (s *Store) Ledger(ctx context.Context, playthroughID, campaign string) ([]L
 		out = append(out, e)
 	}
 	return out, rows.Err()
+}
+
+// SetKeywords makes the campaign's ledger hold exactly these keywords, for correcting it by hand (the Manage page's
+// Danger zone): keywords not listed are removed, and new ones are added with an empty scenario_id. Keywords
+// already held keep the scenario that granted them. One transaction.
+func (s *Store) SetKeywords(ctx context.Context, playthroughID, campaign string, keywords []string) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	want := map[string]bool{}
+	for _, k := range keywords {
+		want[k] = true
+	}
+	rows, err := tx.QueryContext(ctx, s.q(`SELECT keyword FROM campaign_keywords WHERE playthrough_id = ? AND campaign = ?`), playthroughID, campaign)
+	if err != nil {
+		return err
+	}
+	held := map[string]bool{}
+	for rows.Next() {
+		var k string
+		if err := rows.Scan(&k); err != nil {
+			rows.Close()
+			return err
+		}
+		held[k] = true
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for k := range held {
+		if !want[k] {
+			if _, err := tx.ExecContext(ctx, s.q(`DELETE FROM campaign_keywords WHERE playthrough_id = ? AND campaign = ? AND keyword = ?`), playthroughID, campaign, k); err != nil {
+				return err
+			}
+		}
+	}
+	for _, k := range keywords {
+		if !held[k] {
+			if _, err := tx.ExecContext(ctx, s.q(`INSERT INTO campaign_keywords (playthrough_id, campaign, keyword, scenario_id) VALUES (?, ?, ?, '') ON CONFLICT (playthrough_id, campaign, keyword) DO NOTHING`), playthroughID, campaign, k); err != nil {
+				return err
+			}
+		}
+	}
+	return tx.Commit()
 }

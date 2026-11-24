@@ -23,36 +23,42 @@ func TestRefusalWarPlayersOnHomePage(t *testing.T) {
 	}
 }
 
-// Refusal War calls its scenarios sorties, and that name is used everywhere a scenario is named.
+// A campaign names its scenarios with its mission_term ("Scenario" by default, which Refusal War uses), and that name
+// is used everywhere a scenario is named.
 func TestMissionTerm(t *testing.T) {
 	c := refusalWar(t)
 	sc, _ := c.Scenario("scenario_001")
-	if c.MissionNumber(*sc) != "Sortie 001" || c.MissionName(*sc) != "Sortie 001: Pyre Light" || operationName(c, sc) != "Refusal War - Sortie 001" {
+	if c.MissionNumber(*sc) != "Scenario 001" || c.MissionName(*sc) != "Scenario 001: Pyre Light" || operationName(c, sc) != "Refusal War - Scenario 001" {
 		t.Errorf("names: %q %q %q", c.MissionNumber(*sc), c.MissionName(*sc), operationName(c, sc))
 	}
+	custom := *c
+	custom.MissionTerm = "Sortie"
+	if custom.MissionName(*sc) != "Sortie 001: Pyre Light" {
+		t.Errorf("a campaign's own term: %q", custom.MissionName(*sc))
+	}
 	srv, _, cookie := startedCompany(t)
-	if p := body(t, srv, "/refusalwar/scenario_001/", cookie); !strings.Contains(p, `<p class="kicker">Sortie 001`) {
+	if p := body(t, srv, "/refusalwar/scenario_001/", cookie); !strings.Contains(p, `<p class="kicker">Scenario 001`) {
 		t.Errorf("the scenario page's kicker: %.300s", p)
 	}
-	if p := body(t, srv, "/refusalwar/manage/?back=scenario_001", cookie); !strings.Contains(p, "Back to Sortie 001: Pyre Light") {
-		t.Error("the Manage page's back link names the sortie")
+	if p := body(t, srv, "/refusalwar/manage/?back=scenario_001", cookie); !strings.Contains(p, "Back to Scenario 001: Pyre Light") {
+		t.Error("the Manage page's back link names the scenario")
 	}
 }
 
-// The Deploy section links to Manage force with ?back=<scenario>, and Manage's back link then returns to that sortie. Only a real scenario of the campaign counts.
-func TestManageBackLinkReturnsToTheSortie(t *testing.T) {
+// The Deploy section links to Manage force with ?back=<scenario>, and Manage's back link then returns to that scenario. Only a real scenario of the campaign counts.
+func TestManageBackLinkReturnsToTheScenario(t *testing.T) {
 	srv, _, cookie := startedCompany(t)
-	sortie := body(t, srv, "/refusalwar/scenario_001/", cookie)
-	if !strings.Contains(sortie, `id="manage-link" href="/refusalwar/manage/?back=scenario_001"`) {
-		t.Fatalf("the Deploy section should link to Manage force carrying the sortie: %.600s", sortie)
+	scenario := body(t, srv, "/refusalwar/scenario_001/", cookie)
+	if !strings.Contains(scenario, `id="manage-link" href="/refusalwar/manage/?back=scenario_001"`) {
+		t.Fatalf("the Deploy section should link to Manage force carrying the scenario: %.600s", scenario)
 	}
 	// A scenario that provides its own mechs has no hangar to manage for it.
 	if strings.Contains(body(t, srv, "/refusalwar/scenario_000/", cookie), `id="manage-link"`) {
 		t.Error("a scenario with provided mechs should not offer Manage force")
 	}
 	man := body(t, srv, "/refusalwar/manage/?back=scenario_001", cookie)
-	if !strings.Contains(man, `<a href="/refusalwar/scenario_001/">&lsaquo; Back to Sortie 001: `) {
-		t.Errorf("Back should return to the sortie: %.400s", man)
+	if !strings.Contains(man, `<a href="/refusalwar/scenario_001/">&lsaquo; Back to Scenario 001: `) {
+		t.Errorf("Back should return to the scenario: %.400s", man)
 	}
 	if plain := body(t, srv, "/refusalwar/manage/", cookie); !strings.Contains(plain, `<a href="/refusalwar/">&lsaquo; Back to the campaign</a>`) {
 		t.Error("without ?back, Back returns to the campaign")
@@ -155,7 +161,6 @@ func TestButtonsHaveNoTrailingEllipsis(t *testing.T) {
 		"a scenario (plain)":    {"/refusalwar/scenario_001/", true},
 		"an unstarted campaign": {"/refusalwar/", false},
 		"an unstarted scenario": {"/refusalwar/scenario_000/", false},
-		"the keywords page":     {"/refusalwar/keywords/", true},
 		"the home page":         {"/", true},
 	} {
 		ck := fresh
@@ -186,13 +191,16 @@ func sps(res content.OutcomeResult) string {
 	return strings.Join(out, ",")
 }
 
-// Committing an outcome puts its keywords in the campaign ledger (once each), shown on the keywords page.
+// Committing an outcome puts its keywords in the campaign ledger (once each), listed on the campaign overview by name.
 func TestCampaignLedger(t *testing.T) {
 	srv, store, cookie := startedCompany(t)
 	ctx := context.Background()
 	id := playthroughID("wolfpack2026")
-	if p := body(t, srv, "/refusalwar/keywords/", cookie); !strings.Contains(p, "No keywords earned yet.") {
-		t.Fatal("an empty ledger says so")
+	if ledger, _ := store.Ledger(ctx, id, "refusalwar"); len(ledger) != 0 {
+		t.Fatalf("a new campaign holds no keywords: %+v", ledger)
+	}
+	if p := body(t, srv, "/refusalwar/", cookie); !strings.Contains(p, `id="force-keywords"`) || !strings.Contains(p, "No keywords earned yet.") {
+		t.Error("the overview says when no keywords are earned")
 	}
 	if err := store.CompleteWithOutcome(ctx, id, "refusalwar", "scenario_000", content.OutcomeResult{Pilots: []content.PilotOutcome{}, Keywords: []string{"depot_gone", "data_saved"}}); err != nil {
 		t.Fatal(err)
@@ -208,8 +216,17 @@ func TestCampaignLedger(t *testing.T) {
 	if ledger, _ = store.Ledger(ctx, id, "refusalwar"); len(ledger) != 2 {
 		t.Errorf("a keyword is held once: %+v", ledger)
 	}
-	if p := body(t, srv, "/refusalwar/keywords/", cookie); !strings.Contains(p, `id="ledger"`) || !strings.Contains(p, "<code>depot_gone</code>") || !strings.Contains(p, "<code>data_saved</code>") || strings.Contains(p, "No keywords earned yet.") {
-		t.Errorf("the keywords page lists the ledger: %.600s", p)
+	if err := store.CompleteWithOutcome(ctx, id, "refusalwar", "scenario_002", content.OutcomeResult{Pilots: []content.PilotOutcome{}, Keywords: []string{"scorched_earth"}}); err != nil {
+		t.Fatal(err)
+	}
+	p := body(t, srv, "/refusalwar/", cookie)
+	for _, want := range []string{`data-from="Scenario 000: Trial of Position">Depot Gone</li>`, `>Data Saved</li>`, `data-text="The chemical plant was completely destroyed."`, `>Scorched Earth</li>`} {
+		if !strings.Contains(p, want) {
+			t.Errorf("the overview lists the earned keywords by name with their descriptions: missing %q", want)
+		}
+	}
+	if strings.Contains(p, "scorched_earth") || strings.Contains(p, "No keywords earned yet.") {
+		t.Error("the overview shows keyword names, never IDs")
 	}
 	if _, err := store.DeleteRun(ctx, id, "refusalwar"); err != nil {
 		t.Fatal(err)

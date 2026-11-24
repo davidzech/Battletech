@@ -29,6 +29,7 @@ func main() {
 	content := flag.String("content", "campaigns", "folder holding the campaign folders")
 	dbPath := flag.String("db", "playthroughs.db", "SQLite database file for playthrough state (used when no PostgreSQL URL is set)")
 	pgURL := flag.String("postgres", os.Getenv("DATABASE_URL"), "PostgreSQL connection URL; defaults to $DATABASE_URL, and when set it is used instead of -db")
+	devReload := flag.Bool("dev-reload", false, "reload open pages when the server restarts (for air; never in production)")
 	flag.Parse()
 
 	var (
@@ -59,5 +60,10 @@ func main() {
 	}()
 
 	log.Printf("serving %q on %s (database: %s)", *content, *addr, desc)
-	log.Fatal(http.ListenAndServe(*addr, site.NewHandler(*content, store)))
+	var opts []site.Option
+	if *devReload {
+		opts = append(opts, site.WithDevReload())
+		log.Printf("live reload on: open pages reload when the server restarts")
+	}
+	log.Fatal(http.ListenAndServe(*addr, site.NewHandler(*content, store, opts...)))
 }

@@ -14,7 +14,9 @@
   var mvpSP = parseInt(dialog.dataset.mvpSp, 10) || 0; // the extra SP the mission's MVP earns; 0 means the mission has no MVP
   var mvpSelect = null, mvpNote = null; // the MVP picker and its note, when the mission has an MVP
   var candidates = null; // who can be the MVP, from the last preview (took part and stays in the campaign); null before the first
-  var inBattle = dialog.dataset.inBattle === '1'; // a battle is in progress: who took part, and who is dead, is read from it
+  // Whether a battle is in progress, so who took part and who is dead are read from it. Checked when the dialog opens, not when the page loads: Start battle
+  // (mekbay.js) begins one without reloading the page and marks the dialog then.
+  var inBattle = false;
   var ui = {};        // pilot id -> { took, fields, killedBox }, the parts of a card the battle fills in
   var state = null;   // { pilots: { id: { tookPart, killed, values } }, mission: { id: value }, mvp: the MVP's pilot id, '' while not chosen }
   var results = {};   // pilot id -> the preview's lines, and the mission's
@@ -231,7 +233,7 @@
         lines.push(money('Total SP', (res.warchest > 0 ? '+' : '') + res.warchest + ' SP'));
         lines.push(money('Warchest', isNaN(before) ? (res.warchest > 0 ? '+' : '') + res.warchest + ' SP' : before + ' \u2192 ' + (before + res.warchest) + ' SP'));
       }
-      if (res.keywords && res.keywords.length) lines.push({ text: 'Keywords: ' + res.keywords.join(', ') });
+      if (res.keywords && res.keywords.length) lines.push({ text: 'Keywords: ' + (res.keywordNames || res.keywords).join(', ') });
       if (res.freeRecruits) lines.push({ text: res.freeRecruits === 1 ? '1 free recruit: a replacement pilot can be recruited for free.' : res.freeRecruits + ' free recruits: replacement pilots can be recruited for free.' });
     }
     total.hidden = !lines.length;
@@ -274,6 +276,7 @@
     error.textContent = '';
     total.hidden = true;
     commit.disabled = true;
+    inBattle = dialog.dataset.inBattle === '1';
     if (!inBattle) { build(); dialog.showModal(); changed(); return; }
     // With a battle behind it, who took part and who is dead come from its record sheets, so nothing that depends on them is shown until they have been read.
     body.textContent = '';

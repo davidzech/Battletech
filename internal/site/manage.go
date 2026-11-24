@@ -34,7 +34,7 @@ func (s *Server) manage(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, back, http.StatusSeeOther)
 		return
 	}
-	// The scenario page's link here carries ?back=<scenario>, so Back returns to that sortie. Only a scenario of this campaign is honoured: the value is looked up,
+	// The scenario page's link here carries ?back=<scenario>, so Back returns to that scenario. Only a scenario of this campaign is honoured: the value is looked up,
 	// never echoed into the page as a URL.
 	p := Page{
 		Title:    "Manage force | " + c.Label,
@@ -48,6 +48,7 @@ func (s *Server) manage(w http.ResponseWriter, r *http.Request) {
 	if cps, err := s.store.Checkpoints(r.Context(), playthroughID(seed), c.Slug); err == nil {
 		p.Checkpoints = checkpointViews(cps)
 	}
+	p.KeywordChoices = s.keywordChoices(r, playthroughID(seed), c)
 	p.OnManagePage = true
 	s.render(w, r, http.StatusOK, "manage", p)
 }

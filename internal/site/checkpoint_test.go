@@ -94,7 +94,7 @@ func TestCheckpointsAndRollback(t *testing.T) {
 		t.Fatalf("complete 000: %d", got)
 	}
 	cps = checkpoints()
-	if len(cps) != 2 || cps[0].Label != "Completed Sortie 000: Trial of Position" || cps[0].HangarCopy == "" || cps[0].HangarCopy == cps[1].HangarCopy {
+	if len(cps) != 2 || cps[0].Label != "Completed Scenario 000: Trial of Position" || cps[0].HangarCopy == "" || cps[0].HangarCopy == cps[1].HangarCopy {
 		t.Fatalf("the mission's checkpoint: %+v", cps)
 	}
 	after000, _, _ := state()

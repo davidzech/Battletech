@@ -50,9 +50,10 @@ func TestParseHangarForce(t *testing.T) {
 		{"name":"Hangar","units":[
 			{"id":"b","unit":"BMLoki_Prime","state":{"crits":[{"id":"x","hits":1}],"crew":[{"name":"","gunnerySkill":4,"pilotingSkill":5}]}},
 			{"id":"c","unit":"BMUller_J","state":{"destroyed":true,"locations":{}}},
-			{"id":"d","unit":"BMUller_J","state":{"crits":[{"id":"y"}],"locations":{}}}]}]}}`)
+			{"id":"d","unit":"BMUller_J","state":{"crits":[{"id":"y"}],"locations":{}}},
+			{"id":"e","unit":"BMUller_J","state":{"crits":[{"id":"z","name":"LRM 5 Ammo","consumed":5}],"locations":{}}}]}]}}`)
 	h, err := ParseHangarForce(raw)
-	if err != nil || h.Name != "H" || h.Timestamp != "t1" || len(h.Units) != 4 {
+	if err != nil || h.Name != "H" || h.Timestamp != "t1" || len(h.Units) != 5 {
 		t.Fatalf("parseHangarForce = %+v, %v", h, err)
 	}
 	a, b, c, d := h.Units[0], h.Units[1], h.Units[2], h.Units[3]
@@ -67,6 +68,9 @@ func TestParseHangarForce(t *testing.T) {
 	}
 	if d.Damaged {
 		t.Errorf("an untouched crit slot is not damage: %+v", d)
+	}
+	if e := h.Units[4]; e.Damaged || e.AmmoBins != 1 || e.AmmoUsed != 5 {
+		t.Errorf("spent ammunition is Ammo expended, not damage: %+v", e)
 	}
 	if _, err := ParseHangarForce(json.RawMessage(`{"action":"forceData","data":null}`)); err == nil {
 		t.Error("a missing force should be an error")

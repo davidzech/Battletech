@@ -141,11 +141,21 @@ func (p NamedPilot) Gunnery() int { return gunneryLadder.At(p.SP.Gunnery).Level 
 // Piloting is the pilot's current Piloting skill (lower is better).
 func (p NamedPilot) Piloting() int { return pilotingLadder.At(p.SP.Piloting).Level }
 
-// EdgeTokens is how many Edge tokens the pilot starts each sortie with.
+// EdgeTokens is how many Edge tokens the pilot starts each scenario with.
 func (p NamedPilot) EdgeTokens() int { return edgeTokensLadder.At(p.SP.EdgeTokens).Level }
 
 // EdgeAbilities is how many Edge abilities the pilot has earned.
 func (p NamedPilot) EdgeAbilities() int { return EdgeAbilitiesLadder.At(p.SP.EdgeAbilities).Level }
+
+// stepPercent is how far sp has come from the breakpoint it reached (from) towards the next one (to), 0 to 100, rounded like
+// the browser's (allocator.js): Edge abilities at 180 SP is 0% of the way to 360, and at 270 SP 50%.
+func stepPercent(sp, from, to int) int {
+	if to <= from {
+		return 100
+	}
+	gap := to - from
+	return max(0, min(100, ((sp-from)*100+gap/2)/gap))
+}
 
 // pilotColumn is one column of a pilot as the campaign page shows it.
 type pilotColumn struct {
@@ -156,7 +166,7 @@ type pilotColumn struct {
 	HasNext bool   // false at the top of the ladder
 	NextAt  int    // SP the column needs in total to reach the next level
 	NextLvl int
-	Percent int // how far along to the next level, 0 to 100 (100 at the top of the ladder)
+	Percent int // how far from the last level reached to the next, 0 to 100 (100 at the top of the ladder)
 }
 
 // PilotView is a named pilot with everything the campaign page shows already worked out.
@@ -174,11 +184,12 @@ type PilotView struct {
 
 func (p NamedPilot) View(ranks []string) PilotView {
 	col := func(l ladder, sp int) pilotColumn {
-		c := pilotColumn{Name: l.Name, Label: boxLabel(l), SP: sp, Level: l.At(sp).Level}
+		at := l.At(sp)
+		c := pilotColumn{Name: l.Name, Label: boxLabel(l), SP: sp, Level: at.Level}
 		c.Percent = 100
 		if n, ok := l.next(sp); ok {
 			c.HasNext, c.NextAt, c.NextLvl = true, n.SP, n.Level
-			c.Percent = min(100, (sp*100+n.SP/2)/n.SP) // rounded, like the browser's
+			c.Percent = stepPercent(sp, at.SP, n.SP)
 		}
 		return c
 	}

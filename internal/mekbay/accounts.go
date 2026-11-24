@@ -2,7 +2,7 @@ package mekbay
 
 import (
 	"crypto/sha256"
-	"encoding/hex"
+	"uuid"
 )
 
 // MekBay accounts. MekBay identifiers are implicit: there is no registration, and any UUID a client presents is an account, which owns what it saves (only
@@ -29,11 +29,10 @@ func MekBayUID(seed, slot string) string {
 		salt = "p1"
 	}
 	sum := sha256.Sum256([]byte("battletech-mekbay-account-v1:" + salt + ":" + seed))
-	b := sum[:16]
-	b[6] = b[6]&0x0f | 0x40 // version 4
-	b[8] = b[8]&0x3f | 0x80 // RFC 4122 variant
-	h := hex.EncodeToString(b)
-	return h[0:8] + "-" + h[8:12] + "-" + h[12:16] + "-" + h[16:20] + "-" + h[20:32]
+	u := uuid.UUID(sum[:16])
+	u[6] = u[6]&0x0f | 0x40 // version 4: the standard library only makes random v4 UUIDs, so the bits are set by hand
+	u[8] = u[8]&0x3f | 0x80 // RFC 9562 variant
+	return u.String()
 }
 
 // AccountUID is the synthesized MekBay user ID for the visitor's seed in a slot; "" if there is no seed.

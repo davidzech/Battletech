@@ -6,6 +6,7 @@
 <title>{{.Title}}</title>
 <script>document.documentElement.classList.add('js')</script>
 <script src="/static/dom.js"></script>
+{{if .DevReload}}<script src="/static/devreload.js"></script>{{end}}
 <link rel="icon" type="image/png" href="/static/favicon.png">
 <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
 <link rel="preload" href="/static/bt_oldstyle.ttf" as="font" type="font/ttf" crossorigin>
@@ -111,3 +112,5 @@ document.querySelectorAll('.waypoint').forEach(function(w){
 </body>
 </html>
 {{end}}
+{{/* The keywords the campaign has earned, as chips whose hover card is the keyword's description (keywordchips.js, after mechrow.js): on the campaign overview and the Manage page. */}}
+{{define "keywords"}}<div class="keywords" id="force-keywords"><h3>Keywords</h3>{{if .Keywords}}<ul class="keyword-list">{{range .Keywords}}<li class="keyword-chip" data-text="{{.Text}}" data-from="{{.From}}">{{.Name}}</li>{{end}}</ul>{{else}}<p class="muted">No keywords earned yet.</p>{{end}}</div>{{end}}

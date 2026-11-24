@@ -5,6 +5,7 @@ planet: Strana Mechty
 map: Circles of Equals
 unit_limit: 2
 pilots_required: true
+commander: false   # one-on-one Trials: no force commander
 provided_units:
   - BMBlackHawk_Prime
   - BMRyoken_Prime
@@ -31,19 +32,21 @@ readout:
 
 # Scenario 000: Trial of Position
 
-> You entered the sibko among many. You leave the cadet years among few.
+## Briefing
+
+You entered the sibko among many. You leave the cadet years among few.
+
+The instructors have named you ready, but the Clan does not take their word for it.
+
+A Call to Trial has been sounded.
+
+You are summoned to the Circle of Equals to contest the rank of MechWarrior.
+
+Three machines have been set against each of you. Zellbrigen binds the field.
+
+> If you are victorious, so be it. The Clan will be bettered by having a new, competent, MechWarrior. If you are not, the death of the incompetent is the death of a feeble progeny and a testament to our glorious method.
 >
-> The instructors have named you ready, but the Clan does not take their word for it.
->
-> A Call to Trial has been sounded.
->
-> You are summoned to the Circle of Equals to contest the rank of MechWarrior.
->
-> Three machines have been set against each of you. Zellbrigen binds the field.
->
-> "If you are victorious, so be it. The Clan will be bettered by having a new, competent, MechWarrior. If you are not, the death of the incompetent is the death of a feeble progeny and a testament to our glorious method."
->
-> — Ulric Kerensky, ilKhan
+> -- Ulric Kerensky, ilKhan
 
 ## Overview
 

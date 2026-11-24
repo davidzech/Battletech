@@ -9,7 +9,7 @@ import (
 	"github.com/davidzech/Battletech/internal/mekbay"
 )
 
-// Repairing and rearming a hangar unit between sorties, from Hot Spots: Draconis Reach, the SP Activity Cost Table (printed p. 33).
+// Repairing and rearming a hangar unit between scenarios, from Hot Spots: Draconis Reach, the SP Activity Cost Table (printed p. 33).
 //
 //	Repair (armor damage only)                = tonnage / 2
 //	Repair (structure and/or critical damage) = tonnage x 2

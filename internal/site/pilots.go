@@ -46,11 +46,7 @@ func (s *Server) addPilot(w http.ResponseWriter, r *http.Request) {
 		}
 		portrait = pilot.RandomPortrait(livingPortraits(existing))
 	}
-	rank := r.PostFormValue("rank")
-	if rank != "" && !pilot.ValidRank(c.Ranks, rank) {
-		http.Error(w, "Pick a rank from the list.", http.StatusBadRequest)
-		return
-	}
+	rank := c.RecruitRank() // every recruit joins at the campaign's recruit_rank (Refusal War: MechWarrior); it isn't chosen
 	// A recruit starts with the campaign's starting SP (150 in Refusal War), spent as the player chose and the rest unallocated.
 	var start pilot.SPAllocation
 	for field, dst := range map[string]*int{

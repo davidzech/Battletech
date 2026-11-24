@@ -52,10 +52,10 @@ func (s *Server) outcomeRequest(w http.ResponseWriter, r *http.Request) (pt stor
 		http.Error(w, "could not load your pilots", http.StatusInternalServerError)
 		return
 	}
-	names := map[string]string{}
+	names, ranks := map[string]string{}, map[string]string{}
 	for _, p := range pilots {
 		if !p.Fallen {
-			names[p.ID] = p.Name
+			names[p.ID], ranks[p.ID] = p.Name, p.Rank
 		}
 	}
 	res, err = sc.EvaluateOutcome(in, names)
@@ -63,15 +63,17 @@ func (s *Server) outcomeRequest(w http.ResponseWriter, r *http.Request) (pt stor
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	res.ResolvePromotions(ranks, c.Ranks) // "at least": a pilot already at or above a promotion keeps their rank
 	return pt, c, sc, res, true
 }
 
 // previewOutcome is POST /api/campaign/scenario-outcome: what the reported inputs would do, without changing anything.
 func (s *Server) previewOutcome(w http.ResponseWriter, r *http.Request) {
-	_, _, _, res, ok := s.outcomeRequest(w, r)
+	_, c, _, res, ok := s.outcomeRequest(w, r)
 	if !ok {
 		return
 	}
+	res.KeywordNames = c.KeywordNames(res.Keywords)
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	_ = json.NewEncoder(w).Encode(res)

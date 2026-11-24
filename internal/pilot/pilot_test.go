@@ -157,3 +157,25 @@ func TestRankHelpers(t *testing.T) {
 		t.Error("validRank")
 	}
 }
+
+// A stat box's bar shows how far the column has come from the breakpoint it reached towards the next one, not its whole
+// total over the next breakpoint.
+func TestStepPercent(t *testing.T) {
+	col := func(sp int) pilotColumn {
+		return NamedPilot{SP: SPAllocation{EdgeAbilities: sp}, TotalSP: sp}.View(nil).Columns[3]
+	}
+	for _, c := range []struct{ sp, level, want int }{
+		{0, 0, 0},     // 0 of 60 to the first ability
+		{30, 0, 50},   // halfway to 60
+		{60, 1, 0},    // just reached 1: 0 of the 120 more to 180
+		{120, 1, 50},  // 60 of 120
+		{180, 2, 0},   // just reached 2: 0 of the 180 more to 360
+		{270, 2, 50},  // 90 of 180
+		{359, 2, 99},  // 179 of 180
+		{900, 5, 100}, // the top of the ladder
+	} {
+		if got := col(c.sp); got.Level != c.level || got.Percent != c.want {
+			t.Errorf("Edge abilities at %d SP: level %d, %d%%; want level %d, %d%%", c.sp, got.Level, got.Percent, c.level, c.want)
+		}
+	}
+}

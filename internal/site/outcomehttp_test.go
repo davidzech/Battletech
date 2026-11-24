@@ -228,3 +228,42 @@ func TestScenario000MVP(t *testing.T) {
 		t.Error("the completion dialog should be told the MVP bonus")
 	}
 }
+
+// Committing Scenario 000 promotes the surviving cadets: the pilot with the most kills to Star Commander, the other to MechWarrior. The preview already says so.
+func TestScenario000PromotesOnCommit(t *testing.T) {
+	srv, store, cookie := startedCompany(t) // Alrek and Katarina, cadets
+	ctx := context.Background()
+	id := playthroughID("wolfpack2026")
+	pid := map[string]string{}
+	ps, _ := store.Pilots(ctx, id, "refusalwar")
+	for _, p := range ps {
+		pid[p.Name] = p.ID
+	}
+	alrek, katarina := entry(pid["Alrek"], true, 1, false), entry(pid["Katarina"], true, 1, false)
+	katarina.MVP = true // a tie on kills: the MVP is the Star Commander
+	b, _ := json.Marshal(content.OutcomeInputs{Pilots: []content.OutcomeEntry{alrek, katarina}})
+	v := url.Values{"campaign": {"refusalwar"}, "scenario": {"scenario_000"}, "inputs": {string(b)}}
+	res := post(t, srv, "/api/campaign/scenario-outcome", v, cookie, srv.URL)
+	var preview content.OutcomeResult
+	if err := json.NewDecoder(res.Body).Decode(&preview); err != nil {
+		t.Fatal(err)
+	}
+	notes := map[string]string{}
+	for _, p := range preview.Pilots {
+		notes[p.Name] = strings.Join(p.Notes, " ")
+	}
+	if !strings.Contains(notes["Alrek"], "Promoted to MechWarrior.") || !strings.Contains(notes["Katarina"], "Promoted to Star Commander.") {
+		t.Errorf("the preview names the promotions: %v", notes)
+	}
+	if got := post(t, srv, "/api/campaign/scenario-outcome/commit", v, cookie, srv.URL).StatusCode; got != http.StatusNoContent {
+		t.Fatalf("commit: %d", got)
+	}
+	ranks := map[string]string{}
+	ps, _ = store.Pilots(ctx, id, "refusalwar")
+	for _, p := range ps {
+		ranks[p.Name] = p.Rank
+	}
+	if ranks["Alrek"] != "MechWarrior" || ranks["Katarina"] != "Star Commander" {
+		t.Errorf("ranks after the Trial: %v", ranks)
+	}
+}

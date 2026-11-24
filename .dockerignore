@@ -12,3 +12,5 @@ data
 node_modules
 dist
 Pages
+tmp
+.air.toml

@@ -25,15 +25,17 @@ readout:
 
 # Scenario 001: Pyre Light
 
-> Ulric Kerensky bid every Wolf against every world the Falcons hold.
->
-> For that, Khan Elias Crichell was made to treat with a Star Colonel. He has not forgotten the insult.
->
-> Colmar feeds their Gamma Galaxy. In Marakaa Valley stand a firebase and a chemical plant. Our wings struck the firebase, then the storms closed over the valley. No one can say what survived.
->
-> You will drop without the sky. What remains in that valley, you will see for yourselves.
->
-> "We will turn this Trial of Refusal into a Trial of Absorption."
+## Briefing
+
+Ulric Kerensky bid every Wolf against every world the Falcons hold.
+
+For that, Khan Elias Crichell was made to treat with a Star Colonel. He has not forgotten the insult.
+
+Colmar feeds their Gamma Galaxy. In Marakaa Valley stand a firebase and a chemical plant. Our wings struck the firebase, then the storms closed over the valley. No one can say what survived.
+
+You will drop without the sky. What remains in that valley, you will see for yourselves.
+
+> We will turn this Trial of Refusal into a Trial of Absorption.
 >
 > — Vandervahn Chistu, saKhan of Clan Jade Falcon
 
@@ -88,7 +90,7 @@ Field any force up to 7,500 BV.
 
 **Exits:** the player may exit from any edge except the east.
 
-**Time limit:** the sortie ends after 8 rounds (one turn past the front side of the turn tracker). Mechs must have extracted by then.
+**Time limit:** the scenario ends after 8 rounds (one turn past the front side of the turn tracker). Mechs must have extracted by then.
 
 **Objectives:** an objective is revealed when a unit has line of sight to it from within 3 hexes.
 

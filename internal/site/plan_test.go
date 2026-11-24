@@ -94,28 +94,41 @@ func TestDeployPlanEndpoint(t *testing.T) {
 		t.Errorf("crew: %+v", one.Players[0].Crew)
 	}
 	// Two players split the mechs and the pilots; the total BV is the two players' together.
+	// With two named pilots deployed, the plan names the force's commander.
 	two := read(plan("players", "2", "p1_units", "ua", "p1_units", "ub", "p1_assign_unit", "ua", "p1_assign_pilot", "Alrek",
-		"p2_units", "uc", "p2_assign_unit", "uc", "p2_assign_pilot", "Katarina"))
+		"p2_units", "uc", "p2_assign_unit", "uc", "p2_assign_pilot", "Katarina", "commander", "katarina"))
 	if len(two.Players) != 2 || two.Players[0].Player != 1 || two.Players[1].Player != 2 || two.TotalBV != two.Players[0].BV+two.Players[1].BV || two.TotalBV == 0 {
 		t.Fatalf("two players: %+v", two)
 	}
 	if two.Players[1].Crew[0].Pilot != "Katarina" || two.Players[1].Units[0].ID != "uc" {
 		t.Errorf("player 2: %+v", two.Players[1])
 	}
+	if two.Commander != "Katarina" {
+		t.Errorf("the commander: %q", two.Commander)
+	}
+	// One named pilot deployed commands the force without being chosen; none deployed means no commander.
+	if one.Commander != "Alrek" {
+		t.Errorf("the only named pilot commands: %q", one.Commander)
+	}
+	if none := read(plan("players", "1", "p1_units", "ua")); none.Commander != "" {
+		t.Errorf("no named pilot, no commander: %q", none.Commander)
+	}
 	// Nothing is saved or sent to MekBay.
 	if len(fake.battles) != 0 || len(fake.services) != 0 || len(fake.purchases) != 0 {
 		t.Errorf("a plan must not touch MekBay: %+v", fake.battles)
 	}
 	bad := map[string][]string{
-		"no players":           {"p1_units", "ua"},
-		"too many players":     {"players", "3", "p1_units", "ua", "p2_units", "ub", "p3_units", "uc"},
-		"zero players":         {"players", "0", "p1_units", "ua"},
-		"a player with nobody": {"players", "2", "p1_units", "ua"},
-		"a mech twice":         {"players", "2", "p1_units", "ua", "p2_units", "ua"},
-		"a pilot twice":        {"players", "2", "p1_units", "ua", "p1_assign_unit", "ua", "p1_assign_pilot", "Alrek", "p2_units", "ub", "p2_assign_unit", "ub", "p2_assign_pilot", "alrek"},
-		"unknown pilot":        {"players", "1", "p1_units", "ua", "p1_assign_unit", "ua", "p1_assign_pilot", "Nobody"},
-		"a mech not taken":     {"players", "2", "p1_units", "ua", "p2_units", "ub", "p2_assign_unit", "ua", "p2_assign_pilot", "Alrek"},
-		"unpaired":             {"players", "1", "p1_units", "ua", "p1_assign_unit", "ua"},
+		"no players":             {"p1_units", "ua"},
+		"too many players":       {"players", "3", "p1_units", "ua", "p2_units", "ub", "p3_units", "uc"},
+		"zero players":           {"players", "0", "p1_units", "ua"},
+		"a player with nobody":   {"players", "2", "p1_units", "ua"},
+		"a mech twice":           {"players", "2", "p1_units", "ua", "p2_units", "ua"},
+		"a pilot twice":          {"players", "2", "p1_units", "ua", "p1_assign_unit", "ua", "p1_assign_pilot", "Alrek", "p2_units", "ub", "p2_assign_unit", "ub", "p2_assign_pilot", "alrek"},
+		"unknown pilot":          {"players", "1", "p1_units", "ua", "p1_assign_unit", "ua", "p1_assign_pilot", "Nobody"},
+		"a mech not taken":       {"players", "2", "p1_units", "ua", "p2_units", "ub", "p2_assign_unit", "ua", "p2_assign_pilot", "Alrek"},
+		"unpaired":               {"players", "1", "p1_units", "ua", "p1_assign_unit", "ua"},
+		"no commander chosen":    {"players", "1", "p1_units", "ua", "p1_units", "ub", "p1_assign_unit", "ua", "p1_assign_pilot", "Alrek", "p1_assign_unit", "ub", "p1_assign_pilot", "Katarina"},
+		"commander not deployed": {"players", "1", "p1_units", "ua", "p1_units", "ub", "p1_assign_unit", "ua", "p1_assign_pilot", "Alrek", "p1_assign_unit", "ub", "p1_assign_pilot", "Katarina", "commander", "Jarek"},
 	}
 	for name, kv := range bad {
 		if got := plan(kv...).StatusCode; got != http.StatusBadRequest {

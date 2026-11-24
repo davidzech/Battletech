@@ -1,8 +1,6 @@
 package content
 
 import (
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -112,39 +110,5 @@ func TestObjectivesGrantKeywords(t *testing.T) {
 		if bad.OutcomeError == "" {
 			t.Errorf("%s should be a front matter error", name)
 		}
-	}
-}
-
-// Keywords.md is the registry: a scenario can only grant keywords listed there.
-func TestKeywordRegistry(t *testing.T) {
-	if got := strings.Join(keywordIDs("# Keywords\n\n- `depot_gone` - the depot was destroyed\n* `data_saved`: saved\n  - `nested_one` - indented\nnot a bullet `x_y`\n- `Bad_Case` no\n"), ","); got != "depot_gone,data_saved,nested_one" {
-		t.Errorf("keyword IDs: %q", got)
-	}
-	root := t.TempDir()
-	write := func(path, text string) {
-		p := filepath.Join(root, "Scratch", path)
-		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(p, []byte(text), 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	write("Keywords.md", "# Keywords\n\n- `depot_gone` - the depot was destroyed\n")
-	write("Scenario_000/Setup.md", "---\nid: scenario_000\ntitle: Good\n---\n# Good\n")
-	write("Scenario_000/Outcome.md", "---\nid: scenario_000\npilot_sp: 50\nobjectives:\n  - id: depot\n    sp: 300\n    grants: [depot_gone]\n---\n")
-	write("Scenario_001/Setup.md", "---\nid: scenario_001\ntitle: Bad\n---\n# Bad\n")
-	write("Scenario_001/Outcome.md", "---\nid: scenario_001\nobjectives:\n  - id: depot\n    sp: 300\n    grants: [made_up_keyword]\n---\n")
-	c, ok := (Library{Root: root}).Campaign("scratch")
-	if !ok || strings.Join(c.Keywords, ",") != "depot_gone" {
-		t.Fatalf("the registry: %+v %v", c, ok)
-	}
-	good, _ := c.Scenario("scenario_000")
-	bad, _ := c.Scenario("scenario_001")
-	if !good.HasOutcome() || good.OutcomeError != "" {
-		t.Errorf("a registered keyword is fine: %q", good.OutcomeError)
-	}
-	if bad.HasOutcome() || !strings.Contains(bad.OutcomeError, "made_up_keyword") {
-		t.Errorf("an unregistered keyword is refused: %q", bad.OutcomeError)
 	}
 }

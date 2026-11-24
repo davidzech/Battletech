@@ -41,7 +41,7 @@
     if (m) return 'Internal structure lost in: ' + locNames(m[1]) + '.';
     m = /^(?:Crippled|Truly destroyed): (.+)$/.exec(note || '');
     if (m) return sentence(m[1]);
-    if (note === 'Destroyed') return 'Destroyed in play. It can still be repaired between sorties.';
+    if (note === 'Destroyed') return 'Destroyed in play. It can still be repaired between scenarios.';
     return note || '';
   }
 
@@ -205,7 +205,7 @@
           return { label: a.name, value: a.tons + (a.tons === 1 ? ' ton' : ' tons') + ' \u00b7 ' + a.used + (a.capacity ? ' of ' + a.capacity : '') + ' shots used' };
         });
         if (u.rearmCost) lines.push({ label: 'Rearm', value: u.rearmCost + ' SP' });
-        attachTip(ap, { title: 'Ammo expended', cls: 'cond-ammo', text: 'Some ammunition has been used. Rearm it between sorties.', lines: lines });
+        attachTip(ap, { title: 'Ammo expended', cls: 'cond-ammo', text: 'Some ammunition has been used. Rearm it between scenarios.', lines: lines });
         chips.appendChild(ap);
       }
     } else if (u.destroyed) chips.appendChild(chip('bad', 'Destroyed'));

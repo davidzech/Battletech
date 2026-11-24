@@ -86,7 +86,7 @@ func TestStartBattleEndpoint(t *testing.T) {
 		t.Fatalf("one start: %d", len(fake.battles))
 	}
 	req := fake.battles[0]
-	if req.Account != mekbay.MekBayUID(seed, mekbay.SlotHangar) || req.Provided || req.HangarInstance != run.HangarInstance || len(req.Players) != 2 || req.OperationName != "Refusal War - Sortie 001" {
+	if req.Account != mekbay.MekBayUID(seed, mekbay.SlotHangar) || req.Provided || req.HangarInstance != run.HangarInstance || len(req.Players) != 2 || req.OperationName != "Refusal War - Scenario 001" {
 		t.Fatalf("the request: %+v", req)
 	}
 	for i, p := range req.Players {
@@ -102,6 +102,10 @@ func TestStartBattleEndpoint(t *testing.T) {
 	}
 	if c := req.Players[0].Crew; len(c) != 1 || c[0].UnitID != "ua" || c[0].Name != "Alrek" || c[0].Gunnery != alrek.Gunnery() || c[0].Piloting != alrek.Piloting() {
 		t.Errorf("Player 1's pilot: %+v", c)
+	}
+	// Alrek is the only named pilot deployed, so he commands the force: his mech is the commander's, and Player 2's force has none.
+	if req.Players[0].Commander != "ua" || req.Players[1].Commander != "" {
+		t.Errorf("the commander's mech: %q, %q", req.Players[0].Commander, req.Players[1].Commander)
 	}
 
 	// The answer is one link for the whole table: a mekbay-<id> host of its own opening the operation, never showing the account.
