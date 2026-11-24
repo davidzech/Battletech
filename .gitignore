@@ -7,3 +7,6 @@ dist/
 *.db-shm
 # MekBay account UIDs are credentials
 uid.txt
+
+# air (live reload) build output
+/tmp/

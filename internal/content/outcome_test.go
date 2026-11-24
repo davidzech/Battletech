@@ -197,3 +197,64 @@ func TestNoMVPWithoutABonus(t *testing.T) {
 		t.Errorf("Refusal War's missions take its mvp_sp: %d", sc.MVPSP)
 	}
 }
+
+// Scenario 000 promotes: every cadet who passes the Trial becomes at least a MechWarrior, and the one with the most kills a Star Commander, the MVP breaking a
+// tie. A promotion never lowers a rank, and a pilot the mission removes is not promoted.
+func TestScenario000Promotions(t *testing.T) {
+	c := refusalWar(t)
+	sc, _ := c.Scenario("scenario_000")
+	names := map[string]string{"a": "Alrek", "b": "Katarina", "c": "Jarek"}
+	run := func(entries ...OutcomeEntry) map[string]PilotOutcome {
+		t.Helper()
+		res, err := sc.EvaluateOutcome(OutcomeInputs{Pilots: entries}, names)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.ResolvePromotions(map[string]string{"c": "Star Captain"}, c.Ranks) // Jarek already outranks both promotions
+		out := map[string]PilotOutcome{}
+		for _, p := range res.Pilots {
+			out[p.PilotID] = p
+		}
+		return out
+	}
+	pilot := func(id string, kills int, killed, mvp bool) OutcomeEntry {
+		return OutcomeEntry{PilotID: id, TookPart: true, Killed: killed, MVP: mvp, Values: map[string]any{"kills": float64(kills)}}
+	}
+	check := func(what string, got map[string]PilotOutcome, want map[string]string) {
+		t.Helper()
+		for id, rank := range want {
+			if got[id].Rank != rank {
+				t.Errorf("%s: %s takes rank %q, want %q (notes %v)", what, got[id].Name, got[id].Rank, rank, got[id].Notes)
+			}
+		}
+	}
+	check("most kills", run(pilot("a", 2, false, false), pilot("b", 1, false, true)), map[string]string{"a": "Star Commander", "b": "MechWarrior"})
+	check("a tie goes to the MVP", run(pilot("a", 1, false, false), pilot("b", 1, false, true)), map[string]string{"a": "MechWarrior", "b": "Star Commander"})
+	check("a tie with no MVP yet", run(pilot("a", 1, false, false), pilot("b", 1, false, false)), map[string]string{"a": "MechWarrior", "b": "MechWarrior"})
+	// A killed pilot's kills don't count: the most kills among the survivors does.
+	got := run(pilot("a", 3, true, false), pilot("b", 1, false, true))
+	check("the dead don't compete", got, map[string]string{"a": "", "b": "Star Commander"})
+	if !got["a"].KIA {
+		t.Error("Alrek was killed")
+	}
+	// No kills: removed from the campaign (Merchant Caste), so not promoted.
+	check("no kills", run(pilot("a", 0, false, false), pilot("b", 2, false, true)), map[string]string{"a": "", "b": "Star Commander"})
+	// A promotion is "at least": Jarek, a Star Captain with the most kills, keeps his rank.
+	got = run(pilot("c", 4, false, true), pilot("a", 1, false, false))
+	check("never a demotion", got, map[string]string{"c": "", "a": "MechWarrior"})
+	if p := got["a"]; p.Notes[len(p.Notes)-1] != "Promoted to MechWarrior." {
+		t.Errorf("the report says so: %v", p.Notes)
+	}
+}
+
+// A promotion to a rank the campaign doesn't have is caught when the campaign loads.
+func TestPromotionToAnUnknownRank(t *testing.T) {
+	c := refusalWar(t)
+	sc, _ := c.Scenario("scenario_000")
+	sc.OutcomeRules = append(sc.OutcomeRules, OutcomeRule{When: "kills > 3", Promote: "Grand Poobah"})
+	sc.OutcomeError = ""
+	c.checkPromotions()
+	if !strings.Contains(sc.OutcomeError, `"Grand Poobah", which is not one of the campaign's ranks`) {
+		t.Errorf("OutcomeError = %q", sc.OutcomeError)
+	}
+}

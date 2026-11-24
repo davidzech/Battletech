@@ -11,7 +11,7 @@ import (
 )
 
 // Starting a battle: what a Deploy does once the plan is checked. In MekBay it builds a force for each player and one for the OpFor, and saves an operation that
-// sets the players' forces against the OpFor's, so the whole table opens one link (`?operation=<id>`) and sees the same sortie. Every force and the operation belong
+// sets the players' forces against the OpFor's, so the whole table opens one link (`?operation=<id>`) and sees the same scenario. Every force and the operation belong
 // to the seed's one account (see accounts.go), so anyone with the link can edit any of them, and MekBay pushes each save to every device that has the force loaded
 // (checked live, 2026-11: a save by one connection reaches the others as an `updatedForce` message, and a repair made in one browser showed up in another). An
 // operation is a saved document, so unlike a lobby it needs no connection kept open: it can be reopened later, and starting again just updates it.
@@ -44,6 +44,9 @@ type BattlePlayer struct {
 	Units []string
 	Crew  []CrewAssignment
 	Draft ForceDraft
+	// Commander is the hangar unit (one of Units) whose pilot commands the whole force, marked as MekBay's commander; "" when it isn't in this player's force.
+	// A Provided battle marks it in the Draft instead.
+	Commander string
 }
 
 // BattleOpFor is the OpFor's force.
@@ -204,6 +207,7 @@ func (c *Client) StartBattle(ctx context.Context, req BattleRequest) (BattleResu
 			if err := applyCrew(f, p.Crew); err != nil {
 				return BattleResult{}, err
 			}
+			setCommander(f, p.Commander)
 			force, ts = f, f["timestamp"].(string)
 		}
 		if err := save(force); err != nil {

@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"uuid"
 
 	"github.com/coder/websocket"
-	"github.com/google/uuid"
 )
 
 // MekBay's server is closed source and has no documented API: this speaks the WebSocket protocol its own web
@@ -34,11 +34,12 @@ type GroupDraft struct {
 
 // UnitDraft is one unit: Unit is MekBay's unit ID (see Unit.Name).
 type UnitDraft struct {
-	Unit     string
-	BV       int
-	Pilot    string
-	Gunnery  int
-	Piloting int
+	Unit      string
+	BV        int
+	Pilot     string
+	Gunnery   int
+	Piloting  int
+	Commander bool // the force's commander (MekBay's formation commander, shown on the record sheet)
 }
 
 // HangarUnit is one unit of a player's hangar force as MekBay stores it.
@@ -63,7 +64,7 @@ type HangarUnit struct {
 	Gunnery   int
 	Piloting  int
 	PilotDead bool // the record sheet shows the pilot dead (see crewIsDead)
-	Damaged   bool // has recorded armor/structure damage, critical hits or spent ammo
+	Damaged   bool // has recorded armor/structure damage or critical hits (spent ammo is not damage: see AmmoBins)
 	Destroyed bool
 	// The raw damage MekBay records, from which conditionOf works out the unit's state (see condition.go).
 	Locations  map[string]LocationLoss // armor and internal structure points lost, by location (HD, CT, LT, RT, LA, RA, LL, RL ...)
@@ -207,7 +208,7 @@ func ParseHangarForce(raw json.RawMessage) (HangarForce, error) {
 			}
 			for _, c := range u.State.Crits {
 				gone := c.Destroyed != nil && c.Destroyed != float64(0)
-				if c.Hits > 0 || c.Consumed > 0 || gone {
+				if c.Hits > 0 || gone { // spent ammunition is not damage: it is Ammo expended (AmmoBins), which a rearm fixes
 					hu.Damaged = true
 				}
 				if c.Hits > 0 || gone {
@@ -382,13 +383,8 @@ func (c *Client) editForce(ctx context.Context, owner, instance string, edit fun
 	return s.saveForce(ctx, force, now)
 }
 
-func NewID() string {
-	id, err := uuid.NewV7()
-	if err != nil {
-		panic(err) // only fails if the system has no randomness
-	}
-	return id.String()
-}
+// NewID returns a new version 7 UUID, the kind MekBay uses for force and operation IDs.
+func NewID() string { return uuid.NewV7().String() }
 
 // serializedForce mirrors the parts of MekBay's SerializedForce this site writes.
 type serializedForce struct {
@@ -413,6 +409,7 @@ type serializedUnit struct {
 	Unit      string          `json:"unit"`
 	Alias     string          `json:"alias"`
 	UpdatedTs int64           `json:"updatedTs"`
+	Commander bool            `json:"commander,omitempty"`
 	State     serializedState `json:"state"`
 }
 
@@ -443,7 +440,7 @@ func BuildForce(instanceID string, now time.Time, d ForceDraft) serializedForce 
 		for _, u := range g.Units {
 			f.BV += u.BV
 			sg.Units = append(sg.Units, serializedUnit{
-				ID: NewID(), Unit: u.Unit, UpdatedTs: now.UnixMilli(),
+				ID: NewID(), Unit: u.Unit, UpdatedTs: now.UnixMilli(), Commander: u.Commander,
 				State: serializedState{
 					Crew:      []serializedCrew{{Name: u.Pilot, Gunnery: u.Gunnery, Piloting: u.Piloting}},
 					Crits:     []any{},

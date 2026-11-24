@@ -52,7 +52,7 @@ type Crumb struct {
 // Page is the data every template receives.
 type Page struct {
 	Title string
-	// BackURL and BackLabel, when set, replace the Manage page's "Back to the campaign" link (it returns to the sortie the player came from).
+	// BackURL and BackLabel, when set, replace the Manage page's "Back to the campaign" link (it returns to the scenario the player came from).
 	BackURL, BackLabel string
 	Crumbs             []Crumb
 	Campaign           *content.Campaign
@@ -62,30 +62,32 @@ type Page struct {
 	HasLocked          bool                   // some scenario cards are locked, so the campaign page offers 'Show all scenarios'
 	ScenarioState      string                 // on a scenario page: completed, available or locked
 	NextScenarios      []content.Scenario     // on a completed scenario's page: the scenarios it leads to, which are now available
-	Ledger             []storage.LedgerEntry  // the keywords the campaign has been granted (on the keywords page)
 	Outcome            *content.OutcomeResult // on a completed scenario page: the recorded report of its outcome
 	Images             []string               // URLs of the scenario's images
 	Seed               string                 // the visitor's seed ("" if none chosen yet)
 	Play               storage.Playthrough    // the visitor's playthrough (zero value if no seed)
 	Run                storage.CampaignRun    // the playthrough's run of this page's campaign (zero value until it is started)
 	Pilots             []pilot.PilotView      // the run's named pilots
+	Keywords           []KeywordView          // on the campaign overview: the keywords the campaign has earned, oldest first
 	CanRecruit         bool                   // the command has room for another living named pilot, and the warchest can pay for them
 	RecruitNote        string                 // the short gray note under Recruit New Pilot: why it is unavailable, or what it costs
 	MaxPilots          int                    // most living named pilots a command may have
 	// CachedHangar is the hangar last read from MekBay for this run (nil if none yet), and CachedAt when; the campaign and scenario
 	// pages embed it so they can paint the hangar before the live read finishes (see hangarcache.go).
-	CachedHangar *mekbay.HangarForce
-	CachedAt     time.Time
-	Ranks        []string         // the campaign's pilot ranks, lowest first (empty when it has none)
-	Memorial     bool             // at least one named pilot was killed in action
-	Ladders      string           // the pilot improvement ladders as JSON, for the pilot builder's live preview
-	Abilities    string           // the Edge ability catalog as JSON, for the ability picker
-	Portraits    string           // the portrait list as JSON, for the portrait picker
-	InProgress   bool             // the scenario has a battle in progress (an operation that is neither completed nor aborted)
-	OperationURL string           // the table's link to that battle, so the Operation in progress view can show it before anything is read from MekBay
-	Checkpoints  []CheckpointView // the campaign's rollback points, newest first (the Manage page)
-	BattleCache  string           // the last status read of that battle as JSON ({forces, updatedAt}), so the view paints it at once while a fresh read is made
-	Commit       string           // git commit the server was built from, short form ("dev" if unknown)
+	CachedHangar   *mekbay.HangarForce
+	CachedAt       time.Time
+	Ranks          []string         // the campaign's pilot ranks, lowest first (empty when it has none)
+	Memorial       bool             // at least one named pilot was killed in action
+	Ladders        string           // the pilot improvement ladders as JSON, for the pilot builder's live preview
+	Abilities      string           // the Edge ability catalog as JSON, for the ability picker
+	Portraits      string           // the portrait list as JSON, for the portrait picker
+	InProgress     bool             // the scenario has a battle in progress (an operation that is neither completed nor aborted)
+	OperationURL   string           // the table's link to that battle, so the Operation in progress view can show it before anything is read from MekBay
+	Checkpoints    []CheckpointView // the campaign's rollback points, newest first (the Manage page)
+	KeywordChoices []KeywordChoice  // every registered keyword, ticked when held (the Manage page's Edit keywords dialog)
+	BattleCache    string           // the last status read of that battle as JSON ({forces, updatedAt}), so the view paints it at once while a fresh read is made
+	Commit         string           // git commit the server was built from, short form ("dev" if unknown)
+	DevReload      bool             // the server runs with -dev-reload, so the layout loads static/devreload.js
 }
 
 // Card is one entry in a list of links (campaigns or scenarios).
@@ -102,6 +104,8 @@ type Server struct {
 	upstream *[3]string // web, WebSocket and Origin of the MekBay to proxy; tests replace it
 	proxy    *mekbayproxy.Proxy
 	onProxy  func(*mekbayproxy.Proxy) // tests take hold of the proxy here
+
+	bootID string // set by WithDevReload: this process's ID for live reload (devreload.go); empty means off
 }
 
 // Option customizes the handler returned by NewHandler.
@@ -124,7 +128,7 @@ func NewHandler(contentRoot string, store *storage.Store, opts ...Option) http.H
 	if s.onProxy != nil {
 		s.onProxy(s.proxy)
 	}
-	for _, name := range []string{"home", "campaign", "manage", "scenario", "keywords", "notfound"} {
+	for _, name := range []string{"home", "campaign", "manage", "scenario", "notfound"} {
 		s.pages[name] = template.Must(template.ParseFS(assets, "templates/layout.html", "templates/"+name+".html"))
 	}
 
@@ -162,6 +166,7 @@ func NewHandler(contentRoot string, store *storage.Store, opts ...Option) http.H
 	mux.HandleFunc("POST /api/warchest", s.setWarchest)
 	mux.HandleFunc("POST /api/campaign/players", s.setPlayers)
 	mux.HandleFunc("POST /api/campaign/rollback", s.rollbackCampaign)
+	mux.HandleFunc("POST /api/campaign/keywords", s.setKeywords)
 	mux.HandleFunc("POST /api/campaign/force-name", s.setForceName)
 	mux.HandleFunc("POST /api/campaign/scenario-complete", s.setScenarioCompleted)
 	mux.HandleFunc("POST /api/campaign/scenario-outcome", s.previewOutcome)
@@ -180,11 +185,13 @@ func NewHandler(contentRoot string, store *storage.Store, opts ...Option) http.H
 	mux.HandleFunc("GET /api/mekbay/hangar", s.hangarJSON)
 	mux.HandleFunc("GET /{$}", s.home)
 	mux.HandleFunc("GET /{campaign}/{$}", s.campaign)
-	mux.HandleFunc("GET /{campaign}/keywords/{$}", s.keywords)
 	mux.HandleFunc("GET /{campaign}/manage/{$}", s.manage)
 	mux.HandleFunc("GET /{campaign}/{scenario}/{$}", s.scenario)
 	mux.HandleFunc("GET /{campaign}/{scenario}/images/{file}", s.image)
 	mux.HandleFunc("GET /{campaign}/{scenario}/forces/{file}", s.force)
+	if s.bootID != "" {
+		mux.HandleFunc("GET /dev/reload", s.devReload)
+	}
 	mux.HandleFunc("/", s.notFound)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if mekbayproxy.IsHost(r.Host) {
@@ -232,12 +239,16 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name
 					for _, v := range p.Pilots {
 						p.Memorial = p.Memorial || v.Fallen
 					}
+					if name == "campaign" || name == "manage" {
+						p.Keywords = s.keywordViews(r, id, p.Campaign)
+					}
 					p.MaxPilots = limit
 				}
 			}
 		}
 	}
 	p.Commit = shortCommit(buildCommit)
+	p.DevReload = s.bootID != ""
 	// The page is rendered in full before anything is sent, so a template error is a clean 500 rather than half a page under a 200.
 	var buf bytes.Buffer
 	if err := s.pages[name].ExecuteTemplate(&buf, "layout", p); err != nil {
@@ -286,27 +297,6 @@ func (s *Server) campaign(w http.ResponseWriter, r *http.Request) {
 		p.Cards = append(p.Cards, Card{Num: sc.Number, Name: sc.Title, Sub: sc.Planet, URL: "/" + c.Slug + "/" + sc.Slug + "/", State: state})
 	}
 	s.render(w, r, http.StatusOK, "campaign", p)
-}
-
-func (s *Server) keywords(w http.ResponseWriter, r *http.Request) {
-	c, ok := s.lib.Campaign(r.PathValue("campaign"))
-	if !ok {
-		s.notFound(w, r)
-		return
-	}
-	p := Page{
-		Title:    "Keywords | " + c.Label,
-		Crumbs:   []Crumb{{Label: c.Label, URL: "/" + c.Slug + "/"}, {Label: "Keywords", URL: "/" + c.Slug + "/keywords/"}},
-		Campaign: c,
-	}
-	if seed := currentSeed(r); seed != "" {
-		if ledger, err := s.store.Ledger(r.Context(), playthroughID(seed), c.Slug); err != nil {
-			log.Printf("load the campaign ledger: %v", err)
-		} else {
-			p.Ledger = ledger
-		}
-	}
-	s.render(w, r, http.StatusOK, "keywords", p)
 }
 
 func (s *Server) scenario(w http.ResponseWriter, r *http.Request) {

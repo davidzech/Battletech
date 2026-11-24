@@ -17,7 +17,7 @@ func TestScenario000ProvidesItsOwnMechs(t *testing.T) {
 		t.Fatalf("Scenario 000 should provide Nova, Stormcrow, Shadow Cat, Pouncer and Mongrel (Grendel) Primes: %+v", sc.ProvidedUnits)
 	}
 	if sc1, _ := c.Scenario("scenario_001"); sc1.Provides() {
-		t.Error("Sortie 001 uses the player's hangar")
+		t.Error("Scenario 001 uses the player's hangar")
 	}
 	camps, err := lib.Campaigns()
 	if err != nil {

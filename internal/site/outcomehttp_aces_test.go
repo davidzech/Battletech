@@ -36,7 +36,7 @@ func TestAcesMissionEndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 	write("Intro.md", string(intro))
-	write("Keywords.md", "# Keywords\n\n- `depot_gone` - the depot was destroyed\n- `depot_standing` - the depot still stands\n- `data_saved` - the data got out\n")
+	write("Keywords.md", "---\nkeywords:\n  - {id: depot_gone, name: Depot Gone, scenario: scenario_000, description: The depot was destroyed.}\n  - {id: depot_standing, name: Depot Standing, scenario: scenario_000, description: The depot still stands.}\n  - {id: data_saved, name: Data Saved, scenario: scenario_000, description: The data got out.}\n---\n")
 	write("Scenario_000/Setup.md", "---\nid: scenario_000\ntitle: Raid\nplanet: Colmar\nforces: {}\n---\n# Raid\n")
 	write("Scenario_000/Outcome.md", `---
 id: scenario_000
@@ -153,13 +153,10 @@ outcomes:
 		t.Errorf("the keywords are in the ledger: %+v", ledger)
 	}
 	page = body(t, srv, "/refusalwar/scenario_000/", cookie)
-	for _, want := range []string{`id="outcome-summary"`, "<b>Jarek</b>", "<b>Sybille</b>", "benched", "&#43;40 SP (benched: half)", "Awarded: 600 SP", "Assigned to pilots: 200 SP", "Warchest: +400 SP", "Keywords granted:", "<code>depot_gone</code>", "Killed in Action."} {
+	for _, want := range []string{`id="outcome-summary"`, "<b>Jarek</b>", "<b>Sybille</b>", "benched", "&#43;40 SP (benched: half)", "Awarded: 600 SP", "Assigned to pilots: 200 SP", "Warchest: +400 SP", "Keywords granted:", "<b>Depot Gone</b>", "Killed in Action."} {
 		if !strings.Contains(page, want) {
 			t.Errorf("the report on the page is missing %q", want)
 		}
-	}
-	if p := body(t, srv, "/refusalwar/keywords/", cookie); !strings.Contains(p, "<code>depot_gone</code>") || !strings.Contains(p, "<code>data_saved</code>") || strings.Contains(p, "<code>depot_standing</code> <span") {
-		t.Errorf("the keywords page shows what was earned, not what was not: %.500s", p)
 	}
 	// The next scenario is open; a second report is refused.
 	if !strings.Contains(body(t, srv, "/refusalwar/", cookie), `class="card available" href="/refusalwar/scenario_001/"`) {

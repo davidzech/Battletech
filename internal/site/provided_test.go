@@ -69,7 +69,7 @@ func TestProvidedScenarioDeploy(t *testing.T) {
 	if !view.Provided || len(view.Units) != 5 || view.Units[0].Name != "Nova" {
 		t.Fatalf("the popup should list the five provided mechs: %+v", view)
 	}
-	// Sortie 001 still reads the hangar (and so fails here).
+	// Scenario 001 still reads the hangar (and so fails here).
 	if r := get(t, srv, "/api/mekbay/hangar?campaign=refusalwar&scenario=scenario_001", cookie); r.StatusCode != http.StatusBadGateway {
 		t.Errorf("an ordinary scenario reads the hangar: %d", r.StatusCode)
 	}
@@ -83,7 +83,7 @@ func TestProvidedScenarioDeploy(t *testing.T) {
 		t.Errorf("the scenario page should show the provided mechs and say so: %.600s", page)
 	}
 	if strings.Contains(body(t, srv, "/refusalwar/scenario_001/", cookie), "&#34;provided&#34;:true") {
-		t.Error("Sortie 001 provides nothing")
+		t.Error("Scenario 001 provides nothing")
 	}
 	// The plan is checked against the provided mechs: they can be picked (with named pilots), the hangar's units can't.
 	plan := func(kv ...string) *http.Response {
@@ -142,6 +142,6 @@ func TestScenario000EnforcesItsRules(t *testing.T) {
 		t.Error("the short provided-mechs text")
 	}
 	if p := body(t, srv, "/refusalwar/scenario_001/", cookie); !strings.Contains(p, `data-unit-limit="0"`) || strings.Contains(p, `data-pilots-required="1"`) {
-		t.Error("Sortie 001 has no unit limit or pilot rule")
+		t.Error("Scenario 001 has no unit limit or pilot rule")
 	}
 }

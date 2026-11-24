@@ -21,7 +21,7 @@ type battleResponse struct {
 
 // playerDraft is a player's force built from scratch, for a scenario whose mechs are provided and so are not in MekBay: the units they took, with the crews
 // they were given.
-func playerDraft(name string, h mekbay.HangarForce, units []string, crews []mekbay.CrewAssignment, views map[string]hangarUnitView) mekbay.ForceDraft {
+func playerDraft(name string, h mekbay.HangarForce, units []string, crews []mekbay.CrewAssignment, views map[string]hangarUnitView, commander string) mekbay.ForceDraft {
 	byID := map[string]mekbay.HangarUnit{}
 	for _, u := range h.Units {
 		byID[u.ID] = u
@@ -33,7 +33,7 @@ func playerDraft(name string, h mekbay.HangarForce, units []string, crews []mekb
 	g := mekbay.GroupDraft{Name: "Deployed"}
 	for _, id := range units {
 		u := byID[id]
-		ud := mekbay.UnitDraft{Unit: u.Unit, BV: views[id].BV, Pilot: u.Pilot, Gunnery: u.Gunnery, Piloting: u.Piloting}
+		ud := mekbay.UnitDraft{Unit: u.Unit, BV: views[id].BV, Pilot: u.Pilot, Gunnery: u.Gunnery, Piloting: u.Piloting, Commander: id == commander}
 		if a, ok := crew[id]; ok {
 			ud.Pilot, ud.Gunnery, ud.Piloting = a.Name, a.Gunnery, a.Piloting
 		}
@@ -92,8 +92,11 @@ func (s *Server) startBattle(w http.ResponseWriter, r *http.Request) {
 		num := i + 1
 		name := fmt.Sprintf("%s - Player %d", bp.run.ForceLabel(), num)
 		p := mekbay.BattlePlayer{Number: num, Name: name, Units: bp.units[i], Crew: bp.crews[i]}
+		if bp.commander != nil && bp.commander.player == i {
+			p.Commander = bp.commander.unit // the record sheet marks the commander's mech
+		}
 		if req.Provided {
-			p.Draft = playerDraft(name, bp.h, bp.units[i], bp.crews[i], bp.views)
+			p.Draft = playerDraft(name, bp.h, bp.units[i], bp.crews[i], bp.views, p.Commander)
 		}
 		req.Players = append(req.Players, p)
 	}

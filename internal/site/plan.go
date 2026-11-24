@@ -10,10 +10,11 @@ import (
 
 	"github.com/davidzech/Battletech/internal/content"
 	"github.com/davidzech/Battletech/internal/mekbay"
+	"github.com/davidzech/Battletech/internal/pilot"
 	"github.com/davidzech/Battletech/internal/storage"
 )
 
-// The deployment plan: which mechs and pilots each player takes on a sortie. The Deploy wizard steps through the players one at a time, each choosing from what
+// The deployment plan: which mechs and pilots each player takes on a scenario. The Deploy wizard steps through the players one at a time, each choosing from what
 // the earlier ones left, and ends with a review of the whole plan. This endpoint checks that plan on the server and describes it back. It does not touch MekBay yet:
 // building each player's force in their own MekBay account, and the OpFor in the OpFor's, comes next, and the old single-player deploy (POST /api/mekbay/deploy)
 // is still in the code but is not used by the wizard.
@@ -58,6 +59,8 @@ type planResult struct {
 	TotalBV  int          `json:"totalBV"`
 	Limit    int          `json:"limit"`
 	Deployed bool         `json:"deployed"` // always false for now: nothing was sent to MekBay
+	// Commander is the named pilot who commands the force (marked on their mech in MekBay); "" when the scenario has none or no named pilot is deployed.
+	Commander string `json:"commander,omitempty"`
 }
 
 // planProblem checks a whole plan against the hangar and returns the first problem as a sentence, or "". units[i] is player i+1's mech IDs.
@@ -85,6 +88,15 @@ type builtPlan struct {
 	units [][]string // each player's mechs
 	crews [][]mekbay.CrewAssignment
 	res   planResult
+	// commander is the deployed named pilot who commands the force, and where: their player (0-based) and mech. nil when there is none.
+	commander *deployedPilot
+}
+
+// deployedPilot is a named pilot in one of the plan's mechs.
+type deployedPilot struct {
+	player int // 0-based
+	unit   string
+	name   string
 }
 
 // checkPlan reads and checks a deployment plan from a request, and answers the request itself when it is not good. Fields: campaign, scenario, players, and for each player i the repeated
@@ -178,7 +190,72 @@ func (s *Server) checkPlan(w http.ResponseWriter, r *http.Request) (*builtPlan, 
 		http.Error(w, msg, http.StatusBadRequest)
 		return nil, false
 	}
-	return &builtPlan{pt: pt, run: run, c: c, sc: sc, h: h, views: views, units: units, crews: crews, res: res}, true
+	commander, msg := planCommander(sc, h, pilots, units, crews, r.PostFormValue("commander"))
+	if msg != "" {
+		http.Error(w, msg, http.StatusBadRequest)
+		return nil, false
+	}
+	if commander != nil {
+		res.Commander = commander.name
+	}
+	return &builtPlan{pt: pt, run: run, c: c, sc: sc, h: h, views: views, units: units, crews: crews, res: res, commander: commander}, true
+}
+
+// deployedPilots lists the living named pilots the plan puts in a mech, in player and mech order: a mech's pilot is the one assigned to it, or the one the force
+// already has in it when the plan doesn't change it.
+func deployedPilots(h mekbay.HangarForce, pilots []pilot.NamedPilot, units [][]string, crews [][]mekbay.CrewAssignment) []deployedPilot {
+	living := map[string]string{}
+	for _, p := range pilots {
+		if !p.Fallen {
+			living[strings.ToLower(p.Name)] = p.Name
+		}
+	}
+	inForce := map[string]string{}
+	for _, u := range h.Units {
+		inForce[u.ID] = u.Pilot
+	}
+	var out []deployedPilot
+	for i, ids := range units {
+		assigned := map[string]string{}
+		for _, a := range crews[i] {
+			assigned[a.UnitID] = a.Name
+		}
+		for _, id := range ids {
+			name, ok := assigned[id]
+			if !ok {
+				name = inForce[id]
+			}
+			if canonical, ok := living[strings.ToLower(name)]; ok {
+				out = append(out, deployedPilot{player: i, unit: id, name: canonical})
+			}
+		}
+	}
+	return out
+}
+
+// planCommander settles who commands the force: none when the scenario doesn't choose one or no named pilot is deployed, the only one when there is one, and
+// otherwise the deployed named pilot the request names (`commander`, a pilot's name, any case). The second result is the problem, as a sentence.
+func planCommander(sc *content.Scenario, h mekbay.HangarForce, pilots []pilot.NamedPilot, units [][]string, crews [][]mekbay.CrewAssignment, want string) (*deployedPilot, string) {
+	if !sc.ChoosesCommander {
+		return nil, ""
+	}
+	deployed := deployedPilots(h, pilots, units, crews)
+	switch {
+	case len(deployed) == 0:
+		return nil, ""
+	case len(deployed) == 1:
+		return &deployed[0], ""
+	}
+	want = strings.TrimSpace(want)
+	if want == "" {
+		return nil, "Choose which named pilot commands the force."
+	}
+	for i := range deployed {
+		if strings.EqualFold(deployed[i].name, want) {
+			return &deployed[i], ""
+		}
+	}
+	return nil, want + " isn't in one of the mechs being deployed, so they can't command the force."
 }
 
 // deployPlan is POST /api/deploy/plan: check a deployment plan and describe it, without sending anything to MekBay.

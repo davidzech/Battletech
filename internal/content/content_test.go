@@ -38,38 +38,40 @@ func TestPlayersLabel(t *testing.T) {
 }
 
 func TestSplitBriefing(t *testing.T) {
-	body := "\n> First line.\n>\n> \"Second.\"\n\n## Overview\n\nText.\n"
-	briefing, rest := splitBriefing(body)
-	if briefing != "First line.\n\n\"Second.\"" {
+	body := "## Briefing\n\nFirst line.\n\n> Second.\n\n## Overview\n\nText.\n"
+	rest, briefing := splitBriefing(body)
+	if briefing != "First line.\n\n> Second." {
 		t.Errorf("briefing = %q", briefing)
 	}
-	if !strings.HasPrefix(strings.TrimSpace(rest), "## Overview") {
+	if strings.Contains(rest, "Briefing") || !strings.HasPrefix(strings.TrimSpace(rest), "## Overview") {
 		t.Errorf("rest = %q", rest)
 	}
 
-	// No leading blockquote: everything stays in the body.
-	b, r := splitBriefing("## Overview\n\n> not fluff\n")
-	if b != "" || !strings.Contains(r, "## Overview") || !strings.Contains(r, "> not fluff") {
-		t.Errorf("unexpected split: %q / %q", b, r)
+	// No briefing section: a blockquote is just a blockquote and everything stays in the body.
+	r, b := splitBriefing("> not fluff\n\n## Overview\n")
+	if b != "" || !strings.Contains(r, "> not fluff") || !strings.Contains(r, "## Overview") {
+		t.Errorf("unexpected split: %q / %q", r, b)
 	}
 
-	// Windows line endings.
-	if b, _ := splitBriefing("> A\r\n> B\r\n\r\nrest"); b != "A\nB" {
-		t.Errorf("CRLF briefing = %q", b)
-	}
-}
-
-func TestRenderBriefingMarksPullQuote(t *testing.T) {
-	html := string(renderBriefing("Plain line.\n\n\"If you are victorious, so be it.\""))
-	if strings.Count(html, `class="pull"`) != 1 || !strings.Contains(html, "<p>Plain line.</p>") {
-		t.Errorf("html = %s", html)
+	// The section runs to the end of the body, and Windows line endings are fine.
+	if r, b := splitBriefing("Before.\r\n## Briefing\r\nA\r\nB\r\n"); b != "A\nB" || strings.TrimSpace(r) != "Before." {
+		t.Errorf("CRLF split = %q / %q", r, b)
 	}
 }
 
-func TestRenderBriefingMarksAttribution(t *testing.T) {
-	html := string(renderBriefing("\"Quote.\"\n\n— Someone, Title"))
-	if strings.Count(html, `class="cite"`) != 1 || !strings.Contains(html, "— Someone, Title") {
+func TestRenderBriefingMarksQuotesNotDialogue(t *testing.T) {
+	html := string(renderBriefing("\"Move out,\" she said.\n\n— Not an attribution\n\n> If you are victorious, so be it.\n>\n> — Someone, Title"))
+	if strings.Count(html, "<blockquote>") != 1 || strings.Count(html, `class="cite"`) != 1 || !strings.Contains(html, `<p class="cite">— Someone, Title</p>`) {
 		t.Errorf("html = %s", html)
+	}
+	if strings.Contains(html, `class="pull"`) || !strings.Contains(html, "<p>— Not an attribution</p>") {
+		t.Errorf("text outside the quote was marked: %s", html)
+	}
+
+	// "--" is an easier-to-type em dash for the attribution (a single "- " would be a list item).
+	html = string(renderBriefing("> Quote.\n>\n> -- Someone, Title"))
+	if !strings.Contains(html, `<p class="cite">— Someone, Title</p>`) {
+		t.Errorf("-- attribution: %s", html)
 	}
 }
 
@@ -115,9 +117,10 @@ func TestRefusalWarStartsWithTwoNamedPilots(t *testing.T) {
 // Each campaign picks its faction (and so its ranks) in Intro.md; a campaign may also list its own ranks.
 func TestCampaignFactionAndRanks(t *testing.T) {
 	rw := refusalWar(t)
-	want := []string{"MechWarrior", "Star Commander", "Star Captain", "Star Colonel", "Galaxy Commander", "saKhan", "Khan"}
-	if rw.Faction != "clan" || strings.Join(rw.Ranks, "|") != strings.Join(want, "|") {
-		t.Fatalf("Refusal War: faction %q, ranks %v", rw.Faction, rw.Ranks)
+	// Refusal War lists its own ladder: the Clan ranks with Cadet below MechWarrior. Its pilots start as cadets and recruits join as MechWarriors.
+	want := []string{"Cadet", "MechWarrior", "Star Commander", "Star Captain", "Star Colonel", "Galaxy Commander", "saKhan", "Khan"}
+	if rw.Faction != "clan" || strings.Join(rw.Ranks, "|") != strings.Join(want, "|") || rw.FirstRank() != "Cadet" || rw.RecruitRank() != "MechWarrior" {
+		t.Fatalf("Refusal War: faction %q, ranks %v, first %q, recruits %q", rw.Faction, rw.Ranks, rw.FirstRank(), rw.RecruitRank())
 	}
 	// The returned ladders are copies: changing one never changes the faction.
 	rw.Ranks[0] = "X"

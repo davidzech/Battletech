@@ -305,14 +305,13 @@
     });
   }
 
-  // ---- Recruit New Pilot: a one-step wizard. A random portrait nobody has, a name, and a rank; the new pilot is a standard 4/5 pilot
+  // ---- Recruit New Pilot: a one-step wizard. A random portrait nobody has and a name (the rank is the campaign's recruit_rank); the new pilot is a standard 4/5 pilot
   // with 1 Edge token and no SP, shown in the same stat boxes as the start wizard.
   var recruit = document.getElementById('recruit-dialog');
   if (recruit && typeof recruit.showModal === 'function') {
     var portraitList = JSON.parse(box.dataset.portraits || '[]');
     var rName = document.getElementById('recruit-name');
     var rImg = document.getElementById('recruit-portrait-img');
-    var rRank = document.getElementById('recruit-rank');
     var rError = document.getElementById('recruit-error');
     var rGo = document.getElementById('recruit-go');
     var rBoxes = document.getElementById('recruit-boxes');
@@ -368,7 +367,6 @@
       rError.textContent = '';
       ladders.forEach(function (l) { rSP[l.key] = 0; });
       rRefresh();
-      if (rRank) rRank.selectedIndex = 0;
       rGo.disabled = false;
       if (rCost > 0) {
         var after = rWarchest - rCost;
@@ -394,7 +392,7 @@
       if (!name) { rError.textContent = 'Give your pilot a name.'; rName.focus(); return; }
       rGo.disabled = true;
       rError.textContent = '';
-      var fields = 'name=' + encodeURIComponent(name) + '&portrait=' + encodeURIComponent(rPortrait) + (rRank ? '&rank=' + encodeURIComponent(rRank.value) : '');
+      var fields = 'name=' + encodeURIComponent(name) + '&portrait=' + encodeURIComponent(rPortrait);
       ladders.forEach(function (l) { fields += '&' + l.key + '=' + rSP[l.key]; });
       post('/api/pilots', fields).then(function (res) {
         if (res.ok) { location.reload(); return; }
@@ -407,7 +405,7 @@
   // A rank never wraps: the longest of a faction's ranks fits the box at the stylesheet's size, and a rank that is still too wide
   // (a longer ladder in another campaign) is scaled down in proportion.
   function fitRanks() {
-    box.querySelectorAll('.rank-btn, .rank-label').forEach(function (e) {
+    box.querySelectorAll('.rank-label').forEach(function (e) {
       e.style.fontSize = '';
       var room = e.clientWidth, need = e.scrollWidth;
       if (room > 0 && need > room) e.style.fontSize = (parseFloat(getComputedStyle(e).fontSize) * room / need * 0.97).toFixed(2) + 'px';
@@ -416,33 +414,6 @@
   fitRanks();
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitRanks); // the display font changes the widths when it arrives
   window.addEventListener('resize', fitRanks);
-
-  // ---- Rank: a cosmetic rank under the portrait, picked from a list in a small dialog.
-  var rankDialog = document.getElementById('rank-dialog');
-  var rankSelect = document.getElementById('rank-select');
-  var rankError = document.getElementById('rank-error');
-  var rankPilot = null; // the pilot's row whose rank is being changed
-  if (rankDialog && typeof rankDialog.showModal === 'function') {
-    document.getElementById('rank-cancel').addEventListener('click', function () { rankDialog.close(); });
-    rankDialog.addEventListener('click', function (e) { if (e.target === rankDialog) rankDialog.close(); });
-    document.getElementById('rank-form').addEventListener('submit', function (e) {
-      e.preventDefault();
-      if (!rankPilot) return;
-      rankError.textContent = '';
-      post('/api/pilots/rank', 'pilot=' + encodeURIComponent(rankPilot.dataset.pilot) + '&rank=' + encodeURIComponent(rankSelect.value)).then(function (res) {
-        if (res.ok) { location.reload(); return; }
-        return res.text().then(function (t) { rankError.textContent = t.trim() || 'Could not save the rank.'; });
-      }, function () { rankError.textContent = 'Could not reach the server.'; });
-    });
-  }
-  function openRank(li) {
-    rankPilot = li;
-    rankError.textContent = '';
-    document.getElementById('rank-title').textContent = 'Change ' + li.dataset.name + '\u2019s rank';
-    rankSelect.value = li.dataset.rank;
-    rankDialog.showModal();
-    rankSelect.focus();
-  }
 
   box.querySelectorAll('li.pilot').forEach(function (li) {
     var id = li.dataset.pilot;
@@ -459,8 +430,6 @@
         error: function (m) { error.textContent = m; }
       });
     }
-    var rankBtn = li.querySelector('.rank-btn');
-    if (rankBtn && rankDialog) rankBtn.addEventListener('click', function () { openRank(li); });
     var manage = li.querySelector('.pilot-sp');
     if (manage && dialog) manage.addEventListener('click', function () { openSP(li); });
 
@@ -634,6 +603,21 @@
         }).then(function (ok) { if (ok) save(); });
       });
 
+      // Rank: an advanced correction (promotions come from mission outcomes). Saved as soon as it is picked; a refusal puts the old rank back.
+      var rankSel = li.querySelector('.rec-rank-select');
+      if (rankSel) {
+        var savedRank = rankSel.value;
+        rankSel.addEventListener('change', function () {
+          recError.textContent = '';
+          rankSel.disabled = true;
+          post('/api/pilots/rank', 'pilot=' + encodeURIComponent(li.dataset.pilot) + '&rank=' + encodeURIComponent(rankSel.value)).then(function (res) {
+            rankSel.disabled = false;
+            if (res.ok) { recDirty = true; savedRank = rankSel.value; return; }
+            rankSel.value = savedRank;
+            return res.text().then(function (t) { recError.textContent = t.trim() || 'Could not save the rank.'; });
+          }, function () { rankSel.disabled = false; rankSel.value = savedRank; recError.textContent = 'Could not reach the server.'; });
+        });
+      }
       var del = li.querySelector('.rec-delete');
       del.addEventListener('click', function () {
         Confirm.ask({

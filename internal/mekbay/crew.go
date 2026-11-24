@@ -90,3 +90,24 @@ func applyCrew(force map[string]any, crew []CrewAssignment) error {
 	}
 	return nil
 }
+
+// setCommander marks one unit of a saved force (the decoded JSON of its `data`) as MekBay's commander (`commander: true` on the unit, which the record sheet
+// shows) and takes the mark off every other unit, so a force copied from the hangar never keeps an old one. An empty unitID only clears it.
+func setCommander(force map[string]any, unitID string) {
+	groups, _ := force["groups"].([]any)
+	for _, g := range groups {
+		gm, _ := g.(map[string]any)
+		units, _ := gm["units"].([]any)
+		for _, u := range units {
+			um, _ := u.(map[string]any)
+			if um == nil {
+				continue
+			}
+			if id, _ := um["id"].(string); unitID != "" && id == unitID {
+				um["commander"] = true
+			} else {
+				delete(um, "commander")
+			}
+		}
+	}
+}

@@ -46,6 +46,7 @@ type Scenario struct {
 	// OutcomePilotSP is the flat SP each active pilot gets from the pool (half for a benched one, none for one killed; Outcome.md pilot_sp).
 	OutcomePilotSP any
 	pilotShare     *Expr
+	ranks          []string // the campaign's ranks, lowest first, so a promotion can be compared with another (checkPromotions)
 	OutcomeRules   []OutcomeRule
 	OutcomeError   string
 	// MVPSP is the extra SP the mission's MVP earns (the campaign's mvp_sp, or the scenario's own Outcome.md mvp_sp); 0 means the mission has no MVP.
@@ -58,11 +59,14 @@ type Scenario struct {
 	// every mech taken need a named pilot assigned.
 	UnitLimit      int
 	PilotsRequired bool
-	BVLimit        int           // most battle value the player may deploy (front matter bv_limit); 0 means no limit
-	Next           string        // id of the default next scenario
-	BriefingHTML   template.HTML // the fluff: a leading blockquote in Setup.md
-	SetupHTML      template.HTML
-	OutcomeHTML    template.HTML
+	// ChoosesCommander says the Deploy wizard picks one of the deployed named pilots as the force's commander, marked on their mech in MekBay (Setup.md
+	// `commander`, true when omitted; Scenario 000's one-on-one Trial sets it false).
+	ChoosesCommander bool
+	BVLimit          int           // most battle value the player may deploy (front matter bv_limit); 0 means no limit
+	Next             string        // id of the default next scenario
+	BriefingHTML     template.HTML // the fluff: a leading blockquote in Setup.md
+	SetupHTML        template.HTML
+	OutcomeHTML      template.HTML
 }
 
 // ReadoutRow is one line of the technical readout drawn over a scenario's image.
@@ -87,12 +91,12 @@ type ForceFile struct {
 
 // Campaign is a folder containing Scenario_NNN folders.
 type Campaign struct {
-	Slug         string
-	Label        string
-	IntroHTML    template.HTML
-	KeywordsHTML template.HTML
-	// Keywords are the keyword IDs Keywords.md registers (the campaign's ledger can hold only these).
-	Keywords   []string
+	Slug      string
+	Label     string
+	IntroHTML template.HTML // Intro.md's body, all of it the campaign's briefing, rendered like a scenario's
+	IntroTag  string        // the body's leading `## ` heading (e.g. "The Enemy Within"), shown as the briefing's tag
+	// Keywords are the keywords Keywords.md registers, in its order (the campaign's ledger can hold only these).
+	Keywords   []Keyword
 	MinPlayers int // fewest players the campaign is built for (Intro.md front matter min_players); 0 if not given
 	MaxPlayers int // most players it supports (max_players); 0 if not given
 	// StartingNamedPilots is how many named pilots the campaign requires before scenarios can be played
@@ -112,6 +116,8 @@ type Campaign struct {
 	// the SP it costs from the warchest to recruit a new named pilot later on (Intro.md recruit_cost; Refusal War: 300); 0 is free. The starting pilots are free.
 	MaxNamedPilots int
 	RecruitCost    int
+	// recruitRank is the rank a pilot recruited after the start joins at (Intro.md recruit_rank; Refusal War: MechWarrior): see RecruitRank.
+	recruitRank string
 	// AvailabilityFaction and AvailabilityEra, e.g. "Clan Wolf" and "Clan Invasion", pick the units the purchase search offers by default (see
 	// availability.go); both empty means no such filter.
 	AvailabilityFaction, AvailabilityEra string
@@ -121,7 +127,7 @@ type Campaign struct {
 	// Ranks is the rank ladder of the campaign's named pilots, lowest first: the Intro.md `ranks` list if it has one, else its
 	// faction's.
 	Ranks []string
-	// MissionTerm is what the campaign calls its scenarios, e.g. "Sortie" (Intro.md mission_term; "Scenario" by default): see MissionName.
+	// MissionTerm is what the campaign calls its scenarios, e.g. "Mission" (Intro.md mission_term; "Scenario" by default): see MissionName.
 	MissionTerm string
 	// MVPSP is the extra SP the most valuable pilot of a mission earns (Intro.md mvp_sp; 0 means the campaign has no MVP). A scenario's Outcome.md can override it.
 	MVPSP int
@@ -178,38 +184,6 @@ func (c *Campaign) PilotLimit() int {
 		return c.MaxNamedPilots
 	}
 	return pilot.MaxNamedPilots
-}
-
-// keywordBullet matches a keyword's bullet in Keywords.md: a lowercase snake_case ID in backticks at the start.
-var keywordBullet = regexp.MustCompile("(?m)^\\s*[-*]\\s+`([a-z][a-z0-9_]*)`")
-
-// keywordIDs lists the keyword IDs registered in a Keywords.md body.
-func keywordIDs(body string) []string {
-	var out []string
-	for _, m := range keywordBullet.FindAllStringSubmatch(body, -1) {
-		out = append(out, m[1])
-	}
-	return out
-}
-
-// checkGrants marks a scenario whose outcome grants a keyword that Keywords.md doesn't register: it then has no outcome engine, and the mistake is reported.
-func (c *Campaign) checkGrants() {
-	known := map[string]bool{}
-	for _, k := range c.Keywords {
-		known[k] = true
-	}
-	for i := range c.Scenarios {
-		sc := &c.Scenarios[i]
-		if sc.OutcomeError != "" {
-			continue
-		}
-		for _, g := range sc.GrantedKeywords() {
-			if !known[g] {
-				sc.OutcomeError = fmt.Sprintf("grants the keyword %q, which is not in Keywords.md", g)
-				break
-			}
-		}
-	}
 }
 
 // lowerAll lowercases and trims a list of scenario IDs.
@@ -298,6 +272,7 @@ type introMeta struct {
 	AvailabilityEra     string   `yaml:"availability_era"`
 	Faction             string   `yaml:"faction"`
 	Ranks               []string `yaml:"ranks"`
+	RecruitRank         string   `yaml:"recruit_rank"`
 	MissionTerm         string   `yaml:"mission_term"`
 	MVPSP               int      `yaml:"mvp_sp"`
 }
@@ -315,6 +290,7 @@ type setupMeta struct {
 	Provided  []string            `yaml:"provided_units"`
 	UnitLimit int                 `yaml:"unit_limit"`
 	PilotsReq bool                `yaml:"pilots_required"`
+	Commander *bool               `yaml:"commander"`
 }
 
 // outcomeMeta is a scenario's Outcome.md front matter: where it leads, and its outcome engine (see outcomes.go).
@@ -425,7 +401,7 @@ func (l Library) load(name string) (*Campaign, bool) {
 		var setup setupMeta
 		setupBody, err := readMarkdown(filepath.Join(sdir, "Setup.md"), &setup)
 		problem(e.Name()+"/Setup.md", err)
-		briefing, setupBody := splitBriefing(leadingTitle.ReplaceAllString(setupBody, ""))
+		setupBody, briefing := splitBriefing(leadingTitle.ReplaceAllString(setupBody, ""))
 		setupBody, waypoints := splitWaypoints(setupBody)
 		var outcome outcomeMeta
 		outcomeBody, err := readMarkdown(filepath.Join(sdir, "Outcome.md"), &outcome)
@@ -446,6 +422,7 @@ func (l Library) load(name string) (*Campaign, bool) {
 			ProvidedUnits:     setup.Provided,
 			UnitLimit:         setup.UnitLimit,
 			PilotsRequired:    setup.PilotsReq,
+			ChoosesCommander:  setup.Commander == nil || *setup.Commander,
 			Next:              outcome.DefaultNext,
 			OutcomeInputs:     outcome.Inputs,
 			OutcomeObjectives: outcome.Objectives,
@@ -475,14 +452,12 @@ func (l Library) load(name string) (*Campaign, bool) {
 	}
 	sort.Slice(c.Scenarios, func(i, j int) bool { return c.Scenarios[i].Slug < c.Scenarios[j].Slug })
 	c.resolveBranches()
-	var kwMeta struct{}
-	kw, err := readMarkdown(filepath.Join(dir, "Keywords.md"), &kwMeta)
-	problem("Keywords.md", err)
-	c.IntroHTML = RenderMarkdown(intro, false)
-	c.KeywordsHTML = RenderMarkdown(kw, true)
-	c.Keywords = keywordIDs(kw)
+	c.IntroTag, intro = splitLeadingHeading(intro)
+	c.IntroHTML = renderBriefing(intro)
+	c.loadKeywords(dir)
 	c.loadNames(dir)
 	c.checkGrants()
+	c.checkPromotions()
 	c.checkScenarios()
 	return c, true
 }
@@ -498,6 +473,10 @@ func (c *Campaign) applyIntro(meta introMeta) {
 	c.Faction = meta.Faction
 	if c.Ranks = meta.Ranks; len(c.Ranks) == 0 {
 		c.Ranks = pilot.FactionRanks(meta.Faction)
+	}
+	if c.recruitRank = strings.TrimSpace(meta.RecruitRank); c.recruitRank != "" && pilot.RankIndex(c.Ranks, c.recruitRank) < 0 {
+		c.Problems = append(c.Problems, fmt.Sprintf("Intro.md: recruit_rank %q is not one of the campaign's ranks", c.recruitRank))
+		c.recruitRank = ""
 	}
 	c.MissionTerm = strings.TrimSpace(meta.MissionTerm)
 	if c.MissionTerm == "" {
@@ -524,6 +503,14 @@ func (c *Campaign) checkScenarios() {
 	}
 }
 
+// RecruitRank is the rank a pilot recruited after the start joins at: the campaign's recruit_rank, else its lowest rank ("" when it has no ranks).
+func (c *Campaign) RecruitRank() string {
+	if c.recruitRank != "" {
+		return c.recruitRank
+	}
+	return c.FirstRank()
+}
+
 // FirstRank is the rank every named pilot starts at: the lowest of the campaign's ranks ("" when the campaign has none).
 func (c *Campaign) FirstRank() string {
 	if len(c.Ranks) == 0 {
@@ -532,10 +519,10 @@ func (c *Campaign) FirstRank() string {
 	return c.Ranks[0]
 }
 
-// MissionNumber is how the campaign names a scenario by number, e.g. "Sortie 001" (Intro.md mission_term, "Scenario" by default).
+// MissionNumber is how the campaign names a scenario by number, e.g. "Scenario 001" (Intro.md mission_term, "Scenario" by default).
 func (c *Campaign) MissionNumber(sc Scenario) string { return c.MissionTerm + " " + sc.Number }
 
-// MissionName is a scenario's full name, e.g. "Sortie 001: Pyre Light".
+// MissionName is a scenario's full name, e.g. "Scenario 001: Pyre Light".
 func (c *Campaign) MissionName(sc Scenario) string { return c.MissionNumber(sc) + ": " + sc.Title }
 
 var (
@@ -633,36 +620,51 @@ func forceFiles(m map[string]string) []ForceFile {
 	return out
 }
 
-// splitBriefing separates a leading blockquote (the scenario's fluff) from the rest of the body and
-// returns the quote's text with the "> " markers removed.
-func splitBriefing(body string) (briefing, rest string) {
-	lines := strings.Split(strings.ReplaceAll(body, "\r\n", "\n"), "\n")
-	i := 0
-	for i < len(lines) && strings.TrimSpace(lines[i]) == "" {
-		i++
+// splitBriefing takes the `## Briefing` section (the in-world fluff, up to the next `#` or `##` heading) out
+// of a body and returns the rest and the section's text without its heading. A body with no such section is
+// returned whole, with an empty briefing.
+func splitBriefing(body string) (rest, briefing string) {
+	var keep, section []string
+	in, found := false, false
+	for _, line := range strings.Split(strings.ReplaceAll(body, "\r\n", "\n"), "\n") {
+		switch {
+		case !found && strings.TrimSpace(line) == "## Briefing":
+			in, found = true, true
+		case in && (strings.HasPrefix(line, "## ") || strings.HasPrefix(line, "# ")):
+			in = false
+			keep = append(keep, line)
+		case in:
+			section = append(section, line)
+		default:
+			keep = append(keep, line)
+		}
 	}
-	start := i
-	for i < len(lines) && strings.HasPrefix(strings.TrimSpace(lines[i]), ">") {
-		i++
-	}
-	if i == start {
-		return "", body
-	}
-	quote := make([]string, 0, i-start)
-	for _, l := range lines[start:i] {
-		quote = append(quote, strings.TrimPrefix(strings.TrimPrefix(strings.TrimSpace(l), ">"), " "))
-	}
-	return strings.Join(quote, "\n"), strings.Join(lines[i:], "\n")
+	return strings.Join(keep, "\n"), strings.TrimSpace(strings.Join(section, "\n"))
 }
 
-// renderBriefing renders the fluff, marking any paragraph that opens with a quotation mark as a
-// pull quote and any that opens with an em dash as its attribution, so they can be styled.
-func renderBriefing(src string) template.HTML {
-	html := string(RenderMarkdown(src, false))
-	for _, open := range []string{"<p>&quot;", "<p>&ldquo;", "<p>\""} {
-		html = strings.ReplaceAll(html, open, `<p class="pull">`+open[len("<p>"):])
+// leadingHeading matches a body's first line when it is a `## ` heading.
+var leadingHeading = regexp.MustCompile(`\A\s*##\s+(.*?)\s*\r?\n`)
+
+// splitLeadingHeading takes a leading `## ` heading off a body and returns its text and the rest.
+func splitLeadingHeading(body string) (heading, rest string) {
+	m := leadingHeading.FindStringSubmatchIndex(body)
+	if m == nil {
+		return "", body
 	}
-	html = strings.ReplaceAll(html, "<p>—", `<p class="cite">`+"—")
+	return body[m[2]:m[3]], body[m[1]:]
+}
+
+// briefingQuote matches a blockquote in rendered briefing HTML (goldmark puts each tag on its own line).
+var briefingQuote = regexp.MustCompile(`(?s)<blockquote>.*?</blockquote>`)
+
+// renderBriefing renders the fluff. A blockquote in it is a pull quote (the stylesheet adds the quotation
+// marks), and a paragraph inside the quote that opens with an em dash, or with "--" (easier to type; it
+// becomes an em dash), is its attribution.
+func renderBriefing(src string) template.HTML {
+	html := briefingQuote.ReplaceAllStringFunc(string(RenderMarkdown(src, false)), func(q string) string {
+		q = strings.ReplaceAll(q, "<p>-- ", "<p>— ")
+		return strings.ReplaceAll(q, "<p>—", `<p class="cite">—`)
+	})
 	return template.HTML(html)
 }
 

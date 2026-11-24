@@ -2,7 +2,9 @@ package mekbay
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
+	"time"
 )
 
 // A force of three mechs: u1 crewed by the named pilot Alrek (3/4), u2 by an unnamed 4/5 crew, u3 by a named pilot with no new assignment.
@@ -91,5 +93,39 @@ func TestPilotDeadFromTheCockpit(t *testing.T) {
 		if err != nil || len(h.Units) != 1 || h.Units[0].PilotDead != c.dead {
 			t.Errorf("%s: %+v %v", name, h.Units, err)
 		}
+	}
+}
+
+// setCommander marks one unit of a force as MekBay's commander and takes the mark off every other, even one the hangar copy carried.
+func TestSetCommander(t *testing.T) {
+	force := decodeForce(t, `{"groups":[{"units":[{"id":"a","commander":true},{"id":"b"}]},{"units":[{"id":"c"}]}]}`)
+	marked := func() []string {
+		var out []string
+		for _, g := range force["groups"].([]any) {
+			for _, u := range g.(map[string]any)["units"].([]any) {
+				um := u.(map[string]any)
+				if um["commander"] == true {
+					out = append(out, um["id"].(string))
+				}
+			}
+		}
+		return out
+	}
+	setCommander(force, "c")
+	if got := marked(); len(got) != 1 || got[0] != "c" {
+		t.Errorf("commander on c only: %v", got)
+	}
+	setCommander(force, "")
+	if got := marked(); len(got) != 0 {
+		t.Errorf("an empty unit clears the mark: %v", got)
+	}
+}
+
+// A force built from a draft (a scenario's own mechs) carries the commander mark as MekBay saves it.
+func TestBuildForceMarksTheCommander(t *testing.T) {
+	f := BuildForce("i", time.Now(), ForceDraft{Name: "F", Groups: []GroupDraft{{Name: "G", Units: []UnitDraft{{Unit: "BMGrizzly"}, {Unit: "BMLoki_Prime", Commander: true}}}}})
+	b, _ := json.Marshal(f)
+	if !strings.Contains(string(b), `"unit":"BMLoki_Prime","alias":"","updatedTs":`) || strings.Count(string(b), `"commander":true`) != 1 {
+		t.Errorf("one commander, on the Loki: %s", b)
 	}
 }

@@ -6,6 +6,8 @@ import (
 	"math"
 	"regexp"
 	"strings"
+
+	"github.com/davidzech/Battletech/internal/pilot"
 )
 
 // The outcome engine. A scenario's Outcome.md says, in its front matter, what the players report when the mission is over and what follows from it. Most scenarios
@@ -43,7 +45,15 @@ import (
 //	    kia: true            # the pilot is killed in action
 //	    free_recruits: 1     # one free recruit (no SP cost) for the replacement
 //
-// Every pilot has two built-in inputs, `Active` (unticked, the pilot is benched) and `killed` (a bool, true if they were killed in action). An input has a `scope`:
+// A pilot rule may also `promote` the pilot to a rank of the campaign, at least: a pilot already at or above it keeps their rank, and of several promotions that
+// match, the highest counts. A pilot the mission removes is not promoted.
+//
+//	  - when: not killed and kills > 0 and kills == most_kills and (most_kills_pilots == 1 or mvp)
+//	    promote: Star Commander   # the pilot with the most kills; on a tie, the MVP
+//
+// Every pilot has two built-in inputs, `Active` (unticked, the pilot is benched) and `killed` (a bool, true if they were killed in action). Pilot rules can also read
+// `mvp` (true for the pilot chosen as the mission's MVP) and, for each number input of a pilot such as `kills`, `most_kills` (the most any active pilot who wasn't
+// killed reported) and `most_kills_pilots` (how many of them reported that many). An input has a `scope`:
 // `pilot` (one value for each active named pilot) or `mission` (one value for the whole mission). A rule is a pilot rule when it gives SP or kills the pilot or reads
 // a pilot input (`killed` is one): it is tried for each active pilot. Any other rule is a mission rule and is tried once. `when` is optional (always true). Pilot rules
 // may give `sp` (straight to the pilot) and `kia`; mission rules may give `pool` (SP into the pool) and `grants` (keywords); either may give `warchest` (SP added to
@@ -85,6 +95,7 @@ type OutcomeRule struct {
 	KIA          bool     `yaml:"kia"`
 	FreeRecruits int      `yaml:"free_recruits"`
 	Grants       []string `yaml:"grants"`
+	Promote      string   `yaml:"promote"` // a rank of the campaign: the pilot is promoted to at least it (a pilot rule)
 
 	when, sp, pool, warchest *Expr
 	pilot                    bool
@@ -121,7 +132,7 @@ func (sc *Scenario) CompileOutcomes() {
 		}
 	}
 	sc.OutcomeObjectives = nil // expanded
-	scope := map[string]string{"killed": "pilot"}
+	scope := map[string]string{"killed": "pilot", "mvp": "pilot"}
 	for i := range sc.OutcomeInputs {
 		in := &sc.OutcomeInputs[i]
 		if in.ID == "" {
@@ -160,13 +171,29 @@ func (sc *Scenario) CompileOutcomes() {
 		}
 		scope[in.ID] = in.Scope
 	}
+	// Each number input of a pilot also gives most_<id> and most_<id>_pilots (see EvaluateOutcome), which compare the pilots with each other.
+	for _, in := range sc.OutcomeInputs {
+		if in.Scope != "pilot" || in.Type != "number" {
+			continue
+		}
+		for _, name := range []string{"most_" + in.ID, "most_" + in.ID + "_pilots"} {
+			if _, dup := scope[name]; dup {
+				fail("input %q clashes with the built-in %q", name, name)
+				return
+			}
+			scope[name] = "pilot"
+		}
+	}
 	// Expressions are type-checked against the inputs: a number input is an int, a bool input a bool.
-	env := map[string]any{"killed": false}
+	env := map[string]any{"killed": false, "mvp": false}
 	for _, in := range sc.OutcomeInputs {
 		if in.Type == "bool" {
 			env[in.ID] = false
 		} else {
 			env[in.ID] = 0
+			if in.Scope == "pilot" {
+				env["most_"+in.ID], env["most_"+in.ID+"_pilots"] = 0, 0
+			}
 		}
 	}
 	if sc.OutcomePilotSP != nil {
@@ -211,7 +238,8 @@ func (sc *Scenario) CompileOutcomes() {
 				return
 			}
 		}
-		r.pilot = r.sp != nil || r.KIA
+		r.Promote = strings.TrimSpace(r.Promote)
+		r.pilot = r.sp != nil || r.KIA || r.Promote != ""
 		for _, e := range []*Expr{r.when, r.sp, r.pool, r.warchest} {
 			if e == nil {
 				continue
@@ -273,17 +301,22 @@ type PilotOutcome struct {
 	KIA     bool     `json:"kia"`     // killed in action: removed from the campaign
 	MVP     bool     `json:"mvp"`     // chosen as the mission's MVP
 	Notes   []string `json:"notes"`
+	// Promote is the highest rank a matching rule promotes the pilot to; Rank is the rank they actually take, once ResolvePromotions has compared it with the
+	// rank they hold ("" when they already hold it or a higher one). The commit sets Rank.
+	Promote string `json:"promote,omitempty"`
+	Rank    string `json:"rank,omitempty"`
 }
 
 // OutcomeResult is the full outcome of a mission: what it does to each pilot and to the force.
 type OutcomeResult struct {
 	Pilots       []PilotOutcome `json:"pilots"`
-	Pool         int            `json:"pool"`         // SP granted for the objectives met, before the pilots take their shares
-	Paid         int            `json:"paid"`         // SP of the pool the pilots took as their shares (the rest of the pool went to the warchest)
-	Warchest     int            `json:"warchest"`     // SP added to the warchest: what is left of the pool, and any direct grants
-	FreeRecruits int            `json:"freeRecruits"` // recruits that cost no SP
-	Keywords     []string       `json:"keywords"`     // keywords added to the campaign ledger
-	Notes        []string       `json:"notes"`        // notes about the mission as a whole
+	Pool         int            `json:"pool"`                   // SP granted for the objectives met, before the pilots take their shares
+	Paid         int            `json:"paid"`                   // SP of the pool the pilots took as their shares (the rest of the pool went to the warchest)
+	Warchest     int            `json:"warchest"`               // SP added to the warchest: what is left of the pool, and any direct grants
+	FreeRecruits int            `json:"freeRecruits"`           // recruits that cost no SP
+	Keywords     []string       `json:"keywords"`               // keywords added to the campaign ledger
+	KeywordNames []string       `json:"keywordNames,omitempty"` // the same keywords as players see them (Campaign.KeywordName); filled by the site for the preview
+	Notes        []string       `json:"notes"`                  // notes about the mission as a whole
 	// MVPCandidates are the pilots who can be the mission's MVP (IDs, in report order): every pilot who took part and stays in the campaign. When there are any, one
 	// of them must be chosen before the mission can be committed (MVPMissing); the MVP's SP is free, not drawn from the pool.
 	MVPCandidates []string `json:"mvpCandidates"`
@@ -424,7 +457,7 @@ func (sc *Scenario) EvaluateOutcome(in OutcomeInputs, names map[string]string) (
 				po.Status = "killed"
 			}
 			po.Entered = sc.entered(vals, "pilot")
-			vars := map[string]any{"killed": e.Killed}
+			vars := map[string]any{"killed": e.Killed, "mvp": e.MVP}
 			for k, v := range mission {
 				vars[k] = v
 			}
@@ -444,6 +477,27 @@ func (sc *Scenario) EvaluateOutcome(in OutcomeInputs, names map[string]string) (
 		if res.Pilots[i].Status != "benched" {
 			active[idx].out = &res.Pilots[i]
 			idx++
+		}
+	}
+	// most_<input> and most_<input>_pilots: the most any active pilot who wasn't killed reported for each number input of a pilot, and how many reported it.
+	for _, in := range sc.OutcomeInputs {
+		if in.Scope != "pilot" || in.Type != "number" {
+			continue
+		}
+		most, count := 0, 0
+		for _, t := range active {
+			if t.vars["killed"] == true {
+				continue
+			}
+			switch v := t.vars[in.ID].(int); {
+			case count == 0 || v > most:
+				most, count = v, 1
+			case v == most:
+				count++
+			}
+		}
+		for _, t := range active {
+			t.vars["most_"+in.ID], t.vars["most_"+in.ID+"_pilots"] = most, count
 		}
 	}
 	granted := map[string]bool{}
@@ -468,6 +522,9 @@ func (sc *Scenario) EvaluateOutcome(in OutcomeInputs, names map[string]string) (
 		if r.KIA {
 			p.KIA = true
 			notes = append(notes, "Killed in Action.")
+		}
+		if r.Promote != "" && p != nil && pilot.RankIndex(sc.ranks, r.Promote) > pilot.RankIndex(sc.ranks, p.Promote) {
+			p.Promote = r.Promote
 		}
 		if r.pool != nil {
 			v, err := r.pool.Number(vars)
@@ -603,4 +660,42 @@ func (sc *Scenario) EvaluateOutcome(in OutcomeInputs, names map[string]string) (
 		}
 	}
 	return res, nil
+}
+
+// checkPromotions holds every scenario's promotions to the campaign's ranks: a rank it doesn't have is a mistake, reported like any other in the outcome, and the
+// scenario learns the ladder so it can tell which of two promotions is higher.
+func (c *Campaign) checkPromotions() {
+	for i := range c.Scenarios {
+		sc := &c.Scenarios[i]
+		sc.ranks = c.Ranks
+		if sc.OutcomeError != "" {
+			continue
+		}
+		for j, r := range sc.OutcomeRules {
+			if r.Promote != "" && pilot.RankIndex(c.Ranks, r.Promote) < 0 {
+				sc.OutcomeError = fmt.Sprintf("outcome %d promotes to %q, which is not one of the campaign's ranks", j+1, r.Promote)
+				break
+			}
+		}
+	}
+}
+
+// ResolvePromotions settles each promotion against the rank the pilot holds now (current maps a pilot's ID to their stored rank; ranks is the campaign's
+// ladder): a pilot below the rank they are promoted to takes it (Rank) and the report says so, one already at or above it keeps theirs. A pilot the mission
+// removes is not promoted.
+func (res *OutcomeResult) ResolvePromotions(current map[string]string, ranks []string) {
+	for i := range res.Pilots {
+		p := &res.Pilots[i]
+		p.Rank = ""
+		if p.Promote == "" || p.KIA {
+			continue
+		}
+		if pilot.RankIndex(ranks, p.Promote) > pilot.RankIndex(ranks, pilot.RankFor(ranks, current[p.PilotID])) {
+			p.Rank = p.Promote
+			if len(p.Notes) == 1 && p.Notes[0] == "No effect." {
+				p.Notes = nil
+			}
+			p.Notes = append(p.Notes, "Promoted to "+p.Promote+".")
+		}
+	}
 }

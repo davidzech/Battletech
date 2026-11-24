@@ -132,7 +132,7 @@ func TestNamedPilotsFlow(t *testing.T) {
 		t.Fatalf("allocation = %+v", ps[0].SP)
 	}
 	c = body(t, srv, "/refusalwar/manage/", cookie)
-	if !strings.Contains(c, `<span class="stat-value">3</span>`) || !strings.Contains(c, "SP earned <b>510</b>") || !strings.Contains(c, `stat-next">300/700 SP<`) || !strings.Contains(c, "<b>2</b>") || !strings.Contains(c, `stat-bar"><span style="width: 43%"`) {
+	if !strings.Contains(c, `<span class="stat-value">3</span>`) || !strings.Contains(c, "SP earned <b>510</b>") || !strings.Contains(c, `stat-next">300/700 SP<`) || !strings.Contains(c, "<b>2</b>") || !strings.Contains(c, `stat-bar"><span style="width: 0%"`) { // 300 is the level-3 breakpoint: 0% of the way on to 700
 		t.Fatalf("the page should show the new levels (gunnery 3, edge 2): %.4000s", c)
 	}
 
@@ -709,16 +709,21 @@ func TestPilotRanksEndToEnd(t *testing.T) {
 	}
 	status := func(v url.Values) int { return post(t, srv, "/api/pilots/rank", v, cookie, srv.URL).StatusCode }
 
-	// Everyone starts as a MechWarrior, shown under the portrait, with every rank offered in the picker.
+	// The starting pilots are cadets, shown as a plain label under the portrait: the rank is changed only in Advanced Management (Danger zone), whose picker
+	// offers Refusal War's eight ranks for each of the two pilots. The Recruit dialog has no picker: recruits join as MechWarriors.
 	page := body(t, srv, "/refusalwar/manage/", cookie)
-	for _, want := range []string{`class="rank-btn"`, ">MechWarrior</button>", `id="rank-dialog"`, `<option value="Star Captain">`, `<option value="saKhan">`, `<option value="Khan">`, `data-rank="MechWarrior"`} {
+	for _, want := range []string{`<span class="rank-label">Cadet</span>`, `class="rec-rank-select"`, `<option value="Cadet" selected>`, `<option value="Star Captain">`, `<option value="Khan">`, `data-rank="Cadet"`, "Joins as MechWarrior."} {
 		if !strings.Contains(page, want) {
 			t.Errorf("the manage page is missing %q", want)
 		}
 	}
-	// The seven Clan ranks are offered twice: in the rank picker and in the Recruit New Pilot dialog.
-	if strings.Count(page, "<option value=") != 14 {
-		t.Errorf("each rank picker should list the seven Clan ranks (14 options in all), got %d", strings.Count(page, "<option value="))
+	for _, gone := range []string{`class="rank-btn"`, `id="rank-dialog"`, `id="recruit-rank"`} {
+		if strings.Contains(page, gone) {
+			t.Errorf("the rank is no longer edited on the cards or chosen when recruiting: %q", gone)
+		}
+	}
+	if strings.Count(page, "<option value=") != 16 {
+		t.Errorf("Advanced Management lists the eight ranks for each of the two pilots (16 options), got %d", strings.Count(page, "<option value="))
 	}
 
 	if got := post(t, srv, "/api/pilots/rank", form("rank", "Khan"), cookie, "https://evil.example").StatusCode; got != http.StatusForbidden {
@@ -744,7 +749,7 @@ func TestPilotRanksEndToEnd(t *testing.T) {
 		t.Fatalf("set rank: %d", got)
 	}
 	page = body(t, srv, "/refusalwar/manage/", cookie)
-	if !strings.Contains(page, ">Star Captain</button>") || !strings.Contains(page, `data-rank="Star Captain"`) {
+	if !strings.Contains(page, `<span class="rank-label">Star Captain</span>`) || !strings.Contains(page, `<option value="Star Captain" selected>`) || !strings.Contains(page, `data-rank="Star Captain"`) {
 		t.Error("the card should show the new rank")
 	}
 	if over := body(t, srv, "/refusalwar/", cookie); !strings.Contains(over, "Star Captain &middot; ") {
@@ -785,7 +790,7 @@ func TestRecruitNewPilot(t *testing.T) {
 	}
 	// The button sits under the active pilots (above the memorial) and opens the one-step dialog.
 	page := body(t, srv, "/refusalwar/manage/", cookie)
-	for _, want := range []string{`id="recruit-open"`, ">Recruit New Pilot</button>", `id="recruit-dialog"`, `id="recruit-name"`, `id="recruit-rank"`, `id="recruit-portrait"`} {
+	for _, want := range []string{`id="recruit-open"`, ">Recruit New Pilot</button>", `id="recruit-dialog"`, `id="recruit-name"`, `id="recruit-portrait"`} {
 		if !strings.Contains(page, want) {
 			t.Errorf("the manage page is missing %q", want)
 		}
@@ -804,7 +809,6 @@ func TestRecruitNewPilot(t *testing.T) {
 		"markup":         {"name", "<b>x</b>"},
 		"taken name":     {"name", existing.Name},
 		"taken, case":    {"name", strings.ToUpper(existing.Name)},
-		"bad rank":       {"name", "Jarek", "rank", "General"},
 		"bad portrait":   {"name", "Jarek", "portrait", "../x.png"},
 		"taken portrait": {"name", "Jarek", "portrait", existing.Portrait},
 	} {
@@ -823,11 +827,12 @@ func TestRecruitNewPilot(t *testing.T) {
 			break
 		}
 	}
+	// A rank in the request is ignored: every recruit joins at the campaign's recruit_rank.
 	if got := recruit("name", "Jarek", "portrait", free, "rank", "Star Captain"); got != http.StatusNoContent {
 		t.Fatalf("recruit: %d", got)
 	}
 	ps, _ = store.Pilots(ctx, id, "refusalwar")
-	if len(ps) != 3 || ps[2].Name != "Jarek" || ps[2].Portrait != free || ps[2].Rank != "Star Captain" || ps[2].TotalSP != 150 || ps[2].SP.Total() != 0 || ps[2].Unallocated() != 150 {
+	if len(ps) != 3 || ps[2].Name != "Jarek" || ps[2].Portrait != free || ps[2].Rank != "MechWarrior" || ps[2].TotalSP != 150 || ps[2].SP.Total() != 0 || ps[2].Unallocated() != 150 {
 		t.Fatalf("the new pilot: %+v", ps)
 	}
 	if v := ps[2].View(pilot.FactionRanks("clan")); v.Gunnery != 4 || v.Piloting != 5 || v.EdgeTokens != 1 || v.Abilities != 0 {
@@ -866,12 +871,12 @@ func TestRecruitNewPilot(t *testing.T) {
 	if err := store.DeletePilot(ctx, id, "refusalwar", ps[3].ID); err != nil {
 		t.Fatal(err)
 	}
-	// With no portrait or rank chosen, a free portrait and the lowest rank are used.
+	// With no portrait chosen, a free one is used; the rank is the campaign's recruit_rank as always.
 	if got := recruit("name", "Sybille"); got != http.StatusNoContent {
 		t.Fatalf("recruit with defaults: %d", got)
 	}
 	ps, _ = store.Pilots(ctx, id, "refusalwar")
-	if len(ps) != 4 || ps[3].Rank != "" || !pilot.ValidPortrait(ps[3].Portrait) || ps[3].Portrait == ps[0].Portrait || ps[3].Portrait == ps[1].Portrait || ps[3].Portrait == ps[2].Portrait {
+	if len(ps) != 4 || ps[3].Rank != "MechWarrior" || !pilot.ValidPortrait(ps[3].Portrait) || ps[3].Portrait == ps[0].Portrait || ps[3].Portrait == ps[1].Portrait || ps[3].Portrait == ps[2].Portrait {
 		t.Fatalf("defaults: %+v", ps[3])
 	}
 	// A command holds four living pilots: the button is disabled, and the server refuses a fifth.
@@ -947,7 +952,7 @@ func TestStartWizardKnowsTheFirstRank(t *testing.T) {
 	srv, _ := newTestServer(t)
 	cookie := post(t, srv, "/api/seed", url.Values{"seed": {"wolfpack2026"}}, nil, "").Cookies()[0]
 	post(t, srv, "/api/account", url.Values{"account": {"Wolf Pack"}}, cookie, srv.URL)
-	if p := body(t, srv, "/refusalwar/", cookie); !strings.Contains(p, `data-first-rank="MechWarrior"`) || !strings.Contains(p, "/static/pilotcard.js") {
+	if p := body(t, srv, "/refusalwar/", cookie); !strings.Contains(p, `data-first-rank="Cadet"`) || !strings.Contains(p, "/static/pilotcard.js") {
 		t.Error("the wizard knows the first rank and loads the compact pilot cards")
 	}
 	if (&content.Campaign{}).FirstRank() != "" {
@@ -958,7 +963,7 @@ func TestStartWizardKnowsTheFirstRank(t *testing.T) {
 // Every page loads the shared helpers (static/dom.js) before any script of its own, since those scripts use Dom.el and Dom.commas.
 func TestPagesLoadTheSharedHelpersFirst(t *testing.T) {
 	srv, _, cookie := startedCompany(t)
-	for _, path := range []string{"/", "/refusalwar/", "/refusalwar/manage/", "/refusalwar/scenario_001/", "/refusalwar/keywords/"} {
+	for _, path := range []string{"/", "/refusalwar/", "/refusalwar/manage/", "/refusalwar/scenario_001/"} {
 		p := body(t, srv, path, cookie)
 		dom := strings.Index(p, `<script src="/static/dom.js"></script>`)
 		first := strings.Index(p, `<script src="/static/`)

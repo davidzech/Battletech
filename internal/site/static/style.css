@@ -250,7 +250,9 @@ th {
 .button.alert:hover { color: var(--alert-ink); }
 /* A <button class="button"> looks like the link buttons: no default border, pointer cursor. */
 button.button { border: 0; cursor: pointer; }
-button.button:disabled { opacity: 0.6; cursor: wait; filter: none; }
+/* A disabled button is one that can't be used yet (nothing chosen, a rule not met): not-allowed. Only a button that is busy doing its work (aria-busy) waits. */
+button.button:disabled { opacity: 0.6; cursor: not-allowed; filter: none; }
+button[aria-busy="true"], button[aria-busy="true"]:disabled { cursor: wait; }
 /* The outline button: a square yellow border, nothing inside, yellow text. */
 .button.button-outline, button.button.button-outline { background: transparent; color: var(--accent); border: 1px solid var(--accent); clip-path: none; }
 .button.button-outline:hover, button.button.button-outline:hover:not(:disabled) { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); filter: none; }
@@ -421,6 +423,13 @@ dialog.wizard { width: min(46rem, calc(100vw - 2rem)); }
 .roster-pilot .stat-value { font-size: 1.5rem; }
 @media (max-width: 40rem) { .roster-pilot .stat-boxes { flex-basis: 100%; } }
 .force-units { margin: 0.4rem 0 1rem; }
+/* Earned keywords on the campaign overview: chips whose hover card is the keyword's description (roster.js). */
+.keywords { margin: 1.5rem 0 1rem; }
+.keywords h3 { margin: 0 0 0.4rem; font: 700 0.75rem var(--display); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+.keywords p { margin: 0; }
+.keyword-list { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.keyword-chip { padding: 0.25rem 0.65rem; background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--accent); font: 700 0.85rem var(--display); letter-spacing: 0.08em; text-transform: uppercase; cursor: default; transition: border-color 0.12s; }
+.keyword-chip:hover, .keyword-chip.tip-open, .keyword-chip:focus-visible { border-color: var(--accent); outline: none; }
 /* One line for the hangar, in the same card style (and so the same width) as the pilot rows above it. */
 .force-summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.3rem 1rem; padding: 0.55rem 0.75rem; background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--accent); }
 .force-summary { align-items: center; }
@@ -436,7 +445,7 @@ dialog.wizard { width: min(46rem, calc(100vw - 2rem)); }
 .danger-zone h2 { color: #e5594f; }
 button.danger, button.button.danger { background: #c0392b; color: #fff; border-color: #c0392b; }
 button.danger:hover:not(:disabled), button.button.danger:hover:not(:disabled) { background: #e5594f; border-color: #e5594f; }
-button.danger:disabled { opacity: 0.5; cursor: wait; }
+button.danger:disabled { opacity: 0.5; cursor: not-allowed; }
 /* Portrait buttons (wizard and pilot cards) and the picker grid. */
 .pilot-id { display: flex; align-items: center; gap: 1rem; min-width: 0; }
 .pilot-id .pilot-name { flex: 1; min-width: 0; }
@@ -699,27 +708,27 @@ dialog label.check { display: flex; align-items: center; gap: 0.5rem; text-trans
   font-size: clamp(1.15rem, 2.1vw, 1.4rem);
   line-height: 1.6;
   letter-spacing: 0.01em;
-  animation: briefing-in 0.7s ease both;
 }
-.briefing-text p:nth-child(2) { animation-delay: 0.35s; }
-.briefing-text p:nth-child(3) { animation-delay: 0.7s; }
-.briefing-text p:nth-child(4) { animation-delay: 1.05s; }
-.briefing-text p:first-child {
+.briefing-text > * { animation: briefing-in 0.7s ease both; }
+.briefing-text > :nth-child(2) { animation-delay: 0.35s; }
+.briefing-text > :nth-child(3) { animation-delay: 0.7s; }
+.briefing-text > :nth-child(4) { animation-delay: 1.05s; }
+.briefing-text > :nth-child(n+5) { animation-delay: 1.4s; }
+.briefing-text > p:first-child {
   font: 700 clamp(1.3rem, 3vw, 1.75rem) / 1.3 var(--display);
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
-.briefing-text p:last-child { margin-bottom: 0; }
-.briefing-text p.pull {
+.briefing-text > :last-child, .briefing-text blockquote > :last-child { margin-bottom: 0; }
+/* A blockquote in the briefing is its pull quote; the quotation marks are drawn here, not typed. */
+.briefing-text blockquote {
   position: relative;
-  margin-top: 1.5rem;
+  margin: 1.5rem 0 1rem;
   padding: 0.2rem 0 0.2rem 1.6rem;
   border-left: 3px solid var(--accent);
-  font-style: italic;
-  font-size: clamp(1.2rem, 2.4vw, 1.5rem);
   color: var(--accent);
 }
-.briefing-text p.pull::before {
+.briefing-text blockquote::before {
   content: "\201C";
   position: absolute;
   left: -0.15rem;
@@ -729,18 +738,28 @@ dialog label.check { display: flex; align-items: center; gap: 0.5rem; text-trans
   opacity: 0.18;
   pointer-events: none;
 }
-/* Attribution under a pull quote: continues the quote's accent rule, set small and muted. */
-.briefing-text p.pull:has(+ p.cite) { margin-bottom: 0; }
-.briefing-text p.cite {
-  margin-top: 0;
-  padding: 0.5rem 0 0.2rem 1.6rem;
-  border-left: 3px solid var(--accent);
+.briefing-text blockquote p:not(.cite) {
+  margin: 0 0 0.6rem;
+  font-style: italic;
+  font-size: clamp(1.2rem, 2.4vw, 1.5rem);
+}
+.briefing-text blockquote > p:first-child:not(.cite)::before { content: "\201C"; }
+.briefing-text blockquote > p:not(.cite):last-child::after,
+.briefing-text blockquote > p:not(.cite):has(+ p.cite)::after { content: "\201D"; }
+/* The attribution: the quote's last paragraph when it opens with an em dash, set small and muted. */
+.briefing-text blockquote p.cite {
+  margin: 0;
+  padding-top: 0.3rem;
   font: 600 0.85rem var(--display);
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--muted);
 }
 .briefing-text em { color: inherit; }
+/* The campaign intro is much longer than a scenario's fluff, so its text is set a step smaller. */
+.campaign-intro .briefing-text p { font-size: clamp(1.05rem, 1.8vw, 1.2rem); }
+.campaign-intro .briefing-text > p:first-child { font-size: clamp(1.15rem, 2.4vw, 1.45rem); }
+.campaign-intro .briefing-text blockquote p:not(.cite) { font-size: clamp(1.1rem, 2vw, 1.3rem); }
 
 @keyframes briefing-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
 @keyframes briefing-in {
@@ -748,7 +767,7 @@ dialog label.check { display: flex; align-items: center; gap: 0.5rem; text-trans
   to { opacity: 1; transform: none; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .briefing-tag::before, .briefing-text p { animation: none; }
+  .briefing-tag::before, .briefing-text > * { animation: none; }
 }
 @media (max-width: 30rem) {
   .briefing { padding: 1rem 1rem 1.25rem 1.2rem; }
@@ -1013,9 +1032,7 @@ dialog.confirm-dialog.danger h2 { color: #ff8d83; }
 
 /* The pilot's portrait with their rank underneath, and the rank picker. */
 .pilot-side { display: flex; flex-direction: column; gap: 0.35rem; width: 8rem; flex: none; }
-.rank-btn, .rank-label { display: block; width: 100%; padding: 0.3rem 0.2rem; text-align: center; font: 700 0.62rem/1.2 var(--display); letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap; overflow: hidden; } /* never wraps; pilots.js shrinks a rank that is still too long */
-button.rank-btn { color: var(--text); background: var(--bg); border: 1px solid var(--line); cursor: pointer; }
-button.rank-btn:hover, button.rank-btn:focus-visible { color: var(--accent); border-color: var(--accent); outline: none; }
+.rank-label { display: block; width: 100%; padding: 0.3rem 0.2rem; text-align: center; font: 700 0.62rem/1.2 var(--display); letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap; overflow: hidden; } /* never wraps; pilots.js shrinks a rank that is still too long */
 .rank-label { color: var(--muted); }
 dialog select { display: block; width: 100%; margin-top: 0.4rem; padding: 0.55rem 0.7rem; font: 700 1rem var(--display); letter-spacing: 0.05em; color: var(--text); background: var(--bg); border: 1px solid var(--line); }
 dialog select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
@@ -1038,7 +1055,10 @@ dialog select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 .recruit { margin: 1rem 0 0; display: flex; justify-content: flex-end; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
 .recruit .muted { margin: 0; }
 .recruit button.button:disabled { opacity: 0.45; cursor: not-allowed; filter: grayscale(0.5); }
-.recruit-rank-label { display: block; margin-top: 1rem; }
+.recruit-rank-note { margin: 1rem 0 0; }
+/* Advanced Management: a pilot's rank, an advanced correction (promotions come from mission outcomes). */
+.rec-rank { margin-top: 0.4rem; }
+.rec-rank label { display: inline-flex; align-items: center; gap: 0.5rem; }
 #recruit-dialog .pilot-top { margin-top: 0.75rem; }
 
 /* Edge abilities: the chips under a pilot's stat boxes, the "choose" button, the picker and the records row. */
@@ -1200,9 +1220,12 @@ dialog button.deploy-pilot:hover:not(:disabled), .deploy-pilot:focus-visible { b
 .deploy-slot.filled { border-style: solid; padding: 0.35rem 0.4rem 0.35rem 0.4rem; cursor: grab; position: relative; }
 .deploy-slot.unavailable { visibility: hidden; }
 .deploy-slot-empty { margin: 0 auto; font: 700 0.72rem var(--display); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); text-align: center; }
-.deploy-slot.over { border-color: var(--accent); border-style: solid; background: color-mix(in srgb, var(--accent) 16%, var(--bg)); }
-.holding-pilot .deploy-slot:not(.filled):not(.unavailable) { border-color: var(--accent); cursor: pointer; }
-.holding-pilot .deploy-slot:not(.unavailable) { cursor: pointer; }
+/* A slot shows it will take the pilot only when the pilot is over it: dragged onto it (.over, set by mekbay.js), or, while a pilot picked up from the tray is
+   held, under the pointer or keyboard focus. An empty slot keeps its dashed border, just yellow; the rest stay as they are. */
+.deploy-slot.over,
+.holding-pilot .deploy-slot:not(.unavailable):not(.disabled):hover,
+.holding-pilot .deploy-slot:not(.unavailable):not(.disabled):focus-visible { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, var(--bg)); }
+.holding-pilot .deploy-slot:not(.unavailable):not(.disabled) { cursor: pointer; }
 .deploy-slot:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 dialog button.deploy-slot-x { margin-left: auto; width: 1.6rem; height: 1.6rem; padding: 0; font: 1.2rem/1 var(--body); letter-spacing: 0; text-transform: none; color: var(--muted); background: none; border: 0; box-shadow: none; cursor: pointer; }
 dialog button.deploy-slot-x:hover:not(:disabled), dialog button.deploy-slot-x:focus-visible { color: var(--accent); background: none; border: 0; outline: none; }
@@ -1489,3 +1512,24 @@ dialog .wiz-modes button.wiz-mode + button.wiz-mode { border-left: 1px solid var
 dialog .wiz-modes button.wiz-mode.active { background: var(--accent); color: var(--accent-ink); }
 dialog .wiz-modes button.wiz-mode:focus-visible { outline: 2px solid var(--text); outline-offset: -2px; }
 .wiz-pilot-cards { margin: 0.2rem 0 0.9rem; }
+
+/* The Manage page's Edit keywords dialog: one themed checkbox per registered keyword, its description beneath its name. */
+dialog.keywords-edit { width: min(34rem, calc(100vw - 2rem)); }
+.keyword-choices { list-style: none; margin: 0.75rem 0 0; padding: 0; display: grid; gap: 0.5rem; max-height: 55vh; overflow-y: auto; }
+.keyword-choices label { align-items: flex-start; padding: 0.45rem 0.6rem; background: var(--panel); border: 1px solid var(--line); cursor: pointer; }
+.keyword-choices label > span { display: grid; gap: 0.15rem; }
+.keyword-choices b { font: 700 0.9rem var(--display); letter-spacing: 0.08em; text-transform: uppercase; }
+.keyword-choices .muted { font-size: 0.85rem; }
+
+/* The Deploy wizard's Commander step: each button is a pilot card in its own right (portrait, name, rank, stats) with a strip joined underneath naming the
+   pilot's mech and player; the whole bordered button highlights when it is hovered and turns yellow when chosen. */
+.commander-picks { list-style: none; margin: 0.75rem 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(14.5rem, 1fr)); gap: 0.75rem; }
+dialog button.commander-pick { display: flex; flex-direction: column; width: 100%; padding: 0; gap: 0; text-align: left; color: var(--text); font: inherit; letter-spacing: normal; text-transform: none; background: var(--panel-2); border: 2px solid var(--line); cursor: pointer; transition: border-color 0.12s, background-color 0.12s, box-shadow 0.12s; }
+dialog button.commander-pick:hover, dialog button.commander-pick:focus-visible { color: var(--text); border-color: color-mix(in srgb, var(--accent) 60%, var(--line)); outline: none; }
+dialog button.commander-pick.selected { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--panel-2)); box-shadow: 0 0 0 1px var(--accent), 0 0 18px color-mix(in srgb, var(--accent) 25%, transparent); }
+.commander-pilot { display: flex; flex-direction: column; gap: 0.4rem; padding: 0.45rem 0.55rem 0.5rem; }
+.commander-mech { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; padding: 0.35rem 0.55rem; background: var(--bg); border-top: 1px solid var(--line); font: 700 0.72rem var(--display); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.commander-mech-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.commander-mech-player { flex: none; }
+dialog button.commander-pick.selected .commander-mech { color: var(--accent-ink); background: var(--accent); border-top-color: var(--accent); }
+.deploy-commander-note { margin: 0 0 0.75rem; font: 700 0.9rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); }

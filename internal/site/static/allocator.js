@@ -101,7 +101,8 @@
       if (n) {
         nextLevel.textContent = String(n.level);
         next.textContent = spent + '/' + n.sp + ' SP';
-        fill.style.width = Math.min(100, Math.round(spent / n.sp * 100)) + '%';
+        // How far from the breakpoint reached to the next one (pilot.go's stepPercent): Edge abilities at 180 SP is 0% of the way to 360.
+        fill.style.width = Math.max(0, Math.min(100, Math.round((spent - r.sp) / (n.sp - r.sp) * 100))) + '%';
       } else {
         next.textContent = 'max';
         fill.style.width = '100%';

@@ -8,8 +8,7 @@ import (
 	"errors"
 	"strings"
 	"time"
-
-	"github.com/google/uuid"
+	"uuid"
 
 	"github.com/davidzech/Battletech/internal/mekbay"
 )

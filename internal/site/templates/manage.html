@@ -7,14 +7,14 @@
 <div class="hangar-stat"><span class="hangar-stat-label">Funds</span><span class="hangar-stat-value">{{.Run.WarchestText}} SP</span></div>
 <div class="hangar-stat overview-players" id="overview-players"><span class="hangar-stat-label">Default players</span><span class="overview-players-pick" id="overview-players-pick"></span></div>
 </div>
-<p class="muted" id="overview-note">The number of players is where every Deploy starts; you can still change it for a single deploy.</p>
 <p class="form-error" id="overview-error" role="alert"></p>
+{{template "keywords" .}}
 </section>
 <section class="pilots" id="pilots" data-campaign="{{.Campaign.Slug}}" data-portraits="{{.Portraits}}" data-ladders="{{.Ladders}}" data-abilities="{{.Abilities}}">
 <h2 class="section-title">Named pilots</h2>
 <ul class="pilot-list">
 {{range .Pilots}}{{if not .Fallen}}<li class="pilot" data-pilot="{{.ID}}" data-name="{{.Name}}" data-edge-pending="{{.EdgePending}}" data-learned="{{range .EdgeLearned}}{{.ID}} {{end}}" data-rank="{{.Rank}}" data-portrait="{{.Portrait}}" data-sp="{{range .Columns}}{{.SP}},{{end}}" data-unallocated="{{.Unallocated}}">
-<div class="pilot-card"><div class="pilot-side"><button type="button" class="portrait-btn" title="Change portrait" aria-label="Change {{.Name}}&rsquo;s portrait"><img src="{{.PortraitURL}}" alt="" width="96" height="96"><span class="portrait-edit">Change</span></button>{{if $.Ranks}}<button type="button" class="rank-btn" title="Change rank" aria-label="Change {{.Name}}&rsquo;s rank">{{.Rank}}</button>{{end}}</div>
+<div class="pilot-card"><div class="pilot-side"><button type="button" class="portrait-btn" title="Change portrait" aria-label="Change {{.Name}}&rsquo;s portrait"><img src="{{.PortraitURL}}" alt="" width="96" height="96"><span class="portrait-edit">Change</span></button>{{if .Rank}}<span class="rank-label">{{.Rank}}</span>{{end}}</div>
 <div class="pilot-main">
 <div class="pilot-head"><h3><span class="name-text">{{.Name}}</span><button type="button" class="name-edit" title="Edit name" aria-label="Edit {{.Name}}&rsquo;s name"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button></h3><span class="pilot-stat">SP earned <b>{{.Earned}}</b></span>{{if .Unallocated}}<span class="pilot-stat unalloc">Unallocated <b>{{.Unallocated}}</b></span>{{end}}</div>
 <div class="stat-boxes">{{range .Columns}}<div class="stat-box"><span class="stat-label">{{.Label}}</span><span class="stat-main"><span class="stat-valwrap"><span class="stat-value">{{.Level}}</span>{{if .HasNext}}<span class="stat-to"><span class="stat-arrow" aria-hidden="true"><svg viewBox="0 0 16 10" width="16" height="10" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 5h13M10 1l4 4-4 4"/></svg></span><b>{{.NextLvl}}</b></span>{{end}}</span></span><span class="stat-next">{{if .HasNext}}{{.SP}}/{{.NextAt}} SP{{else}}max{{end}}</span><span class="stat-bar"><span style="width: {{.Percent}}%"></span></span></div>{{end}}</div>
@@ -38,20 +38,7 @@
 {{end}}{{end}}</ul>
 {{end}}<p id="pilot-error" class="form-error" role="alert"></p>
 </section>
-{{if .Ranks}}<dialog id="rank-dialog" class="wizard" aria-labelledby="rank-title">
-  <form id="rank-form" autocomplete="off">
-    <h2 id="rank-title">Change rank</h2>
-    <p class="muted">A pilot&rsquo;s rank is cosmetic: it changes nothing in play.</p>
-    <label for="rank-select">Rank</label>
-    <select id="rank-select">{{range .Ranks}}<option value="{{.}}">{{.}}</option>{{end}}</select>
-    <p id="rank-error" class="form-error" role="alert"></p>
-    <div class="form-actions">
-      <button type="submit" class="button">Save rank</button>
-      <button type="button" id="rank-cancel">Cancel</button>
-    </div>
-  </form>
-</dialog>
-{{end}}<dialog id="recruit-dialog" class="wizard" aria-labelledby="recruit-title" data-sp="{{.Campaign.StartingPilotSP}}" data-cost="{{if .Run.FreeRecruits}}0{{else}}{{.Campaign.RecruitCost}}{{end}}" data-warchest="{{.Run.Warchest}}">
+<dialog id="recruit-dialog" class="wizard" aria-labelledby="recruit-title" data-sp="{{.Campaign.StartingPilotSP}}" data-cost="{{if .Run.FreeRecruits}}0{{else}}{{.Campaign.RecruitCost}}{{end}}" data-warchest="{{.Run.Warchest}}">
   <form id="recruit-form" autocomplete="off" novalidate>
     <h2 id="recruit-title">Recruit a new pilot</h2>
     <p class="muted">{{if .Campaign.StartingPilotSP}}A new pilot starts with {{.Campaign.StartingPilotSP}} SP to allocate. Spend as much as you like now; what is left stays unallocated and can be spent later under Manage SP.{{else}}A new pilot is a standard 4/5 pilot with 1 Edge token and no SP.{{end}}</p>
@@ -64,8 +51,7 @@
     </div>
     {{if .Campaign.StartingPilotSP}}<div class="alloc-headrow"><h3 class="alloc-head">Allocate SP</h3><p class="alloc-remaining" id="recruit-remaining"></p></div>
     <div id="recruit-rows"></div>
-    {{end}}{{if .Ranks}}<label for="recruit-rank" class="recruit-rank-label">Rank</label>
-    <select id="recruit-rank">{{range .Ranks}}<option value="{{.}}">{{.}}</option>{{end}}</select>
+    {{end}}{{if .Campaign.RecruitRank}}<p class="muted recruit-rank-note">Joins as {{.Campaign.RecruitRank}}.</p>
     {{end}}<p id="recruit-cost" class="repair-cost" hidden></p>
     <p id="recruit-error" class="form-error" role="alert"></p>
     <div class="form-actions">
@@ -111,14 +97,28 @@
   <p class="form-error" id="rollback-error" role="alert"></p>
   <div class="form-actions"><button type="button" id="rollback-close">Close</button></div>
 </dialog>
+<dialog id="keywords-dialog" class="keywords-edit" aria-labelledby="keywords-title" data-campaign="{{.Campaign.Slug}}">
+  <form id="keywords-form" autocomplete="off">
+    <h2 id="keywords-title">Edit keywords</h2>
+    <p class="muted">Tick the keywords the campaign holds.</p>
+    {{if .KeywordChoices}}<ul class="keyword-choices">{{range .KeywordChoices}}<li><label class="themed-check"><input type="checkbox" class="themed-box" name="keyword" value="{{.ID}}"{{if .Held}} checked{{end}}><span><b>{{.Name}}</b>{{if .Text}}<span class="muted">{{.Text}}</span>{{end}}</span></label></li>{{end}}</ul>{{else}}<p class="muted">This campaign registers no keywords.</p>{{end}}
+    <p class="form-error" id="keywords-error" role="alert"></p>
+    <div class="form-actions">
+      <button type="submit" class="button" id="keywords-save">Save</button>
+      <button type="button" id="keywords-cancel">Cancel</button>
+    </div>
+  </form>
+</dialog>
 <section class="danger-zone" id="danger-zone" data-campaign="{{.Campaign.Slug}}">
 <details class="danger-details">
 <summary><h2>Danger zone</h2></summary>
 <div class="fold-body">
-<p class="muted">Advanced Management corrects pilot records: rename, revive or delete a pilot, reset their SP allocation or Edge abilities, or override their total SP.</p>
+<p class="muted">Advanced Management corrects pilot records: rename, revive or delete a pilot, change their rank, reset their SP allocation or Edge abilities, or override their total SP.</p>
 <p class="danger-action"><button type="button" class="button" id="records-open">Advanced Management</button></p>
 <p class="muted">The campaign is saved when it starts and each time a mission is completed. Rollback puts the pilots, SP, warchest, completed missions and hangar back as they were at one of those points, and forgets everything after it. Aborting a mission rolls back to the latest one.</p>
 <p class="danger-action"><button type="button" class="button" id="rollback-open">Rollback</button></p>
+<p class="muted">Edit keywords sets which keywords the campaign holds, to correct a mission&rsquo;s report or a misclick. Keywords decide what lies ahead, so change them only when they are wrong.</p>
+<p class="danger-action"><button type="button" class="button" id="keywords-open">Edit keywords</button></p>
 <p class="muted">Deleting this campaign removes {{.Run.ForceLabel}}&rsquo;s progress in it: its named pilots and the site&rsquo;s copy of its hangar. Your account, its other campaigns and anything saved in MekBay are not touched.</p>
 <button type="button" class="button danger" id="delete-open">Delete campaign</button>
 </div>
@@ -183,7 +183,7 @@
 </dialog>
 <dialog id="records-dialog" class="wizard" aria-labelledby="records-title">
   <h2 id="records-title">Advanced Management</h2>
-  <p class="muted">Every named pilot this campaign has had. Use this to correct a misclick or a mismatch: bring a pilot Killed in Action back, delete a record for good, reset a pilot's SP allocation or their Edge abilities, or override their total SP.</p>
+  <p class="muted">Every named pilot this campaign has had. Use this to correct a misclick or a mismatch: bring a pilot Killed in Action back, delete a record for good, change a pilot's rank, reset their SP allocation or Edge abilities, or override their total SP.</p>
   <form class="rec-warchest" id="warchest-form">
     <label>Warchest funds (SP) <input type="number" id="warchest-input" name="funds" min="0" max="100000000" step="100" inputmode="numeric" value="{{.Run.Warchest}}"></label>
     <button type="submit" class="button" id="warchest-save">Set funds</button>
@@ -193,6 +193,7 @@
 <div class="rec-top"><img src="{{.PortraitURL}}" alt="" width="40" height="40"><span class="rec-name"><span class="name-text">{{.Name}}</span><button type="button" class="name-edit" title="Edit name" aria-label="Edit {{.Name}}&rsquo;s name"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button></span><span class="rec-state{{if .Fallen}} kia{{end}}">{{if .Fallen}}Killed in Action{{else}}Active{{end}}</span>{{if .Fallen}}<button type="button" class="rec-revive">Revive</button>{{end}}<button type="button" class="rec-delete" title="Delete {{.Name}}" aria-label="Delete {{.Name}}"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button></div>
 <div class="rec-sp"><span class="rec-sp-text">Total <b class="rec-n-total">{{.Earned}}</b> SP &middot; allocated <b class="rec-n-alloc">{{.Allocated}}</b> &middot; unallocated <b class="rec-n-unalloc">{{.Unallocated}}</b></span><button type="button" class="rec-total">Set total SP</button><button type="button" class="rec-reset">Reset SP allocation</button></div>
 <div class="rec-skills"><span class="rec-skills-text">Edge abilities: <b class="rec-n-skills">{{if .EdgeLearned}}{{range $i, $a := .EdgeLearned}}{{if $i}}, {{end}}{{$a.Name}}{{end}}{{else}}none{{end}}</b></span><button type="button" class="rec-skills-reset"{{if not .EdgeLearned}} disabled{{end}}>Reset Edge abilities</button></div>
+{{if $.Ranks}}{{$rank := .Rank}}<div class="rec-rank"><label>Rank <select class="rec-rank-select">{{range $.Ranks}}<option value="{{.}}"{{if eq . $rank}} selected{{end}}>{{.}}</option>{{end}}</select></label></div>{{end}}
 <form class="rec-total-form" hidden><label>New total SP <input type="number" min="0" max="1000000" step="10" inputmode="numeric"></label><button type="submit" class="button">Save</button><button type="button" class="rec-total-cancel">Cancel</button></form>
 </li>
 {{else}}<li class="muted">No pilots.</li>
@@ -216,4 +217,6 @@
 <script src="/static/pilots.js" defer></script>
 <script src="/static/campaigndelete.js" defer></script>
 <script src="/static/history.js" defer></script>
+<script src="/static/keywordchips.js" defer></script>
+<script src="/static/keywordsedit.js" defer></script>
 {{end}}
