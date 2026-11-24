@@ -72,7 +72,7 @@ func (s *Server) swapUnit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cost := option.Cost
-	s.payForHangarChange(w, r, pt, c, run, cost, "swap a unit", func() error {
+	s.payForHangarChange(w, r, pt, c, run, cost, "swap a unit", func() (mekbay.HangarForce, error) {
 		return s.mekbay.SwapUnit(r.Context(), mekbay.SwapRequest{OwnerUID: mekbay.AccountUID(currentSeed(r), mekbay.SlotHangar), Instance: run.HangarInstance, UnitID: hu.ID, To: to})
 	})
 }

@@ -477,6 +477,45 @@
     records.addEventListener('click', function (e) { if (e.target === records) records.close(); });
     records.addEventListener('close', function () { if (recDirty) location.reload(); });
 
+    // ---- Change rank: a small dialog with the campaign's ranks, over Advanced Management. Saving updates the pilot's row in place (the page behind is
+    // reloaded when Advanced Management closes, like every other correction here).
+    var rankDialog = document.getElementById('rank-dialog');
+    var rankSelect = document.getElementById('rank-select');
+    var rankError = document.getElementById('rank-error');
+    var rankPilot = null; // the row whose rank is being changed
+    if (rankDialog && typeof rankDialog.showModal === 'function') {
+      document.getElementById('rank-cancel').addEventListener('click', function () { rankDialog.close(); });
+      rankDialog.addEventListener('click', function (e) { if (e.target === rankDialog) rankDialog.close(); });
+      document.getElementById('rank-form').addEventListener('submit', function (e) {
+        e.preventDefault();
+        if (!rankPilot) return;
+        var li = rankPilot, rank = rankSelect.value, save = document.getElementById('rank-save');
+        rankError.textContent = '';
+        save.disabled = true;
+        save.setAttribute('aria-busy', 'true');
+        post('/api/pilots/rank', 'pilot=' + encodeURIComponent(li.dataset.pilot) + '&rank=' + encodeURIComponent(rank)).then(function (res) {
+          save.disabled = false;
+          save.setAttribute('aria-busy', 'false');
+          if (res.ok) {
+            recDirty = true;
+            li.dataset.rank = rank;
+            li.querySelector('.rec-rank-btn').textContent = rank;
+            rankDialog.close();
+            return;
+          }
+          return res.text().then(function (t) { rankError.textContent = t.trim() || 'Could not save the rank.'; });
+        }, function () { save.disabled = false; save.setAttribute('aria-busy', 'false'); rankError.textContent = 'Could not reach the server.'; });
+      });
+    } else rankDialog = null;
+    function openRank(li) {
+      rankPilot = li;
+      rankError.textContent = '';
+      document.getElementById('rank-title').textContent = 'Change ' + li.dataset.name + '\u2019s rank';
+      rankSelect.value = li.dataset.rank;
+      rankDialog.showModal();
+      rankSelect.focus();
+    }
+
     // The warchest: set the force's funds directly.
     var wcForm = document.getElementById('warchest-form');
     if (wcForm) wcForm.addEventListener('submit', function (e) {
@@ -603,21 +642,9 @@
         }).then(function (ok) { if (ok) save(); });
       });
 
-      // Rank: an advanced correction (promotions come from mission outcomes). Saved as soon as it is picked; a refusal puts the old rank back.
-      var rankSel = li.querySelector('.rec-rank-select');
-      if (rankSel) {
-        var savedRank = rankSel.value;
-        rankSel.addEventListener('change', function () {
-          recError.textContent = '';
-          rankSel.disabled = true;
-          post('/api/pilots/rank', 'pilot=' + encodeURIComponent(li.dataset.pilot) + '&rank=' + encodeURIComponent(rankSel.value)).then(function (res) {
-            rankSel.disabled = false;
-            if (res.ok) { recDirty = true; savedRank = rankSel.value; return; }
-            rankSel.value = savedRank;
-            return res.text().then(function (t) { recError.textContent = t.trim() || 'Could not save the rank.'; });
-          }, function () { rankSel.disabled = false; rankSel.value = savedRank; recError.textContent = 'Could not reach the server.'; });
-        });
-      }
+      // Rank: an advanced correction (promotions come from mission outcomes). The rank button opens the Change rank dialog on top of this one.
+      var rankBtn = li.querySelector('.rec-rank-btn');
+      if (rankBtn && rankDialog) rankBtn.addEventListener('click', function () { openRank(li); });
       var del = li.querySelector('.rec-delete');
       del.addEventListener('click', function () {
         Confirm.ask({

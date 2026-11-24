@@ -85,7 +85,8 @@ func TestSellUnitEndpoint(t *testing.T) {
 	if got := post(t, srv, "/api/hangar/service", url.Values{"campaign": {"refusalwar"}, "kind": {"rearm"}, "unit": {"ua"}}, cookie, srv.URL).StatusCode; got != http.StatusConflict {
 		t.Errorf("rearming a truly destroyed unit: %d", got)
 	}
-	// The hangar view carries the price for the page.
+	// The hangar view carries the price for the page. (The sales above emptied the cached copy, as they should; a live read fills it again.)
+	body(t, srv, "/api/campaign/force?campaign=refusalwar", cookie)
 	if p := body(t, srv, "/refusalwar/manage/", cookie); !strings.Contains(p, "sellValue") {
 		t.Error("the Manage page's cached hangar should carry each unit's sell value")
 	}

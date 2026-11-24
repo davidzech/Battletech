@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/davidzech/Battletech/internal/content"
+	"github.com/davidzech/Battletech/internal/mekbay"
 	"github.com/davidzech/Battletech/internal/storage"
 )
 
@@ -77,7 +78,10 @@ func (s *Server) hangarRequest(w http.ResponseWriter, r *http.Request) (pt stora
 
 // payForHangarChange charges cost SP to the warchest and then makes the change in MekBay (change); if that fails the SP are refunded, so the player never pays
 // for a change that wasn't made. It answers the request itself: {"cost", "warchest"} on success. what names the change for the log ("repair a unit").
-func (s *Server) payForHangarChange(w http.ResponseWriter, r *http.Request, pt storage.Playthrough, c *content.Campaign, run storage.CampaignRun, cost int, what string, change func() error) {
+//
+// change returns the hangar force as MekBay saved it, which becomes the cached copy, so the page that reloads next paints the change at once instead of the
+// hangar from before it until a live read catches up.
+func (s *Server) payForHangarChange(w http.ResponseWriter, r *http.Request, pt storage.Playthrough, c *content.Campaign, run storage.CampaignRun, cost int, what string, change func() (mekbay.HangarForce, error)) {
 	if err := s.store.SpendWarchest(r.Context(), pt.ID, c.Slug, cost); errors.Is(err, storage.ErrInsufficientFunds) {
 		http.Error(w, fmt.Sprintf("Not enough in the warchest: that costs %d SP and you have %d.", cost, run.Warchest), http.StatusConflict)
 		return
@@ -85,7 +89,8 @@ func (s *Server) payForHangarChange(w http.ResponseWriter, r *http.Request, pt s
 		http.Error(w, "could not charge the warchest", http.StatusInternalServerError)
 		return
 	}
-	if err := change(); err != nil {
+	h, err := change()
+	if err != nil {
 		log.Printf("%s in MekBay: %v", what, err) // never log the owner UID
 		if rerr := s.store.RefundWarchest(r.Context(), pt.ID, c.Slug, cost); rerr != nil {
 			log.Printf("could not refund %d SP: %v", cost, rerr)
@@ -93,6 +98,7 @@ func (s *Server) payForHangarChange(w http.ResponseWriter, r *http.Request, pt s
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
+	s.cacheHangar(r.Context(), pt.ID, c.Slug, run.HangarInstance, h)
 	w.Header().Set("Content-Type", "application/json")
 	fmt.Fprintf(w, `{"cost":%d,"warchest":%d}`, cost, run.Warchest-cost)
 }

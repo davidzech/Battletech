@@ -252,7 +252,7 @@ th {
 button.button { border: 0; cursor: pointer; }
 /* A disabled button is one that can't be used yet (nothing chosen, a rule not met): not-allowed. Only a button that is busy doing its work (aria-busy) waits. */
 button.button:disabled { opacity: 0.6; cursor: not-allowed; filter: none; }
-button[aria-busy="true"], button[aria-busy="true"]:disabled { cursor: wait; }
+button[aria-busy="true"], button.button[aria-busy="true"]:disabled { cursor: wait; } /* specific enough to win over the red buttons' :disabled too */
 /* The outline button: a square yellow border, nothing inside, yellow text. */
 .button.button-outline, button.button.button-outline { background: transparent; color: var(--accent); border: 1px solid var(--accent); clip-path: none; }
 .button.button-outline:hover, button.button.button-outline:hover:not(:disabled) { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); filter: none; }
@@ -1057,8 +1057,11 @@ dialog select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 .recruit button.button:disabled { opacity: 0.45; cursor: not-allowed; filter: grayscale(0.5); }
 .recruit-rank-note { margin: 1rem 0 0; }
 /* Advanced Management: a pilot's rank, an advanced correction (promotions come from mission outcomes). */
-.rec-rank { margin-top: 0.4rem; }
-.rec-rank label { display: inline-flex; align-items: center; gap: 0.5rem; }
+.rec-rank { display: flex; align-items: center; gap: 0.6rem; margin-top: 0.4rem; }
+.rec-rank-text { font: 700 0.75rem var(--display); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+/* The rank button: the rank as the cards used to show it, a small uppercase plate that lights yellow on hover and opens the Change rank dialog. */
+dialog button.rank-btn { display: inline-block; width: auto; min-width: 9rem; padding: 0.35rem 0.8rem; text-align: center; font: 700 0.62rem/1.2 var(--display); letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap; color: var(--text); background: var(--bg); border: 1px solid var(--line); cursor: pointer; }
+dialog button.rank-btn:hover, dialog button.rank-btn:focus-visible { color: var(--accent); border-color: var(--accent); outline: none; }
 #recruit-dialog .pilot-top { margin-top: 0.75rem; }
 
 /* Edge abilities: the chips under a pilot's stat boxes, the "choose" button, the picker and the records row. */
@@ -1134,6 +1137,8 @@ dialog button.rec-skills-reset:disabled { opacity: 0.4; cursor: not-allowed; }
 .repair-cost, .confirm-detail { font: 700 1.05rem var(--display); color: var(--accent); }
 .repair-cost.short, .confirm-detail.short { color: #ff7a59; }
 .confirm-detail { margin: 0 0 1rem; }
+.confirm-error:empty { display: none; }
+.confirm-error { margin: 0 0 0.8rem; }
 /* A small breakdown under a confirmation's message: what, then how much. */
 .confirm-items { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 0.3rem 1.2rem; margin: 0 0 0.9rem; padding: 0.6rem 0.8rem; background: var(--bg); border: 1px solid var(--line); }
 .confirm-items[hidden] { display: none; }
