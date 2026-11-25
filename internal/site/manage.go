@@ -4,10 +4,12 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 
 	"github.com/davidzech/Battletech/internal/content"
+	"github.com/davidzech/Battletech/internal/storage"
 )
 
 // manage serves /<campaign>/manage/, the page for managing a started campaign's force: hangar link, named pilots and
@@ -45,10 +47,6 @@ func (s *Server) manage(w http.ResponseWriter, r *http.Request) {
 		p.BackURL = back + sc.Slug + "/"
 		p.BackLabel = "Back to " + c.MissionName(*sc)
 	}
-	if cps, err := s.store.Checkpoints(r.Context(), playthroughID(seed), c.Slug); err == nil {
-		p.Checkpoints = checkpointViews(cps)
-	}
-	p.KeywordChoices = s.keywordChoices(r, playthroughID(seed), c)
 	p.OnManagePage = true
 	s.render(w, r, http.StatusOK, "manage", p)
 }
@@ -106,6 +104,7 @@ func (s *Server) setPlayers(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not save the player count", http.StatusInternalServerError)
 		return
 	}
+	s.logHistory(r, pt.ID, c.Slug, storage.HistoryCampaign, 0, fmt.Sprintf("The default number of players was set to %d.", n))
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -127,5 +126,6 @@ func (s *Server) setForceName(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not save the force name", http.StatusInternalServerError)
 		return
 	}
+	s.logHistory(r, pt.ID, c.Slug, storage.HistoryCampaign, 0, "The force was renamed "+name+".")
 	w.WriteHeader(http.StatusNoContent)
 }

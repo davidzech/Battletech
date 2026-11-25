@@ -90,50 +90,14 @@
 <div class="mech-list" id="hangar-units-list"><p class="muted">Reading your hangar&hellip;</p></div>
 <p class="recruit" id="campaign-run" data-campaign="{{.Campaign.Slug}}"><button type="button" class="button" id="purchase-open">Purchase New Units</button></p>
 </section>
-<dialog id="rollback-dialog" class="rollback" aria-labelledby="rollback-title" data-campaign="{{.Campaign.Slug}}">
-  <h2 id="rollback-title">Rollback</h2>
-  <p class="muted">Choose a saved point to go back to. Everything after it is forgotten, and a battle in progress is given up.</p>
-  {{if .Checkpoints}}<ol class="checkpoints">{{range .Checkpoints}}<li><span class="cp-label">{{.Label}}</span><span class="muted cp-when">{{.When}}</span>{{if .Latest}}<span class="muted cp-now">latest</span>{{end}}<button type="button" class="button button-outline cp-rollback" data-checkpoint="{{.Seq}}" data-label="{{.Label}}">Roll back to here</button></li>{{end}}</ol>{{else}}<p class="muted">No saved points yet: they start with the next mission you complete.</p>{{end}}
-  <p class="form-error" id="rollback-error" role="alert"></p>
-  <div class="form-actions"><button type="button" id="rollback-close">Close</button></div>
-</dialog>
-<dialog id="keywords-dialog" class="keywords-edit" aria-labelledby="keywords-title" data-campaign="{{.Campaign.Slug}}">
-  <form id="keywords-form" autocomplete="off">
-    <h2 id="keywords-title">Edit keywords</h2>
-    <p class="muted">Tick the keywords the campaign holds.</p>
-    {{if .KeywordChoices}}<ul class="keyword-choices">{{range .KeywordChoices}}<li><label class="themed-check"><input type="checkbox" class="themed-box" name="keyword" value="{{.ID}}"{{if .Held}} checked{{end}}><span><b>{{.Name}}</b>{{if .Text}}<span class="muted">{{.Text}}</span>{{end}}</span></label></li>{{end}}</ul>{{else}}<p class="muted">This campaign registers no keywords.</p>{{end}}
-    <p class="form-error" id="keywords-error" role="alert"></p>
-    <div class="form-actions">
-      <button type="submit" class="button" id="keywords-save">Save</button>
-      <button type="button" id="keywords-cancel">Cancel</button>
-    </div>
-  </form>
-</dialog>
 <section class="danger-zone" id="danger-zone" data-campaign="{{.Campaign.Slug}}">
 <details class="danger-details">
 <summary><h2>Danger zone</h2></summary>
 <div class="fold-body">
 <p class="muted">Advanced Management corrects pilot records: rename, revive or delete a pilot, change their rank, reset their SP allocation or Edge abilities, or override their total SP.</p>
 <p class="danger-action"><button type="button" class="button" id="records-open">Advanced Management</button></p>
-<p class="muted">The campaign is saved when it starts and each time a mission is completed. Rollback puts the pilots, SP, warchest, completed missions and hangar back as they were at one of those points, and forgets everything after it. Aborting a mission rolls back to the latest one.</p>
-<p class="danger-action"><button type="button" class="button" id="rollback-open">Rollback</button></p>
-<p class="muted">Edit keywords sets which keywords the campaign holds, to correct a mission&rsquo;s report or a misclick. Keywords decide what lies ahead, so change them only when they are wrong.</p>
-<p class="danger-action"><button type="button" class="button" id="keywords-open">Edit keywords</button></p>
-<p class="muted">Deleting this campaign removes {{.Run.ForceLabel}}&rsquo;s progress in it: its named pilots and the site&rsquo;s copy of its hangar. Your account, its other campaigns and anything saved in MekBay are not touched.</p>
-<button type="button" class="button danger" id="delete-open">Delete campaign</button>
 </div>
 </details>
-<dialog id="delete-dialog" aria-labelledby="delete-title">
-  <form id="delete-form" method="dialog">
-    <h2 id="delete-title">Delete {{.Campaign.Label}}?</h2>
-    <p>This permanently deletes your progress in this campaign, including all of its named pilots. It cannot be undone.</p>
-    <p id="delete-error" class="form-error" role="alert"></p>
-    <div class="form-actions">
-      <button type="submit" class="button danger" id="delete-confirm">Delete campaign</button>
-      <button type="button" id="delete-cancel">Cancel</button>
-    </div>
-  </form>
-</dialog>
 </section>
 <dialog id="purchase-dialog" class="wizard purchase" aria-labelledby="purchase-title" data-faction="{{.Campaign.AvailabilityFaction}}" data-era="{{.Campaign.AvailabilityEra}}">
   <form id="purchase-form" autocomplete="off">
@@ -229,8 +193,5 @@
 <script src="/static/campaign.js" defer></script>
 <script src="/static/abilitycard.js" defer></script>
 <script src="/static/pilots.js" defer></script>
-<script src="/static/campaigndelete.js" defer></script>
-<script src="/static/history.js" defer></script>
 <script src="/static/keywordchips.js" defer></script>
-<script src="/static/keywordsedit.js" defer></script>
 {{end}}

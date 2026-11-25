@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/davidzech/Battletech/internal/content"
+	"github.com/davidzech/Battletech/internal/storage"
 )
 
 // The campaign log: which of a campaign's scenarios the run has completed. The first scenario (000) is available from the start, and completing a scenario
@@ -77,7 +78,12 @@ func (s *Server) setScenarioCompleted(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not save the campaign log", http.StatusInternalServerError)
 		return
 	}
-	if done { // a mission completed by hand is a rollback point too
+	if done {
+		s.logHistory(r, pt.ID, c.Slug, storage.HistoryMission, 0, "Completed "+c.MissionName(*sc)+".")
+	} else {
+		s.logHistory(r, pt.ID, c.Slug, storage.HistoryMission, 0, "Marked "+c.MissionName(*sc)+" not completed.")
+	}
+	if done { // a mission completed by hand is a rollback point too (recorded after the line above, so rolling back to it keeps the line)
 		if run, ok, err := s.store.Run(r.Context(), pt.ID, c.Slug); err == nil && ok {
 			if copyID, err := s.checkpointCopy(r.Context(), currentSeed(r), run); err != nil {
 				log.Printf("checkpoint after %s: %v", sc.Slug, err)

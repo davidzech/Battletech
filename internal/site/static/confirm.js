@@ -76,7 +76,9 @@
     cancelBtn.addEventListener('click', function () { if (!busy) finish(false); });
     // Escape closes the dialog by itself (not while an action runs); the backdrop is the dialog element outside its content.
     dialog.addEventListener('cancel', function (e) { if (busy) e.preventDefault(); });
-    dialog.addEventListener('close', function () { finish(false); });
+    // The close event comes a moment after close(): by then a question asked straight after the last one (a second "Are you sure?") may have reopened the
+    // dialog, and that stale event must not answer it. A close that leaves the dialog shut is the player's (Escape) and cancels.
+    dialog.addEventListener('close', function () { if (!dialog.open) finish(false); });
     dialog.addEventListener('click', function (e) { if (e.target === dialog && !busy) finish(false); });
     document.body.appendChild(dialog);
   }

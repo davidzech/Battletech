@@ -4,8 +4,10 @@ import (
 	"log"
 	"net/http"
 	"slices"
+	"strings"
 
 	"github.com/davidzech/Battletech/internal/content"
+	"github.com/davidzech/Battletech/internal/storage"
 )
 
 // KeywordView is a keyword the campaign has earned, as the overview shows it: its name, its description from
@@ -89,5 +91,14 @@ func (s *Server) setKeywords(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not save the keywords", http.StatusInternalServerError)
 		return
 	}
+	names := make([]string, 0, len(keywords))
+	for _, k := range keywords {
+		names = append(names, c.KeywordName(k))
+	}
+	text := "The keywords were edited: none held."
+	if len(names) > 0 {
+		text = "The keywords were edited: " + strings.Join(names, ", ") + "."
+	}
+	s.logHistory(r, pt.ID, c.Slug, storage.HistoryKeywords, 0, text)
 	w.WriteHeader(http.StatusNoContent)
 }

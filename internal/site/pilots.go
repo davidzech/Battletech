@@ -113,6 +113,17 @@ func (s *Server) addPilot(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not save the pilot", http.StatusInternalServerError)
 		return
 	}
+	paid := fmt.Sprintf("for %d SP", cost)
+	if usedFree {
+		paid = "with a free recruit"
+	} else if cost == 0 {
+		paid = "for free"
+	}
+	text := fmt.Sprintf("Recruited %s %s %s", rank, name, paid)
+	if a := allocationText(start); a != "" {
+		text += " (" + a + ")"
+	}
+	s.logHistory(r, pt.ID, c.Slug, storage.HistoryPilot, -cost, strings.TrimSpace(text)+".")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -138,6 +149,7 @@ func (s *Server) pilotFallen(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	p, found := s.pilotByID(r, pt.ID, c.Slug, r.PostFormValue("pilot"))
 	if err := s.store.MarkFallen(r.Context(), pt.ID, c.Slug, r.PostFormValue("pilot")); errors.Is(err, sql.ErrNoRows) {
 		http.Error(w, "No such living pilot.", http.StatusNotFound)
 		return
@@ -145,6 +157,7 @@ func (s *Server) pilotFallen(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not save", http.StatusInternalServerError)
 		return
 	}
+	s.logHistory(r, pt.ID, c.Slug, storage.HistoryPilot, 0, pilotLabel(p, found)+" was marked killed in action.")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -237,6 +250,7 @@ func (s *Server) setPortrait(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Pick a portrait from the list.", http.StatusBadRequest)
 		return
 	}
+	p, found := s.pilotByID(r, pt.ID, c.Slug, r.PostFormValue("pilot"))
 	if err := s.store.SetPilotPortrait(r.Context(), pt.ID, c.Slug, r.PostFormValue("pilot"), portrait); errors.Is(err, sql.ErrNoRows) {
 		http.Error(w, "No such living pilot.", http.StatusNotFound)
 		return
@@ -247,6 +261,7 @@ func (s *Server) setPortrait(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not save the portrait", http.StatusInternalServerError)
 		return
 	}
+	s.logHistory(r, pt.ID, c.Slug, storage.HistoryPilot, 0, pilotLabel(p, found)+" changed portrait.")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -293,6 +308,7 @@ func (s *Server) allocateSP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Allocate some SP first.", http.StatusBadRequest)
 		return
 	}
+	p, found := s.pilotByID(r, pt.ID, c.Slug, r.PostFormValue("pilot"))
 	if err := s.store.ApplySP(r.Context(), pt.ID, c.Slug, r.PostFormValue("pilot"), earned, a); errors.Is(err, sql.ErrNoRows) {
 		http.Error(w, "No such living pilot.", http.StatusNotFound)
 		return
@@ -303,6 +319,14 @@ func (s *Server) allocateSP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not save the SP", http.StatusInternalServerError)
 		return
 	}
+	var parts []string
+	if earned > 0 {
+		parts = append(parts, fmt.Sprintf("earned %d SP", earned))
+	}
+	if a.Total() > 0 {
+		parts = append(parts, fmt.Sprintf("allocated %d SP (%s)", a.Total(), allocationText(a)))
+	}
+	s.logHistory(r, pt.ID, c.Slug, storage.HistoryPilot, 0, pilotLabel(p, found)+" "+strings.Join(parts, " and ")+".")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -318,6 +342,7 @@ func (s *Server) revivePilot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	alt := pilot.RandomPortrait(livingPortraits(existing))
+	p, found := s.pilotByID(r, pt.ID, c.Slug, r.PostFormValue("pilot"))
 	if err := s.store.RevivePilot(r.Context(), pt.ID, c.Slug, r.PostFormValue("pilot"), alt, c.PilotLimit()); errors.Is(err, sql.ErrNoRows) {
 		http.Error(w, "No such pilot killed in action.", http.StatusNotFound)
 		return
@@ -328,6 +353,7 @@ func (s *Server) revivePilot(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not revive the pilot", http.StatusInternalServerError)
 		return
 	}
+	s.logHistory(r, pt.ID, c.Slug, storage.HistoryPilot, 0, pilotLabel(p, found)+" was revived (Advanced Management).")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -337,6 +363,7 @@ func (s *Server) deletePilot(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	p, found := s.pilotByID(r, pt.ID, c.Slug, r.PostFormValue("pilot"))
 	if err := s.store.DeletePilot(r.Context(), pt.ID, c.Slug, r.PostFormValue("pilot")); errors.Is(err, sql.ErrNoRows) {
 		http.Error(w, "No such pilot.", http.StatusNotFound)
 		return
@@ -344,6 +371,7 @@ func (s *Server) deletePilot(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not delete the pilot", http.StatusInternalServerError)
 		return
 	}
+	s.logHistory(r, pt.ID, c.Slug, storage.HistoryPilot, 0, pilotLabel(p, found)+" was deleted (Advanced Management).")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -356,6 +384,7 @@ func (s *Server) resetPilotSP(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	p, found := s.pilotByID(r, pt.ID, c.Slug, r.PostFormValue("pilot"))
 	if err := s.store.ResetPilotSP(r.Context(), pt.ID, c.Slug, r.PostFormValue("pilot")); errors.Is(err, sql.ErrNoRows) {
 		http.Error(w, "No such pilot.", http.StatusNotFound)
 		return
@@ -363,6 +392,7 @@ func (s *Server) resetPilotSP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not reset the pilot", http.StatusInternalServerError)
 		return
 	}
+	s.logHistory(r, pt.ID, c.Slug, storage.HistoryPilot, 0, pilotLabel(p, found)+"'s SP allocation was reset (Advanced Management).")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -379,6 +409,7 @@ func (s *Server) setPilotTotal(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("The total must be a whole number from 0 to %d.", maxTotalSP), http.StatusBadRequest)
 		return
 	}
+	p, found := s.pilotByID(r, pt.ID, c.Slug, r.PostFormValue("pilot"))
 	err = s.store.SetPilotTotal(r.Context(), pt.ID, c.Slug, r.PostFormValue("pilot"), total, r.PostFormValue("reset") == "1")
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
@@ -388,6 +419,7 @@ func (s *Server) setPilotTotal(w http.ResponseWriter, r *http.Request) {
 	case err != nil:
 		http.Error(w, "could not save the total", http.StatusInternalServerError)
 	default:
+		s.logHistory(r, pt.ID, c.Slug, storage.HistoryPilot, 0, fmt.Sprintf("%s's total SP was set to %s (Advanced Management).", pilotLabel(p, found), format.Commas(total)))
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
@@ -406,9 +438,13 @@ func (s *Server) setWarchest(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("The funds must be a whole number from 0 to %d.", maxWarchest), http.StatusBadRequest)
 		return
 	}
+	before, _, _ := s.store.Run(r.Context(), pt.ID, c.Slug)
 	if err := s.store.SetWarchest(r.Context(), pt.ID, c.Slug, funds); err != nil {
 		http.Error(w, "could not save the funds", http.StatusInternalServerError)
 		return
+	}
+	if funds != before.Warchest {
+		s.logHistory(r, pt.ID, c.Slug, storage.HistoryFunds, funds-before.Warchest, fmt.Sprintf("The warchest was set to %s SP (Advanced Management).", format.Commas(funds)))
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -424,6 +460,7 @@ func (s *Server) renamePilot(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	p, found := s.pilotByID(r, pt.ID, c.Slug, r.PostFormValue("pilot"))
 	switch err := s.store.RenamePilot(r.Context(), pt.ID, c.Slug, r.PostFormValue("pilot"), name); {
 	case errors.Is(err, sql.ErrNoRows):
 		http.Error(w, "No such pilot.", http.StatusNotFound)
@@ -432,6 +469,9 @@ func (s *Server) renamePilot(w http.ResponseWriter, r *http.Request) {
 	case err != nil:
 		http.Error(w, "could not rename the pilot", http.StatusInternalServerError)
 	default:
+		if !found || p.Name != name {
+			s.logHistory(r, pt.ID, c.Slug, storage.HistoryPilot, 0, fmt.Sprintf("%s was renamed %s.", pilotLabel(p, found), name))
+		}
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
@@ -447,6 +487,7 @@ func (s *Server) setRank(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Pick a rank from the list.", http.StatusBadRequest)
 		return
 	}
+	p, found := s.pilotByID(r, pt.ID, c.Slug, r.PostFormValue("pilot"))
 	if err := s.store.SetPilotRank(r.Context(), pt.ID, c.Slug, r.PostFormValue("pilot"), rank); errors.Is(err, sql.ErrNoRows) {
 		http.Error(w, "No such pilot.", http.StatusNotFound)
 		return
@@ -454,6 +495,7 @@ func (s *Server) setRank(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not save the rank", http.StatusInternalServerError)
 		return
 	}
+	s.logHistory(r, pt.ID, c.Slug, storage.HistoryPilot, 0, fmt.Sprintf("%s's rank was set to %s (Advanced Management).", pilotLabel(p, found), rank))
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -463,6 +505,7 @@ func (s *Server) learnAbilities(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	p, found := s.pilotByID(r, pt.ID, c.Slug, r.PostFormValue("pilot"))
 	err := s.store.LearnAbilities(r.Context(), pt.ID, c.Slug, r.PostFormValue("pilot"), r.PostForm["ability"])
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
@@ -478,6 +521,7 @@ func (s *Server) learnAbilities(w http.ResponseWriter, r *http.Request) {
 	case err != nil:
 		http.Error(w, "could not save the Edge abilities", http.StatusInternalServerError)
 	default:
+		s.logHistory(r, pt.ID, c.Slug, storage.HistoryPilot, 0, fmt.Sprintf("%s learned %s.", pilotLabel(p, found), abilityNames(r.PostForm["ability"])))
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
@@ -488,6 +532,7 @@ func (s *Server) resetEdgeAbilities(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	p, found := s.pilotByID(r, pt.ID, c.Slug, r.PostFormValue("pilot"))
 	if err := s.store.ResetEdgeAbilities(r.Context(), pt.ID, c.Slug, r.PostFormValue("pilot")); errors.Is(err, sql.ErrNoRows) {
 		http.Error(w, "No such pilot.", http.StatusNotFound)
 		return
@@ -495,6 +540,7 @@ func (s *Server) resetEdgeAbilities(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not reset the Edge abilities", http.StatusInternalServerError)
 		return
 	}
+	s.logHistory(r, pt.ID, c.Slug, storage.HistoryPilot, 0, pilotLabel(p, found)+"'s Edge abilities were reset (Advanced Management).")
 	w.WriteHeader(http.StatusNoContent)
 }
 

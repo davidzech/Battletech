@@ -6,8 +6,10 @@ import (
 	"net/http"
 
 	"github.com/davidzech/Battletech/internal/catalog"
+	"github.com/davidzech/Battletech/internal/format"
 	"github.com/davidzech/Battletech/internal/hangar"
 	"github.com/davidzech/Battletech/internal/mekbay"
+	"github.com/davidzech/Battletech/internal/storage"
 )
 
 // Selling units: the price is package hangar (sell.go), removing the unit from the force package mekbay.
@@ -54,6 +56,7 @@ func (s *Server) sellUnit(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "The unit was sold but the warchest could not be paid. Set the funds under Advanced Management.", http.StatusInternalServerError)
 		return
 	}
+	s.logHistory(r, pt.ID, c.Slug, storage.HistoryHangar, value, fmt.Sprintf("Sold %s for %s SP.", catalog.DisplayName(cat), format.Commas(value)))
 	w.Header().Set("Content-Type", "application/json")
 	fmt.Fprintf(w, `{"value":%d,"warchest":%d}`, value, run.Warchest+value)
 }

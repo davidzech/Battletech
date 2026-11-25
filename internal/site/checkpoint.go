@@ -8,7 +8,6 @@ import (
 	"log"
 	"net/http"
 	"strconv"
-	"time"
 
 	"github.com/davidzech/Battletech/internal/mekbay"
 	"github.com/davidzech/Battletech/internal/storage"
@@ -114,20 +113,4 @@ func (s *Server) rollbackCampaign(w http.ResponseWriter, r *http.Request) {
 	default:
 		w.WriteHeader(http.StatusNoContent)
 	}
-}
-
-// CheckpointView is a checkpoint as the Manage page lists it.
-type CheckpointView struct {
-	Seq    int
-	Label  string
-	When   string
-	Latest bool
-}
-
-func checkpointViews(cps []storage.Checkpoint) []CheckpointView {
-	out := make([]CheckpointView, 0, len(cps))
-	for i, c := range cps {
-		out = append(out, CheckpointView{Seq: c.Seq, Label: c.Label, When: time.Unix(c.At, 0).UTC().Format("2006-01-02 15:04 UTC"), Latest: i == 0})
-	}
-	return out
 }

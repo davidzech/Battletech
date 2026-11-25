@@ -10,7 +10,7 @@ import (
 	"github.com/davidzech/Battletech/internal/content"
 )
 
-// Edit keywords (the Manage page's Danger zone) sets the ledger to exactly the ticked keywords: kept ones keep the
+// Edit keywords (the campaign page's Danger zone) sets the ledger to exactly the ticked keywords: kept ones keep the
 // scenario that granted them, and only keywords Keywords.md registers are accepted. The pages show each keyword's own
 // scenario from the registry, however it got into the ledger.
 func TestEditKeywords(t *testing.T) {
@@ -20,10 +20,10 @@ func TestEditKeywords(t *testing.T) {
 	if err := store.CompleteWithOutcome(ctx, id, "refusalwar", "scenario_000", content.OutcomeResult{Pilots: []content.PilotOutcome{}, Keywords: []string{"scorched_earth", "sigint"}}); err != nil {
 		t.Fatal(err)
 	}
-	p := body(t, srv, "/refusalwar/manage/", cookie)
+	p := body(t, srv, "/refusalwar/", cookie)
 	for _, want := range []string{`id="keywords-open"`, `id="keywords-dialog"`, `value="scorched_earth" checked`, `value="avenger">`, "<b>Counter Intelligence</b>", "The chemical plant was completely destroyed."} {
 		if !strings.Contains(p, want) {
-			t.Errorf("the manage page's keyword editor is missing %q", want)
+			t.Errorf("the campaign page's keyword editor is missing %q", want)
 		}
 	}
 	set := func(keywords ...string) *http.Response {

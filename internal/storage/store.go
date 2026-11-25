@@ -142,6 +142,17 @@ func (s *Store) schemaStatements() []string {
 	snapshot       TEXT NOT NULL,
 	PRIMARY KEY (playthrough_id, campaign, seq)
 )`,
+		// The campaign history (history.go): append-only, numbered per campaign, never part of a checkpoint.
+		`CREATE TABLE IF NOT EXISTS campaign_history (
+	playthrough_id TEXT NOT NULL REFERENCES playthroughs(id) ON DELETE CASCADE,
+	campaign       TEXT NOT NULL,
+	seq            INTEGER NOT NULL,
+	at             INTEGER NOT NULL,
+	kind           TEXT NOT NULL,
+	text           TEXT NOT NULL,
+	sp             INTEGER NOT NULL DEFAULT 0,
+	PRIMARY KEY (playthrough_id, campaign, seq)
+)`,
 		`CREATE TABLE IF NOT EXISTS mekbay_links (
 	id             TEXT PRIMARY KEY,
 	playthrough_id TEXT NOT NULL REFERENCES playthroughs(id) ON DELETE CASCADE,
@@ -248,6 +259,10 @@ func (s *Store) init() error {
 	if err := s.ensureColumn("mekbay_operations", "status_at", "INTEGER NOT NULL DEFAULT 0"); err != nil {
 		return err
 	}
+	// The last history entry when a checkpoint was taken: rolling back to it deletes every later entry (0 for a checkpoint older than the history).
+	if err := s.ensureColumn("campaign_checkpoints", "history_seq", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
 	if err := s.ensureColumn("campaign_runs", "warchest", "INTEGER NOT NULL DEFAULT 0"); err != nil {
 		return err
 	}
@@ -280,6 +295,20 @@ func (s *Store) init() error {
 	if _, err := s.db.Exec(`UPDATE named_pilots SET sp_total = sp_gunnery + sp_piloting + sp_edge_tokens + sp_edge_abilities
 		WHERE sp_total < sp_gunnery + sp_piloting + sp_edge_tokens + sp_edge_abilities`); err != nil {
 		return fmt.Errorf("migrate schema: %w", err)
+	}
+	// A campaign started before the history existed (or whose start line was never written) gets its start line, as line 0, so a rollback never takes it away.
+	// Only what the run row knows goes in it: the force's name and when it started.
+	epoch := `CAST(strftime('%s', r.started_at) AS INTEGER)`
+	if s.postgres {
+		epoch = `CAST(EXTRACT(EPOCH FROM r.started_at) AS BIGINT)`
+	}
+	if _, err := s.db.Exec(`INSERT INTO campaign_history (playthrough_id, campaign, seq, at, kind, text, sp)
+		SELECT r.playthrough_id, r.campaign, 0, ` + epoch + `, '` + HistoryCampaign + `',
+			'Started the campaign as ' || CASE WHEN r.force_name = '' THEN 'your force' ELSE r.force_name END || '.', 0
+		FROM campaign_runs r
+		WHERE r.hangar_instance <> '' AND NOT EXISTS (SELECT 1 FROM campaign_history h WHERE h.playthrough_id = r.playthrough_id AND h.campaign = r.campaign
+			AND (h.seq = 0 OR h.text LIKE 'Started the campaign%'))`); err != nil {
+		return fmt.Errorf("backfill the campaign history: %w", err)
 	}
 	return nil
 }
@@ -547,7 +576,7 @@ func (s *Store) DeleteRun(ctx context.Context, playthroughID, campaign string) (
 		playthroughID, campaign); err != nil {
 		return false, err
 	}
-	for _, table := range []string{"named_pilots", "mekbay_operations", "mekbay_links", "hangar_cache", "scenario_completions", "campaign_keywords", "campaign_checkpoints"} {
+	for _, table := range []string{"named_pilots", "mekbay_operations", "mekbay_links", "hangar_cache", "scenario_completions", "campaign_keywords", "campaign_checkpoints", "campaign_history"} {
 		if _, err := tx.ExecContext(ctx, s.q("DELETE FROM "+table+" WHERE playthrough_id = ? AND campaign = ?"), playthroughID, campaign); err != nil {
 			return false, err
 		}

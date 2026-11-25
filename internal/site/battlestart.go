@@ -117,6 +117,7 @@ func (s *Server) startBattle(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "The battle was started in MekBay but could not be recorded here.", http.StatusInternalServerError)
 		return
 	}
+	s.logHistory(r, bp.pt.ID, bp.c.Slug, storage.HistoryMission, 0, battleHistory(bp))
 	link, err := s.mekbayLink(r, bp.pt.ID, bp.c.Slug, tableLabel, account, url.Values{"operation": {got.OperationID}})
 	if err != nil {
 		log.Printf("link to the operation: %v", err)
@@ -217,6 +218,9 @@ func (s *Server) abortBattle(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Could not roll the campaign back: "+err.Error(), http.StatusBadGateway)
 			return
 		}
+		// The history goes back with the campaign (the deployment's line too), so the abort leaves no line of its own.
+	} else {
+		s.logHistory(r, pt.ID, c.Slug, storage.HistoryMission, 0, "Aborted "+c.MissionName(*sc)+", keeping every change since the last checkpoint.")
 	}
 	if _, err := s.store.DeleteMekBayOperation(r.Context(), pt.ID, c.Slug, sc.ID); err != nil {
 		http.Error(w, "could not abort the battle", http.StatusInternalServerError)

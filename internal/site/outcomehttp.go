@@ -116,6 +116,7 @@ func (s *Server) commitOutcome(w http.ResponseWriter, r *http.Request) {
 	case err != nil:
 		http.Error(w, "could not save the outcome", http.StatusInternalServerError)
 	default:
+		s.logHistory(r, pt.ID, c.Slug, storage.HistoryMission, res.Warchest, outcomeHistory(c, sc, res)) // before the checkpoint, so rolling back to it keeps the line
 		s.recordCheckpoint(r.Context(), currentSeed(r), pt.ID, c.Slug, label, copyID)
 		w.WriteHeader(http.StatusNoContent)
 		return

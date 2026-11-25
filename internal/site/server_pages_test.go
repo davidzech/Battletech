@@ -146,7 +146,7 @@ func TestMissionLogLayout(t *testing.T) {
 		t.Fatalf("commit: %d", got)
 	}
 	page = body(t, srv, "/refusalwar/scenario_000/", cookie)
-	if !strings.Contains(page, `class="mission-log completed"`) || !strings.Contains(page, `<span>Completed &#10003;</span><i class="mission-led"`) || strings.Contains(page, `id="mission-actions"`) {
+	if !strings.Contains(page, `class="mission-log completed"`) || !strings.Contains(page, `<span>Completed</span><i class="mission-led"`) || strings.Contains(page, `id="mission-actions"`) {
 		t.Error("a completed mission has a green LED and no actions")
 	}
 	// A plain scenario (no outcome engine) keeps its Mark completed / Mark not completed toggle, also at the bottom.
@@ -264,7 +264,8 @@ func TestCampaignLedger(t *testing.T) {
 			t.Errorf("the overview lists the earned keywords by name with their descriptions: missing %q", want)
 		}
 	}
-	if strings.Contains(p, "scorched_earth") || strings.Contains(p, "No keywords earned yet.") {
+	// (The Danger zone's Edit keywords dialog carries the IDs as its checkboxes' values, which players never see; everything before it is the overview.)
+	if shown := p[:strings.Index(p, `id="keywords-dialog"`)]; strings.Contains(shown, "scorched_earth") || strings.Contains(p, "No keywords earned yet.") {
 		t.Error("the overview shows keyword names, never IDs")
 	}
 	if _, err := store.DeleteRun(ctx, id, "refusalwar"); err != nil {

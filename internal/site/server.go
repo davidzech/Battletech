@@ -69,6 +69,8 @@ type Page struct {
 	Seed               string                 // the visitor's seed ("" if none chosen yet)
 	Play               storage.Playthrough    // the visitor's playthrough (zero value if no seed)
 	Run                storage.CampaignRun    // the playthrough's run of this page's campaign (zero value until it is started)
+	History            []historyView          // a started campaign's history, newest first (the campaign page's History dialog)
+	HistoryFilters     []historyFilter        // the kinds the history holds, as the dialog's filter buttons
 	Pilots             []pilot.PilotView      // the run's named pilots
 	Keywords           []KeywordView          // on the campaign overview: the keywords the campaign has earned, oldest first
 	CanRecruit         bool                   // the command has room for another living named pilot, and the warchest can pay for them
@@ -78,18 +80,17 @@ type Page struct {
 	// pages embed it so they can paint the hangar before the live read finishes (see hangarcache.go).
 	CachedHangar   *mekbay.HangarForce
 	CachedAt       time.Time
-	Ranks          []string         // the campaign's pilot ranks, lowest first (empty when it has none)
-	Memorial       bool             // at least one named pilot was killed in action
-	Ladders        string           // the pilot improvement ladders as JSON, for the pilot builder's live preview
-	Abilities      string           // the Edge ability catalog as JSON, for the ability picker
-	Portraits      string           // the portrait list as JSON, for the portrait picker
-	InProgress     bool             // the scenario has a battle in progress (an operation that is neither completed nor aborted)
-	OperationURL   string           // the table's link to that battle, so the Operation in progress view can show it before anything is read from MekBay
-	Checkpoints    []CheckpointView // the campaign's rollback points, newest first (the Manage page)
-	KeywordChoices []KeywordChoice  // every registered keyword, ticked when held (the Manage page's Edit keywords dialog)
-	BattleCache    string           // the last status read of that battle as JSON ({forces, updatedAt}), so the view paints it at once while a fresh read is made
-	Commit         string           // git commit the server was built from, short form ("dev" if unknown)
-	DevReload      bool             // the server runs with -dev-reload, so the layout loads static/devreload.js
+	Ranks          []string        // the campaign's pilot ranks, lowest first (empty when it has none)
+	Memorial       bool            // at least one named pilot was killed in action
+	Ladders        string          // the pilot improvement ladders as JSON, for the pilot builder's live preview
+	Abilities      string          // the Edge ability catalog as JSON, for the ability picker
+	Portraits      string          // the portrait list as JSON, for the portrait picker
+	InProgress     bool            // the scenario has a battle in progress (an operation that is neither completed nor aborted)
+	OperationURL   string          // the table's link to that battle, so the Operation in progress view can show it before anything is read from MekBay
+	KeywordChoices []KeywordChoice // every registered keyword, ticked when held (the Manage page's Edit keywords dialog)
+	BattleCache    string          // the last status read of that battle as JSON ({forces, updatedAt}), so the view paints it at once while a fresh read is made
+	Commit         string          // git commit the server was built from, short form ("dev" if unknown)
+	DevReload      bool            // the server runs with -dev-reload, so the layout loads static/devreload.js
 }
 
 // Card is one entry in a list of links (campaigns or scenarios).
@@ -289,6 +290,10 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name
 					}
 					if name == "campaign" || name == "manage" {
 						p.Keywords = s.keywordViews(r, id, p.Campaign)
+					}
+					if name == "campaign" {
+						p.History, p.HistoryFilters = s.historyViews(r, id, p.Campaign)
+						p.KeywordChoices = s.keywordChoices(r, id, p.Campaign) // the Danger zone's Edit keywords
 					}
 					p.MaxPilots = limit
 				}

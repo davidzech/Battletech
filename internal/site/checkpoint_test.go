@@ -64,9 +64,12 @@ func TestCheckpointsAndRollback(t *testing.T) {
 		t.Fatalf("the hangar was copied into the checkpoint: %+v", fake.copies)
 	}
 
-	// The Manage page's Danger zone has a Rollback button and a dialog listing the checkpoints.
-	if p := body(t, srv, "/refusalwar/manage/", cookie); !strings.Contains(p, `id="rollback-open">Rollback</button>`) || !strings.Contains(p, `id="rollback-dialog"`) || !strings.Contains(p, "Campaign started") || !strings.Contains(p, `data-checkpoint="`+strconv.Itoa(cps[0].Seq)+`"`) {
-		t.Error("the Manage page offers Rollback with the saved points listed")
+	// Rolling back is offered from the campaign page's History, on the line the checkpoint follows; the Manage page no longer has a Rollback of its own.
+	if p := body(t, srv, "/refusalwar/", cookie); !strings.Contains(p, `data-checkpoint="`+strconv.Itoa(cps[0].Seq)+`" data-label="Campaign started"`) {
+		t.Error("the History offers the starting checkpoint")
+	}
+	if p := body(t, srv, "/refusalwar/manage/", cookie); strings.Contains(p, "rollback-open") || strings.Contains(p, "rollback-dialog") {
+		t.Error("the Manage page has no Rollback of its own")
 	}
 
 	// Change things: the warchest, a pilot's SP, a pilot killed in action. None of it makes a checkpoint.

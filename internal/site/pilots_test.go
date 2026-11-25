@@ -269,7 +269,7 @@ func TestDeleteCampaign(t *testing.T) {
 		t.Fatal("a refused delete removed the campaign")
 	}
 	// The page offers the delete button with its confirmation popup while the campaign is started.
-	if page := body(t, srv, "/refusalwar/manage/", cookie); !strings.Contains(page, `id="delete-dialog"`) {
+	if page := body(t, srv, "/refusalwar/", cookie); !strings.Contains(page, `id="delete-dialog"`) || !strings.Contains(page, `id="danger-zone"`) {
 		t.Error("a started campaign should show the delete button and its confirmation popup")
 	}
 
@@ -307,14 +307,20 @@ func TestManageAndOverview(t *testing.T) {
 			t.Errorf("overview is missing %q", want)
 		}
 	}
-	for _, not := range []string{`id="pilot-add"`, `id="delete-dialog"`, `id="run-dialog"`, `class="pilot-sp"`} {
+	for _, not := range []string{`id="pilot-add"`, `id="run-dialog"`, `class="pilot-sp"`} {
 		if strings.Contains(over, not) {
 			t.Errorf("overview should not hold %q", not)
 		}
 	}
+	// The campaign page's Danger zone holds Edit keywords and Delete campaign; the Manage page's keeps Advanced Management.
+	for _, want := range []string{`id="danger-zone"`, `id="keywords-open"`, `id="delete-dialog"`} {
+		if !strings.Contains(over, want) {
+			t.Errorf("the campaign page's Danger zone is missing %q", want)
+		}
+	}
 	// The manage page holds all of them.
 	man := body(t, srv, "/refusalwar/manage/", cookie)
-	for _, want := range []string{`id="delete-dialog"`, `id="sp-dialog"`, `class="button pilot-sp"`, "Purchase New Units"} {
+	for _, want := range []string{`id="sp-dialog"`, `class="button pilot-sp"`, "Purchase New Units", `id="records-open"`} {
 		if !strings.Contains(man, want) {
 			t.Errorf("manage page is missing %q", want)
 		}
