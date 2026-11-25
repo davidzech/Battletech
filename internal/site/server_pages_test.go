@@ -25,7 +25,7 @@ func TestRefusalWarPlayersOnHomePage(t *testing.T) {
 		t.Fatalf("the campaigns list should show the player range: %.1500s", home)
 	}
 	// Each campaign card shows the campaign's emblem and its era, with the era's icon.
-	for _, want := range []string{`<img src="/refusalwar/images/icon.webp"`, `<span class="era"><img src="/static/era-clan-invasion.webp" alt="" width="20" height="20">Clan Invasion Era</span>`} {
+	for _, want := range []string{`<img src="/refusalwar/images/icon.webp"`, `<span class="era"><img src="/static/era-clan-invasion.webp" alt="" width="20" height="20">Clan Invasion Era<span class="era-years">(3050–3061)</span></span>`} {
 		if !strings.Contains(home, want) {
 			t.Errorf("the campaign card is missing %q", want)
 		}

@@ -875,6 +875,7 @@ h1.bt-title {
   color: var(--accent);
 }
 .card .name .era img { width: 1.25rem; height: 1.25rem; flex: none; }
+.card .name .era .era-years { color: var(--muted); font-weight: 400; letter-spacing: 0.08em; }
 @media (max-width: 30rem) {
   .cards.plain .card.campaign-card { grid-template-columns: 3.75rem 1fr; gap: 0.9rem; }
   .cards.plain .card.campaign-card .go { display: none; }
@@ -1479,9 +1480,33 @@ dialog button.deploy-count:disabled, .overview-players button.deploy-count:disab
 .card.completed { border-color: #5fc47e; background: color-mix(in srgb, #5fc47e 9%, var(--panel)); }
 .card.completed:hover { border-color: #7fdc9a; background: color-mix(in srgb, #5fc47e 14%, var(--panel-2)); }
 .card.completed .num, .card.completed .go { color: #5fc47e; }
-.cards.scenarios li.locked { display: none; }
-.cards.scenarios.show-all li.locked { display: list-item; }
+.cards.scenarios li.locked:not(.passed) { display: none; }
 .card.locked { opacity: 0.5; border-style: dashed; }
+/* The path graph left of the scenario cards (graph.go): each row draws its slice of the lines, overhanging half the gap above and below so the slices join. */
+.cards.scenarios { --lane: 1.1rem; }
+.cards.scenarios li { display: grid; grid-template-columns: calc(var(--graph-lanes, 1) * var(--lane)) 1fr; gap: 0.6rem; }
+.cards.scenarios.show-all li.locked { display: grid; }
+.sgraph { position: relative; }
+.sgraph-lines { position: absolute; left: 0; top: -0.4rem; width: 100%; height: calc(100% + 0.8rem); overflow: visible; } /* a hair more than the gap, so no seam */
+.sgraph-lines path { fill: none; stroke-width: 2px; }
+.sg-done { stroke: #5fc47e; }
+.sg-next { stroke: var(--accent); stroke-dasharray: 4 4; }
+.sg-passed { stroke: var(--muted); opacity: 0.45; stroke-dasharray: 3 4; }
+.sg-node {
+  position: absolute;
+  top: 50%;
+  left: calc((var(--lane-n, 0) + 0.5) * var(--lane));
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  box-sizing: border-box;
+  background: var(--bg);
+}
+.sg-node.sg-done { background: #5fc47e; box-shadow: 0 0 6px rgb(95 196 126 / 0.6); }
+.sg-node.sg-next { border: 2px solid var(--accent); box-shadow: 0 0 6px rgb(242 184 0 / 0.45); }
+.sg-node.sg-passed { border: 2px solid var(--muted); opacity: 0.45; }
+.sg-node.sg-locked { width: 0.5rem; height: 0.5rem; border: 1.5px solid var(--muted); opacity: 0.35; }
 .show-all { margin: 0.2rem 0 1.2rem; }
 /* The label and the state are centred on each other's capitals: each text box is trimmed to its capital height, so the flex centring lines up the letters themselves and the LED sits on their middle (untrimmed, Bahnschrift's capitals sit above the middle of their line box, by a different amount at each size). The bar is padded to keep its height. A browser without text-box keeps the plain centring. */
 .mission-log { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 1rem; margin: 1rem 0; padding: 0.6rem 1rem; background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--line); }
