@@ -355,7 +355,7 @@ func (s *Server) scenario(w http.ResponseWriter, r *http.Request) {
 	var next []content.Scenario
 	if completed[sc.Slug] {
 		for _, b := range sc.Branches {
-			if n, ok := c.Scenario(b); ok {
+			if n, ok := c.Scenario(b); ok && available[b] { // a branch not taken (the other choice, once a later mission is done) is not offered
 				next = append(next, *n)
 			}
 		}

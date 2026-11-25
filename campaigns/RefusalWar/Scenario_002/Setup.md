@@ -25,7 +25,7 @@ readout:
 
 ## Briefing
 
-The 12th Falcon Regulars burned on Colmar. Their Khan has begun to sweat.
+The 12th Falcon Regulars burned on Colmar.
 
 saKhan Phelan will not leave for the Inner Sphere before Delta Galaxy draws Falcon blood. On Sudeten, the 4th Wolf Guards have already broken the 8th Falcon Regulars. Their Star Colonel left his Dire Wolf in an ejection pod and went to ground in their headquarters. What remains of his command Star gathers there.
 

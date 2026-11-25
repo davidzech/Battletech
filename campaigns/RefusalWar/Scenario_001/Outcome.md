@@ -1,6 +1,7 @@
 ---
 id: scenario_001
 default_next: ""
+branches: [scenario_002, scenario_003]   # a choice of next mission: Flame Tongue (Sudeten) or Blade Splint (Zoetermeer)
 pilot_sp: 100   # SP each pilot who took part draws from the pool; the only place the amount is set
 objectives:
   - id: plant_large

@@ -54,7 +54,7 @@ func TestCampaignLog(t *testing.T) {
 	if p := body(t, srv, "/refusalwar/scenario_000/", cookie); !strings.Contains(p, `id="mission-log"`) || !strings.Contains(p, "Complete mission") || !strings.Contains(p, "Not completed") {
 		t.Errorf("Scenario 000's mission log: %.300s", p)
 	}
-	if p := body(t, srv, "/refusalwar/scenario_001/", cookie); !strings.Contains(p, "Not available yet") || strings.Contains(p, "mission-log-toggle") {
+	if p := body(t, srv, "/refusalwar/scenario_001/", cookie); !strings.Contains(p, "Not available: this mission doesn") || strings.Contains(p, "mission-log-toggle") {
 		t.Error("a locked scenario cannot be marked")
 	}
 	// The breadcrumb menu leaves out locked scenarios.
@@ -112,6 +112,25 @@ func TestCampaignLog(t *testing.T) {
 	}
 	if p := body(t, srv, "/refusalwar/scenario_001/", cookie); !strings.Contains(p, "Mark not completed") {
 		t.Error("a completed scenario without an outcome offers to be unmarked")
+	}
+	// 001 offers a choice of 002 or 003; once 002 is completed, 003 (the path not taken) closes and 001 no longer links to it.
+	if p := body(t, srv, "/refusalwar/scenario_001/", cookie); !strings.Contains(p, `href="/refusalwar/scenario_002/"`) || !strings.Contains(p, `<li><a class="button" href="/refusalwar/scenario_003/">`) {
+		t.Error("001 offers both 002 and 003")
+	}
+	if err := store.SetScenarioCompleted(ctx, id, "refusalwar", "scenario_002", true); err != nil {
+		t.Fatal(err)
+	}
+	if p := body(t, srv, "/refusalwar/scenario_003/", cookie); !strings.Contains(p, "Not available: this mission doesn") {
+		t.Error("after 002, 003 is locked")
+	}
+	if p := body(t, srv, "/refusalwar/scenario_001/", cookie); strings.Contains(p, `<li><a class="button" href="/refusalwar/scenario_003/">`) {
+		t.Error("001 no longer links to the branch not taken")
+	}
+	if err := store.SetScenarioCompleted(ctx, id, "refusalwar", "scenario_002", false); err != nil {
+		t.Fatal(err)
+	}
+	if p := body(t, srv, "/refusalwar/scenario_003/", cookie); strings.Contains(p, "Not available:") {
+		t.Error("un-completing 002 reopens the choice")
 	}
 	// Un-completing 001 leaves 000 completed (and 000, which has a committed outcome, cannot be un-completed).
 	if got := complete("scenario_001", "0"); got != http.StatusNoContent {

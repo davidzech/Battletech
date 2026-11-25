@@ -225,23 +225,28 @@ func (c *Campaign) resolveBranches() {
 	}
 }
 
-// Available says which scenarios a run can see (and play): the campaign's first, every completed one, and every branch of a completed one. Keys are slugs;
-// completed is the set of completed slugs.
+// Available says which scenarios a run can see (and play): every completed one, and the branches of the **last** completed one only, so a choice of next
+// missions closes once one of them is played (after 001 offers 002 or 003, completing 002 offers 002's branches, not 003). Missions are always played in
+// increasing order, so the last completed is the highest-numbered; with nothing completed it is the campaign's first. Keys are slugs; completed is the set of
+// completed slugs.
 func (c *Campaign) Available(completed map[string]bool) map[string]bool {
 	out := map[string]bool{}
-	if len(c.Scenarios) > 0 {
-		out[c.Scenarios[0].Slug] = true
-	}
-	for slug := range completed {
-		sc, ok := c.Scenario(slug)
-		if !ok {
-			continue
+	var last *Scenario
+	for i := range c.Scenarios { // sorted by slug, so in number order
+		if sc := &c.Scenarios[i]; completed[sc.Slug] {
+			out[sc.Slug] = true
+			last = sc
 		}
-		out[slug] = true
-		for _, b := range sc.Branches {
-			if _, ok := c.Scenario(b); ok {
-				out[b] = true
-			}
+	}
+	if last == nil {
+		if len(c.Scenarios) > 0 {
+			out[c.Scenarios[0].Slug] = true
+		}
+		return out
+	}
+	for _, b := range last.Branches {
+		if _, ok := c.Scenario(b); ok {
+			out[b] = true
 		}
 	}
 	return out
