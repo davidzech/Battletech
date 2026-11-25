@@ -16,13 +16,16 @@ import (
 // outcomeRequest checks a scenario-outcome request and evaluates it: a same-origin request from a started campaign, for an available scenario with an outcome engine
 // that is not completed yet. It returns what the engine makes of the reported inputs.
 func (s *Server) outcomeRequest(w http.ResponseWriter, r *http.Request) (pt storage.Playthrough, c *content.Campaign, sc *content.Scenario, res content.OutcomeResult, ok bool) {
-	if pt, c, ok = s.pilotRequest(w, r); !ok {
+	if pt, c, _, ok = s.openRunRequest(w, r); !ok {
 		return
 	}
 	ok = false
 	sc, found := c.Scenario(r.PostFormValue("scenario"))
 	if !found {
 		http.Error(w, "unknown scenario", http.StatusNotFound)
+		return
+	}
+	if !s.battleLock(w, r, pt, c, sc.ID) { // a battle in progress locks every other mission
 		return
 	}
 	if !sc.HasOutcome() {

@@ -1,5 +1,6 @@
 {{define "content"}}<div class="page-head">{{template "crest" .}}<p class="kicker">Campaign</p>
 <h1 class="bt-title">{{.Campaign.Label}}</h1></div>
+{{template "battlelock" .}}
 {{if .Campaign.Problems}}<section class="campaign-problems" role="alert"><h2>Problems in this campaign&rsquo;s files</h2><ul>{{range .Campaign.Problems}}<li><code>{{.}}</code></li>{{end}}</ul></section>{{end}}
 {{if .Campaign.IntroHTML}}<section class="briefing campaign-intro{{if .Run.Started}} intro-collapsible{{end}}" id="campaign-intro" aria-label="{{or .Campaign.IntroTag "Campaign briefing"}}">
 <p class="briefing-tag">{{or .Campaign.IntroTag "Campaign briefing"}}</p>
@@ -75,7 +76,7 @@
   {{if .History}}<div class="history-filters" role="group" aria-label="Show">
     <button type="button" class="history-filter selected" data-kind="" aria-pressed="true">All</button>{{range .HistoryFilters}}<button type="button" class="history-filter" data-kind="{{.Kind}}" aria-pressed="false"{{if .Disabled}} disabled title="Nothing of this kind yet"{{end}}>{{.Label}}</button>{{end}}
   </div>
-  <ol class="history-list" id="history-list">{{range .History}}<li class="history-entry kind-{{.Kind}}" data-kind="{{.Kind}}"><span class="history-when">{{.When}}</span><span class="history-kind">{{.Label}}</span><span class="history-text">{{.Text}}</span><span class="history-sp{{if .Gain}} gain{{else}} loss{{end}}">{{.SP}}</span><span class="history-action">{{if .Checkpoint}}<button type="button" class="button button-outline history-rollback" data-checkpoint="{{.Checkpoint}}" data-label="{{.CheckpointLabel}}" title="Roll the campaign back to just after this">Roll back</button>{{end}}</span></li>{{end}}</ol>
+  <ol class="history-list" id="history-list">{{range .History}}<li class="history-entry kind-{{.Kind}}" data-kind="{{.Kind}}"><span class="history-when">{{.When}}</span><span class="history-kind">{{.Label}}</span><span class="history-text">{{.Text}}</span><span class="history-sp{{if .Gain}} gain{{else}} loss{{end}}">{{.SP}}</span><span class="history-action">{{if .Checkpoint}}<button type="button" class="button button-outline history-rollback" data-checkpoint="{{.Checkpoint}}" data-label="{{.CheckpointLabel}}"{{if $.OtherBattle}} disabled title="{{$.Lock.Mission}} is in progress."{{else}} title="Roll the campaign back to just after this"{{end}}>Roll back</button>{{end}}</span></li>{{end}}</ol>
   <p class="form-error" id="history-error" role="alert"></p>{{else}}<p class="muted">Nothing recorded yet. From now on every change to this campaign is listed here.</p>{{end}}
   <div class="form-actions"><button type="button" id="history-close">Close</button></div>
 </dialog>
@@ -98,7 +99,7 @@
 <summary><h2>Danger zone</h2></summary>
 <div class="fold-body">
 <p class="muted">Edit keywords sets which keywords the campaign holds, to correct a mission&rsquo;s report or a misclick. Keywords decide what lies ahead, so change them only when they are wrong.</p>
-<p class="danger-action"><button type="button" class="button" id="keywords-open">Edit keywords</button></p>
+<p class="danger-action"><button type="button" class="button" id="keywords-open"{{if .OtherBattle}} disabled title="{{.Lock.Mission}} is in progress."{{end}}>Edit keywords</button></p>
 <p class="muted">Deleting this campaign removes {{.Run.ForceLabel}}&rsquo;s progress in it: its named pilots and the site&rsquo;s copy of its hangar. Your account, its other campaigns and anything saved in MekBay are not touched.</p>
 <button type="button" class="button danger" id="delete-open">Delete campaign</button>
 </div>

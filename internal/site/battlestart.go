@@ -63,6 +63,10 @@ func (s *Server) startBattle(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	// One battle at a time, and a battle in progress is finished (completed or aborted) before it can be started again.
+	if !s.battleLock(w, r, bp.pt, bp.c, "") {
+		return
+	}
 	// A locked mission can't be fought: the page disables its Deploy force button, and this refuses a request made without the page.
 	if _, available := s.progress(r, bp.c); !available[bp.sc.Slug] {
 		http.Error(w, "That mission isn't available: it doesn't follow your last completed mission.", http.StatusConflict)

@@ -3,6 +3,7 @@
 <script src="/static/unitlinks.js" defer></script>
 <div class="page-head">{{template "crest" .}}<p class="kicker">{{.Campaign.MissionNumber .Scenario}}{{if .Scenario.Planet}} &middot; {{.Scenario.Planet}}{{end}}{{if .Scenario.Map}} &middot; {{.Scenario.Map}}{{end}}</p>
 <h1 class="bt-title">{{.Scenario.Title}}</h1></div>
+{{template "battlelock" .}}
 {{range $i, $img := .Images}}<figure class="scenario-art"><div class="scenario-art-pic"><img src="{{$img}}" alt=""></div>{{if and (eq $i 0) $.Scenario.Readout}}
 <div class="readout">
 <p class="readout-head">Planetary survey<span>{{$.Scenario.Planet}}</span></p>
@@ -40,7 +41,7 @@
 {{if and .Run.Started .Scenario.Forces}}<section class="mekbay" id="mekbay-op">
 <h2>{{if .InProgress}}Operation in progress{{else}}Deploy your force{{end}}</h2>
 {{if .InProgress}}<p class="muted">A battle is in progress. View the operation to open it in MekBay, see how it stands, and complete or abort the mission.</p>{{else if .Scenario.ProvidedUnits}}<p class="muted">This mission provides its own mechs. They are only used for this mission, and will be lost upon completion.</p>{{else}}<p class="muted">Choose which mechs from your hangar fly this mission{{if .Scenario.BVLimit}}, up to {{.Scenario.BVLimit}} BV{{end}}. The site sorts your MekBay hangar into <em>Deployed</em> and <em>Hangar</em> groups and sets up the OpFor against them.</p>{{end}}
-<p class="downloads"><button type="button" class="button" id="deploy-open"{{if eq .ScenarioState "completed"}} disabled title="This mission is completed."{{else if and (eq .ScenarioState "locked") (not .InProgress)}} disabled title="This mission isn't available: it doesn't follow your last completed mission."{{end}}>{{if .InProgress}}View operation{{else}}Deploy force{{end}}</button>{{if and (not .Scenario.ProvidedUnits) (not .InProgress)}}<a class="button" id="manage-link" href="/{{.Campaign.Slug}}/manage/?back={{.Scenario.Slug}}">Manage force</a>{{end}}</p>
+<p class="downloads"><button type="button" class="button" id="deploy-open"{{if eq .ScenarioState "completed"}} disabled title="This mission is completed."{{else if and (eq .ScenarioState "locked") (not .InProgress)}} disabled title="This mission isn't available: it doesn't follow your last completed mission."{{else if .OtherBattle}} disabled title="{{.Lock.Mission}} is in progress. Complete or abort it first."{{end}}>{{if .InProgress}}View operation{{else}}Deploy force{{end}}</button>{{if and (not .Scenario.ProvidedUnits) (not .InProgress)}}<a class="button" id="manage-link" href="/{{.Campaign.Slug}}/manage/?back={{.Scenario.Slug}}">Manage force</a>{{end}}</p>
 </section>
 <dialog id="deploy-dialog" class="deploy" aria-labelledby="deploy-title" data-campaign="{{.Campaign.Slug}}" data-scenario="{{.Scenario.Slug}}" data-in-progress="{{if .InProgress}}1{{end}}" data-operation-url="{{.OperationURL}}"{{if .BattleCache}} data-cached-status="{{.BattleCache}}"{{end}} data-limit="{{.Scenario.BVLimit}}" data-unit-limit="{{.Scenario.UnitLimit}}" data-pilots-required="{{if .Scenario.PilotsRequired}}1{{end}}" data-commander="{{if .Scenario.ChoosesCommander}}1{{end}}" data-can-modify="{{if .Run.Owned}}1{{end}}" data-default-players="{{.Run.Players}}" data-min-players="{{.Campaign.MinPlayers}}" data-max-players="{{.Campaign.MaxPlayers}}" data-pilots="{{.PilotsJSON}}" data-abilities="{{.Abilities}}" data-cached="{{.DeployJSON}}">
 <h2 id="deploy-title">Deploy your force</h2>
@@ -103,7 +104,7 @@
 <div class="fold-body"><section class="panel">{{.Scenario.OutcomeHTML}}</section></div>
 </details>
 {{end}}{{if and .Run.Started (ne .ScenarioState "locked") (or (not .Scenario.HasOutcome) (and (not .Scenario.Forces) (ne .ScenarioState "completed")))}}<section class="mission-actions" id="mission-actions">
-{{if .Scenario.HasOutcome}}<button type="button" class="button button-outline button-large" id="outcome-open">Complete mission</button>{{else}}<button type="button" class="button button-outline button-large" id="mission-log-toggle">{{if eq .ScenarioState "completed"}}Mark not completed{{else}}Mark completed{{end}}</button>{{end}}
+{{if .Scenario.HasOutcome}}<button type="button" class="button button-outline button-large" id="outcome-open"{{if .OtherBattle}} disabled title="{{.Lock.Mission}} is in progress."{{end}}>Complete mission</button>{{else}}<button type="button" class="button button-outline button-large" id="mission-log-toggle"{{if .OtherBattle}} disabled title="{{.Lock.Mission}} is in progress."{{end}}>{{if eq .ScenarioState "completed"}}Mark not completed{{else}}Mark completed{{end}}</button>{{end}}
 <p class="form-error" id="mission-log-error" role="alert"></p>
 </section>
 {{end}}{{if and .Run.Started (eq .ScenarioState "completed") .NextScenarios}}<section class="next-missions" id="next-missions">

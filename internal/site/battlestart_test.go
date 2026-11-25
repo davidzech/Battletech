@@ -150,33 +150,87 @@ func TestStartBattleEndpoint(t *testing.T) {
 		t.Errorf("a started scenario has an OpFor to reset: %.200s", hb)
 	}
 
-	// Starting again updates the same operation (so the link stays the same) and keeps the OpFor, unless it is reset.
-	again := readBattle(t, start(srv.URL, two...))
-	if fake.battles[1].OperationID != first.Operation || fake.battles[1].OpFor.Reuse != op.OpForInstance {
-		t.Errorf("a repeated start keeps the operation and the OpFor: %+v", fake.battles[1])
+	// While the battle is in progress the campaign is locked: starting it again, or any other change, is refused until it is completed or aborted.
+	locked := func(name string, res *http.Response) {
+		t.Helper()
+		if b, _ := io.ReadAll(res.Body); res.StatusCode != http.StatusConflict || !strings.Contains(string(b), "Scenario 001: Pyre Light is in progress") {
+			t.Errorf("%s during the battle: %d %s", name, res.StatusCode, b)
+		}
 	}
-	if again.URL != first.URL {
-		t.Errorf("so the link stays the same: %q vs %q", again.URL, first.URL)
+	locked("starting it again", start(srv.URL, two...))
+	if len(fake.battles) != 1 {
+		t.Errorf("a refused start never reaches MekBay: %d", len(fake.battles))
 	}
-	readBattle(t, start(srv.URL, append([]string{"reset_opfor", "1"}, two...)...))
-	if fake.battles[2].OpFor.Reuse != "" || fake.battles[2].OperationID != first.Operation {
-		t.Errorf("reset_opfor rebuilds the OpFor but keeps the operation: %+v", fake.battles[2])
+	form := func(kv ...string) url.Values {
+		v := url.Values{"campaign": {"refusalwar"}}
+		for i := 0; i+1 < len(kv); i += 2 {
+			v.Add(kv[i], kv[i+1])
+		}
+		return v
+	}
+	pid := ""
+	if ps, _ := store.Pilots(ctx, id, "refusalwar"); len(ps) > 0 {
+		pid = ps[0].ID
+	}
+	for path, f := range map[string]url.Values{
+		"/api/hangar/sell":                form("unit", "ub"),
+		"/api/hangar/service":             form("kind", "rearm", "unit", "ua"),
+		"/api/hangar/purchase":            form("unit", "BMGrizzly"),
+		"/api/pilots":                     form("name", "Natasha"),
+		"/api/pilots/allocate":            form("pilot", pid, "gunnery", "10"),
+		"/api/pilots/rename":              form("pilot", pid, "name", "Ulric"),
+		"/api/pilots/portrait":            form("pilot", pid, "portrait", "male_rank1_1.png"),
+		"/api/pilots/fallen":              form("pilot", pid),
+		"/api/warchest":                   form("funds", "1"),
+		"/api/campaign/force-name":        form("name", "Iron Wolves"),
+		"/api/campaign/players":           form("players", "1"),
+		"/api/campaign/keywords":          form(),
+		"/api/campaign/rollback":          form("checkpoint", "1"),
+		"/api/campaign/scenario-complete": form("scenario", "scenario_000", "done", "0"),
+		"/api/campaign/scenario-outcome":  form("scenario", "scenario_002", "inputs", "{}"),
+	} {
+		locked(path, post(t, srv, path, f, cookie, srv.URL))
+	}
+	// The battle's own mission can still be reported: that is how it ends.
+	if res := post(t, srv, "/api/campaign/scenario-outcome", form("scenario", "scenario_001", "inputs", "{}"), cookie, srv.URL); res.StatusCode == http.StatusConflict {
+		b, _ := io.ReadAll(res.Body)
+		t.Errorf("previewing the battle's own outcome is allowed: %s", b)
 	}
 
-	// MekBay failing leaves the record alone and says why.
+	// The pages say so: a banner everywhere but the battle's own page, the Manage page's controls disabled, and the other missions' buttons too.
+	if page := body(t, srv, "/refusalwar/manage/", cookie); !strings.Contains(page, `id="battle-lock"`) || !strings.Contains(page, `<fieldset class="battle-lock-scope" disabled>`) || !strings.Contains(page, `href="/refusalwar/scenario_001/">Go to the mission</a>`) {
+		t.Error("the Manage page is locked during the battle")
+	}
+	if page := body(t, srv, "/refusalwar/", cookie); !strings.Contains(page, `id="battle-lock"`) || !strings.Contains(page, `id="keywords-open" disabled`) || strings.Contains(page, `id="delete-open" disabled`) {
+		t.Error("the campaign page is locked during the battle, except Delete campaign")
+	}
+	if page := body(t, srv, "/refusalwar/scenario_001/", cookie); strings.Contains(page, `id="battle-lock"`) {
+		t.Error("the battle's own page has its own controls, not the lock banner")
+	}
+	if page := body(t, srv, "/refusalwar/scenario_000/", cookie); !strings.Contains(page, `id="battle-lock"`) {
+		t.Error("another mission's page shows the lock")
+	}
+
+	// Aborting unlocks it. MekBay failing to start the next battle leaves nothing recorded and says why.
+	if r := post(t, srv, "/api/battle/abort", form("scenario", "scenario_001"), cookie, srv.URL); r.StatusCode != http.StatusNoContent {
+		t.Fatalf("abort: %d", r.StatusCode)
+	}
 	fake.mu.Lock()
 	fake.battleErr = errors.New("MekBay says that account doesn't own this force")
 	fake.mu.Unlock()
-	before, _, _ := store.MekBayOperation(ctx, id, "refusalwar", "scenario_001")
 	res := start(srv.URL, two...)
 	if b, _ := io.ReadAll(res.Body); res.StatusCode != http.StatusBadGateway || !strings.Contains(string(b), "doesn't own") {
 		t.Errorf("a MekBay failure is a 502 with the reason: %d %s", res.StatusCode, b)
 	}
-	if after, _, _ := store.MekBayOperation(ctx, id, "refusalwar", "scenario_001"); after != before {
-		t.Errorf("a failed start doesn't change the record: %+v vs %+v", after, before)
+	if _, ok, _ := store.MekBayOperation(ctx, id, "refusalwar", "scenario_001"); ok {
+		t.Error("a failed start records nothing")
 	}
+	fake.mu.Lock()
+	fake.battleErr = nil
+	fake.mu.Unlock()
+	readBattle(t, start(srv.URL, two...))
 
-	// Deleting the campaign takes the record with it.
+	// Deleting the campaign is allowed during a battle, and takes the record with it.
 	if r := post(t, srv, "/api/campaign/delete", url.Values{"campaign": {"refusalwar"}}, cookie, srv.URL); r.StatusCode != http.StatusNoContent {
 		t.Fatalf("delete: %d", r.StatusCode)
 	}

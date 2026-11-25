@@ -60,3 +60,16 @@ func (s *Store) SaveMekBayOperation(ctx context.Context, playthroughID, campaign
 		playthroughID, campaign, scenarioID, op.OpForInstance, op.OperationID)
 	return err
 }
+
+// BattleInProgress says which scenario of a campaign run has a battle in progress, if any (the oldest one, should there be more). While one is in progress
+// the campaign is locked: nothing but that battle's own actions may change it.
+func (s *Store) BattleInProgress(ctx context.Context, playthroughID, campaign string) (scenarioID string, ok bool, err error) {
+	err = s.db.QueryRowContext(ctx,
+		s.q(`SELECT scenario_id FROM mekbay_operations WHERE playthrough_id = ? AND campaign = ? ORDER BY scenario_id LIMIT 1`),
+		playthroughID, campaign,
+	).Scan(&scenarioID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", false, nil
+	}
+	return scenarioID, err == nil, err
+}

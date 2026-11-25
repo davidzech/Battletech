@@ -929,7 +929,9 @@
     if (inProgress) enterOperation(null);
     else load();
   });
-  dialog.addEventListener('close', stopPolling);
+  // A battle started from this dialog changes the whole page (View operation, the mission log, no Manage force, the campaign lock), so closing it reloads.
+  var startedHere = false;
+  dialog.addEventListener('close', function () { stopPolling(); if (startedHere) location.reload(); });
   // One Escape can be taken for both dialogs when the QR code was opened without a click in between; the one under it stays.
   dialog.addEventListener('cancel', function (e) { if ((qrDialog && qrDialog.open) || (abortDialog && abortDialog.open)) e.preventDefault(); });
   cancel.addEventListener('click', function () { dialog.close(); });
@@ -1022,7 +1024,7 @@
       credentials: 'same-origin'
     }).then(function (res) {
       busy = false;
-      if (res.ok) return res.json().then(function (data) { enterOperation(data); });
+      if (res.ok) return res.json().then(function (data) { startedHere = true; enterOperation(data); });
       renderFooter();
       return res.text().then(function (t) { error.textContent = t.trim() || 'Could not start the battle.'; });
     }, function () { busy = false; renderFooter(); error.textContent = 'Could not reach the server.'; });
