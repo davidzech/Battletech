@@ -19,7 +19,7 @@ keywords:
   - id: full_power
     name: Full Power
     scenario: scenario_003
-    description: ""
+    description: The karyoplasma converter on Zoetermeer was left standing.
   - id: counter_intelligence
     name: Counter Intelligence
     scenario: scenario_004
