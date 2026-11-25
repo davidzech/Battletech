@@ -1,5 +1,5 @@
-// Manage page: change a pilot's portrait, spend their unallocated SP in the Manage SP dialog, mark one killed in action,
-// or correct the records (revive or delete a pilot). The server validates everything; these handlers only post the forms and reload to show the result.
+// Manage page: change a pilot's portrait, spend their unallocated SP in the Manage SP dialog,
+// or correct the records (mark a pilot killed in action, revive or delete one). The server validates everything; these handlers only post the forms and reload to show the result.
 (function () {
   var box = document.getElementById('pilots');
   if (!box) return;
@@ -98,7 +98,7 @@
   var spBody = document.getElementById('sp-body');
   var spError = document.getElementById('sp-error');
   var apply = document.getElementById('sp-apply');
-  var current = null; // the pilot whose dialog is open: {id, name, base, pool, earned, sp}; earned is staged, not yet saved
+  var current = null; // the pilot whose dialog is open: {id, name, base, pool, sp}
   var dirty = false;  // something was saved, so the page behind is stale
 
   function render() {
@@ -121,53 +121,7 @@
       return SPAllocator.row(p, l, { ladders: ladders, budget: p.pool, step: STEP, base: p.base, onEdit: function () { spError.textContent = ''; }, refresh: refresh });
     });
     rows.forEach(function (r) { spBody.appendChild(r); });
-    if (!p.pool) spBody.appendChild(el('p', 'muted', 'This pilot has no unallocated SP. Add the SP they earned below, then spend it here.'));
-
-    // Earned SP is added to the pilot's total here, then spent above.
-    var earn = el('form', 'sp-earn');
-    earn.autocomplete = 'off';
-    var label = el('label', null, 'Add earned SP');
-    var input = document.createElement('input');
-    input.type = 'number'; input.min = 0; input.max = 10000; input.step = STEP; input.inputMode = 'numeric'; input.placeholder = '0';
-    label.appendChild(input);
-    var addBtn = el('button', null, 'Add');
-    addBtn.type = 'submit';
-    earn.appendChild(label);
-    earn.appendChild(addBtn);
-    // Earned SP is only staged here: it raises what can be spent in this dialog, but nothing is saved until Apply (closing
-    // the dialog throws it away).
-    earn.addEventListener('submit', function (e) {
-      e.preventDefault();
-      e.stopPropagation(); // this form sits inside the dialog's form: its submit must not also trigger Apply
-      var n = parseInt(input.value, 10);
-      if (isNaN(n) || n < 1) { spError.textContent = 'Enter how much SP the pilot earned.'; return; }
-      if (p.earned + n > 10000) { spError.textContent = 'That is too much SP to add at once.'; return; }
-      Confirm.ask({
-        title: 'Add ' + n + ' earned SP?',
-        message: 'Add ' + n + ' earned SP to ' + p.name + '. It is staged until you press Apply, and Clear or closing this window discards it.',
-        confirmLabel: 'Add SP'
-      }).then(function (ok) {
-        if (!ok) return;
-        p.earned += n;
-        p.pool += n;
-        spError.textContent = '';
-        render();
-      });
-    });
-    spBody.appendChild(earn);
-    if (p.earned) {
-      var staged = el('p', 'sp-staged', '+' + p.earned + ' SP earned. Not saved until you press Apply. ');
-      var clear = el('button', 'link-button', 'Clear');
-      clear.type = 'button';
-      clear.addEventListener('click', function () {
-        p.pool -= p.earned;
-        p.earned = 0;
-        if (SPAllocator.spentOf(p, ladders) > p.pool) ladders.forEach(function (l) { p.sp[l.key] = 0; });
-        render();
-      });
-      staged.appendChild(clear);
-      spBody.appendChild(staged);
-    }
+    if (!p.pool) spBody.appendChild(el('p', 'muted', 'This pilot has no unallocated SP. Missions award SP when they are completed.'));
 
     function refresh() {
       var used = SPAllocator.spentOf(p, ladders);
@@ -176,14 +130,14 @@
       remaining.classList.toggle('done', left === 0);
       rows.forEach(function (r) { r.show(); });
       stats.forEach(function (b, i) { b.show(p.base[ladders[i].key] + p.sp[ladders[i].key]); });
-      apply.disabled = used === 0 && p.earned === 0;
+      apply.disabled = used === 0;
     }
     refresh();
   }
 
   function openSP(li) {
     var base = {}, parts = (li.dataset.sp || '').split(',');
-    var p = { id: li.dataset.pilot, name: li.dataset.name, base: base, pool: parseInt(li.dataset.unallocated, 10) || 0, earned: 0, sp: {} };
+    var p = { id: li.dataset.pilot, name: li.dataset.name, base: base, pool: parseInt(li.dataset.unallocated, 10) || 0, sp: {} };
     ladders.forEach(function (l, i) { base[l.key] = parseInt(parts[i], 10) || 0; p.sp[l.key] = 0; });
     current = p;
     dirty = false;
@@ -199,7 +153,7 @@
       e.preventDefault();
       if (e.target !== e.currentTarget) return; // only the dialog's own submit (Apply), never a form nested in it
       if (!current || apply.disabled) return;
-      var parts = ['pilot=' + encodeURIComponent(current.id), 'earned=' + current.earned];
+      var parts = ['pilot=' + encodeURIComponent(current.id)];
       ladders.forEach(function (l) { parts.push(l.key + '=' + current.sp[l.key]); });
       apply.disabled = true;
       post('/api/pilots/allocate', parts.join('&')).then(function (res) {
@@ -445,27 +399,9 @@
         });
       });
     }
-
-    var kia = li.querySelector('.pilot-kia');
-    if (kia) {
-      kia.addEventListener('click', function () {
-        Confirm.ask({
-          title: 'Mark ' + li.dataset.name + ' as Killed in Action?',
-          message: 'They move to the Memorial and are out of the campaign. Their record stays, and you can bring them back under Advanced Management.',
-          confirmLabel: 'Killed in Action', danger: true
-        }).then(function (ok) { if (ok) send('/api/pilots/fallen', 'pilot=' + encodeURIComponent(id), kia); });
-      });
-    }
   });
 
-  // ---- The "More" menus on the pilot cards: a native <details>, closed again by a click anywhere else or by Escape.
-  function closeMenus(except) {
-    box.querySelectorAll('details.more[open]').forEach(function (d) { if (d !== except) d.removeAttribute('open'); });
-  }
-  document.addEventListener('click', function (e) { closeMenus(e.target.closest ? e.target.closest('details.more') : null); });
-  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeMenus(null); });
-
-  // ---- Advanced Management: edit a name, revive, delete, reset abilities or override the total SP, to correct a misclick or a
+  // ---- Advanced Management: edit a name, mark killed in action or revive, delete, reset abilities or override the total SP, to correct a misclick or a
   // desync. Every action updates its row in place and leaves the dialog open; the page behind is refreshed when the dialog
   // is closed (if anything changed).
   var records = document.getElementById('records-dialog');
@@ -572,15 +508,32 @@
         error: function (m) { recError.textContent = m; }
       });
 
-      var revive = li.querySelector('.rec-revive');
-      if (revive) revive.addEventListener('click', function () {
-        recAct('/api/pilots/revive', li, revive, '', function () {
-          var state = li.querySelector('.rec-state');
-          state.textContent = 'Active';
-          state.classList.remove('kia');
-          revive.remove();
+      // Killed in Action and Revive are one slot: the row shows whichever applies, and each swaps for the other once it is saved.
+      function stateButton(fallen) {
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = fallen ? 'rec-revive' : 'rec-kia';
+        btn.textContent = fallen ? 'Revive' : 'Mark KIA';
+        btn.addEventListener('click', function () {
+          if (fallen) { recAct('/api/pilots/revive', li, btn, '', function () { showState(btn, false); }); return; }
+          Confirm.ask({
+            title: 'Mark ' + li.dataset.name + ' as Killed in Action?',
+            message: 'They move to the Memorial and are out of the campaign. Their record stays, and you can revive them here.',
+            confirmLabel: 'Killed in Action', danger: true
+          }).then(function (ok) { if (ok) recAct('/api/pilots/fallen', li, btn, '', function () { showState(btn, true); }); });
         });
-      });
+        return btn;
+      }
+      function showState(old, fallen) {
+        var state = li.querySelector('.rec-state');
+        state.textContent = fallen ? 'Killed in Action' : 'Active';
+        state.classList.toggle('kia', fallen);
+        var next = stateButton(fallen);
+        old.replaceWith(next);
+        next.focus();
+      }
+      var stateBtn = li.querySelector('.rec-revive, .rec-kia');
+      if (stateBtn) stateBtn.replaceWith(stateButton(stateBtn.classList.contains('rec-revive')));
 
       var reset = li.querySelector('.rec-reset');
       reset.addEventListener('click', function () {
