@@ -278,6 +278,12 @@ func (s *Store) init() error {
 	if err := s.ensureColumn("campaign_runs", "free_recruits", "INTEGER NOT NULL DEFAULT 0"); err != nil {
 		return err
 	}
+	if err := s.ensureColumn("campaign_runs", "battle_claim", "BIGINT NOT NULL DEFAULT 0"); err != nil { // see ClaimBattle
+		return err
+	}
+	if err := s.ensureColumn("campaign_runs", "battle_claim_scenario", "TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
 	if err := s.ensureColumn("scenario_completions", "outcome", "TEXT NOT NULL DEFAULT ''"); err != nil {
 		return err
 	}
@@ -310,9 +316,9 @@ func (s *Store) init() error {
 			AND (h.seq = 0 OR h.text LIKE 'Started the campaign%'))`); err != nil {
 		return fmt.Errorf("backfill the campaign history: %w", err)
 	}
-	// The Funds kind became Corrections, which also takes the Advanced Management lines that were logged as pilot changes.
+	// The Funds kind became Corrections, which also takes the Advanced Management lines that were logged as pilot changes (and Mark KIA, which was untagged).
 	if _, err := s.db.Exec(`UPDATE campaign_history SET kind = '` + HistoryCorrections + `'
-		WHERE kind = 'funds' OR (kind = '` + HistoryPilot + `' AND text LIKE '%(Advanced Management).')`); err != nil {
+		WHERE kind = 'funds' OR (kind = '` + HistoryPilot + `' AND (text LIKE '%(Advanced Management).' OR text LIKE '% was marked killed in action.'))`); err != nil {
 		return fmt.Errorf("migrate the history kinds: %w", err)
 	}
 	return nil

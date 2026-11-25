@@ -282,13 +282,10 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name
 					p.Run = run
 				}
 				if p.Run.Started() {
-					if sid, busy, err := s.store.BattleInProgress(r.Context(), id, p.Campaign.Slug); err != nil {
+					if sc, err := s.battleInProgress(r.Context(), id, p.Campaign, true); err != nil {
 						log.Printf("load the battle in progress: %v", err)
-					} else if busy {
-						p.Lock = &BattleLock{Mission: "A mission", URL: "/" + p.Campaign.Slug + "/"}
-						if sc, ok := p.Campaign.ScenarioByID(sid); ok {
-							p.Lock = &BattleLock{Mission: p.Campaign.MissionName(*sc), URL: "/" + p.Campaign.Slug + "/" + sc.Slug + "/", Slug: sc.Slug}
-						}
+					} else if sc != nil {
+						p.Lock = &BattleLock{Mission: p.Campaign.MissionName(*sc), URL: "/" + p.Campaign.Slug + "/" + sc.Slug + "/", Slug: sc.Slug}
 					}
 					pilots, err := s.store.Pilots(r.Context(), id, p.Campaign.Slug)
 					if err != nil {

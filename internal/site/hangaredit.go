@@ -1,6 +1,7 @@
 package site
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -29,25 +30,51 @@ func (s *Server) runRequest(w http.ResponseWriter, r *http.Request) (pt storage.
 // battleLock refuses the request with 409 when a battle is in progress in the run, unless it is the battle of the scenario allowed (a scenario ID; "" allows
 // none). It answers the request itself and returns false when it refuses.
 func (s *Server) battleLock(w http.ResponseWriter, r *http.Request, pt storage.Playthrough, c *content.Campaign, allowed string) bool {
-	id, busy, err := s.store.BattleInProgress(r.Context(), pt.ID, c.Slug)
+	sc, err := s.battleInProgress(r.Context(), pt.ID, c, true)
 	if err != nil {
 		http.Error(w, "could not load the battle", http.StatusInternalServerError)
 		return false
 	}
-	if !busy || (allowed != "" && id == allowed) {
+	if sc == nil || (allowed != "" && sc.ID == allowed) {
 		return true
 	}
-	http.Error(w, battleLockMessage(c, id), http.StatusConflict)
+	http.Error(w, battleLockMessage(c, sc), http.StatusConflict)
 	return false
 }
 
-// battleLockMessage says why the campaign is locked: which mission is in progress, and how to unlock it.
-func battleLockMessage(c *content.Campaign, scenarioID string) string {
-	name := "A mission"
-	if sc, ok := c.ScenarioByID(scenarioID); ok {
-		name = c.MissionName(*sc)
+// battleInProgress is the scenario whose battle locks the campaign, or nil: the first with a battle recorded that the campaign still has and that isn't
+// completed (a leftover row for one that is, or for a scenario the campaign no longer has, would lock it with no way out), or, with claims, the scenario a
+// start in progress has claimed (see Store.ClaimBattle).
+func (s *Server) battleInProgress(ctx context.Context, playthroughID string, c *content.Campaign, claims bool) (*content.Scenario, error) {
+	ids, err := s.store.BattleScenarios(ctx, playthroughID, c.Slug)
+	if err != nil {
+		return nil, err
 	}
-	return name + " is in progress. Complete or abort it before changing the campaign."
+	if claims {
+		if id, ok, err := s.store.BattleClaim(ctx, playthroughID, c.Slug); err != nil {
+			return nil, err
+		} else if ok {
+			ids = append(ids, id)
+		}
+	}
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	completed, err := s.store.Completions(ctx, playthroughID, c.Slug)
+	if err != nil {
+		return nil, err
+	}
+	for _, id := range ids {
+		if sc, ok := c.ScenarioByID(id); ok && !completed[sc.Slug] {
+			return sc, nil
+		}
+	}
+	return nil, nil
+}
+
+// battleLockMessage says why the campaign is locked: which mission is in progress, and how to unlock it.
+func battleLockMessage(c *content.Campaign, sc *content.Scenario) string {
+	return c.MissionName(*sc) + " is in progress. Complete or abort it before changing the campaign."
 }
 
 // openRunRequest is runRequest without the battle lock.

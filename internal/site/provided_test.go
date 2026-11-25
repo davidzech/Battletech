@@ -211,7 +211,7 @@ func TestReconfigureProvidedMechs(t *testing.T) {
 		t.Error("reconfiguring leaves the scenario's own force alone")
 	}
 	// The deploy data offers the swaps, with each variant marked as fielded or not.
-	data := deployData(h, c, s0, false, false)
+	data := deployData(h, c, s0, false)
 	if data["swaps"] != true || data["provided"] != true {
 		t.Errorf("the deploy data offers the swaps: %v %v", data["swaps"], data["provided"])
 	}

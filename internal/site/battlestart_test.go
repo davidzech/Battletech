@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/davidzech/Battletech/internal/catalog"
 	"github.com/davidzech/Battletech/internal/content"
@@ -145,9 +146,6 @@ func TestStartBattleEndpoint(t *testing.T) {
 	}
 	if page := body(t, srv, "/refusalwar/scenario_001/", cookie); strings.Contains(page, `id="manage-link"`) {
 		t.Error("Manage force is hidden while the operation is in progress")
-	}
-	if hb := body(t, srv, "/api/mekbay/hangar?campaign=refusalwar&scenario=scenario_001", cookie); !strings.Contains(hb, `"hasOperation":true`) {
-		t.Errorf("a started scenario has an OpFor to reset: %.200s", hb)
 	}
 
 	// While the battle is in progress the campaign is locked: starting it again, or any other change, is refused until it is completed or aborted.
@@ -469,5 +467,65 @@ func TestStartBattleWithReconfiguredMechs(t *testing.T) {
 	cat, _ := catalog.ByName(fielded)
 	if d[0].Unit != fielded || d[0].Pilot != "Alrek" || d[0].BV != cat.BV || d[1].Unit != "BMRyoken_Prime" {
 		t.Errorf("the Nova goes as %s with its own BV, the Stormcrow as it was: %+v", fielded, d)
+	}
+}
+
+// TestBattleLockIgnoresLeftoversAndHonoursClaims: a battle row left behind for a completed scenario, or for a scenario the campaign no longer has, doesn't lock
+// the campaign (it would have no way out); a start in progress (a claim) does, until it is released or expires, and a second claim waits for the first.
+func TestBattleLockIgnoresLeftoversAndHonoursClaims(t *testing.T) {
+	srv, store, cookie := startedCompany(t)
+	ctx := context.Background()
+	id := playthroughID("wolfpack2026")
+	ps, _ := store.Pilots(ctx, id, "refusalwar")
+	rename := func(name string) int {
+		return post(t, srv, "/api/pilots/rename", url.Values{"campaign": {"refusalwar"}, "pilot": {ps[0].ID}, "name": {name}}, cookie, srv.URL).StatusCode
+	}
+
+	// Leftovers: a completed scenario's battle and an unknown scenario's battle.
+	if err := store.SetScenarioCompleted(ctx, id, "refusalwar", "scenario_000", true); err != nil {
+		t.Fatal(err)
+	}
+	for _, sc := range []string{"scenario_000", "scenario_999"} {
+		if err := store.SaveMekBayOperation(ctx, id, "refusalwar", sc, storage.MekBayOperation{OpForInstance: "o", OperationID: "op-" + sc}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := rename("Ulric"); got != http.StatusNoContent {
+		t.Errorf("leftover battle rows lock the campaign: %d", got)
+	}
+	if page := body(t, srv, "/refusalwar/manage/", cookie); strings.Contains(page, `id="battle-lock"`) {
+		t.Error("leftover battle rows show the lock banner")
+	}
+
+	// A claim locks it like a battle, and only one claim holds at a time.
+	if ok, err := store.ClaimBattle(ctx, id, "refusalwar", "scenario_001"); err != nil || !ok {
+		t.Fatalf("claim: %v %v", ok, err)
+	}
+	if ok, _ := store.ClaimBattle(ctx, id, "refusalwar", "scenario_002"); ok {
+		t.Error("a second claim went ahead while the first held")
+	}
+	if got := rename("Alrek"); got != http.StatusConflict {
+		t.Errorf("a change during a claimed start: %d", got)
+	}
+	if page := body(t, srv, "/refusalwar/manage/", cookie); !strings.Contains(page, `id="battle-lock"`) || !strings.Contains(page, "Scenario 001") {
+		t.Error("a claimed start shows the lock banner")
+	}
+	if err := store.ReleaseBattleClaim(ctx, id, "refusalwar"); err != nil {
+		t.Fatal(err)
+	}
+	if got := rename("Alrek"); got != http.StatusNoContent {
+		t.Errorf("after the release: %d", got)
+	}
+
+	// A claim older than its TTL (a server that died mid-start) no longer holds.
+	if _, err := store.DB().ExecContext(ctx, store.Rebind(`UPDATE campaign_runs SET battle_claim = ?, battle_claim_scenario = 'scenario_001' WHERE playthrough_id = ?`),
+		time.Now().Add(-storage.BattleClaimTTL-time.Minute).Unix(), id); err != nil {
+		t.Fatal(err)
+	}
+	if got := rename("Ulric"); got != http.StatusNoContent {
+		t.Errorf("an expired claim still locks: %d", got)
+	}
+	if ok, _ := store.ClaimBattle(ctx, id, "refusalwar", "scenario_001"); !ok {
+		t.Error("an expired claim can be taken over")
 	}
 }

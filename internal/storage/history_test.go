@@ -95,7 +95,7 @@ func TestHistoryKindsMigrate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{HistoryCorrections, HistoryCorrections, HistoryPilot, HistoryPilot}
+	want := []string{HistoryCorrections, HistoryCorrections, HistoryPilot, HistoryCorrections}
 	if len(h) != len(want) {
 		t.Fatalf("history: %+v", h)
 	}

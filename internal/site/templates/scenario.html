@@ -61,7 +61,6 @@
 </section>
 <ul class="deploy-list" id="deploy-list"></ul>
 <div class="deploy-review" id="deploy-review" hidden></div>
-<label class="check themed-check" id="deploy-reset-row" hidden><input type="checkbox" id="deploy-reset" class="themed-box"> Reset the OpFor (wipes any damage recorded on it)</label>
 <div class="op-actions" id="op-actions" hidden>
 {{if and .Scenario.HasOutcome (ne .ScenarioState "locked") (ne .ScenarioState "completed")}}<button type="button" class="button button-outline button-large" id="outcome-open">Complete mission</button>
 {{end}}<details class="op-abort" id="op-abort"><summary>More options</summary>
