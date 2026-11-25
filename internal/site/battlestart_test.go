@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/davidzech/Battletech/internal/catalog"
 	"github.com/davidzech/Battletech/internal/content"
 	"github.com/davidzech/Battletech/internal/mekbay"
 	"github.com/davidzech/Battletech/internal/pilot"
@@ -59,6 +60,17 @@ func TestStartBattleEndpoint(t *testing.T) {
 		return post(t, srv, "/api/battle/start", v, cookie, origin)
 	}
 	two := []string{"players", "2", "p1_units", "ua", "p1_assign_unit", "ua", "p1_assign_pilot", "Alrek", "p2_units", "ub"}
+
+	// Scenario 001 is locked until 000 is completed: its page disables Deploy force and the server refuses the battle.
+	if page := body(t, srv, "/refusalwar/scenario_001/", cookie); !strings.Contains(page, `id="deploy-open" disabled title="This mission isn`) {
+		t.Error("a locked mission's Deploy force button should be disabled")
+	}
+	if got := start(srv.URL, two...).StatusCode; got != http.StatusConflict || len(fake.battles) != 0 {
+		t.Errorf("locked mission: %d, want 409", got)
+	}
+	if err := store.SetScenarioCompleted(ctx, id, "refusalwar", "scenario_000", true); err != nil {
+		t.Fatal(err)
+	}
 
 	if got := start("https://evil.example", two...).StatusCode; got != http.StatusForbidden || len(fake.battles) != 0 {
 		t.Errorf("cross-origin: %d", got)
@@ -220,6 +232,9 @@ func TestBattleStatusAndAbort(t *testing.T) {
 		t.Fatalf("start: %d", r.StatusCode)
 	}
 	id := playthroughID(seed)
+	if err := store.SetScenarioCompleted(ctx, id, "refusalwar", "scenario_000", true); err != nil { // unlocks 001
+		t.Fatal(err)
+	}
 	q := "campaign=refusalwar&scenario=scenario_001"
 	status := func() *http.Response { return get(t, srv, "/api/battle/status?"+q, cookie) }
 	abort := func(origin string) *http.Response {
@@ -369,5 +384,36 @@ func TestCrewIsDead(t *testing.T) {
 		if v := hangarViews(h)[0]; v.PilotDead != c.dead {
 			t.Errorf("%s: the view carries it: %+v", name, v)
 		}
+	}
+}
+
+// A provided omnimech reconfigured on the Deploy wizard's Configure step goes into battle as its chosen variant; a variant Clan Wolf doesn't field is refused.
+func TestStartBattleWithReconfiguredMechs(t *testing.T) {
+	const seed = "wolfpack2026"
+	fake := &fakeMekBay{hangar: startingHangar()}
+	srv, _ := newMekBayTestServer(t, fake)
+	cookie := post(t, srv, "/api/seed", url.Values{"seed": {seed}}, nil, "").Cookies()[0]
+	post(t, srv, "/api/account", url.Values{"account": {"Wolf Pack"}}, cookie, srv.URL)
+	if r := post(t, srv, "/api/campaign/start", startForm(goodHangar, "Alrek", "Katarina"), cookie, srv.URL); r.StatusCode != http.StatusNoContent {
+		t.Fatalf("start: %d", r.StatusCode)
+	}
+	fielded, not := swapChoices(t, "BMBlackHawk_Prime")
+	units := []string{providedPrefix + "bmblackhawk_prime", providedPrefix + "bmryoken_prime"}
+	form := func(to string) url.Values {
+		return url.Values{"campaign": {"refusalwar"}, "scenario": {"scenario_000"}, "players": {"1"},
+			"p1_units": units, "p1_assign_unit": units, "p1_assign_pilot": {"Alrek", "Katarina"},
+			"variant_unit": {units[0]}, "variant_to": {to}}
+	}
+	if r := post(t, srv, "/api/deploy/plan", form(not), cookie, srv.URL); r.StatusCode != http.StatusBadRequest {
+		t.Errorf("a variant Clan Wolf doesn't field: %d", r.StatusCode)
+	}
+	readBattle(t, post(t, srv, "/api/battle/start", form(fielded), cookie, srv.URL))
+	if len(fake.battles) != 1 {
+		t.Fatalf("one battle: %+v", fake.battles)
+	}
+	d := fake.battles[0].Players[0].Draft.Groups[0].Units
+	cat, _ := catalog.ByName(fielded)
+	if d[0].Unit != fielded || d[0].Pilot != "Alrek" || d[0].BV != cat.BV || d[1].Unit != "BMRyoken_Prime" {
+		t.Errorf("the Nova goes as %s with its own BV, the Stormcrow as it was: %+v", fielded, d)
 	}
 }

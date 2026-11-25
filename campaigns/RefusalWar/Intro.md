@@ -10,13 +10,13 @@ max_named_pilots: 4
 recruit_cost: 300
 availability_faction: Clan Wolf
 availability_era: Clan Invasion
+icon: images/icon.webp   # the campaign's emblem on the home page (Clan Wolf's wolf head)
 faction: clan
 # The Clan ladder with Cadet below MechWarrior: the starting pilots are cadets until the Trial of Position (Scenario 000) promotes them.
 ranks: [Cadet, MechWarrior, Star Commander, Star Captain, Star Colonel, Galaxy Commander, saKhan, Khan]
 recruit_rank: MechWarrior
 mvp_sp: 20
 ---
-
 
 ## Briefing
 

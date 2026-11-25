@@ -2,9 +2,12 @@ package site
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
+	"github.com/davidzech/Battletech/internal/catalog"
 	"github.com/davidzech/Battletech/internal/content"
+	"github.com/davidzech/Battletech/internal/hangar"
 	"github.com/davidzech/Battletech/internal/mekbay"
 	"github.com/davidzech/Battletech/internal/storage"
 )
@@ -36,4 +39,64 @@ func (s *Server) scenarioHangar(ctx context.Context, run storage.CampaignRun, sc
 		return providedForce(sc), nil
 	}
 	return s.mekbay.ReadHangar(ctx, run.HangarInstance)
+}
+
+// reconfigureProvided applies the variants a deploy plan chose for the provided omnimechs (the paired, repeated variant_unit and variant_to fields: a provided
+// unit's ID and the MekBay unit ID of the variant it becomes) and returns the force as the players will fly it, or the problem as a sentence. Reconfiguring is free
+// and only offered when the scenario says so (provided_swaps): to another variant of the same chassis that the campaign's faction fields in its era. A variant
+// that is the unit's own changes nothing. The unit keeps its ID, so the plan's ticks and pilot assignments still point at it.
+func reconfigureProvided(h mekbay.HangarForce, c *content.Campaign, sc *content.Scenario, ids, tos []string) (mekbay.HangarForce, string) {
+	if len(ids) == 0 && len(tos) == 0 {
+		return h, ""
+	}
+	if !sc.Provides() || !sc.ProvidedSwaps {
+		return h, "This mission's mechs can't be reconfigured."
+	}
+	if len(ids) != len(tos) {
+		return h, "Each reconfigured mech needs a variant."
+	}
+	var available map[string]bool
+	if c != nil && c.AvailabilityFaction != "" && c.AvailabilityEra != "" {
+		available = catalog.Available(c.AvailabilityFaction, c.AvailabilityEra)
+	}
+	out := h
+	out.Units = append([]mekbay.HangarUnit(nil), h.Units...)
+	done := map[string]bool{}
+	for k, id := range ids {
+		if done[id] {
+			return h, "A mech was reconfigured twice."
+		}
+		done[id] = true
+		i := -1
+		for j := range out.Units {
+			if out.Units[j].ID == id {
+				i = j
+			}
+		}
+		if i < 0 {
+			return h, "That mech isn't one of this mission's."
+		}
+		to := tos[k]
+		if to == out.Units[i].Unit {
+			continue
+		}
+		cat, known := catalog.ByName(out.Units[i].Unit)
+		ok := false
+		if known {
+			for _, o := range hangar.SwapOptions(cat) {
+				if o.Unit == to && (available == nil || available[to]) {
+					ok = true
+				}
+			}
+		}
+		if !ok {
+			name := id
+			if known {
+				name = catalog.DisplayName(cat)
+			}
+			return h, fmt.Sprintf("%s can't be reconfigured to that variant.", name)
+		}
+		out.Units[i].Unit = to
+	}
+	return out, ""
 }

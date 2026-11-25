@@ -91,7 +91,25 @@ type Page struct {
 }
 
 // Card is one entry in a list of links (campaigns or scenarios).
-type Card struct{ Num, Name, Sub, URL, State string } // State: "completed", "available" or "locked" for a scenario card
+type Card struct {
+	Num, Name, Sub, URL, State string // State: "completed", "available" or "locked" for a scenario card
+	// A campaign card's emblem and era: Icon is the campaign's icon URL, Era its era's name and EraIcon that era's icon URL ("" for an era with no icon).
+	Icon, Era, EraIcon string
+}
+
+// eraIcons are the icons of the BattleTech eras a campaign can be set in (its Intro.md availability_era), embedded in static/. An era not listed is shown by name only.
+var eraIcons = map[string]string{
+	"Clan Invasion": "era-clan-invasion.webp",
+}
+
+// campaignCard is a campaign as the home page lists it: its name, how many players it is for, its emblem and its era.
+func campaignCard(c *content.Campaign) Card {
+	card := Card{Name: c.Label, Sub: c.PlayersLabel(), URL: "/" + c.Slug + "/", Era: c.AvailabilityEra, Icon: c.IconURL()}
+	if f, ok := eraIcons[c.AvailabilityEra]; ok {
+		card.EraIcon = "/static/" + f
+	}
+	return card
+}
 
 // Server serves the campaigns found under the content root.
 type Server struct {
@@ -187,6 +205,7 @@ func NewHandler(contentRoot string, store *storage.Store, opts ...Option) http.H
 	mux.HandleFunc("GET /{campaign}/{$}", s.campaign)
 	mux.HandleFunc("GET /{campaign}/manage/{$}", s.manage)
 	mux.HandleFunc("GET /{campaign}/{scenario}/{$}", s.scenario)
+	mux.HandleFunc("GET /{campaign}/images/{file}", s.campaignImage)
 	mux.HandleFunc("GET /{campaign}/{scenario}/images/{file}", s.image)
 	mux.HandleFunc("GET /{campaign}/{scenario}/forces/{file}", s.force)
 	if s.bootID != "" {
@@ -274,7 +293,7 @@ func (s *Server) home(w http.ResponseWriter, r *http.Request) {
 	}
 	p := Page{Title: "Campaigns"}
 	for _, c := range cs {
-		p.Cards = append(p.Cards, Card{Name: c.Label, Sub: c.PlayersLabel(), URL: "/" + c.Slug + "/"})
+		p.Cards = append(p.Cards, campaignCard(c))
 	}
 	s.render(w, r, http.StatusOK, "home", p)
 }
@@ -385,6 +404,16 @@ func (s *Server) image(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.ServeFile(w, r, filepath.Join(sc.Dir, "images", filepath.Base(r.PathValue("file"))))
+}
+
+// campaignImage serves files from a campaign's own images/ folder (its icon). Only the base name of the file is used, so URLs can't reach outside that folder.
+func (s *Server) campaignImage(w http.ResponseWriter, r *http.Request) {
+	c, ok := s.lib.Campaign(r.PathValue("campaign"))
+	if !ok {
+		s.notFound(w, r)
+		return
+	}
+	http.ServeFile(w, r, filepath.Join(c.Dir, "images", filepath.Base(r.PathValue("file"))))
 }
 
 // force serves a scenario's .mul force file as a download. Only files listed in the scenario's

@@ -42,8 +42,8 @@ func TestEditKeywords(t *testing.T) {
 	}
 	for _, path := range []string{"/refusalwar/", "/refusalwar/manage/"} {
 		p := body(t, srv, path, cookie)
-		// Scorched Earth was recorded against Scenario 000 above, but its source is 001; Avenger's (002) isn't written yet.
-		for _, want := range []string{`data-from="Scenario 001: Pyre Light">Scorched Earth</li>`, `data-from="">Avenger</li>`, `<script src="/static/keywordchips.js"`} {
+		// Scorched Earth was recorded against Scenario 000 above, but its source is 001; Avenger was added by hand, and its source is 002.
+		for _, want := range []string{`data-from="Scenario 001: Pyre Light">Scorched Earth</li>`, `data-from="Scenario 002: Flame Tongue">Avenger</li>`, `<script src="/static/keywordchips.js"`} {
 			if !strings.Contains(p, want) {
 				t.Errorf("%s lists the keywords with their cards: missing %q", path, want)
 			}

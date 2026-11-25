@@ -54,8 +54,7 @@ func (s *Server) hangarJSON(w http.ResponseWriter, r *http.Request) {
 	if !sc.Provides() { // the scenario's own mechs are not the hangar, so they are never cached as it
 		s.cacheHangar(r.Context(), pt.ID, c.Slug, run.HangarInstance, h)
 	}
-	out := deployData(h, sc.BVLimit, run.Owned(), hasOp)
-	out["provided"] = sc.Provides()
+	out := deployData(h, c, sc, run.Owned(), hasOp)
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	_ = json.NewEncoder(w).Encode(out)

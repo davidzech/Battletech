@@ -4,6 +4,8 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -18,8 +20,45 @@ func TestRefusalWarPlayersOnHomePage(t *testing.T) {
 		t.Fatalf("Refusal War should be for 1-2 players: %+v", c)
 	}
 	srv, _ := newTestServer(t)
-	if home := body(t, srv, "/", nil); !strings.Contains(home, `<span class="sub">1-2 players</span>`) {
+	home := body(t, srv, "/", nil)
+	if !strings.Contains(home, `<span class="sub">1-2 players</span>`) {
 		t.Fatalf("the campaigns list should show the player range: %.1500s", home)
+	}
+	// Each campaign card shows the campaign's emblem and its era, with the era's icon.
+	for _, want := range []string{`<img src="/refusalwar/images/icon.webp"`, `<span class="era"><img src="/static/era-clan-invasion.webp" alt="" width="20" height="20">Clan Invasion Era</span>`} {
+		if !strings.Contains(home, want) {
+			t.Errorf("the campaign card is missing %q", want)
+		}
+	}
+	for path, want := range map[string]int{"/refusalwar/images/icon.webp": http.StatusOK, "/static/era-clan-invasion.webp": http.StatusOK, "/refusalwar/images/nope.webp": http.StatusNotFound} {
+		if res := get(t, srv, path, nil); res.StatusCode != want {
+			t.Errorf("%s: %d, want %d", path, res.StatusCode, want)
+		}
+	}
+	if c.Icon != "icon.webp" || c.AvailabilityEra != "Clan Invasion" {
+		t.Errorf("Refusal War's icon and era: %q %q", c.Icon, c.AvailabilityEra)
+	}
+}
+
+// An Intro.md icon must be a file in the campaign's images/ folder.
+func TestCampaignIconProblems(t *testing.T) {
+	for icon, want := range map[string]string{"images/missing.webp": "is not in the campaign's folder", "../Intro.md": "must be a file in the campaign's images/ folder", "images/sub/icon.webp": "must be a file"} {
+		root := t.TempDir()
+		dir := filepath.Join(root, "Scratch")
+		for _, d := range []string{"Scenario_000", "images"} {
+			if err := os.MkdirAll(filepath.Join(dir, d), 0o755); err != nil {
+				t.Fatal(err)
+			}
+		}
+		_ = os.WriteFile(filepath.Join(dir, "Intro.md"), []byte("---\nicon: "+icon+"\n---\n"), 0o644)
+		_ = os.WriteFile(filepath.Join(dir, "Scenario_000", "Setup.md"), []byte("---\nid: scenario_000\ntitle: First\n---\n# First\n"), 0o644)
+		c, ok := (content.Library{Root: root}).Campaign("scratch")
+		if !ok {
+			t.Fatal("the campaign loads")
+		}
+		if c.Icon != "" || !strings.Contains(strings.Join(c.Problems, "\n"), want) {
+			t.Errorf("icon %q: %q, problems %v", icon, c.Icon, c.Problems)
+		}
 	}
 }
 
@@ -233,5 +272,54 @@ func TestCampaignLedger(t *testing.T) {
 	}
 	if ledger, _ = store.Ledger(ctx, id, "refusalwar"); len(ledger) != 0 {
 		t.Errorf("a deleted campaign keeps no ledger: %+v", ledger)
+	}
+}
+
+// A started campaign's intro is folded with a Show more button (introfold.js); before the start it is shown whole, since it is what the player reads first.
+func TestStartedCampaignFoldsTheIntro(t *testing.T) {
+	srv, _ := newTestServer(t)
+	if p := body(t, srv, "/refusalwar/", nil); strings.Contains(p, "intro-collapsible") || strings.Contains(p, "introfold.js") || !strings.Contains(p, `id="campaign-intro-text"`) {
+		t.Errorf("an unstarted campaign shows its intro whole: %.600s", p)
+	}
+	srv, _, cookie := startedCompany(t)
+	p := body(t, srv, "/refusalwar/", cookie)
+	for _, want := range []string{`class="briefing campaign-intro intro-collapsible"`, `class="intro-more" aria-expanded="false" aria-controls="campaign-intro-text" hidden>Show more</button>`, `<script src="/static/introfold.js" defer>`} {
+		if !strings.Contains(p, want) {
+			t.Errorf("a started campaign folds its intro: missing %q", want)
+		}
+	}
+}
+
+// Every page loads the wizards' keyboard shortcuts (wizardkeys.js: Enter for Next, Backspace for Back), and each wizard marks the buttons they press.
+func TestWizardsMarkTheirNextAndBackButtons(t *testing.T) {
+	srv, _ := newTestServer(t)
+	cookie := post(t, srv, "/api/seed", url.Values{"seed": {"wolfpack2026"}}, nil, "").Cookies()[0]
+	post(t, srv, "/api/account", url.Values{"account": {"Wolf Pack"}}, cookie, srv.URL)
+	start := body(t, srv, "/refusalwar/", cookie)
+	for _, want := range []string{`<script src="/static/wizardkeys.js" defer></script>`, `id="wiz-back" data-wizard-back>`, `id="wiz-next" data-wizard-next>`, `id="setup-back" data-wizard-back>`} {
+		if !strings.Contains(start, want) {
+			t.Errorf("the start wizard's page is missing %q", want)
+		}
+	}
+	srv, _, cookie = startedCompany(t)
+	deploy := body(t, srv, "/refusalwar/scenario_001/", cookie)
+	for _, want := range []string{`<script src="/static/wizardkeys.js" defer></script>`, `id="deploy-back" data-wizard-back hidden>`, `id="deploy-next" data-wizard-next hidden disabled>`} {
+		if !strings.Contains(deploy, want) {
+			t.Errorf("the Deploy wizard's page is missing %q", want)
+		}
+	}
+}
+
+// The campaign's emblem is a crest beside the title of the campaign page and every page under it (each scenario, the Manage page), not of the home page.
+func TestCampaignPagesShowTheCrest(t *testing.T) {
+	const crest = `<div class="page-head"><img class="page-crest" src="/refusalwar/images/icon.webp" alt="">`
+	srv, _, cookie := startedCompany(t)
+	for _, path := range []string{"/refusalwar/", "/refusalwar/scenario_000/", "/refusalwar/scenario_001/", "/refusalwar/manage/"} {
+		if !strings.Contains(body(t, srv, path, cookie), crest) {
+			t.Errorf("%s shows the campaign's crest", path)
+		}
+	}
+	if strings.Contains(body(t, srv, "/", cookie), "page-crest") {
+		t.Error("the home page has no campaign crest")
 	}
 }

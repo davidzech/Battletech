@@ -9,7 +9,13 @@
 // assign them (or click the pilot, then the slot, which also works by keyboard and on touch screens). A pilot drives one mech, so assigning them again moves them;
 // dropping a pilot on the tray, or the x on a slot, takes them off. A mech another player took is not offered, and neither is a pilot they took.
 //
-// After the players' steps comes a Commander step, when the scenario chooses one (data-commander) and two or more named pilots are deployed: a click on one of
+// After the players' steps comes a Configure step when the scenario lets its provided omnimechs be reconfigured (the hangar data's `swaps`, Setup.md
+// provided_swaps) and a mech taken has variants to offer: each taken omnimech gets the shared variant picker (variantpicker.js), with only the variants the
+// campaign's faction fields in its era, free of charge. Every mech starts on its own variant, so going straight on keeps them all; a chosen variant changes the
+// mech everywhere after it (its row, BV and card, the commander strip and the review) and is sent as variant_unit / variant_to with the plan. Unticking a mech
+// puts it back on its own variant.
+//
+// Then comes a Commander step, when the scenario chooses one (data-commander) and two or more named pilots are deployed: a click on one of
 // them makes them the force's commander, whose mech MekBay marks on the record sheet (with one named pilot deployed, they command without being asked).
 // The last step, Start battle, sends the whole plan to POST /api/battle/start, which checks it on the server (the same rules, over every player's mechs together), builds a
 // force for each player and one for the OpFor in MekBay, saves the operation that sets them against each other, and answers with the one MekBay link the whole table opens,
@@ -57,6 +63,8 @@
 
   var units = [];         // the hangar's mechs, as the server describes them
   var provided = false;   // the scenario provides its own mechs in place of the hangar
+  var swaps = false;      // ... and they can be reconfigured for free on the Configure step
+  var variants = {};      // unit ID -> the MekBay unit ID of the variant it was reconfigured to (only for a unit that was)
   var original = {};      // unit ID -> the named pilot the hangar has in it now, if any
   var plans = [];         // per player: { selected: { unitId: true }, crew: { unitId: pilot name } }
   // The count chosen when the campaign was started is where every deploy begins (the picker can change it for one deploy); a run from before that was
@@ -97,10 +105,39 @@
   // ---- The plan
   function plan(i) { if (!plans[i]) plans[i] = { selected: {}, crew: {} }; return plans[i]; }
   function cur() { return plan(step); }
-  // The steps: one per player, then the Commander step when there is a commander to choose, then the review when there are several players.
-  function stepCount() { return playerCount + (needCommander() ? 1 : 0) + (playerCount > 1 ? 1 : 0); }
+  // The steps: one per player, then the Configure step when a mech taken can be reconfigured, then the Commander step when there is a commander to choose,
+  // then the review when there are several players.
+  function stepCount() { return playerCount + (needConfigure() ? 1 : 0) + (needCommander() ? 1 : 0) + (playerCount > 1 ? 1 : 0); }
   function isPlayerStep() { return step < playerCount; }
-  function isCommanderStep() { return needCommander() && step === playerCount; }
+  function isConfigureStep() { return needConfigure() && step === playerCount; }
+  function isCommanderStep() { return needCommander() && step === playerCount + (needConfigure() ? 1 : 0); }
+  // A mech the Configure step offers: the scenario allows it and the mech has a variant the campaign's faction fields.
+  function configurable(u) { return swaps && (u.swapOptions || []).some(function (o) { return o.available !== false; }); }
+  function needConfigure() {
+    if (!swaps) return false;
+    for (var i = 0; i < playerCount; i++) {
+      for (var j = 0; j < units.length; j++) if (plan(i).selected[units[j].id] && configurable(units[j])) return true;
+    }
+    return false;
+  }
+  // A mech as it will be flown: reconfigured to its chosen variant (name, model, BV, role, icon, card), or as it is. It keeps its ID, so ticks and pilots stay on it.
+  function effective(u) {
+    var o = u && variants[u.id] && VariantPicker.option(u, variants[u.id]);
+    if (!o) return u;
+    var v = {};
+    Object.keys(u).forEach(function (k) { v[k] = u[k]; });
+    ['name', 'model', 'bv', 'role', 'icon', 'class', 'tons', 'mekbayUrl', 'card'].forEach(function (k) { v[k] = o[k]; });
+    v.from = u.model;
+    return v;
+  }
+  // A row's view of a mech: a reconfigured one says which variant it was ("A · from Prime").
+  function labelled(v) {
+    if (!v || !v.from) return v;
+    var out = {};
+    Object.keys(v).forEach(function (k) { out[k] = v[k]; });
+    out.model = (v.model || '') + ' · from ' + (v.from || 'standard');
+    return out;
+  }
   function isReview() { return playerCount > 1 && step === stepCount() - 1; }
   function isLast() { return step === stepCount() - 1; }
   // The named pilots in the plan's mechs, in player and mech order: [{ name, unit, player }].
@@ -109,7 +146,7 @@
     for (var i = 0; i < playerCount; i++) {
       units.forEach(function (u) {
         var name = plan(i).selected[u.id] && plan(i).crew[u.id];
-        if (name && pilotNamed(name)) out.push({ name: pilotNamed(name).name, unit: u, player: i + 1 });
+        if (name && pilotNamed(name)) out.push({ name: pilotNamed(name).name, unit: effective(u), player: i + 1 });
       });
     }
     return out;
@@ -149,7 +186,7 @@
   }
   function bvOf(i) {
     var bv = 0;
-    units.forEach(function (u) { if (plan(i).selected[u.id]) bv += u.bv; });
+    units.forEach(function (u) { if (plan(i).selected[u.id]) bv += effective(u).bv; });
     return bv;
   }
   function countOf(i) {
@@ -289,7 +326,8 @@
     box.setAttribute('aria-label', 'Pilot for ' + u.name + (p ? ': ' + p.name + ', ' + statSummary(p) : picked ? '' : ' (not taken yet: a pilot placed here takes it)'));
     function put() { if (held) assign(u.id, held); }
     box.addEventListener('click', put);
-    box.addEventListener('keydown', function (e) { if ((e.key === 'Enter' || e.key === ' ') && e.target === box) { e.preventDefault(); put(); } });
+    // Only while a pilot is held: otherwise Enter is left to the wizard (Next, wizardkeys.js).
+    box.addEventListener('keydown', function (e) { if (held && (e.key === 'Enter' || e.key === ' ') && e.target === box) { e.preventDefault(); put(); } });
     box.addEventListener('dragover', function (e) { e.preventDefault(); box.classList.add('over'); });
     // Moving onto the slot's own text fires dragleave on the slot too: only leaving the slot itself takes the highlight off.
     box.addEventListener('dragleave', function (e) { if (!e.relatedTarget || !box.contains(e.relatedTarget)) box.classList.remove('over'); });
@@ -341,12 +379,13 @@
     box.disabled = unavailable || (!cur().selected[u.id] && countOf(step) >= roomFor(step));
     box.addEventListener('change', function () {
       touched = true;
-      if (box.checked) cur().selected[u.id] = true; else { delete cur().selected[u.id]; delete cur().crew[u.id]; } // a mech not being taken has no pilot
+      if (box.checked) cur().selected[u.id] = true; else { delete cur().selected[u.id]; delete cur().crew[u.id]; delete variants[u.id]; } // a mech not being taken has no pilot, and is back on its own variant
       error.textContent = '';
       render();
     });
     label.appendChild(box);
-    label.appendChild(MechRow.build(pilots.length ? viewOf(u) : u)); // the pilot's skills are shown in the slot
+    var shown = labelled(effective(u));
+    label.appendChild(MechRow.build(pilots.length ? viewOf(shown) : shown)); // the pilot's skills are shown in the slot
     li.appendChild(label);
     if (pilots.length) {
       li.classList.add('has-slot');
@@ -429,9 +468,9 @@
       sec.appendChild(h);
       var ul = el('ul', 'deploy-review-list');
       pl.units.forEach(function (pu) {
-        var u = unitById(pu.id);
+        var u = effective(unitById(pu.id));
         var li = el('li', 'deploy-unit review' + (pilots.length ? ' has-slot' : ''));
-        li.appendChild(infoRow(viewOf(u || { name: pu.name, model: pu.model, bv: pu.bv, icon: '', role: '', tons: 0 }), u));
+        li.appendChild(infoRow(viewOf(labelled(u) || { name: pu.name, model: pu.model, bv: pu.bv, icon: '', role: '', tons: 0 }), u));
         if (pilots.length) li.appendChild(staticPilot(pl.crew[pu.id] || ''));
         ul.appendChild(li);
       });
@@ -476,11 +515,64 @@
     review.appendChild(ul);
   }
 
+  // The force total line under the Configure step and the review.
+  function totalLine() {
+    var p = el('p', 'deploy-review-total' + (over() ? ' over' : ''));
+    p.appendChild(el('span', null, 'Force total: ' + (unitLimit ? totalCount() + ' / ' + unitLimit + ' mechs · ' : '') + fmt(totalBV()) + (limit ? ' / ' + fmt(limit) : '') + ' BV'));
+    return p;
+  }
+
+  // The Configure step: every taken mech that can be reconfigured, grouped by player, each with the variant picker. A change redraws only that mech's rows and
+  // the total, so the box keeps the focus.
+  function renderConfigure() {
+    review.textContent = '';
+    review.appendChild(el('p', 'muted deploy-configure-intro', 'This mission\u2019s omnimechs can be reconfigured to another variant, free of charge. Each starts on its standard configuration: choose another below, or go on to keep it.'));
+    var total = totalLine();
+    for (var i = 0; i < playerCount; i++) {
+      var mine = units.filter(function (u) { return plan(i).selected[u.id] && configurable(u); });
+      if (!mine.length) continue;
+      var sec = el('section', 'deploy-review-player deploy-configure');
+      if (playerCount > 1) sec.appendChild(el('h3', null, 'Player ' + (i + 1)));
+      mine.forEach(function (u) { sec.appendChild(variantPick(u, plan(i).crew[u.id], function () { total.replaceWith(total = totalLine()); renderFooter(); })); });
+      review.appendChild(sec);
+    }
+    review.appendChild(total);
+  }
+
+  function variantPick(u, pilotName, changed) {
+    var free = { price: function () { return 'Free'; } };
+    var block = el('div', 'variant-pick');
+    var head = el('div', 'variant-pick-head');
+    var select = document.createElement('select');
+    select.id = 'variant-' + u.id;
+    var label = el('label', 'variant-pick-name', u.name);
+    label.htmlFor = select.id;
+    head.appendChild(label);
+    var p = pilotName && pilotNamed(pilotName);
+    if (p) head.appendChild(el('span', 'variant-pick-pilot', p.name));
+    block.appendChild(head);
+    VariantPicker.fill(select, u, { onlyAvailable: true, current: 'standard', value: variants[u.id] || '' });
+    block.appendChild(select);
+    var rows = el('div');
+    VariantPicker.flow(rows, u, VariantPicker.option(u, select.value), free);
+    block.appendChild(rows);
+    select.addEventListener('change', function () {
+      if (select.value) variants[u.id] = select.value; else delete variants[u.id];
+      touched = true;
+      error.textContent = '';
+      if (typeof MechRow.hideTip === 'function') MechRow.hideTip();
+      VariantPicker.mark(select);
+      VariantPicker.flow(rows, u, VariantPicker.option(u, select.value), free);
+      changed();
+    });
+    return block;
+  }
+
   function planFromState() {
     var out = [];
     for (var i = 0; i < playerCount; i++) {
       var us = units.filter(function (u) { return plan(i).selected[u.id]; });
-      out.push({ player: i + 1, units: us.map(function (u) { return { id: u.id, name: u.name, model: u.model, bv: u.bv }; }), crew: plan(i).crew, bv: bvOf(i) });
+      out.push({ player: i + 1, units: us.map(function (u) { var e = effective(u); return { id: u.id, name: e.name, model: e.model, bv: e.bv }; }), crew: plan(i).crew, bv: bvOf(i) });
     }
     return out;
   }
@@ -714,7 +806,15 @@
       return;
     }
     meter.hidden = false;
-    if (isCommanderStep()) {
+    if (isConfigureStep()) {
+      list.hidden = true;
+      review.hidden = false;
+      stepTitle.hidden = false;
+      stepTitle.textContent = 'Configure your mechs';
+      meter.hidden = true; // the step ends with the force total
+      renderConfigure();
+      resetRow.hidden = !(isLast() && cachedData && cachedData.hasOperation);
+    } else if (isCommanderStep()) {
       list.hidden = true;
       review.hidden = false;
       stepTitle.hidden = false;
@@ -773,6 +873,13 @@
       });
     }
     provided = !!data.provided;
+    swaps = !!data.swaps;
+    // A variant is kept only for a mech still taken that still offers it.
+    Object.keys(variants).forEach(function (id) {
+      var u = unitById(id), taken = false;
+      for (var i = 0; i < plans.length; i++) if (plans[i] && plans[i].selected[id]) taken = true;
+      if (!swaps || !u || !taken || !VariantPicker.option(u, variants[id])) delete variants[id];
+    });
     document.getElementById('deploy-provided').hidden = !provided;
     status.hidden = units.length > 0;
     if (!units.length) status.textContent = 'Your hangar force has no mechs in it yet. Add some in MekBay first.';
@@ -797,6 +904,7 @@
     step = 0;
     playerCount = defaultPlayers;
     plans = [];
+    variants = {};
     commander = '';
     if (cachedData && cachedData.units) {
       apply(cachedData); // instant
@@ -901,6 +1009,7 @@
         if (!plan(i).selected[u.id]) return;
         var want = plan(i).crew[u.id] || '', was = original[u.id] || '';
         if (want || want !== was) body += pre + 'assign_unit=' + encodeURIComponent(u.id) + pre + 'assign_pilot=' + encodeURIComponent(want);
+        if (variants[u.id]) body += '&variant_unit=' + encodeURIComponent(u.id) + '&variant_to=' + encodeURIComponent(variants[u.id]);
       });
     }
     var cmd = effectiveCommander();

@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
@@ -246,7 +247,7 @@ func plainScenario001Root(t *testing.T) string {
 		}
 		rel, _ := filepath.Rel(src, path)
 		if d.IsDir() {
-			if d.Name() == "images" {
+			if d.Name() == "images" && strings.Count(filepath.ToSlash(rel), "/") >= 2 { // a scenario's big images are not needed; a campaign's icon is
 				return filepath.SkipDir
 			}
 			return os.MkdirAll(filepath.Join(dst, rel), 0o755)

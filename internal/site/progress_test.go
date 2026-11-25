@@ -98,8 +98,8 @@ func TestCampaignLog(t *testing.T) {
 	if !strings.Contains(page, `<li class="completed"><a class="card completed" href="/refusalwar/scenario_000/">`) || !strings.Contains(page, "Completed &#10003;") || !strings.Contains(page, `<li class="available"><a class="card available" href="/refusalwar/scenario_001/">`) {
 		t.Fatalf("000 is completed (green) and 001 is available: %.1500s", page)
 	}
-	if strings.Contains(page, "show-all-scenarios") {
-		t.Error("with nothing locked there is nothing to show")
+	if !strings.Contains(page, "show-all-scenarios") {
+		t.Error("002 is locked until 001 is completed, so it can be shown")
 	}
 	if p := body(t, srv, "/refusalwar/scenario_000/", cookie); strings.Contains(p, "Mark not completed") || !strings.Contains(p, `data-done="1"`) {
 		t.Error("a completed outcome scenario cannot be unmarked")

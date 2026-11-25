@@ -145,3 +145,81 @@ func TestScenario000EnforcesItsRules(t *testing.T) {
 		t.Error("Scenario 001 has no unit limit or pilot rule")
 	}
 }
+
+// The variants a provided omnimech can be reconfigured to in Scenario 000 (provided_swaps): one Clan Wolf fields in the Clan Invasion era, and one it doesn't.
+func swapChoices(t *testing.T, unit string) (fielded, not string) {
+	t.Helper()
+	cat, ok := catalog.ByName(unit)
+	if !ok {
+		t.Fatalf("%s is not in the catalog", unit)
+	}
+	available := catalog.Available("Clan Wolf", "Clan Invasion")
+	for _, o := range hangar.SwapOptions(cat) {
+		if available[o.Unit] && fielded == "" {
+			fielded = o.Unit
+		}
+		if !available[o.Unit] && not == "" {
+			not = o.Unit
+		}
+	}
+	if fielded == "" || not == "" {
+		t.Fatalf("%s needs a fielded and an unfielded variant for this test: %q %q", unit, fielded, not)
+	}
+	return fielded, not
+}
+
+// Scenario 000 lets the cadets reconfigure its provided omnimechs for free, to a variant Clan Wolf fields in the era; the battle is built with that variant.
+func TestReconfigureProvidedMechs(t *testing.T) {
+	c, _ := (content.Library{Root: "../../campaigns"}).Campaign("refusalwar")
+	s0, _ := c.Scenario("scenario_000")
+	s1, _ := c.Scenario("scenario_001")
+	if !s0.ProvidedSwaps || s1.ProvidedSwaps {
+		t.Fatalf("Scenario 000 allows free swaps, 001 doesn't: %v %v", s0.ProvidedSwaps, s1.ProvidedSwaps)
+	}
+	nova := providedPrefix + "bmblackhawk_prime"
+	fielded, not := swapChoices(t, "BMBlackHawk_Prime")
+	h := providedForce(s0)
+	for name, tc := range map[string]struct {
+		sc       *content.Scenario
+		ids, tos []string
+		problem  bool
+		want     string
+	}{
+		"nothing chosen":           {s0, nil, nil, false, "BMBlackHawk_Prime"},
+		"a fielded variant":        {s0, []string{nova}, []string{fielded}, false, fielded},
+		"its own variant":          {s0, []string{nova}, []string{"BMBlackHawk_Prime"}, false, "BMBlackHawk_Prime"},
+		"one Clan Wolf lacks":      {s0, []string{nova}, []string{not}, true, ""},
+		"another chassis":          {s0, []string{nova}, []string{"BMRyoken_Prime"}, true, ""},
+		"an unknown mech":          {s0, []string{"provided-nope"}, []string{fielded}, true, ""},
+		"twice":                    {s0, []string{nova, nova}, []string{fielded, fielded}, true, ""},
+		"unpaired":                 {s0, []string{nova}, nil, true, ""},
+		"a scenario without swaps": {s1, []string{nova}, []string{fielded}, true, ""},
+	} {
+		got, msg := reconfigureProvided(h, c, tc.sc, tc.ids, tc.tos)
+		if (msg != "") != tc.problem {
+			t.Errorf("%s: problem %q", name, msg)
+			continue
+		}
+		if tc.problem {
+			continue
+		}
+		if got.Units[0].Unit != tc.want || got.Units[0].ID != nova {
+			t.Errorf("%s: the Nova is %+v", name, got.Units[0])
+		}
+	}
+	if h.Units[0].Unit != "BMBlackHawk_Prime" {
+		t.Error("reconfiguring leaves the scenario's own force alone")
+	}
+	// The deploy data offers the swaps, with each variant marked as fielded or not.
+	data := deployData(h, c, s0, false, false)
+	if data["swaps"] != true || data["provided"] != true {
+		t.Errorf("the deploy data offers the swaps: %v %v", data["swaps"], data["provided"])
+	}
+	marked := map[string]bool{}
+	for _, o := range data["units"].([]hangarUnitView)[0].SwapOptions {
+		marked[o.Unit] = o.Available
+	}
+	if !marked[fielded] || marked[not] {
+		t.Errorf("the variants are marked as fielded or not: %v", marked)
+	}
+}
