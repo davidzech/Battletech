@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"embed"
 	"encoding/hex"
+	"fmt"
 	"html/template"
 	"log"
 	"net/http"
@@ -59,7 +60,8 @@ type Page struct {
 	OnManagePage       bool // the Manage force page itself, which has no Manage force button in its header
 	Scenario           *content.Scenario
 	Cards              []Card
-	HasLocked          bool                   // some scenario cards are locked, so the campaign page offers 'Show all scenarios'
+	HasLocked          bool                   // some scenario cards are locked and hidden, so the campaign page offers 'Show all scenarios'
+	GraphLanes         int                    // how many lanes the campaign page's path graph needs
 	ScenarioState      string                 // on a scenario page: completed, available or locked
 	NextScenarios      []content.Scenario     // on a completed scenario's page: the scenarios it leads to, which are now available
 	Outcome            *content.OutcomeResult // on a completed scenario page: the recorded report of its outcome
@@ -93,20 +95,47 @@ type Page struct {
 // Card is one entry in a list of links (campaigns or scenarios).
 type Card struct {
 	Num, Name, Sub, URL, State string // State: "completed", "available" or "locked" for a scenario card
+	// A scenario card's slice of the campaign page's path graph (graph.go), and whether a locked card is shown anyway: a mission the run passed over (offered
+	// but not taken, or numbered below the last completed one), which the graph needs on screen.
+	Graph  template.HTML
+	Passed bool
 	// A campaign card's emblem and era: Icon is the campaign's icon URL, Era its era's name and EraIcon that era's icon URL ("" for an era with no icon).
 	Icon, Era, EraIcon string
+	EraYears           string // the era's years, e.g. "3050–3061" ("" for an era the site doesn't know)
 }
 
-// eraIcons are the icons of the BattleTech eras a campaign can be set in (its Intro.md availability_era), embedded in static/. An era not listed is shown by name only.
-var eraIcons = map[string]string{
-	"Clan Invasion": "era-clan-invasion.webp",
+// eras are the BattleTech eras a campaign can be set in (its Intro.md availability_era), with their years (from MekBay's data/eras.json; to 0 for an era still
+// open) and, for some, an icon embedded in static/. An era not listed is shown by name only.
+var eras = map[string]struct {
+	from, to int
+	icon     string
+}{
+	"Age of War":                        {2005, 2570, ""},
+	"Star League":                       {2571, 2780, ""},
+	"Early Succession War":              {2781, 2900, ""},
+	"Late Succession War - LosTech":     {2901, 3019, ""},
+	"Late Succession War - Renaissance": {3020, 3049, ""},
+	"Clan Invasion":                     {3050, 3061, "era-clan-invasion.webp"},
+	"Civil War":                         {3062, 3067, ""},
+	"Jihad":                             {3068, 3080, ""},
+	"Early Republic":                    {3081, 3100, ""},
+	"Late Republic":                     {3101, 3130, ""},
+	"Dark Age":                          {3131, 3150, ""},
+	"ilClan":                            {3151, 0, ""},
 }
 
 // campaignCard is a campaign as the home page lists it: its name, how many players it is for, its emblem and its era.
 func campaignCard(c *content.Campaign) Card {
 	card := Card{Name: c.Label, Sub: c.PlayersLabel(), URL: "/" + c.Slug + "/", Era: c.AvailabilityEra, Icon: c.IconURL()}
-	if f, ok := eraIcons[c.AvailabilityEra]; ok {
-		card.EraIcon = "/static/" + f
+	if e, ok := eras[c.AvailabilityEra]; ok {
+		if e.icon != "" {
+			card.EraIcon = "/static/" + e.icon
+		}
+		if e.to == 0 {
+			card.EraYears = fmt.Sprintf("%d–", e.from)
+		} else {
+			card.EraYears = fmt.Sprintf("%d–%d", e.from, e.to)
+		}
 	}
 	return card
 }
@@ -310,10 +339,19 @@ func (s *Server) campaign(w http.ResponseWriter, r *http.Request) {
 		Campaign: c,
 	}
 	completed, available := s.progress(r, c)
-	for _, sc := range c.Scenarios {
+	graph, kinds, lanes := scenarioGraph(c.Scenarios, completed, available)
+	p.GraphLanes = lanes
+	lastDone := -1
+	for i, sc := range c.Scenarios {
+		if completed[sc.Slug] {
+			lastDone = i
+		}
+	}
+	for i, sc := range c.Scenarios {
 		state := scenarioState(sc.Slug, completed, available)
-		p.HasLocked = p.HasLocked || state == "locked"
-		p.Cards = append(p.Cards, Card{Num: sc.Number, Name: sc.Title, Sub: sc.Planet, URL: "/" + c.Slug + "/" + sc.Slug + "/", State: state})
+		passed := state == "locked" && (kinds[i] == graphPassed || i < lastDone)
+		p.HasLocked = p.HasLocked || (state == "locked" && !passed)
+		p.Cards = append(p.Cards, Card{Num: sc.Number, Name: sc.Title, Sub: sc.Planet, URL: "/" + c.Slug + "/" + sc.Slug + "/", State: state, Graph: graph[i], Passed: passed})
 	}
 	s.render(w, r, http.StatusOK, "campaign", p)
 }
@@ -355,7 +393,7 @@ func (s *Server) scenario(w http.ResponseWriter, r *http.Request) {
 	var next []content.Scenario
 	if completed[sc.Slug] {
 		for _, b := range sc.Branches {
-			if n, ok := c.Scenario(b); ok {
+			if n, ok := c.Scenario(b); ok && available[b] { // a branch not taken (the other choice, once a later mission is done) is not offered
 				next = append(next, *n)
 			}
 		}

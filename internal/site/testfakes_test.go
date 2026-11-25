@@ -260,6 +260,7 @@ func plainScenario001Root(t *testing.T) string {
 			data = []byte(`---
 id: scenario_001
 default_next: ""
+branches: [scenario_002, scenario_003]
 ---
 
 # Scenario 001: Pyre Light - Outcome

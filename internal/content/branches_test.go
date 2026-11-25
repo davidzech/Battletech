@@ -64,11 +64,13 @@ func TestScenarioBranches(t *testing.T) {
 		completed []string
 		want      string
 	}{
-		"nothing done: only the first":     {nil, "scenario_000"},
-		"000 done: its branches open":      {[]string{"scenario_000"}, "scenario_000,scenario_002,scenario_003"},
-		"001 is not reachable from 000":    {[]string{"scenario_000", "scenario_002"}, "scenario_000,scenario_002,scenario_003,scenario_004"},
-		"a completed one is always shown":  {[]string{"scenario_001"}, "scenario_000,scenario_001,scenario_002"},
-		"an unknown completion is ignored": {[]string{"scenario_999"}, "scenario_000"},
+		"nothing done: only the first":         {nil, "scenario_000"},
+		"000 done: its branches open":          {[]string{"scenario_000"}, "scenario_000,scenario_002,scenario_003"},
+		"a choice closes once one is made":     {[]string{"scenario_000", "scenario_002"}, "scenario_000,scenario_002,scenario_004"}, // 003 was the other choice
+		"the last completed (highest) decides": {[]string{"scenario_000", "scenario_002", "scenario_004"}, "scenario_000,scenario_002,scenario_004"},
+		"a path's end offers nothing new":      {[]string{"scenario_000", "scenario_003"}, "scenario_000,scenario_003"},
+		"completed ones are always shown":      {[]string{"scenario_001"}, "scenario_001,scenario_002"},
+		"an unknown completion is ignored":     {[]string{"scenario_999"}, "scenario_000"},
 	} {
 		done := map[string]bool{}
 		for _, s := range c2.completed {
@@ -78,16 +80,16 @@ func TestScenarioBranches(t *testing.T) {
 			t.Errorf("%s: %s, want %s", name, got, c2.want)
 		}
 	}
-	// Refusal War: 000 leads to 001, 001 to 002, 002 to 003, and 003 is the end for now.
+	// Refusal War: 000 leads to 001, 001 to a choice of 002 or 003, and both are the end for now.
 	rw := refusalWar(t)
 	if s0, _ := rw.Scenario("scenario_000"); strings.Join(s0.Branches, ",") != "scenario_001" {
 		t.Errorf("Scenario 000 leads to 001: %v", s0.Branches)
 	}
-	if s1, _ := rw.Scenario("scenario_001"); strings.Join(s1.Branches, ",") != "scenario_002" {
-		t.Errorf("Scenario 001 leads to 002: %v", s1.Branches)
+	if s1, _ := rw.Scenario("scenario_001"); strings.Join(s1.Branches, ",") != "scenario_002,scenario_003" {
+		t.Errorf("Scenario 001 leads to a choice of 002 or 003: %v", s1.Branches)
 	}
-	if s2, _ := rw.Scenario("scenario_002"); strings.Join(s2.Branches, ",") != "scenario_003" {
-		t.Errorf("Scenario 002 leads to 003: %v", s2.Branches)
+	if s2, _ := rw.Scenario("scenario_002"); len(s2.Branches) != 0 {
+		t.Errorf("Scenario 002 leads nowhere: %v", s2.Branches)
 	}
 	if s3, _ := rw.Scenario("scenario_003"); len(s3.Branches) != 0 {
 		t.Errorf("Scenario 003 leads nowhere yet: %v", s3.Branches)

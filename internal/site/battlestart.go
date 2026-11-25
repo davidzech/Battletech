@@ -65,7 +65,7 @@ func (s *Server) startBattle(w http.ResponseWriter, r *http.Request) {
 	}
 	// A locked mission can't be fought: the page disables its Deploy force button, and this refuses a request made without the page.
 	if _, available := s.progress(r, bp.c); !available[bp.sc.Slug] {
-		http.Error(w, "That mission isn't available yet: complete the mission before it first.", http.StatusConflict)
+		http.Error(w, "That mission isn't available: it doesn't follow your last completed mission.", http.StatusConflict)
 		return
 	}
 	seed := currentSeed(r)

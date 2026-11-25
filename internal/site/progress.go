@@ -69,7 +69,7 @@ func (s *Server) setScenarioCompleted(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if !c.Available(completed)[sc.Slug] {
-			http.Error(w, "That scenario isn't available yet: complete the one before it first.", http.StatusConflict)
+			http.Error(w, "That scenario isn't available: it doesn't follow your last completed mission.", http.StatusConflict)
 			return
 		}
 	}

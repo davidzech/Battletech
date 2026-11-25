@@ -2,6 +2,6 @@
 <h1 class="bt-title">Campaigns</h1>
 <p class="lede">Custom tabletop campaigns, scenario by scenario.</p>
 <ul class="cards plain campaigns">
-{{range .Cards}}<li><a class="card campaign-card" href="{{.URL}}"><span class="campaign-icon">{{if .Icon}}<img src="{{.Icon}}" alt="" loading="lazy">{{end}}</span><span class="name">{{.Name}}{{if .Sub}}<span class="sub">{{.Sub}}</span>{{end}}{{if .Era}}<span class="era">{{if .EraIcon}}<img src="{{.EraIcon}}" alt="" width="20" height="20">{{end}}{{.Era}} Era</span>{{end}}</span><span class="go">Open &rsaquo;</span></a></li>
+{{range .Cards}}<li><a class="card campaign-card" href="{{.URL}}"><span class="campaign-icon">{{if .Icon}}<img src="{{.Icon}}" alt="" loading="lazy">{{end}}</span><span class="name">{{.Name}}{{if .Sub}}<span class="sub">{{.Sub}}</span>{{end}}{{if .Era}}<span class="era">{{if .EraIcon}}<img src="{{.EraIcon}}" alt="" width="20" height="20">{{end}}{{.Era}} Era{{if .EraYears}}<span class="era-years">({{.EraYears}})</span>{{end}}</span>{{end}}</span><span class="go">Open &rsaquo;</span></a></li>
 {{end}}</ul>
 {{end}}

@@ -24,7 +24,7 @@ func TestCampaignLog(t *testing.T) {
 
 	// Before the account is named or the campaign started, only Scenario 000 shows, and Show all reveals the rest.
 	page := cards()
-	if !strings.Contains(page, `<li class="available"><a class="card available" href="/refusalwar/scenario_000/">`) || !strings.Contains(page, `<li class="locked"><a class="card locked" href="/refusalwar/scenario_001/">`) {
+	if !strings.Contains(page, `<a class="card available" href="/refusalwar/scenario_000/">`) || !strings.Contains(page, `<a class="card locked" href="/refusalwar/scenario_001/">`) {
 		t.Fatalf("000 is available and 001 locked: %.1500s", page)
 	}
 	if !strings.Contains(page, `id="show-all-scenarios"`) || !strings.Contains(page, "Show all Scenarios") || !strings.Contains(page, "/static/scenariolist.js") {
@@ -54,7 +54,7 @@ func TestCampaignLog(t *testing.T) {
 	if p := body(t, srv, "/refusalwar/scenario_000/", cookie); !strings.Contains(p, `id="mission-log"`) || !strings.Contains(p, "Complete mission") || !strings.Contains(p, "Not completed") {
 		t.Errorf("Scenario 000's mission log: %.300s", p)
 	}
-	if p := body(t, srv, "/refusalwar/scenario_001/", cookie); !strings.Contains(p, "Not available yet") || strings.Contains(p, "mission-log-toggle") {
+	if p := body(t, srv, "/refusalwar/scenario_001/", cookie); !strings.Contains(p, "<span>Not available</span>") || strings.Contains(p, "mission-log-toggle") {
 		t.Error("a locked scenario cannot be marked")
 	}
 	// The breadcrumb menu leaves out locked scenarios.
@@ -95,7 +95,7 @@ func TestCampaignLog(t *testing.T) {
 		t.Error("an uncompleted scenario lists no next missions")
 	}
 	page = cards()
-	if !strings.Contains(page, `<li class="completed"><a class="card completed" href="/refusalwar/scenario_000/">`) || !strings.Contains(page, "Completed &#10003;") || !strings.Contains(page, `<li class="available"><a class="card available" href="/refusalwar/scenario_001/">`) {
+	if !strings.Contains(page, `<a class="card completed" href="/refusalwar/scenario_000/">`) || !strings.Contains(page, "Completed &#10003;") || !strings.Contains(page, `<a class="card available" href="/refusalwar/scenario_001/">`) {
 		t.Fatalf("000 is completed (green) and 001 is available: %.1500s", page)
 	}
 	if !strings.Contains(page, "show-all-scenarios") {
@@ -112,6 +112,31 @@ func TestCampaignLog(t *testing.T) {
 	}
 	if p := body(t, srv, "/refusalwar/scenario_001/", cookie); !strings.Contains(p, "Mark not completed") {
 		t.Error("a completed scenario without an outcome offers to be unmarked")
+	}
+	// 001 offers a choice of 002 or 003; once 002 is completed, 003 (the path not taken) closes and 001 no longer links to it.
+	if p := body(t, srv, "/refusalwar/scenario_001/", cookie); !strings.Contains(p, `href="/refusalwar/scenario_002/"`) || !strings.Contains(p, `<li><a class="button" href="/refusalwar/scenario_003/">`) {
+		t.Error("001 offers both 002 and 003")
+	}
+	if err := store.SetScenarioCompleted(ctx, id, "refusalwar", "scenario_002", true); err != nil {
+		t.Fatal(err)
+	}
+	if p := body(t, srv, "/refusalwar/scenario_003/", cookie); !strings.Contains(p, "<span>Not available</span>") {
+		t.Error("after 002, 003 is locked")
+	}
+	if p := cards(); !strings.Contains(p, `<li class="locked passed"><span class="sgraph">`) || !strings.Contains(p, `<a class="card locked" href="/refusalwar/scenario_003/">`) {
+		t.Error("003, the choice not taken, stays listed (locked) for the path graph")
+	}
+	if p := cards(); !strings.Contains(p, `href="/refusalwar/scenario_003/"><span class="num">003</span><span class="name">Blade Splint<span class="sub">Zoetermeer</span></span><span class="go">Not available</span>`) {
+		t.Error("a mission passed over reads Not available, not Locked")
+	}
+	if p := body(t, srv, "/refusalwar/scenario_001/", cookie); strings.Contains(p, `<li><a class="button" href="/refusalwar/scenario_003/">`) {
+		t.Error("001 no longer links to the branch not taken")
+	}
+	if err := store.SetScenarioCompleted(ctx, id, "refusalwar", "scenario_002", false); err != nil {
+		t.Fatal(err)
+	}
+	if p := body(t, srv, "/refusalwar/scenario_003/", cookie); strings.Contains(p, "<span>Not available</span>") {
+		t.Error("un-completing 002 reopens the choice")
 	}
 	// Un-completing 001 leaves 000 completed (and 000, which has a committed outcome, cannot be un-completed).
 	if got := complete("scenario_001", "0"); got != http.StatusNoContent {
