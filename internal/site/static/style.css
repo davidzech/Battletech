@@ -1678,3 +1678,12 @@ dialog.history { width: min(48rem, 94vw); }
   .history-sp { grid-column: 1; }
   .history-action { grid-column: 2; }
 }
+
+/* A battle in progress locks the campaign: a banner on every page but that battle's own, and the Manage page's controls disabled inside a fieldset (which
+   also disables the buttons its scripts add later). */
+.battle-lock { display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap; margin: 1rem 0; padding: 0.75rem 1rem; border: 1px solid var(--accent); border-left-width: 4px; background: color-mix(in srgb, var(--accent) 8%, var(--panel)); }
+.battle-lock svg { flex: none; color: var(--accent); }
+.battle-lock p { flex: 1 1 16rem; margin: 0; }
+.battle-lock .button { margin: 0; }
+fieldset.battle-lock-scope { border: 0; margin: 0; padding: 0; min-width: 0; }
+fieldset.battle-lock-scope:disabled button:not(.button) { opacity: 0.45; cursor: not-allowed; }

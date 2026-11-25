@@ -64,33 +64,33 @@ func (s *Server) recordCheckpoint(ctx context.Context, seed, playthroughID, camp
 
 // rollbackTo puts the campaign back as it was at a checkpoint: the frozen hangar is copied over the live one first (if that fails nothing has changed), then the
 // database rows are restored and the later checkpoints forgotten, and their frozen hangars deleted.
-func (s *Server) rollbackTo(ctx context.Context, seed, playthroughID, campaign string, seq int) error {
+func (s *Server) rollbackTo(ctx context.Context, seed, playthroughID, campaign string, seq int) (string, error) {
 	cp, ok, err := s.store.Checkpoint(ctx, playthroughID, campaign, seq)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if !ok {
-		return sql.ErrNoRows
+		return "", sql.ErrNoRows
 	}
 	cur, _, err := s.store.Run(ctx, playthroughID, campaign)
 	if err != nil {
-		return err
+		return "", err
 	}
 	live := storage.SnapshotHangarInstance(cp.Snapshot)
 	if cp.HangarCopy != "" && live != "" {
 		if err := s.mekbay.CopyForce(ctx, mekbay.CopyRequest{OwnerUID: mekbay.AccountUID(seed, mekbay.SlotHangar), Source: cp.HangarCopy, Target: live}); err != nil {
-			return fmt.Errorf("could not restore the hangar in MekBay: %w", err)
+			return "", fmt.Errorf("could not restore the hangar in MekBay: %w", err)
 		}
 	}
 	dropped, err := s.store.RestoreCheckpoint(ctx, playthroughID, campaign, seq)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if cur.Owned() && cur.HangarInstance != live && cur.HangarInstance != "" {
 		dropped = append(dropped, cur.HangarInstance) // a hangar imported since is not part of the campaign any more
 	}
 	s.deleteHangars(ctx, seed, dropped)
-	return nil
+	return cp.Label, nil
 }
 
 // rollbackCampaign is POST /api/campaign/rollback: restore the campaign to one of its checkpoints.
@@ -104,13 +104,16 @@ func (s *Server) rollbackCampaign(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Choose a checkpoint.", http.StatusBadRequest)
 		return
 	}
-	switch err := s.rollbackTo(r.Context(), currentSeed(r), pt.ID, c.Slug, seq); {
+	label, err := s.rollbackTo(r.Context(), currentSeed(r), pt.ID, c.Slug, seq)
+	switch {
 	case errors.Is(err, sql.ErrNoRows):
 		http.Error(w, "That checkpoint no longer exists.", http.StatusNotFound)
 	case err != nil:
 		log.Printf("roll back: %v", err)
 		http.Error(w, err.Error(), http.StatusBadGateway)
 	default:
+		// The lines after the checkpoint are gone with the rollback; this one says it happened.
+		s.logHistory(r, pt.ID, c.Slug, storage.HistoryCorrections, 0, "Rolled back to \u201c"+label+"\u201d.")
 		w.WriteHeader(http.StatusNoContent)
 	}
 }

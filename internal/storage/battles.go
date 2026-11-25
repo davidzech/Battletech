@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"time"
 )
 
 // A battle in progress is a row of mekbay_operations: its MekBay operation and OpFor, and the last status read of it (see battle.go).
@@ -58,5 +59,71 @@ func (s *Store) SaveMekBayOperation(ctx context.Context, playthroughID, campaign
 		s.q(`INSERT INTO mekbay_operations (playthrough_id, campaign, scenario_id, opfor_instance, operation_id) VALUES (?, ?, ?, ?, ?)
 		     ON CONFLICT (playthrough_id, campaign, scenario_id) DO UPDATE SET opfor_instance = excluded.opfor_instance, operation_id = excluded.operation_id, status_json = '', status_at = 0`),
 		playthroughID, campaign, scenarioID, op.OpForInstance, op.OperationID)
+	return err
+}
+
+// BattleScenarios lists the scenarios of a campaign run that have a battle in progress, oldest scenario first, leaving out any whose scenario is already
+// completed (a row an older version of the site, or a rollback to an old checkpoint, left behind). While one is in progress the campaign is locked: nothing
+// but that battle's own actions may change it. The site also drops scenarios the campaign no longer has.
+func (s *Store) BattleScenarios(ctx context.Context, playthroughID, campaign string) ([]string, error) {
+	rows, err := s.db.QueryContext(ctx, s.q(`SELECT o.scenario_id FROM mekbay_operations o
+		WHERE o.playthrough_id = ? AND o.campaign = ? AND NOT EXISTS (SELECT 1 FROM scenario_completions c
+			WHERE c.playthrough_id = o.playthrough_id AND c.campaign = o.campaign AND c.scenario_id = o.scenario_id)
+		ORDER BY o.scenario_id`), playthroughID, campaign)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out = append(out, id)
+	}
+	return out, rows.Err()
+}
+
+// BattleClaimTTL is how long a claim to start a battle holds without being released: long enough for the slowest build in MekBay, short enough that a
+// server that died mid-start doesn't lock the campaign for long.
+const BattleClaimTTL = 10 * time.Minute
+
+// ClaimBattle claims the right to start a battle in a campaign run, for the scenario named, while its forces are built in MekBay. Only one claim holds at a
+// time (a single UPDATE of the run's row, which both SQLite and Postgres apply one at a time), so two starts at once can't both go ahead; ok is false when
+// another start holds a claim that hasn't expired. The claim is released with ReleaseBattleClaim once the battle is recorded (or has failed).
+func (s *Store) ClaimBattle(ctx context.Context, playthroughID, campaign, scenarioID string) (ok bool, err error) {
+	now := time.Now()
+	res, err := s.db.ExecContext(ctx, s.q(`UPDATE campaign_runs SET battle_claim = ?, battle_claim_scenario = ?
+		WHERE playthrough_id = ? AND campaign = ? AND battle_claim < ?`),
+		now.Unix(), scenarioID, playthroughID, campaign, now.Add(-BattleClaimTTL).Unix())
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n == 1, err
+}
+
+// BattleClaim says which scenario a start in progress has claimed (see ClaimBattle), if any claim holds.
+func (s *Store) BattleClaim(ctx context.Context, playthroughID, campaign string) (scenarioID string, ok bool, err error) {
+	var at int64
+	err = s.db.QueryRowContext(ctx, s.q(`SELECT battle_claim, battle_claim_scenario FROM campaign_runs WHERE playthrough_id = ? AND campaign = ?`),
+		playthroughID, campaign).Scan(&at, &scenarioID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, err
+	}
+	if at < time.Now().Add(-BattleClaimTTL).Unix() {
+		return "", false, nil
+	}
+	return scenarioID, true, nil
+}
+
+// ReleaseBattleClaim ends a claim made with ClaimBattle.
+func (s *Store) ReleaseBattleClaim(ctx context.Context, playthroughID, campaign string) error {
+	_, err := s.db.ExecContext(ctx, s.q(`UPDATE campaign_runs SET battle_claim = 0, battle_claim_scenario = '' WHERE playthrough_id = ? AND campaign = ?`),
+		playthroughID, campaign)
 	return err
 }

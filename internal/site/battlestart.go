@@ -45,10 +45,10 @@ func playerDraft(name string, h mekbay.HangarForce, units []string, crews []mekb
 	return mekbay.ForceDraft{Name: name, Groups: []mekbay.GroupDraft{g}}
 }
 
-// startBattle is POST /api/battle/start: the Deploy wizard's last step. It takes the same fields as POST /api/deploy/plan (and checks them the same way), plus
-// reset_opfor when the OpFor of an earlier start should be rebuilt instead of kept. It then builds a force for each player and one for the OpFor in MekBay, saves
-// the operation that pits them against each other (see battle.go), records the scenario as started and answers with the one link the whole table opens.
-// Starting again updates the same operation, so the link stays the same.
+// startBattle is POST /api/battle/start: the Deploy wizard's last step. It takes the same fields as POST /api/deploy/plan (and checks them the same way). It
+// then builds a force for each player and one for the OpFor in MekBay, saves the operation that pits them against each other (see battle.go), records the
+// scenario as started and answers with the one link the whole table opens. There is one battle at a time: a campaign with a battle in progress refuses a
+// start (it is completed or aborted first), and the start claims the campaign while it builds (Store.ClaimBattle), so two starts at once can't both go ahead.
 func (s *Server) startBattle(w http.ResponseWriter, r *http.Request) {
 	if !sameOrigin(r) {
 		http.Error(w, "cross-origin request refused", http.StatusForbidden)
@@ -57,6 +57,11 @@ func (s *Server) startBattle(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 32768)
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	// One battle at a time, and a battle in progress is finished (completed or aborted) before it can be started again. This is checked first, so a refused
+	// start never reads the hangar from MekBay.
+	if pt, c, _, ok := s.openRunRequest(w, r); !ok || !s.battleLock(w, r, pt, c, "") {
 		return
 	}
 	bp, ok := s.checkPlan(w, r)
@@ -68,6 +73,31 @@ func (s *Server) startBattle(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "That mission isn't available: it doesn't follow your last completed mission.", http.StatusConflict)
 		return
 	}
+	// Claim the campaign while the battle is built, then look again: a start that finished between the check above and the claim has recorded its battle by
+	// now (it records before it releases its claim). While the claim holds, every other change to the campaign is refused too (battleLock sees it).
+	ctx := context.WithoutCancel(r.Context()) // building the battle is not abandoned if the browser goes away part-way
+	if claimed, err := s.store.ClaimBattle(ctx, bp.pt.ID, bp.c.Slug, bp.sc.ID); err != nil {
+		http.Error(w, "could not claim the campaign", http.StatusInternalServerError)
+		return
+	} else if !claimed {
+		if !s.battleLock(w, r, bp.pt, bp.c, "") {
+			return
+		}
+		http.Error(w, "Another battle is being started. Try again in a moment.", http.StatusConflict)
+		return
+	}
+	defer func() {
+		if err := s.store.ReleaseBattleClaim(ctx, bp.pt.ID, bp.c.Slug); err != nil {
+			log.Printf("release the battle claim: %v", err)
+		}
+	}()
+	if sc, err := s.battleInProgress(ctx, bp.pt.ID, bp.c, false); err != nil {
+		http.Error(w, "could not load the battle", http.StatusInternalServerError)
+		return
+	} else if sc != nil {
+		http.Error(w, battleLockMessage(bp.c, sc), http.StatusConflict)
+		return
+	}
 	seed := currentSeed(r)
 	account := mekbay.AccountUID(seed, mekbay.SlotHangar)
 	draft, err := opForDraft(bp.c, bp.sc)
@@ -76,22 +106,12 @@ func (s *Server) startBattle(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not read the scenario's OpFor", http.StatusInternalServerError)
 		return
 	}
-	// A repeated start updates the same operation, and keeps the OpFor (and the damage recorded on it) unless asked to rebuild it.
 	req := mekbay.BattleRequest{
 		Account:        account,
 		HangarInstance: bp.run.HangarInstance,
 		Provided:       bp.sc.Provides(),
 		OpFor:          mekbay.BattleOpFor{Draft: draft},
 		OperationName:  operationName(bp.c, bp.sc),
-	}
-	if prev, had, err := s.store.MekBayOperation(r.Context(), bp.pt.ID, bp.c.Slug, bp.sc.ID); err != nil {
-		http.Error(w, "could not load the battle", http.StatusInternalServerError)
-		return
-	} else if had {
-		req.OperationID = prev.OperationID
-		if r.PostFormValue("reset_opfor") == "" {
-			req.OpFor.Reuse = prev.OpForInstance
-		}
 	}
 	for i := range bp.units {
 		num := i + 1
@@ -105,14 +125,13 @@ func (s *Server) startBattle(w http.ResponseWriter, r *http.Request) {
 		}
 		req.Players = append(req.Players, p)
 	}
-	// Building the battle is not abandoned if the browser goes away part-way.
-	got, err := s.mekbay.StartBattle(context.WithoutCancel(r.Context()), req)
+	got, err := s.mekbay.StartBattle(ctx, req)
 	if err != nil {
 		log.Printf("start battle %s: %v", bp.sc.ID, err)
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
-	if err := s.store.SaveMekBayOperation(r.Context(), bp.pt.ID, bp.c.Slug, bp.sc.ID, storage.MekBayOperation{OpForInstance: got.OpForInstance, OperationID: got.OperationID}); err != nil {
+	if err := s.store.SaveMekBayOperation(ctx, bp.pt.ID, bp.c.Slug, bp.sc.ID, storage.MekBayOperation{OpForInstance: got.OpForInstance, OperationID: got.OperationID}); err != nil {
 		log.Printf("record operation: %v", err)
 		http.Error(w, "The battle was started in MekBay but could not be recorded here.", http.StatusInternalServerError)
 		return
@@ -212,20 +231,22 @@ func (s *Server) abortBattle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer s.deleteBattle(r.Context(), currentSeed(r), op.OperationID)
+	line := "Aborted " + c.MissionName(*sc) + ", keeping every change since the last checkpoint."
 	if cps, err := s.store.Checkpoints(r.Context(), pt.ID, c.Slug); err == nil && len(cps) > 0 && mode == "rollback" {
-		if err := s.rollbackTo(r.Context(), currentSeed(r), pt.ID, c.Slug, cps[0].Seq); err != nil {
+		label, err := s.rollbackTo(r.Context(), currentSeed(r), pt.ID, c.Slug, cps[0].Seq)
+		if err != nil {
 			log.Printf("roll back on abort: %v", err)
 			http.Error(w, "Could not roll the campaign back: "+err.Error(), http.StatusBadGateway)
 			return
 		}
-		// The history goes back with the campaign (the deployment's line too), so the abort leaves no line of its own.
-	} else {
-		s.logHistory(r, pt.ID, c.Slug, storage.HistoryMission, 0, "Aborted "+c.MissionName(*sc)+", keeping every change since the last checkpoint.")
+		// The history goes back with the campaign (the deployment's line too); one line, once the battle is forgotten, says it was aborted and rolled back.
+		line = "Aborted " + c.MissionName(*sc) + " and rolled back to \u201c" + label + "\u201d."
 	}
 	if _, err := s.store.DeleteMekBayOperation(r.Context(), pt.ID, c.Slug, sc.ID); err != nil {
 		http.Error(w, "could not abort the battle", http.StatusInternalServerError)
 		return
 	}
+	s.logHistory(r, pt.ID, c.Slug, storage.HistoryMission, 0, line) // only once the battle is gone, so the history never says it ended while it still locks the campaign
 	w.WriteHeader(http.StatusNoContent)
 }
 

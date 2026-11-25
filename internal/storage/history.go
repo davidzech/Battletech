@@ -8,16 +8,18 @@ import (
 // The campaign history is a ledger of everything that has happened to a started campaign, oldest first: the start, every purchase, sale, repair, rearm and
 // reconfiguration, every change to a pilot, every mission started, aborted or completed, every correction made under Advanced Management. It is append-only and
 // is not part of a checkpoint's snapshot, but a rollback takes it back too: the entries made after the checkpoint are deleted, since the campaign returns to that
-// point and what came after never happened (the rollback itself is not logged).
+// point and what came after never happened. The rollback then logs a line of its own (after the deletion), so the history shows that one took place.
 
 // History kinds, which the ledger shows as categories.
 const (
 	HistoryCampaign = "campaign" // started, renamed, players
 	HistoryMission  = "mission"  // battles started and aborted, missions completed
-	HistoryPilot    = "pilot"    // recruited, SP, abilities, killed, ranks, names, portraits
+	HistoryPilot    = "pilot"    // recruited, SP, abilities, names, portraits (corrections are HistoryCorrections)
 	HistoryHangar   = "hangar"   // bought, sold, repaired, rearmed, reconfigured
-	HistoryFunds    = "funds"    // the warchest set by hand
 	HistoryKeywords = "keywords" // keywords edited by hand
+	// HistoryCorrections is every Advanced Management correction (the warchest, a pilot's SP, rank, abilities, killed in action, revived, deleted) and every
+	// rollback. It was "funds" when it held only the warchest; Store.init renames those lines.
+	HistoryCorrections = "corrections"
 )
 
 // HistoryEntry is one line of a campaign's history.

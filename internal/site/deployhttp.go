@@ -46,15 +46,10 @@ func (s *Server) hangarJSON(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
-	_, hasOp, err := s.store.MekBayOperation(r.Context(), pt.ID, c.Slug, sc.ID)
-	if err != nil {
-		http.Error(w, "could not load operation", http.StatusInternalServerError)
-		return
-	}
 	if !sc.Provides() { // the scenario's own mechs are not the hangar, so they are never cached as it
 		s.cacheHangar(r.Context(), pt.ID, c.Slug, run.HangarInstance, h)
 	}
-	out := deployData(h, c, sc, run.Owned(), hasOp)
+	out := deployData(h, c, sc, run.Owned())
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	_ = json.NewEncoder(w).Encode(out)

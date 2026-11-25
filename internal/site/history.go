@@ -99,12 +99,12 @@ type historyView struct {
 const startCheckpointLabel = "Campaign started"
 
 var historyLabels = map[string]string{
-	storage.HistoryCampaign: "Campaign",
-	storage.HistoryMission:  "Mission",
-	storage.HistoryPilot:    "Pilot",
-	storage.HistoryHangar:   "Hangar",
-	storage.HistoryFunds:    "Funds",
-	storage.HistoryKeywords: "Keywords",
+	storage.HistoryCampaign:    "Campaign",
+	storage.HistoryMission:     "Mission",
+	storage.HistoryPilot:       "Pilot",
+	storage.HistoryHangar:      "Hangar",
+	storage.HistoryCorrections: "Corrections",
+	storage.HistoryKeywords:    "Keywords",
 }
 
 // historyFilter is one of the History dialog's filter buttons: every kind has one, disabled when the history holds none of it.
@@ -114,15 +114,31 @@ type historyFilter struct {
 }
 
 // historyOrder is the order of the filter buttons.
-var historyOrder = []string{storage.HistoryMission, storage.HistoryPilot, storage.HistoryHangar, storage.HistoryCampaign, storage.HistoryFunds, storage.HistoryKeywords}
+var historyOrder = []string{storage.HistoryMission, storage.HistoryPilot, storage.HistoryHangar, storage.HistoryCampaign, storage.HistoryKeywords, storage.HistoryCorrections}
 
-// historyViews reads a campaign's history for the History dialog, newest first, and its filters (one per kind, disabled for a kind it doesn't hold).
+// portraitHistorySuffix ends the line logged when a pilot's portrait changes. Such lines are kept in the database but left out of
+// the History dialog, where they are noise.
+const portraitHistorySuffix = " changed portrait."
+
+// shownInHistory says whether the History dialog shows an entry.
+func shownInHistory(e storage.HistoryEntry) bool {
+	return !(e.Kind == storage.HistoryPilot && strings.HasSuffix(e.Text, portraitHistorySuffix))
+}
+
+// historyViews reads a campaign's history for the History dialog, newest first (without the lines shownInHistory hides), and its filters (one per kind, disabled for a kind it doesn't hold).
 func (s *Server) historyViews(r *http.Request, playthroughID string, c *content.Campaign) ([]historyView, []historyFilter) {
 	entries, err := s.store.History(r.Context(), playthroughID, c.Slug)
 	if err != nil {
 		log.Printf("read the campaign history: %v", err)
 		return nil, nil
 	}
+	shown := entries[:0:0]
+	for _, e := range entries {
+		if shownInHistory(e) {
+			shown = append(shown, e)
+		}
+	}
+	entries = shown
 	held := map[string]bool{}
 	for _, e := range entries {
 		held[e.Kind] = true

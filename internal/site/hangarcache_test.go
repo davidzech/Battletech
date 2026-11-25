@@ -85,7 +85,7 @@ func TestHangarCachePullThrough(t *testing.T) {
 		t.Fatalf("deploy popup read: %d", r.StatusCode)
 	}
 	sattr := cachedAttr(body(t, srv, "/refusalwar/scenario_001/", cookie))
-	if !strings.Contains(sattr, "Mist Lynx") || !strings.Contains(sattr, "&#34;limit&#34;:7500") || !strings.Contains(sattr, "&#34;hasOperation&#34;:false") || !strings.Contains(sattr, "&#34;canModify&#34;:true") {
+	if !strings.Contains(sattr, "Mist Lynx") || !strings.Contains(sattr, "&#34;limit&#34;:7500") || !strings.Contains(sattr, "&#34;canModify&#34;:true") {
 		t.Errorf("the scenario page should carry the cached hangar for the popup: %.300s", sattr)
 	}
 

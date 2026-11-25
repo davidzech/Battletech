@@ -38,8 +38,6 @@
   var next = document.getElementById('deploy-next');
   var back = document.getElementById('deploy-back');
   var cancel = document.getElementById('deploy-cancel');
-  var resetRow = document.getElementById('deploy-reset-row');
-  var reset = document.getElementById('deploy-reset');
   var tray = document.getElementById('deploy-pilots');
   var trayList = document.getElementById('deploy-pilots-list');
   var playersBox = document.getElementById('deploy-players');
@@ -796,7 +794,6 @@
     if (finished) {
       meter.hidden = true;
       list.hidden = true;
-      resetRow.hidden = true;
       status.hidden = true;
       review.hidden = false;
       title.textContent = 'Operation in progress';
@@ -813,7 +810,6 @@
       stepTitle.textContent = 'Configure your mechs';
       meter.hidden = true; // the step ends with the force total
       renderConfigure();
-      resetRow.hidden = !(isLast() && cachedData && cachedData.hasOperation);
     } else if (isCommanderStep()) {
       list.hidden = true;
       review.hidden = false;
@@ -821,7 +817,6 @@
       stepTitle.textContent = 'Choose your commander';
       meter.hidden = true;
       renderCommander();
-      resetRow.hidden = !(isLast() && cachedData && cachedData.hasOperation);
     } else if (isReview()) {
       list.hidden = true;
       review.hidden = false;
@@ -830,7 +825,6 @@
       meter.hidden = true; // the review ends with the force total
       var cmd = effectiveCommander();
       renderSummary(planFromState(), cmd ? [el('p', 'deploy-commander-note', 'Commander: ' + cmd)] : []);
-      resetRow.hidden = !(cachedData && cachedData.hasOperation);
     } else {
       list.hidden = false;
       if (playerCount > 1) {
@@ -840,7 +834,6 @@
       }
       units.forEach(function (u) { if (!takenElsewhere(u.id)) list.appendChild(row(u)); });
       setMeter();
-      resetRow.hidden = !(isLast() && cachedData && cachedData.hasOperation);
     }
     renderTray();
     renderFooter();
@@ -894,7 +887,6 @@
 
   function load() {
     error.textContent = '';
-    reset.checked = false;
     touched = false;
     finished = null;
     stopPolling();
@@ -929,7 +921,9 @@
     if (inProgress) enterOperation(null);
     else load();
   });
-  dialog.addEventListener('close', stopPolling);
+  // A battle started from this dialog changes the whole page (View operation, the mission log, no Manage force, the campaign lock), so closing it reloads.
+  var startedHere = false;
+  dialog.addEventListener('close', function () { stopPolling(); if (startedHere) location.reload(); });
   // One Escape can be taken for both dialogs when the QR code was opened without a click in between; the one under it stays.
   dialog.addEventListener('cancel', function (e) { if ((qrDialog && qrDialog.open) || (abortDialog && abortDialog.open)) e.preventDefault(); });
   cancel.addEventListener('click', function () { dialog.close(); });
@@ -1014,7 +1008,6 @@
     }
     var cmd = effectiveCommander();
     if (cmd) body += '&commander=' + encodeURIComponent(cmd);
-    if (reset.checked) body += '&reset_opfor=1';
     fetch('/api/battle/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -1022,7 +1015,7 @@
       credentials: 'same-origin'
     }).then(function (res) {
       busy = false;
-      if (res.ok) return res.json().then(function (data) { enterOperation(data); });
+      if (res.ok) return res.json().then(function (data) { startedHere = true; enterOperation(data); });
       renderFooter();
       return res.text().then(function (t) { error.textContent = t.trim() || 'Could not start the battle.'; });
     }, function () { busy = false; renderFooter(); error.textContent = 'Could not reach the server.'; });

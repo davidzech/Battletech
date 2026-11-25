@@ -62,3 +62,46 @@ func TestHistoryBackfillsTheStart(t *testing.T) {
 		t.Errorf("after the rollback only the start is left: %+v", h)
 	}
 }
+
+// TestHistoryKindsMigrate: lines logged before the Corrections kind existed (the warchest under "funds", Advanced Management corrections under "pilot") are
+// moved to it when the store opens; other pilot lines stay where they are.
+func TestHistoryKindsMigrate(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "test.db")
+	s, err := OpenSQLite(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const id = "pt-kinds"
+	if _, err := s.EnsurePlaythrough(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+	for _, l := range [][2]string{
+		{"funds", "The warchest was set to 1,234 SP (Advanced Management)."},
+		{HistoryPilot, "Alrek was revived (Advanced Management)."},
+		{HistoryPilot, "Alrek earned 90 SP."},
+		{HistoryPilot, "Alrek was marked killed in action."},
+	} {
+		if err := s.LogHistory(ctx, id, "refusalwar", l[0], l[1], 0); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s.Close()
+	if s, err = OpenSQLite(path); err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	h, err := s.History(ctx, id, "refusalwar")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{HistoryCorrections, HistoryCorrections, HistoryPilot, HistoryCorrections}
+	if len(h) != len(want) {
+		t.Fatalf("history: %+v", h)
+	}
+	for i, e := range h {
+		if e.Kind != want[i] {
+			t.Errorf("%q: kind %q, want %q", e.Text, e.Kind, want[i])
+		}
+	}
+}

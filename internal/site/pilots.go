@@ -157,7 +157,7 @@ func (s *Server) pilotFallen(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not save", http.StatusInternalServerError)
 		return
 	}
-	s.logHistory(r, pt.ID, c.Slug, storage.HistoryPilot, 0, pilotLabel(p, found)+" was marked killed in action.")
+	s.logHistory(r, pt.ID, c.Slug, storage.HistoryCorrections, 0, pilotLabel(p, found)+" was marked killed in action (Advanced Management).")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -261,14 +261,14 @@ func (s *Server) setPortrait(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not save the portrait", http.StatusInternalServerError)
 		return
 	}
-	s.logHistory(r, pt.ID, c.Slug, storage.HistoryPilot, 0, pilotLabel(p, found)+" changed portrait.")
+	s.logHistory(r, pt.ID, c.Slug, storage.HistoryPilot, 0, pilotLabel(p, found)+portraitHistorySuffix)
 	w.WriteHeader(http.StatusNoContent)
 }
 
 // deleteCampaign deletes the playthrough's progress in one campaign (see Store.DeleteRun). The browser asks the player
 // to confirm first.
 func (s *Server) deleteCampaign(w http.ResponseWriter, r *http.Request) {
-	pt, c, ok := s.pilotRequest(w, r)
+	pt, c, _, ok := s.openRunRequest(w, r) // deleting is allowed during a battle: it removes the battle with everything else
 	if !ok {
 		return
 	}
@@ -353,7 +353,7 @@ func (s *Server) revivePilot(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not revive the pilot", http.StatusInternalServerError)
 		return
 	}
-	s.logHistory(r, pt.ID, c.Slug, storage.HistoryPilot, 0, pilotLabel(p, found)+" was revived (Advanced Management).")
+	s.logHistory(r, pt.ID, c.Slug, storage.HistoryCorrections, 0, pilotLabel(p, found)+" was revived (Advanced Management).")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -371,7 +371,7 @@ func (s *Server) deletePilot(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not delete the pilot", http.StatusInternalServerError)
 		return
 	}
-	s.logHistory(r, pt.ID, c.Slug, storage.HistoryPilot, 0, pilotLabel(p, found)+" was deleted (Advanced Management).")
+	s.logHistory(r, pt.ID, c.Slug, storage.HistoryCorrections, 0, pilotLabel(p, found)+" was deleted (Advanced Management).")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -392,7 +392,7 @@ func (s *Server) resetPilotSP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not reset the pilot", http.StatusInternalServerError)
 		return
 	}
-	s.logHistory(r, pt.ID, c.Slug, storage.HistoryPilot, 0, pilotLabel(p, found)+"'s SP allocation was reset (Advanced Management).")
+	s.logHistory(r, pt.ID, c.Slug, storage.HistoryCorrections, 0, pilotLabel(p, found)+"'s SP allocation was reset (Advanced Management).")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -419,7 +419,7 @@ func (s *Server) setPilotTotal(w http.ResponseWriter, r *http.Request) {
 	case err != nil:
 		http.Error(w, "could not save the total", http.StatusInternalServerError)
 	default:
-		s.logHistory(r, pt.ID, c.Slug, storage.HistoryPilot, 0, fmt.Sprintf("%s's total SP was set to %s (Advanced Management).", pilotLabel(p, found), format.Commas(total)))
+		s.logHistory(r, pt.ID, c.Slug, storage.HistoryCorrections, 0, fmt.Sprintf("%s's total SP was set to %s (Advanced Management).", pilotLabel(p, found), format.Commas(total)))
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
@@ -444,7 +444,7 @@ func (s *Server) setWarchest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if funds != before.Warchest {
-		s.logHistory(r, pt.ID, c.Slug, storage.HistoryFunds, funds-before.Warchest, fmt.Sprintf("The warchest was set to %s SP (Advanced Management).", format.Commas(funds)))
+		s.logHistory(r, pt.ID, c.Slug, storage.HistoryCorrections, funds-before.Warchest, fmt.Sprintf("The warchest was set to %s SP (Advanced Management).", format.Commas(funds)))
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -495,7 +495,7 @@ func (s *Server) setRank(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not save the rank", http.StatusInternalServerError)
 		return
 	}
-	s.logHistory(r, pt.ID, c.Slug, storage.HistoryPilot, 0, fmt.Sprintf("%s's rank was set to %s (Advanced Management).", pilotLabel(p, found), rank))
+	s.logHistory(r, pt.ID, c.Slug, storage.HistoryCorrections, 0, fmt.Sprintf("%s's rank was set to %s (Advanced Management).", pilotLabel(p, found), rank))
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -540,7 +540,7 @@ func (s *Server) resetEdgeAbilities(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not reset the Edge abilities", http.StatusInternalServerError)
 		return
 	}
-	s.logHistory(r, pt.ID, c.Slug, storage.HistoryPilot, 0, pilotLabel(p, found)+"'s Edge abilities were reset (Advanced Management).")
+	s.logHistory(r, pt.ID, c.Slug, storage.HistoryCorrections, 0, pilotLabel(p, found)+"'s Edge abilities were reset (Advanced Management).")
 	w.WriteHeader(http.StatusNoContent)
 }
 

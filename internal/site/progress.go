@@ -41,7 +41,7 @@ func (s *Server) progress(r *http.Request, c *content.Campaign) (completed, avai
 // setScenarioCompleted is POST /api/campaign/scenario-complete: mark a scenario of a started campaign completed (done=1) or not (done=0). Only an available scenario
 // can be completed; un-completing is always allowed. The log is just a log: un-completing a scenario leaves the ones after it alone.
 func (s *Server) setScenarioCompleted(w http.ResponseWriter, r *http.Request) {
-	pt, c, ok := s.pilotRequest(w, r)
+	pt, c, _, ok := s.openRunRequest(w, r)
 	if !ok {
 		return
 	}
@@ -51,6 +51,14 @@ func (s *Server) setScenarioCompleted(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	done := r.PostFormValue("done") == "1"
+	// A battle in progress locks the campaign log, except to complete that battle's own mission, which ends it.
+	allowed := ""
+	if done {
+		allowed = sc.ID
+	}
+	if !s.battleLock(w, r, pt, c, allowed) {
+		return
+	}
 	if sc.HasOutcome() {
 		// A mission with an outcome is completed by reporting it (POST /api/campaign/scenario-outcome/commit), which gives the rewards; marking it by hand would skip
 		// them, and un-completing it would let them be given twice.

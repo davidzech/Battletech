@@ -91,6 +91,19 @@ type Page struct {
 	BattleCache    string          // the last status read of that battle as JSON ({forces, updatedAt}), so the view paints it at once while a fresh read is made
 	Commit         string          // git commit the server was built from, short form ("dev" if unknown)
 	DevReload      bool            // the server runs with -dev-reload, so the layout loads static/devreload.js
+	Lock           *BattleLock     // the battle in progress that locks the campaign (nil when none)
+}
+
+// BattleLock is the battle in progress that locks a campaign: while it runs nothing else may change the campaign (see battleLock), so the pages say so and
+// disable their controls. Mission is its name ("Scenario 002: Flame Tongue") and URL its page.
+type BattleLock struct {
+	Mission, URL, Slug string
+}
+
+// OtherBattle says whether the page is locked by a battle in progress somewhere other than this page's own scenario: every page of the campaign except
+// that battle's scenario page, which has the battle's own controls.
+func (p Page) OtherBattle() bool {
+	return p.Lock != nil && (p.Scenario == nil || p.Lock.Slug != p.Scenario.Slug)
 }
 
 // Card is one entry in a list of links (campaigns or scenarios).
@@ -269,6 +282,11 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name
 					p.Run = run
 				}
 				if p.Run.Started() {
+					if sc, err := s.battleInProgress(r.Context(), id, p.Campaign, true); err != nil {
+						log.Printf("load the battle in progress: %v", err)
+					} else if sc != nil {
+						p.Lock = &BattleLock{Mission: p.Campaign.MissionName(*sc), URL: "/" + p.Campaign.Slug + "/" + sc.Slug + "/", Slug: sc.Slug}
+					}
 					pilots, err := s.store.Pilots(r.Context(), id, p.Campaign.Slug)
 					if err != nil {
 						log.Printf("load named pilots: %v", err)
