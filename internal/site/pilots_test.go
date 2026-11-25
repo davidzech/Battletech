@@ -146,7 +146,7 @@ func TestNamedPilotsFlow(t *testing.T) {
 	if got := post(t, srv, "/api/pilots/allocate", pilots("pilot", ps[1].ID, "earned", "100"), cookie, srv.URL).StatusCode; got != http.StatusNotFound {
 		t.Errorf("SP earned by the fallen: %d", got)
 	}
-	if c := body(t, srv, "/refusalwar/manage/", cookie); !strings.Contains(c, "Killed in Action") || !strings.Contains(c, `class="rec-revive"`) || strings.Contains(c, `id="pilot-add"`) {
+	if c := body(t, srv, "/refusalwar/manage/", cookie); !strings.Contains(c, "Killed in Action") || !strings.Contains(c, `class="rec-revive"`) || !strings.Contains(c, `class="rec-kia"`) || strings.Contains(c, `details class="more"`) || strings.Contains(c, `id="pilot-add"`) {
 		t.Fatalf("a fallen pilot should show, and free a place: %.3000s", c)
 	}
 	if r := post(t, srv, "/api/pilots", pilots("name", "Replacement"), cookie, srv.URL); r.StatusCode != http.StatusNoContent {
