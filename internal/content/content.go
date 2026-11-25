@@ -39,6 +39,9 @@ type Scenario struct {
 	// ProvidedUnits, when set (front matter provided_units: MekBay unit IDs), replace the player's hangar for this scenario: the players pick from this fixed pool
 	// instead, for story reasons. The units exist only for this scenario and never touch the hangar (see provided.go).
 	ProvidedUnits []string
+	// ProvidedSwaps (front matter provided_swaps) lets the players reconfigure the provided omnimechs to another variant for free before the battle, in a step of the
+	// Deploy wizard: any variant of the chassis the campaign's faction fields in its era. It needs provided_units.
+	ProvidedSwaps bool
 	// OutcomeInputs and OutcomeRules are the scenario's outcome engine (Outcome.md front matter `inputs` and `outcomes`, see outcomes.go); OutcomeError says what is wrong
 	// with them, in which case the scenario has no engine.
 	OutcomeInputs     []OutcomeInput
@@ -91,7 +94,11 @@ type ForceFile struct {
 
 // Campaign is a folder containing Scenario_NNN folders.
 type Campaign struct {
-	Slug      string
+	Slug string
+	Dir  string // absolute path of the campaign's folder
+	// Icon is the campaign's emblem on the home page's campaign list (Intro.md front matter icon: a file in the campaign's images/ folder, e.g. images/icon.webp,
+	// served at /<campaign>/images/<file>); "" for none.
+	Icon      string
 	Label     string
 	IntroHTML template.HTML // Intro.md's body, all of it the campaign's briefing, rendered like a scenario's
 	IntroTag  string        // the body's leading `## ` heading (e.g. "The Enemy Within"), shown as the briefing's tag
@@ -257,6 +264,14 @@ func humanize(name string) string {
 	return strings.ReplaceAll(camelGap.ReplaceAllString(name, "$1 $2"), "_", " ")
 }
 
+// IconURL is where the site serves the campaign's icon (its images/ folder), or "" when it has none.
+func (c *Campaign) IconURL() string {
+	if c == nil || c.Icon == "" {
+		return ""
+	}
+	return "/" + c.Slug + "/images/" + c.Icon
+}
+
 // introMeta is a campaign's Intro.md front matter: the campaign-wide settings (see Campaign).
 type introMeta struct {
 	MinPlayers          int      `yaml:"min_players"`
@@ -275,6 +290,7 @@ type introMeta struct {
 	RecruitRank         string   `yaml:"recruit_rank"`
 	MissionTerm         string   `yaml:"mission_term"`
 	MVPSP               int      `yaml:"mvp_sp"`
+	Icon                string   `yaml:"icon"`
 }
 
 // setupMeta is a scenario's Setup.md front matter.
@@ -288,6 +304,7 @@ type setupMeta struct {
 	Forces    map[string]string   `yaml:"forces"`
 	BVLimit   int                 `yaml:"bv_limit"`
 	Provided  []string            `yaml:"provided_units"`
+	Swaps     bool                `yaml:"provided_swaps"`
 	UnitLimit int                 `yaml:"unit_limit"`
 	PilotsReq bool                `yaml:"pilots_required"`
 	Commander *bool               `yaml:"commander"`
@@ -382,7 +399,7 @@ func (l Library) load(name string) (*Campaign, bool) {
 	if err != nil {
 		return nil, false
 	}
-	c := &Campaign{Slug: strings.ToLower(name), Label: humanize(name)}
+	c := &Campaign{Slug: strings.ToLower(name), Label: humanize(name), Dir: dir}
 	problem := func(file string, err error) {
 		if err != nil {
 			c.Problems = append(c.Problems, file+": "+err.Error())
@@ -392,6 +409,16 @@ func (l Library) load(name string) (*Campaign, bool) {
 	intro, err := readMarkdown(filepath.Join(dir, "Intro.md"), &meta)
 	problem("Intro.md", err)
 	c.applyIntro(meta)
+	if meta.Icon != "" {
+		// Only a file directly in images/ is served (see the site's campaign image route), so that is all an icon may be.
+		if base := filepath.Base(meta.Icon); filepath.ToSlash(meta.Icon) != "images/"+base {
+			c.Problems = append(c.Problems, fmt.Sprintf("Intro.md: icon %q must be a file in the campaign's images/ folder, e.g. images/icon.webp", meta.Icon))
+		} else if _, err := os.Stat(filepath.Join(dir, "images", base)); err != nil {
+			c.Problems = append(c.Problems, fmt.Sprintf("Intro.md: icon %q is not in the campaign's folder", meta.Icon))
+		} else {
+			c.Icon = base
+		}
+	}
 	for _, e := range entries {
 		m := scenarioDir.FindStringSubmatch(e.Name())
 		if !e.IsDir() || m == nil {
@@ -420,6 +447,7 @@ func (l Library) load(name string) (*Campaign, bool) {
 			Forces:            forceFiles(setup.Forces),
 			BVLimit:           setup.BVLimit,
 			ProvidedUnits:     setup.Provided,
+			ProvidedSwaps:     setup.Swaps,
 			UnitLimit:         setup.UnitLimit,
 			PilotsRequired:    setup.PilotsReq,
 			ChoosesCommander:  setup.Commander == nil || *setup.Commander,
@@ -440,6 +468,9 @@ func (l Library) load(name string) (*Campaign, bool) {
 		}
 		if s.ID == "" {
 			s.ID = s.Slug
+		}
+		if s.ProvidedSwaps && len(s.ProvidedUnits) == 0 {
+			c.Problems = append(c.Problems, s.Slug+"/Setup.md: provided_swaps needs provided_units (there are no provided mechs to reconfigure)")
 		}
 		s.CompileOutcomes()
 		if s.Title == "" {

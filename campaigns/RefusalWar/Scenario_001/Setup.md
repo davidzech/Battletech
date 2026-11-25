@@ -27,13 +27,13 @@ readout:
 
 ## Briefing
 
-Ulric Kerensky bid every Wolf against every world the Falcons hold.
+Ulric Kerensky defiantly bid the entire Wolf Touman against every world the Falcons hold.
 
-For that, Khan Elias Crichell was made to treat with a Star Colonel. He has not forgotten the insult.
+In doing so, Khan Elias Crichell of the Jade Falcons was made to negotiate with Urlic, an effective Star Colonel. He has not forgotten the insult.
 
-Colmar feeds their Gamma Galaxy. In Marakaa Valley stand a firebase and a chemical plant. Our wings struck the firebase, then the storms closed over the valley. No one can say what survived.
+The first target is Colmar, which supplies the Falcon Gamma Galaxy. In the Marakaa Valley stands a chemical plant embedded within their firebase. Our aero units struck the firebase before the storms closed over the valley. No one can say what survived.
 
-You will drop without the sky. What remains in that valley, you will see for yourselves.
+Your forces will drop under cover of the blackened sky. What remains in that valley, you will see for yourselves.
 
 > We will turn this Trial of Refusal into a Trial of Absorption.
 >

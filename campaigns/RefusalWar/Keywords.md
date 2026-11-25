@@ -11,11 +11,11 @@ keywords:
   - id: avenger
     name: Avenger
     scenario: scenario_002
-    description: Star Captain Rattlov was left alive.
+    description: Star Captain Rothgar Mattlov was left alive.
   - id: no_quarter
     name: No Quarter
     scenario: scenario_002
-    description: Star Captain Rattlov was killed.
+    description: Star Captain Rothgar Mattlov was killed.
   - id: full_power
     name: Full Power
     scenario: scenario_003

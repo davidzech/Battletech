@@ -1,10 +1,12 @@
-{{define "content"}}<p class="kicker">Campaign</p>
-<h1 class="bt-title">{{.Campaign.Label}}</h1>
+{{define "content"}}<div class="page-head">{{template "crest" .}}<p class="kicker">Campaign</p>
+<h1 class="bt-title">{{.Campaign.Label}}</h1></div>
 {{if .Campaign.Problems}}<section class="campaign-problems" role="alert"><h2>Problems in this campaign&rsquo;s files</h2><ul>{{range .Campaign.Problems}}<li><code>{{.}}</code></li>{{end}}</ul></section>{{end}}
-{{if .Campaign.IntroHTML}}<section class="briefing campaign-intro" aria-label="{{or .Campaign.IntroTag "Campaign briefing"}}">
+{{if .Campaign.IntroHTML}}<section class="briefing campaign-intro{{if .Run.Started}} intro-collapsible{{end}}" id="campaign-intro" aria-label="{{or .Campaign.IntroTag "Campaign briefing"}}">
 <p class="briefing-tag">{{or .Campaign.IntroTag "Campaign briefing"}}</p>
-<div class="briefing-text">{{.Campaign.IntroHTML}}</div>
+<div class="briefing-text" id="campaign-intro-text">{{.Campaign.IntroHTML}}</div>
+{{if .Run.Started}}<button type="button" class="intro-more" aria-expanded="false" aria-controls="campaign-intro-text" hidden>Show more</button>{{end}}
 </section>
+{{if .Run.Started}}<script src="/static/introfold.js" defer></script>{{end}}
 {{else}}<section class="panel"><p class="muted">Campaign briefing coming soon.</p></section>
 {{end}}{{if not .Seed}}<p class="muted">Choose a seed (top right) to track your progress through this campaign.</p>
 {{else if not .Play.Configured}}<p class="muted">Name your account (top right) to start this campaign.</p>
@@ -43,8 +45,8 @@
     <p id="wiz-hint" class="wiz-hint" aria-live="polite"></p>
     <p id="wiz-error" class="form-error" role="alert"></p>
     <div class="form-actions">
-      <button type="button" id="wiz-back">Back</button>
-      <button type="submit" class="button" id="wiz-next">Next</button>
+      <button type="button" id="wiz-back" data-wizard-back>Back</button>
+      <button type="submit" class="button" id="wiz-next" data-wizard-next>Next</button>
       <button type="button" id="wiz-cancel">Cancel</button>
     </div>
     <div class="wiz-footer">

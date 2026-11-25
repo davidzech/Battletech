@@ -100,7 +100,8 @@ type deployedPilot struct {
 }
 
 // checkPlan reads and checks a deployment plan from a request, and answers the request itself when it is not good. Fields: campaign, scenario, players, and for each player i the repeated
-// p<i>_units and the paired p<i>_assign_unit and p<i>_assign_pilot. It needs a started campaign and writes nothing.
+// p<i>_units and the paired p<i>_assign_unit and p<i>_assign_pilot; for a scenario whose provided mechs can be reconfigured, the paired variant_unit and
+// variant_to (see reconfigureProvided), which every check after them sees. It needs a started campaign and writes nothing.
 func (s *Server) checkPlan(w http.ResponseWriter, r *http.Request) (*builtPlan, bool) {
 	if !sameOrigin(r) {
 		http.Error(w, "cross-origin request refused", http.StatusForbidden)
@@ -129,6 +130,11 @@ func (s *Server) checkPlan(w http.ResponseWriter, r *http.Request) (*builtPlan, 
 	if err != nil {
 		log.Printf("read hangar for the plan: %v", err)
 		http.Error(w, err.Error(), http.StatusBadGateway)
+		return nil, false
+	}
+	h, msg := reconfigureProvided(h, c, sc, r.PostForm["variant_unit"], r.PostForm["variant_to"])
+	if msg != "" {
+		http.Error(w, msg, http.StatusBadRequest)
 		return nil, false
 	}
 	pilots, err := s.store.Pilots(r.Context(), pt.ID, c.Slug)

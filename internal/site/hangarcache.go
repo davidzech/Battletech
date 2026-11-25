@@ -32,9 +32,12 @@ func forceData(h mekbay.HangarForce, c *content.Campaign) map[string]any {
 	return map[string]any{"name": h.Name, "units": units, "bv": bv}
 }
 
-// deployData is the hangar as the scenario's deploy popup shows it.
-func deployData(h mekbay.HangarForce, limit int, canModify, hasOperation bool) map[string]any {
-	return map[string]any{"name": h.Name, "limit": limit, "canModify": canModify, "units": hangarViews(h), "hasOperation": hasOperation}
+// deployData is the hangar (or the scenario's provided mechs) as the scenario's deploy popup shows it. `provided` says the mechs are the scenario's own, and
+// `swaps` that the wizard has a Configure step where they can be reconfigured for free, to the variants each omnimech's swapOptions mark as available.
+func deployData(h mekbay.HangarForce, c *content.Campaign, sc *content.Scenario, canModify, hasOperation bool) map[string]any {
+	units := hangarViews(h)
+	markSwapAvailability(units, c)
+	return map[string]any{"name": h.Name, "limit": sc.BVLimit, "canModify": canModify, "units": units, "hasOperation": hasOperation, "provided": sc.Provides(), "swaps": sc.Provides() && sc.ProvidedSwaps}
 }
 
 func cachedJSON(data map[string]any, at time.Time) string {
@@ -107,14 +110,12 @@ func (p Page) PilotsJSON() string {
 func (p Page) DeployJSON() string {
 	if p.Scenario != nil && p.Scenario.Provides() {
 		// The scenario's own mechs need no read from MekBay, so the popup can show them at once.
-		data := deployData(providedForce(p.Scenario), p.Scenario.BVLimit, p.Run.Owned(), p.InProgress)
-		data["provided"] = true
-		return cachedJSON(data, time.Now())
+		return cachedJSON(deployData(providedForce(p.Scenario), p.Campaign, p.Scenario, p.Run.Owned(), p.InProgress), time.Now())
 	}
 	if p.CachedHangar == nil || p.Scenario == nil {
 		return ""
 	}
-	return cachedJSON(deployData(*p.CachedHangar, p.Scenario.BVLimit, p.Run.Owned(), p.InProgress), p.CachedAt)
+	return cachedJSON(deployData(*p.CachedHangar, p.Campaign, p.Scenario, p.Run.Owned(), p.InProgress), p.CachedAt)
 }
 
 // cacheHangar saves a hangar that was just read live. A failure only costs the cache, so it is logged and otherwise ignored.

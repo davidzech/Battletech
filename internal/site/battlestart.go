@@ -63,6 +63,11 @@ func (s *Server) startBattle(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	// A locked mission can't be fought: the page disables its Deploy force button, and this refuses a request made without the page.
+	if _, available := s.progress(r, bp.c); !available[bp.sc.Slug] {
+		http.Error(w, "That mission isn't available yet: complete the mission before it first.", http.StatusConflict)
+		return
+	}
 	seed := currentSeed(r)
 	account := mekbay.AccountUID(seed, mekbay.SlotHangar)
 	draft, err := opForDraft(bp.c, bp.sc)

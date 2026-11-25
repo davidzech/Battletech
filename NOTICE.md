@@ -24,6 +24,8 @@ The GPL does not cover the material listed below, which keeps its own license.
 | Pilot portraits | `internal/pilot/portraits/` | MechWarrior 5 (Piranha Games / Microsoft) | used under Microsoft's [Game Content Usage Rules](https://www.xbox.com/en-US/developers/rules); see `internal/pilot/portraits/NOTICE.md` |
 | QR code generator | `internal/site/static/qrcode.js` | qrcode-generator, (C) 2009 Kazuhiko Arase | MIT; see `internal/site/static/qrcode-LICENSE.txt` |
 | BattleTech old-style font | `internal/site/static/bt_oldstyle.ttf` | "Battletech" font, version 1.00 (2004); its author is not named in the file | not covered by the GPL; its author's terms |
+| Era icons | `internal/site/static/era-*.webp` (Clan Invasion) | official BattleTech era artwork (The Topps Company / Catalyst Game Labs), supplied by the campaign author | not covered by the GPL; used as fan, non-commercial material under its owners' terms |
+| Campaign emblems | `campaigns/*/images/icon.webp` (Refusal War: the Clan Wolf ilClan emblem) | official BattleTech artwork (The Topps Company / Catalyst Game Labs), supplied by the campaign author | not covered by the GPL; used as fan, non-commercial material under its owners' terms |
 | Campaign content | `campaigns/`, `Pages/` | the campaign author | not licensed under the GPL; all rights reserved by the author |
 
 The non-commercial terms of CC BY-NC-SA 4.0 and of Microsoft's Game Content Usage Rules mean the site, as shipped with

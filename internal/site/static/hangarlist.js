@@ -155,39 +155,13 @@
   // Reconfigure (omnimechs only): a dialog listing the unit's other variants with their prices, like the repair dialog.
   var swapDlg = document.getElementById('swap-dialog');
   var swapUnitRow = null;
-  function swapOption() {
-    var to = document.getElementById('swap-select').value;
-    return (swapUnitRow.swapOptions || []).filter(function (o) { return o.unit === to; })[0];
-  }
-  // The dialog shows the unit as its full row, then, once another variant is chosen, an arrow with what changes and the variant's own row: a flow from one to the other.
-  // Each row shows its unit card on hover or focus, like a Hangar row, right-aligned with the row: the current unit's (with its condition pills) and the chosen
-  // variant's (as it would be after the swap).
-  function swapRow(box, v, card) {
-    var row = { name: v.name, model: v.model, role: v.role, icon: v.icon, class: v.class, tons: v.tons, bv: v.bv };
-    if (v.mekbayUrl) row.externalUrl = v.mekbayUrl;
-    var built = MechRow.build(row);
-    if (card && typeof UnitCard !== 'undefined') withCard(built, card);
-    box.appendChild(built);
-  }
+  function swapOption() { return VariantPicker.option(swapUnitRow, document.getElementById('swap-select').value); }
+  // The dialog shows the unit as its full row, then, once another variant is chosen, an arrow with what changes and the variant's own row: a flow from one to the
+  // other, each row with its unit card (the shared VariantPicker, which the Deploy wizard's Configure step uses too).
   function swapCostText() {
     var o = swapOption(), u = swapUnitRow, cost = o ? o.cost : 0, after = warchest - cost;
-    var sel = document.getElementById('swap-select'), chosen = sel.options[sel.selectedIndex];
-    sel.className = chosen ? chosen.className : ''; // the closed box takes the colour of the chosen option
-    var sub = document.getElementById('swap-sub');
-    sub.textContent = '';
-    sub.appendChild(el('div', 'swap-label', o ? 'From' : 'Current variant'));
-    swapRow(sub, u, function () { return UnitCard.forUnit(u); });
-    if (o) {
-      var dir = o.bv > u.bv ? 'up' : o.bv < u.bv ? 'down' : 'same', diff = o.bv - u.bv;
-      var flow = el('div', 'swap-flow swap-' + dir);
-      flow.appendChild(el('span', 'swap-arrow', '↓'));
-      flow.appendChild(el('span', null, commas(u.bv) + ' → ' + commas(o.bv) + ' BV'));
-      if (diff) flow.appendChild(el('b', null, (diff > 0 ? '+' : '−') + commas(Math.abs(diff)) + ' BV'));
-      flow.appendChild(el('span', 'swap-flow-cost', o.cost + ' SP'));
-      sub.appendChild(flow);
-      sub.appendChild(el('div', 'swap-label', 'To'));
-      swapRow(sub, o, function () { return o.card ? UnitCard.build(o.card) : UnitCard.unknown(o.name); });
-    }
+    VariantPicker.mark(document.getElementById('swap-select'));
+    VariantPicker.flow(document.getElementById('swap-sub'), u, o, { price: function (o) { return o.cost + ' SP'; } });
     // The price as a short breakdown: half the tonnage, plus half the BV gained (nothing for a variant worth less).
     var bd = document.getElementById('swap-breakdown');
     bd.textContent = '';
@@ -211,31 +185,16 @@
     swapUnitRow = u;
     var box = document.getElementById('swap-available');
     if (box && !keep) box.checked = true;
-    var was = keep ? document.getElementById('swap-select').value : '';
-    document.getElementById('swap-title').textContent = 'Reconfigure ' + u.name;
     var select = document.getElementById('swap-select');
-    select.textContent = '';
-    // The current variant comes first and is chosen to begin with: reconfiguring to it would change nothing, so Reconfigure stays disabled until another is picked.
-    var here = document.createElement('option');
-    here.value = '';
-    here.className = 'swap-same';
-    here.textContent = '● ' + (u.model || 'This variant') + ' — ' + commas(u.bv) + ' BV — current';
-    select.appendChild(here);
-    // Like Purchase, only the variants the campaign's faction fields in its era are offered while the box is ticked (it is, each time the dialog
-    // opens); unticking it lists them all.
-    var onlyAvailable = document.getElementById('swap-available');
-    (u.swapOptions || []).forEach(function (o) {
-      if (onlyAvailable && onlyAvailable.checked && o.available === false) return;
-      var opt = document.createElement('option');
-      opt.value = o.unit;
-      // Like a stock: green for a variant worth more BV than this one, red for one worth less, so the change reads at a glance.
-      var dir = o.bv > u.bv ? 'up' : o.bv < u.bv ? 'down' : 'same';
-      opt.className = 'swap-' + dir;
-      opt.textContent = (dir === 'up' ? '▲ ' : dir === 'down' ? '▼ ' : '') + (o.model || o.unit) + ' — ' + commas(o.bv) + ' BV — ' + o.cost + ' SP';
-      select.appendChild(opt);
+    document.getElementById('swap-title').textContent = 'Reconfigure ' + u.name;
+    // The current variant comes first and is chosen to begin with: reconfiguring to it would change nothing, so Reconfigure stays disabled until another is
+    // picked. Like Purchase, only the variants the campaign's faction fields in its era are offered while the box is ticked (it is, each time the dialog
+    // opens); unticking it lists them all. A variant still listed stays chosen when the box changes.
+    VariantPicker.fill(select, u, {
+      onlyAvailable: !!(box && box.checked),
+      price: function (o) { return o.cost + ' SP'; },
+      value: keep ? select.value : ''
     });
-    select.value = was; // a variant still listed stays chosen when the box changes
-    if (select.selectedIndex < 0) select.selectedIndex = 0;
     document.getElementById('swap-error').textContent = '';
     swapCostText();
     if (!swapDlg.open) swapDlg.showModal();

@@ -1,5 +1,5 @@
-{{define "content"}}<p class="kicker">{{.Campaign.Label}}</p>
-<h1 class="bt-title">Manage force</h1>
+{{define "content"}}<div class="page-head">{{template "crest" .}}<p class="kicker">{{.Campaign.Label}}</p>
+<h1 class="bt-title">Manage force</h1></div>
 <p><a href="{{if .BackURL}}{{.BackURL}}{{else}}/{{.Campaign.Slug}}/{{end}}">&lsaquo; {{if .BackLabel}}{{.BackLabel}}{{else}}Back to the campaign{{end}}</a></p>
 <section class="warchest overview" id="overview" data-campaign="{{.Campaign.Slug}}" data-min-players="{{.Campaign.MinPlayers}}" data-max-players="{{.Campaign.MaxPlayers}}" data-players="{{.Run.Players}}">
 <h2 class="section-title force-name" id="force-name"><span class="force-name-value" id="force-name-value">{{.Run.ForceLabel}}</span><button type="button" class="force-name-edit" id="force-name-edit" data-name="{{.Run.ForceName}}" title="Rename force" aria-label="Rename force"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button></h2>
@@ -218,6 +218,7 @@
 <script src="/static/mechrow.js" defer></script>
 <script src="/static/unitcard.js" defer></script>
 <script src="/static/forcesummary.js" defer></script>
+<script src="/static/variantpicker.js" defer></script>
 <script src="/static/hangarlist.js" defer></script>
 <script src="/static/unitsearch.js" defer></script>
 <script src="/static/purchase.js" defer></script>

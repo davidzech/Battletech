@@ -12,6 +12,7 @@ provided_units:
   - BMShadowCat_Prime
   - BMPouncer_Prime
   - BMGrendel_Prime
+provided_swaps: true  # the cadets may reconfigure these omnimechs for free, to any variant Clan Wolf fields in the era
 forces:
   opfor1: OpFor1.mul
   opfor2: OpFor2.mul
@@ -69,6 +70,8 @@ Each cadet is given a machine from the Trial's pool:
 - [Mongrel Prime](https://mekbay.com/?gs=cbt&shareUnit=BMGrendel_Prime&tab=General)
 
 These machines are lent for the Trial only: they are not part of your force, and whatever happens to them does not follow you out of the Circle. No more than two machines may take the field in all, and each must have a named pilot.
+
+**You may reconfigure them to any variant available to Clan Wolf during the Clan Invasion Era for free.**
 
 **Deployment:** Each player spawns their mech on the road intersection. Hex positions: TBD
 
