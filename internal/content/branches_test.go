@@ -78,7 +78,7 @@ func TestScenarioBranches(t *testing.T) {
 			t.Errorf("%s: %s, want %s", name, got, c2.want)
 		}
 	}
-	// Refusal War: 000 leads to 001, 001 to 002, and 002 is the end for now.
+	// Refusal War: 000 leads to 001, 001 to 002, 002 to 003, and 003 is the end for now.
 	rw := refusalWar(t)
 	if s0, _ := rw.Scenario("scenario_000"); strings.Join(s0.Branches, ",") != "scenario_001" {
 		t.Errorf("Scenario 000 leads to 001: %v", s0.Branches)
@@ -86,8 +86,11 @@ func TestScenarioBranches(t *testing.T) {
 	if s1, _ := rw.Scenario("scenario_001"); strings.Join(s1.Branches, ",") != "scenario_002" {
 		t.Errorf("Scenario 001 leads to 002: %v", s1.Branches)
 	}
-	if s2, _ := rw.Scenario("scenario_002"); len(s2.Branches) != 0 {
-		t.Errorf("Scenario 002 leads nowhere yet: %v", s2.Branches)
+	if s2, _ := rw.Scenario("scenario_002"); strings.Join(s2.Branches, ",") != "scenario_003" {
+		t.Errorf("Scenario 002 leads to 003: %v", s2.Branches)
+	}
+	if s3, _ := rw.Scenario("scenario_003"); len(s3.Branches) != 0 {
+		t.Errorf("Scenario 003 leads nowhere yet: %v", s3.Branches)
 	}
 	for _, camp := range []*Campaign{rw, c} {
 		for _, sc := range camp.Scenarios {
