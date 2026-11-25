@@ -261,7 +261,7 @@ func (s *Server) setPortrait(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not save the portrait", http.StatusInternalServerError)
 		return
 	}
-	s.logHistory(r, pt.ID, c.Slug, storage.HistoryPilot, 0, pilotLabel(p, found)+" changed portrait.")
+	s.logHistory(r, pt.ID, c.Slug, storage.HistoryPilot, 0, pilotLabel(p, found)+portraitHistorySuffix)
 	w.WriteHeader(http.StatusNoContent)
 }
 

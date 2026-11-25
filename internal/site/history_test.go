@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/davidzech/Battletech/internal/pilot"
 	"github.com/davidzech/Battletech/internal/storage"
 )
 
@@ -101,6 +102,22 @@ func TestCampaignHistory(t *testing.T) {
 	post(t, srv, "/api/campaign/force-name", form("name", "Iron Wolves"), cookie, srv.URL)
 	if h := history(); h[len(h)-1].Text != "The force was renamed Iron Wolves." || h[len(h)-1].Seq != 4 {
 		t.Errorf("the next line follows the checkpoint: %+v", h[len(h)-1])
+	}
+
+	// A portrait change is logged but left out of the History dialog.
+	taken := map[string]bool{}
+	ps, _ := store.Pilots(ctx, id, "refusalwar")
+	for _, p := range ps {
+		taken[p.Portrait] = true
+	}
+	if r := post(t, srv, "/api/pilots/portrait", form("pilot", alrek, "portrait", pilot.RandomPortrait(taken)), cookie, srv.URL); r.StatusCode != http.StatusNoContent {
+		t.Fatalf("portrait: %d", r.StatusCode)
+	}
+	if h := history(); !strings.HasSuffix(h[len(h)-1].Text, portraitHistorySuffix) {
+		t.Errorf("the portrait change is logged: %+v", h[len(h)-1])
+	}
+	if strings.Contains(body(t, srv, "/refusalwar/", cookie), "changed portrait") {
+		t.Error("the History dialog leaves portrait changes out")
 	}
 
 	// The campaign page has the History button and dialog, newest first.
