@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/davidzech/Battletech/internal/content"
+	"github.com/davidzech/Battletech/internal/format"
 	"github.com/davidzech/Battletech/internal/mekbay"
 	"github.com/davidzech/Battletech/internal/pilot"
 	"github.com/davidzech/Battletech/internal/storage"
@@ -164,13 +165,19 @@ func (s *Server) startCampaign(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.cacheHangar(r.Context(), id, c.Slug, hangar.Instance, made) // the new hangar is the run's first cached one
+	// Logged before the starting checkpoint is recorded, so rolling back to it keeps this line.
+	names := make([]string, 0, len(pilots))
+	for _, p := range pilots {
+		names = append(names, p.Name)
+	}
+	s.logHistory(r, id, c.Slug, storage.HistoryCampaign, c.StartingWarchest, fmt.Sprintf("Started the campaign as %s, with the named pilots %s and a warchest of %s SP.", forceName, strings.Join(names, " and "), format.Commas(c.StartingWarchest)))
 	// The first checkpoint: the campaign as it starts, which aborting the first mission rolls back to.
 	if run, ok, err := s.store.Run(r.Context(), id, c.Slug); err == nil && ok {
 		copyID, err := s.checkpointCopy(r.Context(), currentSeed(r), run)
 		if err != nil {
 			log.Printf("the starting checkpoint's hangar copy: %v", err)
 		} else {
-			s.recordCheckpoint(r.Context(), currentSeed(r), id, c.Slug, "Campaign started", copyID)
+			s.recordCheckpoint(r.Context(), currentSeed(r), id, c.Slug, startCheckpointLabel, copyID)
 		}
 	}
 	w.WriteHeader(http.StatusNoContent)

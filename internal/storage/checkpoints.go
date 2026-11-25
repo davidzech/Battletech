@@ -32,6 +32,7 @@ type Checkpoint struct {
 	At         int64  // Unix time
 	HangarCopy string // the frozen hangar force's instance ID in MekBay ("" if the run's hangar isn't one the site owns)
 	Snapshot   string // the campaign's rows as JSON (only loaded by Store.Checkpoint)
+	HistorySeq int    // the last history line when it was taken, so the history can offer it on that line (0 for a checkpoint older than the history; only loaded by Store.Checkpoints)
 }
 
 type snapshotQuerier interface {
@@ -136,8 +137,12 @@ func (s *Store) AddCheckpoint(ctx context.Context, playthroughID, campaign, labe
 	if err := tx.QueryRowContext(ctx, s.q(`SELECT COALESCE(MAX(seq), 0) + 1 FROM campaign_checkpoints WHERE playthrough_id = ? AND campaign = ?`), playthroughID, campaign).Scan(&seq); err != nil {
 		return nil, err
 	}
-	if _, err := tx.ExecContext(ctx, s.q(`INSERT INTO campaign_checkpoints (playthrough_id, campaign, seq, label, created_at, hangar_copy, snapshot) VALUES (?, ?, ?, ?, ?, ?, ?)`),
-		playthroughID, campaign, seq, label, time.Now().Unix(), hangarCopy, snap); err != nil {
+	var historySeq int
+	if err := tx.QueryRowContext(ctx, s.q(`SELECT COALESCE(MAX(seq), 0) FROM campaign_history WHERE playthrough_id = ? AND campaign = ?`), playthroughID, campaign).Scan(&historySeq); err != nil {
+		return nil, err
+	}
+	if _, err := tx.ExecContext(ctx, s.q(`INSERT INTO campaign_checkpoints (playthrough_id, campaign, seq, label, created_at, hangar_copy, snapshot, history_seq) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`),
+		playthroughID, campaign, seq, label, time.Now().Unix(), hangarCopy, snap, historySeq); err != nil {
 		return nil, err
 	}
 	rows, err := tx.QueryContext(ctx, s.q(`SELECT seq, hangar_copy FROM campaign_checkpoints WHERE playthrough_id = ? AND campaign = ? ORDER BY seq DESC`), playthroughID, campaign)
@@ -171,7 +176,7 @@ func (s *Store) AddCheckpoint(ctx context.Context, playthroughID, campaign, labe
 
 // Checkpoints lists a campaign's rollback points, newest first (without their snapshots).
 func (s *Store) Checkpoints(ctx context.Context, playthroughID, campaign string) ([]Checkpoint, error) {
-	rows, err := s.db.QueryContext(ctx, s.q(`SELECT seq, label, created_at, hangar_copy FROM campaign_checkpoints WHERE playthrough_id = ? AND campaign = ? ORDER BY seq DESC`), playthroughID, campaign)
+	rows, err := s.db.QueryContext(ctx, s.q(`SELECT seq, label, created_at, hangar_copy, history_seq FROM campaign_checkpoints WHERE playthrough_id = ? AND campaign = ? ORDER BY seq DESC`), playthroughID, campaign)
 	if err != nil {
 		return nil, err
 	}
@@ -179,7 +184,7 @@ func (s *Store) Checkpoints(ctx context.Context, playthroughID, campaign string)
 	var out []Checkpoint
 	for rows.Next() {
 		var c Checkpoint
-		if err := rows.Scan(&c.Seq, &c.Label, &c.At, &c.HangarCopy); err != nil {
+		if err := rows.Scan(&c.Seq, &c.Label, &c.At, &c.HangarCopy, &c.HistorySeq); err != nil {
 			return nil, err
 		}
 		out = append(out, c)
@@ -257,6 +262,11 @@ func (s *Store) RestoreCheckpoint(ctx context.Context, playthroughID, campaign s
 		}
 	}
 	rows.Close()
+	// The history goes back with the rest: what happened after the checkpoint never happened.
+	if _, err := tx.ExecContext(ctx, s.q(`DELETE FROM campaign_history WHERE playthrough_id = ? AND campaign = ?
+		AND seq > (SELECT history_seq FROM campaign_checkpoints WHERE playthrough_id = ? AND campaign = ? AND seq = ?)`), playthroughID, campaign, playthroughID, campaign, seq); err != nil {
+		return nil, err
+	}
 	if _, err := tx.ExecContext(ctx, s.q(`DELETE FROM campaign_checkpoints WHERE playthrough_id = ? AND campaign = ? AND seq > ?`), playthroughID, campaign, seq); err != nil {
 		return nil, err
 	}

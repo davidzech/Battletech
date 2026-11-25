@@ -1,11 +1,13 @@
 package site
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 
 	"github.com/davidzech/Battletech/internal/catalog"
 	"github.com/davidzech/Battletech/internal/content"
+	"github.com/davidzech/Battletech/internal/format"
 	"github.com/davidzech/Battletech/internal/hangar"
 	"github.com/davidzech/Battletech/internal/mekbay"
 )
@@ -72,7 +74,8 @@ func (s *Server) swapUnit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cost := option.Cost
-	s.payForHangarChange(w, r, pt, c, run, cost, "swap a unit", func() (mekbay.HangarForce, error) {
+	history := fmt.Sprintf("Reconfigured %s to %s for %s SP.", catalog.DisplayName(cat), option.Model, format.Commas(cost))
+	s.payForHangarChange(w, r, pt, c, run, cost, "swap a unit", history, func() (mekbay.HangarForce, error) {
 		return s.mekbay.SwapUnit(r.Context(), mekbay.SwapRequest{OwnerUID: mekbay.AccountUID(currentSeed(r), mekbay.SlotHangar), Instance: run.HangarInstance, UnitID: hu.ID, To: to})
 	})
 }

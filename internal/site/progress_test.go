@@ -95,7 +95,7 @@ func TestCampaignLog(t *testing.T) {
 		t.Error("an uncompleted scenario lists no next missions")
 	}
 	page = cards()
-	if !strings.Contains(page, `<a class="card completed" href="/refusalwar/scenario_000/">`) || !strings.Contains(page, "Completed &#10003;") || !strings.Contains(page, `<a class="card available" href="/refusalwar/scenario_001/">`) {
+	if !strings.Contains(page, `<a class="card completed" href="/refusalwar/scenario_000/">`) || !strings.Contains(page, "Completed") || !strings.Contains(page, `<a class="card available" href="/refusalwar/scenario_001/">`) {
 		t.Fatalf("000 is completed (green) and 001 is available: %.1500s", page)
 	}
 	if !strings.Contains(page, "show-all-scenarios") {

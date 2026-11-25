@@ -1,8 +1,12 @@
 package site
 
 import (
+	"fmt"
 	"net/http"
+	"strings"
 
+	"github.com/davidzech/Battletech/internal/catalog"
+	"github.com/davidzech/Battletech/internal/format"
 	"github.com/davidzech/Battletech/internal/hangar"
 	"github.com/davidzech/Battletech/internal/mekbay"
 )
@@ -24,7 +28,14 @@ func (s *Server) purchaseUnits(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	s.payForHangarChange(w, r, pt, c, run, cost, "buy units", func() (mekbay.HangarForce, error) {
+	names := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if u, ok := catalog.ByName(id); ok {
+			names = append(names, catalog.DisplayName(u))
+		}
+	}
+	history := fmt.Sprintf("Bought %s for %s SP.", strings.Join(names, ", "), format.Commas(cost))
+	s.payForHangarChange(w, r, pt, c, run, cost, "buy units", history, func() (mekbay.HangarForce, error) {
 		return s.mekbay.PurchaseUnits(r.Context(), mekbay.PurchaseRequest{OwnerUID: mekbay.AccountUID(currentSeed(r), mekbay.SlotHangar), Instance: run.HangarInstance, Units: ids})
 	})
 }

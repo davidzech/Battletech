@@ -65,8 +65,56 @@
 <script src="/static/campaign.js" defer></script>
 {{end}}<h2>Scenarios</h2>
 <ul class="cards scenarios" id="scenario-cards" style="--graph-lanes: {{.GraphLanes}}">
-{{range .Cards}}<li class="{{.State}}{{if .Passed}} passed{{end}}"><span class="sgraph">{{.Graph}}</span><a class="card {{.State}}" href="{{.URL}}"><span class="num">{{.Num}}</span><span class="name">{{.Name}}{{if .Sub}}<span class="sub">{{.Sub}}</span>{{end}}</span><span class="go">{{if eq .State "completed"}}Completed &#10003;{{else if .Passed}}Not available{{else if eq .State "locked"}}Locked{{else}}Open &rsaquo;{{end}}</span></a></li>
+{{range .Cards}}<li class="{{.State}}{{if .Passed}} passed{{end}}"><span class="sgraph">{{.Graph}}</span><a class="card {{.State}}" href="{{.URL}}"><span class="num">{{.Num}}</span><span class="name">{{.Name}}{{if .Sub}}<span class="sub">{{.Sub}}</span>{{end}}</span><span class="go">{{if eq .State "completed"}}Completed{{else if .Passed}}Not available{{else if eq .State "locked"}}Locked{{else}}Open &rsaquo;{{end}}</span></a></li>
 {{end}}</ul>
 {{if .HasLocked}}<p class="show-all"><label class="check themed-check"><input type="checkbox" class="themed-box" id="show-all-scenarios"> Show all Scenarios</label></p>
 <script src="/static/scenariolist.js" defer></script>
+{{end}}{{if .Run.Started}}<p class="history-open-row"><button type="button" class="button button-outline" id="history-open">History</button></p>
+<dialog id="history-dialog" class="history" aria-labelledby="history-title" data-campaign="{{.Campaign.Slug}}">
+  <h2 id="history-title">Campaign history</h2>
+  {{if .History}}<div class="history-filters" role="group" aria-label="Show">
+    <button type="button" class="history-filter selected" data-kind="" aria-pressed="true">All</button>{{range .HistoryFilters}}<button type="button" class="history-filter" data-kind="{{.Kind}}" aria-pressed="false"{{if .Disabled}} disabled title="Nothing of this kind yet"{{end}}>{{.Label}}</button>{{end}}
+  </div>
+  <ol class="history-list" id="history-list">{{range .History}}<li class="history-entry kind-{{.Kind}}" data-kind="{{.Kind}}"><span class="history-when">{{.When}}</span><span class="history-kind">{{.Label}}</span><span class="history-text">{{.Text}}</span><span class="history-sp{{if .Gain}} gain{{else}} loss{{end}}">{{.SP}}</span><span class="history-action">{{if .Checkpoint}}<button type="button" class="button button-outline history-rollback" data-checkpoint="{{.Checkpoint}}" data-label="{{.CheckpointLabel}}" title="Roll the campaign back to just after this">Roll back</button>{{end}}</span></li>{{end}}</ol>
+  <p class="form-error" id="history-error" role="alert"></p>{{else}}<p class="muted">Nothing recorded yet. From now on every change to this campaign is listed here.</p>{{end}}
+  <div class="form-actions"><button type="button" id="history-close">Close</button></div>
+</dialog>
+<script src="/static/confirm.js" defer></script>
+<script src="/static/campaignhistory.js" defer></script>
+<dialog id="keywords-dialog" class="keywords-edit" aria-labelledby="keywords-title" data-campaign="{{.Campaign.Slug}}">
+  <form id="keywords-form" autocomplete="off">
+    <h2 id="keywords-title">Edit keywords</h2>
+    <p class="muted">Tick the keywords the campaign holds.</p>
+    {{if .KeywordChoices}}<ul class="keyword-choices">{{range .KeywordChoices}}<li><label class="themed-check"><input type="checkbox" class="themed-box" name="keyword" value="{{.ID}}"{{if .Held}} checked{{end}}><span><b>{{.Name}}</b>{{if .Text}}<span class="muted">{{.Text}}</span>{{end}}</span></label></li>{{end}}</ul>{{else}}<p class="muted">This campaign registers no keywords.</p>{{end}}
+    <p class="form-error" id="keywords-error" role="alert"></p>
+    <div class="form-actions">
+      <button type="submit" class="button" id="keywords-save">Save</button>
+      <button type="button" id="keywords-cancel">Cancel</button>
+    </div>
+  </form>
+</dialog>
+<section class="danger-zone" id="danger-zone" data-campaign="{{.Campaign.Slug}}">
+<details class="danger-details">
+<summary><h2>Danger zone</h2></summary>
+<div class="fold-body">
+<p class="muted">Edit keywords sets which keywords the campaign holds, to correct a mission&rsquo;s report or a misclick. Keywords decide what lies ahead, so change them only when they are wrong.</p>
+<p class="danger-action"><button type="button" class="button" id="keywords-open">Edit keywords</button></p>
+<p class="muted">Deleting this campaign removes {{.Run.ForceLabel}}&rsquo;s progress in it: its named pilots and the site&rsquo;s copy of its hangar. Your account, its other campaigns and anything saved in MekBay are not touched.</p>
+<button type="button" class="button danger" id="delete-open">Delete campaign</button>
+</div>
+</details>
+<dialog id="delete-dialog" aria-labelledby="delete-title">
+  <form id="delete-form" method="dialog">
+    <h2 id="delete-title">Delete {{.Campaign.Label}}?</h2>
+    <p>This permanently deletes your progress in this campaign, including all of its named pilots. It cannot be undone.</p>
+    <p id="delete-error" class="form-error" role="alert"></p>
+    <div class="form-actions">
+      <button type="submit" class="button danger" id="delete-confirm">Delete campaign</button>
+      <button type="button" id="delete-cancel">Cancel</button>
+    </div>
+  </form>
+</dialog>
+</section>
+<script src="/static/campaigndelete.js" defer></script>
+<script src="/static/keywordsedit.js" defer></script>
 {{end}}{{end}}

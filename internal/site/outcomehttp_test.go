@@ -145,7 +145,7 @@ func TestMissionOutcomeEndToEnd(t *testing.T) {
 	}
 	// The page now reports what happened, 001 is open, and the Complete button is gone.
 	page = body(t, srv, "/refusalwar/scenario_000/", cookie)
-	for _, want := range []string{`id="outcome-summary"`, "<b>Alrek</b>", `<span class="outcome-mvp-badge">MVP</span>`, "Kills: 2", "&#43;400 SP", "&#43;20 SP (MVP)", "<b>Katarina</b>", "permanently removed", "Completed &#10003;"} {
+	for _, want := range []string{`id="outcome-summary"`, "<b>Alrek</b>", `<span class="outcome-mvp-badge">MVP</span>`, "Kills: 2", "&#43;400 SP", "&#43;20 SP (MVP)", "<b>Katarina</b>", "permanently removed", "<span>Completed</span>"} {
 		if !strings.Contains(page, want) {
 			t.Errorf("the report on the page is missing %q", want)
 		}

@@ -81,7 +81,7 @@ func (s *Server) hangarRequest(w http.ResponseWriter, r *http.Request) (pt stora
 //
 // change returns the hangar force as MekBay saved it, which becomes the cached copy, so the page that reloads next paints the change at once instead of the
 // hangar from before it until a live read catches up.
-func (s *Server) payForHangarChange(w http.ResponseWriter, r *http.Request, pt storage.Playthrough, c *content.Campaign, run storage.CampaignRun, cost int, what string, change func() (mekbay.HangarForce, error)) {
+func (s *Server) payForHangarChange(w http.ResponseWriter, r *http.Request, pt storage.Playthrough, c *content.Campaign, run storage.CampaignRun, cost int, what, history string, change func() (mekbay.HangarForce, error)) {
 	if err := s.store.SpendWarchest(r.Context(), pt.ID, c.Slug, cost); errors.Is(err, storage.ErrInsufficientFunds) {
 		http.Error(w, fmt.Sprintf("Not enough in the warchest: that costs %d SP and you have %d.", cost, run.Warchest), http.StatusConflict)
 		return
@@ -99,6 +99,7 @@ func (s *Server) payForHangarChange(w http.ResponseWriter, r *http.Request, pt s
 		return
 	}
 	s.cacheHangar(r.Context(), pt.ID, c.Slug, run.HangarInstance, h)
+	s.logHistory(r, pt.ID, c.Slug, storage.HistoryHangar, -cost, history)
 	w.Header().Set("Content-Type", "application/json")
 	fmt.Fprintf(w, `{"cost":%d,"warchest":%d}`, cost, run.Warchest-cost)
 }
