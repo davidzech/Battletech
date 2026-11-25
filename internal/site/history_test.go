@@ -81,12 +81,12 @@ func TestCampaignHistory(t *testing.T) {
 	if got := post(t, srv, "/api/warchest", form("funds", "1234"), cookie, srv.URL).StatusCode; got != http.StatusNoContent {
 		t.Fatalf("set the warchest: %d", got)
 	}
-	if e := find("The warchest was set to 1,234 SP"); e.Kind != storage.HistoryFunds || e.SP >= 0 {
+	if e := find("The warchest was set to 1,234 SP"); e.Kind != storage.HistoryCorrections || e.SP >= 0 {
 		t.Errorf("setting the funds: %+v", e)
 	}
 
-	// Rolling back to the end of Scenario 001 takes the history back with the campaign: the sale and the funds never happened, everything before stays, and the
-	// rollback itself leaves no line.
+	// Rolling back to the end of Scenario 001 takes the history back with the campaign: the sale and the funds never happened, everything before stays, and one
+	// line says the rollback happened.
 	cps, _ := store.Checkpoints(ctx, id, "refusalwar")
 	if got := post(t, srv, "/api/campaign/rollback", form("checkpoint", strconv.Itoa(cps[0].Seq)), cookie, srv.URL).StatusCode; got != http.StatusNoContent {
 		t.Fatalf("rollback: %d", got)
@@ -95,12 +95,15 @@ func TestCampaignHistory(t *testing.T) {
 	for _, e := range history() {
 		texts = append(texts, e.Text)
 	}
-	if len(texts) != 3 || !strings.HasPrefix(texts[0], "Started the campaign") || !strings.HasPrefix(texts[1], "Alrek earned 90 SP") || texts[2] != "Completed Scenario 001: Pyre Light." {
-		t.Errorf("after the rollback the history ends at the checkpoint: %q", texts)
+	if len(texts) != 4 || !strings.HasPrefix(texts[0], "Started the campaign") || !strings.HasPrefix(texts[1], "Alrek earned 90 SP") || texts[2] != "Completed Scenario 001: Pyre Light." || texts[3] != "Rolled back to \u201cCompleted Scenario 001: Pyre Light\u201d." {
+		t.Errorf("after the rollback the history ends at the checkpoint, then the rollback's own line: %q", texts)
+	}
+	if h := history(); h[len(h)-1].Kind != storage.HistoryCorrections {
+		t.Errorf("a rollback is a correction: %+v", h[len(h)-1])
 	}
 	// Logging goes on from there.
 	post(t, srv, "/api/campaign/force-name", form("name", "Iron Wolves"), cookie, srv.URL)
-	if h := history(); h[len(h)-1].Text != "The force was renamed Iron Wolves." || h[len(h)-1].Seq != 4 {
+	if h := history(); h[len(h)-1].Text != "The force was renamed Iron Wolves." || h[len(h)-1].Seq != 5 {
 		t.Errorf("the next line follows the checkpoint: %+v", h[len(h)-1])
 	}
 
@@ -128,8 +131,8 @@ func TestCampaignHistory(t *testing.T) {
 	if strings.Index(page, "The force was renamed Iron Wolves.") > strings.Index(page, "Started the campaign as") {
 		t.Error("the history is newest first")
 	}
-	if strings.Contains(page, "Sold ") || strings.Contains(page, "Rolled back") {
-		t.Error("nothing the rollback took back is shown, nor the rollback")
+	if strings.Contains(page, "Sold ") || !strings.Contains(page, "Rolled back to") {
+		t.Error("nothing the rollback took back is shown, but the rollback is")
 	}
 	// The lines a checkpoint was taken right after offer to roll back to it; the others don't.
 	if !strings.Contains(page, `data-label="Campaign started"`) || !strings.Contains(page, `data-label="Completed Scenario 001: Pyre Light"`) || strings.Count(page, `class="button button-outline history-rollback"`) != 2 {

@@ -99,12 +99,12 @@ type historyView struct {
 const startCheckpointLabel = "Campaign started"
 
 var historyLabels = map[string]string{
-	storage.HistoryCampaign: "Campaign",
-	storage.HistoryMission:  "Mission",
-	storage.HistoryPilot:    "Pilot",
-	storage.HistoryHangar:   "Hangar",
-	storage.HistoryFunds:    "Funds",
-	storage.HistoryKeywords: "Keywords",
+	storage.HistoryCampaign:    "Campaign",
+	storage.HistoryMission:     "Mission",
+	storage.HistoryPilot:       "Pilot",
+	storage.HistoryHangar:      "Hangar",
+	storage.HistoryCorrections: "Corrections",
+	storage.HistoryKeywords:    "Keywords",
 }
 
 // historyFilter is one of the History dialog's filter buttons: every kind has one, disabled when the history holds none of it.
@@ -114,7 +114,7 @@ type historyFilter struct {
 }
 
 // historyOrder is the order of the filter buttons.
-var historyOrder = []string{storage.HistoryMission, storage.HistoryPilot, storage.HistoryHangar, storage.HistoryCampaign, storage.HistoryFunds, storage.HistoryKeywords}
+var historyOrder = []string{storage.HistoryMission, storage.HistoryPilot, storage.HistoryHangar, storage.HistoryCampaign, storage.HistoryKeywords, storage.HistoryCorrections}
 
 // portraitHistorySuffix ends the line logged when a pilot's portrait changes. Such lines are kept in the database but left out of
 // the History dialog, where they are noise.

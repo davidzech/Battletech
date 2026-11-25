@@ -213,12 +213,14 @@ func (s *Server) abortBattle(w http.ResponseWriter, r *http.Request) {
 	}
 	defer s.deleteBattle(r.Context(), currentSeed(r), op.OperationID)
 	if cps, err := s.store.Checkpoints(r.Context(), pt.ID, c.Slug); err == nil && len(cps) > 0 && mode == "rollback" {
-		if err := s.rollbackTo(r.Context(), currentSeed(r), pt.ID, c.Slug, cps[0].Seq); err != nil {
+		label, err := s.rollbackTo(r.Context(), currentSeed(r), pt.ID, c.Slug, cps[0].Seq)
+		if err != nil {
 			log.Printf("roll back on abort: %v", err)
 			http.Error(w, "Could not roll the campaign back: "+err.Error(), http.StatusBadGateway)
 			return
 		}
-		// The history goes back with the campaign (the deployment's line too), so the abort leaves no line of its own.
+		// The history goes back with the campaign (the deployment's line too); one line says the mission was aborted and the campaign rolled back.
+		s.logHistory(r, pt.ID, c.Slug, storage.HistoryMission, 0, "Aborted "+c.MissionName(*sc)+" and rolled back to \u201c"+label+"\u201d.")
 	} else {
 		s.logHistory(r, pt.ID, c.Slug, storage.HistoryMission, 0, "Aborted "+c.MissionName(*sc)+", keeping every change since the last checkpoint.")
 	}

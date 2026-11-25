@@ -310,6 +310,11 @@ func (s *Store) init() error {
 			AND (h.seq = 0 OR h.text LIKE 'Started the campaign%'))`); err != nil {
 		return fmt.Errorf("backfill the campaign history: %w", err)
 	}
+	// The Funds kind became Corrections, which also takes the Advanced Management lines that were logged as pilot changes.
+	if _, err := s.db.Exec(`UPDATE campaign_history SET kind = '` + HistoryCorrections + `'
+		WHERE kind = 'funds' OR (kind = '` + HistoryPilot + `' AND text LIKE '%(Advanced Management).')`); err != nil {
+		return fmt.Errorf("migrate the history kinds: %w", err)
+	}
 	return nil
 }
 
