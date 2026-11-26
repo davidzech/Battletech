@@ -29,6 +29,25 @@ func (s *Store) MekBayOperation(ctx context.Context, playthroughID, campaign, sc
 	return op, err == nil, err
 }
 
+// MekBayOperationIDs lists the MekBay operation of every battle a campaign run has recorded, the one in progress and any a rollback or an older version of the
+// site left behind, so that deleting the campaign can delete them in MekBay too.
+func (s *Store) MekBayOperationIDs(ctx context.Context, playthroughID, campaign string) ([]string, error) {
+	rows, err := s.db.QueryContext(ctx, s.q(`SELECT operation_id FROM mekbay_operations WHERE playthrough_id = ? AND campaign = ? AND operation_id <> ''`), playthroughID, campaign)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out = append(out, id)
+	}
+	return out, rows.Err()
+}
+
 // DeleteMekBayOperation forgets a scenario's operation: the battle is over (the mission was completed or aborted). Nothing is deleted in MekBay.
 func (s *Store) DeleteMekBayOperation(ctx context.Context, playthroughID, campaign, scenarioID string) (bool, error) {
 	res, err := s.db.ExecContext(ctx, s.q(`DELETE FROM mekbay_operations WHERE playthrough_id = ? AND campaign = ? AND scenario_id = ?`), playthroughID, campaign, scenarioID)

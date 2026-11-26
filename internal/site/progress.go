@@ -85,6 +85,15 @@ func (s *Server) setScenarioCompleted(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	// Completing ends the mission's battle, if one is in progress; once it is, nothing refers to it any more, so it is deleted in MekBay.
+	var battle string
+	if done {
+		if op, had, err := s.store.MekBayOperation(r.Context(), pt.ID, c.Slug, sc.ID); err != nil {
+			log.Printf("load the battle to delete after completing %s: %v", sc.Slug, err)
+		} else if had {
+			battle = op.OperationID
+		}
+	}
 	changed, err := s.store.SetScenarioCompleted(r.Context(), pt.ID, c.Slug, sc.Slug, done)
 	if err != nil {
 		http.Error(w, "could not save the campaign log", http.StatusInternalServerError)
@@ -98,6 +107,9 @@ func (s *Server) setScenarioCompleted(w http.ResponseWriter, r *http.Request) {
 		s.logHistory(r, pt.ID, c.Slug, storage.HistoryMission, 0, "Completed "+c.MissionName(*sc)+".")
 	} else {
 		s.logHistory(r, pt.ID, c.Slug, storage.HistoryMission, 0, "Marked "+c.MissionName(*sc)+" not completed.")
+	}
+	if battle != "" {
+		s.cleanUpInBackground(currentSeed(r), nil, []string{battle})
 	}
 	if done { // a mission completed by hand is a rollback point too (recorded after the line above, so rolling back to it keeps the line)
 		if run, ok, err := s.store.Run(r.Context(), pt.ID, c.Slug); err == nil && ok {

@@ -111,6 +111,11 @@ func (s *Server) commitOutcome(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Could not save a checkpoint of your hangar in MekBay: "+cerr.Error(), http.StatusBadGateway)
 		return
 	}
+	// The battle being completed, if there is one: once the mission is, nothing refers to it any more, so it is deleted in MekBay.
+	op, hadBattle, err := s.store.MekBayOperation(r.Context(), pt.ID, c.Slug, sc.ID)
+	if err != nil {
+		log.Printf("load the battle to delete after completing %s: %v", sc.Slug, err)
+	}
 	label := "Completed " + c.MissionName(*sc)
 	switch err := s.store.CompleteWithOutcome(r.Context(), pt.ID, c.Slug, sc.Slug, res); {
 	case errors.Is(err, storage.ErrAlreadyCompleted):
@@ -124,6 +129,9 @@ func (s *Server) commitOutcome(w http.ResponseWriter, r *http.Request) {
 	default:
 		s.logHistory(r, pt.ID, c.Slug, storage.HistoryMission, res.Warchest, outcomeHistory(c, sc, res)) // before the checkpoint, so rolling back to it keeps the line
 		s.recordCheckpoint(r.Context(), currentSeed(r), pt.ID, c.Slug, label, copyID)
+		if hadBattle {
+			s.cleanUpInBackground(currentSeed(r), nil, []string{op.OperationID})
+		}
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}

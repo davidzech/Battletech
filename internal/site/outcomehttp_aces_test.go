@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -148,6 +149,12 @@ Rest, then raid again.
 	if got := post(t, srv, "/api/campaign/scenario-outcome/commit", report(true, true, entries...), cookie, srv.URL).StatusCode; got != http.StatusNoContent {
 		t.Fatalf("commit: %d", got)
 	}
+	// Once the mission is completed nothing refers to its battle any more, so it is deleted in MekBay, in the background.
+	eventually(t, "the completed mission's battle is deleted in MekBay", func() (bool, any) {
+		fake.mu.Lock()
+		defer fake.mu.Unlock()
+		return slices.Contains(fake.battleDeletes, "op-1"), fake.battleDeletes
+	})
 	fake.mu.Lock()
 	if len(fake.commits) != 2 || fake.commits[1].OperationID != "op-1" || fake.commits[1].HangarInstance != run0.HangarInstance || fake.commits[1].OwnerUID != mekbay.AccountUID("wolfpack2026", mekbay.SlotHangar) {
 		t.Errorf("the hangar was written back from the battle's operation: %+v", fake.commits)
