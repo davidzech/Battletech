@@ -95,7 +95,7 @@
       var preview = el('ul', 'outcome-preview');
       preview.id = 'outcome-preview-' + p.id;
       card.appendChild(preview);
-      if (tb) tb.addEventListener('change', function () { st.tookPart = tb.checked; if (!tb.checked) st.killed = false; fields.hidden = !tb.checked; changed(); });
+      if (tb) tb.addEventListener('change', function () { st.tookPart = tb.checked; if (!tb.checked) { st.killed = false; ui[p.id].killedBox.checked = false; } fields.hidden = !tb.checked; changed(); });
       body.appendChild(card);
     });
     var mission = byScope('mission');
