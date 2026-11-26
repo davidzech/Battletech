@@ -7,10 +7,21 @@ bv_limit: 11000
 forces:
   opfor1: OpFor1.mul
   opfor2: OpFor2.mul
-images: []   # the Baker 3 banner is still to be made
-readout:
-  - Star: G class
+allies: [Allies.mul]   # the downed Mist Lynx and the Savior: added to the battle on the players' side, for free
+images:
+  - images/baker3.png
+readout:   # Sarna gives only the G-class star and the 184-hour recharge; the rest is invented to fit a cold world of snowbound rifts and forests
+  - Star: Baker (G7V)
+  - Orbit: 3rd of 6
+  - Satellites: 1
   - Recharge: 184 hours
+  - Gravity: 1.03 g
+  - Atmosphere: Standard (breathable)
+  - Equatorial temp: 11 °C
+  - Surface water: 64%
+  - Polar ice: Extensive
+  - Capital: Haddon
+  - Population: 318,000,000 (3057)
   - Date: 30 September 3057
 ---
 
@@ -53,9 +64,9 @@ Field any force up to 11,000 BV.
 
 ### Wolf Automata
 
-**Deployment:** as under Map. They are on the players' side, but no player controls them (see Special Rules).
+**Deployment:** as under Map. They are on the players' side, but no player controls them (see Special Rules). Start battle adds them to the operation for free, as a force of their own after the players' (Allies.mul).
 
-- [Mist Lynx C](https://mekbay.com/?gs=cbt&shareUnit=BMKoshi_C&tab=General) (3/2) Striker: the downed C5, hex 1611, with the pre-existing damage below
+- [Mist Lynx C](https://mekbay.com/?gs=cbt&shareUnit=BMKoshi_C&tab=General) (3/2) Striker: MechWarrior Vesna, in the downed C5, hex 1611, with the pre-existing damage below
 - [Savior Repair Vehicle](https://mekbay.com/?gs=cbt&shareUnit=SVSaviorRepairVehicle&tab=General): the easternmost road hex
 
 **The Mist Lynx's pre-existing damage:** its armor is intact.

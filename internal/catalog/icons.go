@@ -16,13 +16,21 @@ var IconFiles embed.FS
 
 var IconFileName = regexp.MustCompile(`^[a-z0-9._-]+\.png$`)
 
-// IconURL is where a unit's icon is served from: its own icon if one was vendored, else the default icon of its
-// weight class.
+// IconURL is where a unit's icon is served from: its own icon if one was vendored, else a default one: a vehicle's, a VTOL's or battle armor's for those, a
+// mech's weight class for anything else.
 func IconURL(u Unit) string {
 	if u.Icon != "" {
 		if _, err := fs.Stat(IconFiles, "icons/"+u.Icon); err == nil {
 			return "/icons/" + u.Icon
 		}
+	}
+	switch u.Type {
+	case "Tank":
+		return "/icons/default_tracked.png"
+	case "VTOL":
+		return "/icons/default_vtol.png"
+	case "Infantry":
+		return "/icons/default_ba.png"
 	}
 	return DefaultIconURL(u.Class)
 }

@@ -40,7 +40,7 @@ type Unit struct {
 	Omni     int       `json:"omni"`        // 1 for an omnimech: its variants can be swapped (see swap.go)
 	Engine   string    `json:"engine"`      // Fusion, XL (Clan), Light, ICE...
 	Ammo     []AmmoBin `json:"ammo"`        // the unit's ammunition, for the rearm breakdown
-	Icon     string    `json:"icon"`        // file name in icons/ (mechs only; "" for anything else)
+	Icon     string    `json:"icon"`        // file name in icons/ (mechs, vehicles and battle armor; "" for anything else)
 	// A mech's construction (mechs only, 0 or "" for anything else): armor and internal structure points in all and their types, the heat generated
 	// firing everything and the heat sunk per turn, and Walk/Run/Jump movement points.
 	Armor         int    `json:"armor"`

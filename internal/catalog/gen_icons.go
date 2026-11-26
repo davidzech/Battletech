@@ -2,17 +2,17 @@
 
 // gen_icons.go vendors the unit icons the site shows into internal/site/icons, so nothing is hotlinked from MekBay or
 // GitHub. The icons come from MegaMek's mm-data repository (data/images/units), licensed CC BY-NC-SA 4.0; see
-// icons/NOTICE.md. mm-data is large (hundreds of MB), so fetch only the two folders needed:
+// icons/NOTICE.md. mm-data is large (hundreds of MB), so fetch only the folders needed:
 //
 //	git clone --depth 1 --filter=blob:none --sparse https://github.com/MegaMek/mm-data.git
-//	cd mm-data && git sparse-checkout set data/images/units/meks data/images/units/defaults
+//	cd mm-data && git sparse-checkout set data/images/units/meks data/images/units/vehicles "data/images/units/battle armor" data/images/units/defaults
 //
-// then, from internal/site:
+// then, from internal/catalog:
 //
 //	go run gen_icons.go gen_common.go -src <path to mm-data>/data/images/units
 //
-// It copies the icon of every mech in ../../data/units.json (and a default icon per weight class, for units without
-// one) under the flat names gen_units.go records in units_index.json.
+// It copies the icon of every mech, vehicle and battle armor in ../../data/units.json (and the default icons, for units
+// without one) under the flat names gen_units.go records in units_index.json.
 package main
 
 import (
@@ -48,7 +48,7 @@ func main() {
 
 	want := map[string]string{} // flat name -> source path inside -src
 	for _, u := range doc.Units {
-		if u.Type != "Mek" || u.Icon == "" {
+		if !vendoredIcon(u.Icon) {
 			continue
 		}
 		name := iconFile(u.Icon)
@@ -57,8 +57,8 @@ func main() {
 		}
 		want[name] = u.Icon
 	}
-	for _, class := range []string{"light", "medium", "heavy", "assault", "tripod", "quad"} {
-		want["default_"+class+".png"] = "defaults/default_" + class + ".png"
+	for _, d := range []string{"light", "medium", "heavy", "assault", "tripod", "quad", "tracked", "wheeled", "hover", "vtol", "ba", "infantry"} {
+		want["default_"+d+".png"] = "defaults/default_" + d + ".png"
 	}
 
 	if err := os.MkdirAll("icons", 0o755); err != nil {

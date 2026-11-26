@@ -59,3 +59,28 @@ func TestIconFileNamesAreWindowsSafe(t *testing.T) {
 		seen[strings.ToLower(n)] = n
 	}
 }
+
+// Vehicles and battle armor have icons of their own, named after their folder so they can't clash with a mech's; one without falls back to its type's default.
+func TestVehicleAndBattleArmorIcons(t *testing.T) {
+	for id, want := range map[string]string{
+		"SVSaviorRepairVehicle":              "/icons/vehicles_savior.png",
+		"BAElementalBattleArmor_APGaussSqd5": "/icons/battle_armor_elemental_5-co.png",
+		"BMKoshi_C":                          "/icons/koshi_c.png",
+	} {
+		u, ok := ByName(id)
+		if !ok {
+			t.Fatalf("%s is not in the catalog", id)
+		}
+		if got := IconURL(u); got != want {
+			t.Errorf("%s: %s, want %s", id, got, want)
+		}
+	}
+	for typ, want := range map[string]string{"Tank": "/icons/default_tracked.png", "VTOL": "/icons/default_vtol.png", "Infantry": "/icons/default_ba.png", "Mek": "/icons/default_medium.png"} {
+		if got := IconURL(Unit{Type: typ, Class: "Medium"}); got != want {
+			t.Errorf("a %s without an icon: %s, want %s", typ, got, want)
+		}
+		if _, err := IconFiles.Open(strings.TrimPrefix(want, "/")); err != nil {
+			t.Errorf("%s is not vendored: %v", want, err)
+		}
+	}
+}

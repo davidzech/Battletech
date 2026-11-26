@@ -689,9 +689,10 @@
     // Until the first read has come back there are no forces to show yet: say so rather than leave the pane bare.
     if (!(statusData && statusData.updatedAt)) box.appendChild(el('p', 'muted op-reading', 'Reading the battle from MekBay'));
     ((statusData && statusData.forces) || []).forEach(function (f) {
-      var sec = el('section', 'deploy-review-player op-force');
-      var h = el('h3', null, f.name || 'Force');
-      h.appendChild(el('span', null, f.units.length + (f.units.length === 1 ? ' mech' : ' mechs')));
+      // The scenario's allies (its automata) are on the players' side but nobody's force: they are labelled as such, and may include vehicles.
+      var sec = el('section', 'deploy-review-player op-force' + (f.allies ? ' op-allies' : ''));
+      var h = el('h3', null, f.allies ? 'Allies' : (f.name || 'Force'));
+      h.appendChild(el('span', null, f.allies ? f.units.length + (f.units.length === 1 ? ' unit' : ' units') : f.units.length + (f.units.length === 1 ? ' mech' : ' mechs')));
       sec.appendChild(h);
       var ul = el('ul', 'deploy-review-list');
       f.units.forEach(function (u) {

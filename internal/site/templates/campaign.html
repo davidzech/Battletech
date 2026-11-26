@@ -1,7 +1,8 @@
 {{define "content"}}<div class="page-head">{{template "crest" .}}<p class="kicker">Campaign</p>
 <h1 class="bt-title">{{.Campaign.Label}}</h1></div>
 {{template "battlelock" .}}
-{{if .Campaign.Problems}}<section class="campaign-problems" role="alert"><h2>Problems in this campaign&rsquo;s files</h2><ul>{{range .Campaign.Problems}}<li><code>{{.}}</code></li>{{end}}</ul></section>{{end}}
+{{if .Campaign.ImageURL}}<figure class="scenario-art campaign-art"><div class="scenario-art-pic"><img src="{{.Campaign.ImageURL}}" alt=""></div></figure>
+{{end}}{{if .Campaign.Problems}}<section class="campaign-problems" role="alert"><h2>Problems in this campaign&rsquo;s files</h2><ul>{{range .Campaign.Problems}}<li><code>{{.}}</code></li>{{end}}</ul></section>{{end}}
 {{if .Campaign.IntroHTML}}<section class="briefing campaign-intro{{if .Run.Started}} intro-collapsible{{end}}" id="campaign-intro" aria-label="{{or .Campaign.IntroTag "Campaign briefing"}}">
 <p class="briefing-tag">{{or .Campaign.IntroTag "Campaign briefing"}}</p>
 <div class="briefing-text" id="campaign-intro-text">{{.Campaign.IntroHTML}}</div>

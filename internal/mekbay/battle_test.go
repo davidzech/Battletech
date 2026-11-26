@@ -327,3 +327,38 @@ func TestSubsetForce(t *testing.T) {
 		t.Errorf("units that are not there: %v", err)
 	}
 }
+
+// A scenario's allies are one more force on the players' side, after theirs and before the OpFor, owned by the same account; ReadBattle reads them back with
+// their instance ID, and the write-back leaves a skipped force alone.
+func TestStartBattleWithAllies(t *testing.T) {
+	f := newFakeForceServer(t)
+	cl := &Client{URL: f.wsURL()}
+	res, err := cl.StartBattle(context.Background(), BattleRequest{Account: tableAccount, Provided: true, OperationName: "S",
+		OpFor:   BattleOpFor{Draft: ForceDraft{Name: "OpFor", Groups: []GroupDraft{{Name: "OpFor 1", Units: []UnitDraft{{Unit: "BMMadCat_S"}}}}}},
+		Allies:  ForceDraft{Name: "S - Allies", Groups: []GroupDraft{{Name: "Allies", Units: []UnitDraft{{Unit: "BMKoshi_C", Pilot: "Vesna", Gunnery: 3, Piloting: 2}, {Unit: "SVSaviorRepairVehicle"}}}}},
+		Players: []BattlePlayer{{Number: 1, Name: "P1", Draft: ForceDraft{Name: "P1", Groups: []GroupDraft{{Name: "Deployed", Units: []UnitDraft{{Unit: "BMGrizzly"}}}}}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.mu.Lock()
+	op := f.ops[res.OperationID]
+	want := []string{"friendly:" + res.PlayerInstances[0], "friendly:" + res.AlliesInstance, "enemy:" + res.OpForInstance}
+	if res.AlliesInstance == "" || !slices.Equal(operationForces(op), want) || f.owners[res.AlliesInstance] != tableAccount {
+		t.Errorf("the allies follow the players on the friendly side: %v, want %v", operationForces(op), want)
+	}
+	if names, crews := unitsOf(f.forces[res.AlliesInstance]); !slices.Equal(names, []string{"BMKoshi_C", "SVSaviorRepairVehicle"}) || crews[0] != "Vesna" {
+		t.Errorf("the allies' units: %v %v", names, crews)
+	}
+	f.mu.Unlock()
+	got, err := cl.ReadBattle(context.Background(), res.OperationID)
+	if err != nil || len(got.Forces) != 2 || got.Forces[1].InstanceID != res.AlliesInstance {
+		t.Fatalf("the status reads the allies too, with their ID: %+v %v", got.Forces, err)
+	}
+	// None with a scenario that has no allies.
+	plain, err := cl.StartBattle(context.Background(), BattleRequest{Account: tableAccount, Provided: true, OperationName: "S",
+		OpFor:   BattleOpFor{Draft: ForceDraft{Name: "OpFor", Groups: []GroupDraft{{Name: "OpFor 1", Units: []UnitDraft{{Unit: "BMMadCat_S"}}}}}},
+		Players: []BattlePlayer{{Number: 1, Name: "P1", Draft: ForceDraft{Name: "P1", Groups: []GroupDraft{{Name: "Deployed", Units: []UnitDraft{{Unit: "BMGrizzly"}}}}}}}})
+	if err != nil || plain.AlliesInstance != "" {
+		t.Errorf("no allies, no allies' force: %+v %v", plain, err)
+	}
+}

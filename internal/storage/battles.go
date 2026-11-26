@@ -13,14 +13,16 @@ import (
 type MekBayOperation struct {
 	OpForInstance string // the OpFor force's instance ID
 	OperationID   string
+	// AlliesInstance is the scenario's allies' force ("" when it has none): friendly, but not the players', so its units never go back into the hangar.
+	AlliesInstance string
 }
 
 // MekBayOperation loads the stored operation for a scenario; ok is false if none was created yet.
 func (s *Store) MekBayOperation(ctx context.Context, playthroughID, campaign, scenarioID string) (op MekBayOperation, ok bool, err error) {
 	err = s.db.QueryRowContext(ctx,
-		s.q(`SELECT opfor_instance, operation_id FROM mekbay_operations WHERE playthrough_id = ? AND campaign = ? AND scenario_id = ?`),
+		s.q(`SELECT opfor_instance, operation_id, allies_instance FROM mekbay_operations WHERE playthrough_id = ? AND campaign = ? AND scenario_id = ?`),
 		playthroughID, campaign, scenarioID,
-	).Scan(&op.OpForInstance, &op.OperationID)
+	).Scan(&op.OpForInstance, &op.OperationID, &op.AlliesInstance)
 	if errors.Is(err, sql.ErrNoRows) {
 		return MekBayOperation{}, false, nil
 	}
@@ -56,9 +58,9 @@ func (s *Store) BattleStatusCache(ctx context.Context, playthroughID, campaign, 
 // SaveMekBayOperation stores (or replaces) the operation for a scenario of a campaign run.
 func (s *Store) SaveMekBayOperation(ctx context.Context, playthroughID, campaign, scenarioID string, op MekBayOperation) error {
 	_, err := s.db.ExecContext(ctx,
-		s.q(`INSERT INTO mekbay_operations (playthrough_id, campaign, scenario_id, opfor_instance, operation_id) VALUES (?, ?, ?, ?, ?)
-		     ON CONFLICT (playthrough_id, campaign, scenario_id) DO UPDATE SET opfor_instance = excluded.opfor_instance, operation_id = excluded.operation_id, status_json = '', status_at = 0`),
-		playthroughID, campaign, scenarioID, op.OpForInstance, op.OperationID)
+		s.q(`INSERT INTO mekbay_operations (playthrough_id, campaign, scenario_id, opfor_instance, operation_id, allies_instance) VALUES (?, ?, ?, ?, ?, ?)
+		     ON CONFLICT (playthrough_id, campaign, scenario_id) DO UPDATE SET opfor_instance = excluded.opfor_instance, operation_id = excluded.operation_id, allies_instance = excluded.allies_instance, status_json = '', status_at = 0`),
+		playthroughID, campaign, scenarioID, op.OpForInstance, op.OperationID, op.AlliesInstance)
 	return err
 }
 

@@ -28,9 +28,12 @@ type BattleRequest struct {
 	Account        string // the seed's MekBay account: it owns every force and the operation
 	HangarInstance string // the site's copy of the hangar the players' mechs are taken from (not read when Provided)
 	// Provided says the mechs are not in MekBay (a scenario that provides its own): each player's force is built from its Draft instead of copied from the hangar.
-	Provided      bool
-	Players       []BattlePlayer
-	OpFor         BattleOpFor
+	Provided bool
+	Players  []BattlePlayer
+	OpFor    BattleOpFor
+	// Allies are the scenario's own units on the players' side that no player controls (its automata); they are built new, as a force of their own after the
+	// players' forces, on the friendly side. No groups means none.
+	Allies        ForceDraft
 	OperationName string
 	// OperationID is the operation of an earlier start of this battle to update, so the link stays the same; "" makes a new one.
 	OperationID string
@@ -61,6 +64,7 @@ type BattleResult struct {
 	OperationID     string
 	OpForInstance   string
 	PlayerInstances []string // each player's force, in the order of the request
+	AlliesInstance  string   // the allies' force ("" when the scenario has none)
 }
 
 // subsetForce copies the units a player takes out of the hangar force (the decoded JSON of its saved data) into a force of their own, keeping what MekBay
@@ -217,7 +221,17 @@ func (c *Client) StartBattle(ctx context.Context, req BattleRequest) (BattleResu
 		forces = append(forces, map[string]any{"instanceId": instance, "alignment": "friendly", "timestamp": ts})
 	}
 
-	// The operation: every player's force on the friendly side, the OpFor on the other.
+	// The scenario's allies: one more force on the players' side, after theirs.
+	if len(req.Allies.Groups) > 0 {
+		res.AlliesInstance = NewID()
+		f := BuildForce(res.AlliesInstance, time.Now().UTC(), req.Allies)
+		if err := save(f); err != nil {
+			return BattleResult{}, err
+		}
+		forces = append(forces, map[string]any{"instanceId": res.AlliesInstance, "alignment": "friendly", "timestamp": f.Timestamp})
+	}
+
+	// The operation: every player's force (and the allies') on the friendly side, the OpFor on the other.
 	res.OperationID = req.OperationID
 	if res.OperationID == "" {
 		res.OperationID = NewID()
@@ -232,8 +246,9 @@ func (c *Client) StartBattle(ctx context.Context, req BattleRequest) (BattleResu
 
 // BattleForce is one force of a battle as MekBay has it now.
 type BattleForce struct {
-	Alignment string // "friendly": only the players' forces are read, the OpFor's is not
-	Force     HangarForce
+	InstanceID string
+	Alignment  string // "friendly": only the players' forces (and the allies') are read, the OpFor's is not
+	Force      HangarForce
 }
 
 // BattleStatus is a battle's operation read back: the players' forces in it, in the operation's order.
@@ -279,7 +294,7 @@ func (c *Client) ReadBattle(ctx context.Context, operationID string) (BattleStat
 		if err != nil {
 			continue // a force deleted from MekBay since: the others are still worth showing
 		}
-		out.Forces = append(out.Forces, BattleForce{Alignment: f.Alignment, Force: h})
+		out.Forces = append(out.Forces, BattleForce{InstanceID: f.InstanceID, Alignment: f.Alignment, Force: h})
 	}
 	if len(out.Forces) == 0 {
 		return BattleStatus{}, errors.New("none of the players' forces could be read from MekBay")

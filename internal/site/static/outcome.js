@@ -157,6 +157,7 @@
   function crewOf(status) {
     var crew = {};
     ((status && status.forces) || []).forEach(function (f) {
+      if (f.allies) return; // the scenario's automata: their crews are never the players' named pilots
       (f.units || []).forEach(function (u) {
         if (!u.pilot) return;
         var k = u.pilot.toLowerCase();

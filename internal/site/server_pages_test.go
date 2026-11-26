@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/davidzech/Battletech/internal/content"
+	"github.com/davidzech/Battletech/internal/storage"
 )
 
 func TestRefusalWarPlayersOnHomePage(t *testing.T) {
@@ -59,6 +60,27 @@ func TestCampaignIconProblems(t *testing.T) {
 		if c.Icon != "" || !strings.Contains(strings.Join(c.Problems, "\n"), want) {
 			t.Errorf("icon %q: %q, problems %v", icon, c.Icon, c.Problems)
 		}
+	}
+}
+
+// A campaign's banner (Intro.md image) is checked like its icon, and shown at the top of its page as a plain 3:1 banner: no targeting frame or survey.
+func TestCampaignBanner(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "Scratch")
+	for _, d := range []string{"Scenario_000", "images"} {
+		if err := os.MkdirAll(filepath.Join(dir, d), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_ = os.WriteFile(filepath.Join(dir, "Intro.md"), []byte("---\nimage: images/missing.png\n---\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "Scenario_000", "Setup.md"), []byte("---\nid: scenario_000\ntitle: First\n---\n# First\n"), 0o644)
+	if c, _ := (content.Library{Root: root}).Campaign("scratch"); c.Image != "" || !strings.Contains(strings.Join(c.Problems, "\n"), `image "images/missing.png" is not in the campaign's folder`) {
+		t.Errorf("a missing banner is a problem: %q %v", c.Image, c.Problems)
+	}
+	srv, _ := newTestServer(t)
+	page := body(t, srv, "/refusalwar/", nil)
+	if !strings.Contains(page, `<figure class="scenario-art campaign-art"><div class="scenario-art-pic"><img src="/refusalwar/images/wolf_hall.png" alt=""></div></figure>`) {
+		t.Errorf("Refusal War's page shows its banner, with no readout: %.400s", page)
 	}
 }
 
@@ -322,5 +344,36 @@ func TestCampaignPagesShowTheCrest(t *testing.T) {
 	}
 	if strings.Contains(body(t, srv, "/", cookie), "page-crest") {
 		t.Error("the home page has no campaign crest")
+	}
+}
+
+// Scenario banners and campaign emblems are revalidated on every visit, so an image replaced under the same name shows at once; an unchanged one is a 304.
+func TestCampaignImagesAreRevalidated(t *testing.T) {
+	store, err := storage.OpenSQLite(t.TempDir() + "/images.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { store.DB().Close() })
+	srv := newTestServerAt(t, "../../campaigns", store, &fakeMekBay{hangar: startingHangar()}) // the real campaigns: the tests' copy leaves the banners out
+	for _, u := range []string{"/refusalwar/scenario_001/images/colmar.png", "/refusalwar/images/icon.webp"} {
+		res, err := http.Get(srv.URL + u)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		if res.StatusCode != http.StatusOK || res.Header.Get("Cache-Control") != "no-cache" || res.Header.Get("Last-Modified") == "" {
+			t.Errorf("%s: %d, Cache-Control %q, Last-Modified %q", u, res.StatusCode, res.Header.Get("Cache-Control"), res.Header.Get("Last-Modified"))
+			continue
+		}
+		req, _ := http.NewRequest("GET", srv.URL+u, nil)
+		req.Header.Set("If-Modified-Since", res.Header.Get("Last-Modified"))
+		again, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		again.Body.Close()
+		if again.StatusCode != http.StatusNotModified {
+			t.Errorf("%s: an unchanged image is a 304, got %d", u, again.StatusCode)
+		}
 	}
 }

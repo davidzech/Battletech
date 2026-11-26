@@ -145,7 +145,7 @@ func (s *Server) writeBackBattle(w http.ResponseWriter, r *http.Request, pt stor
 	if !had || err != nil || !started || !run.Owned() {
 		return true // no battle to write back, or a hangar the site doesn't own
 	}
-	rep, err := s.mekbay.CommitBattle(r.Context(), mekbay.CommitBattleRequest{OwnerUID: mekbay.AccountUID(currentSeed(r), mekbay.SlotHangar), HangarInstance: run.HangarInstance, OperationID: op.OperationID})
+	rep, err := s.mekbay.CommitBattle(r.Context(), mekbay.CommitBattleRequest{OwnerUID: mekbay.AccountUID(currentSeed(r), mekbay.SlotHangar), HangarInstance: run.HangarInstance, OperationID: op.OperationID, Skip: skipAllies(op.AlliesInstance)})
 	if err != nil {
 		http.Error(w, "Could not write the battle's damage back into your hangar: "+err.Error(), http.StatusBadGateway)
 		return false
