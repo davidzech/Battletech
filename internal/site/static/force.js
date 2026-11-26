@@ -17,6 +17,7 @@
   }
 
   function render(data) {
+    MechRow.hideTip(); // the icons are about to be replaced, so a card open on one would point at nothing
     box.textContent = '';
     var card = ForceSummary.build(data);
     if (!card) { box.appendChild(el('p', 'muted', 'Your hangar has no units in it yet.')); return; }

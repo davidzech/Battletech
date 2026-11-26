@@ -43,6 +43,7 @@
     var name = el('label', 'alloc-name', l.name);
     var slider = document.createElement('input');
     slider.type = 'range'; slider.min = base; slider.max = base + o.budget; slider.step = o.step;
+    slider.setAttribute('aria-label', l.name); // the label wraps only the number box
     var number = document.createElement('input');
     number.type = 'number'; number.min = base; number.max = base + o.budget; number.step = o.step; number.inputMode = 'numeric';
     name.appendChild(number);

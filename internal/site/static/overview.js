@@ -84,7 +84,6 @@
   // A campaign that is always played by the same number of players has nothing to choose: show the number.
   if (min === max) {
     pick.appendChild(el('b', 'hangar-stat-value', String(min)));
-    document.getElementById('overview-note').hidden = true;
     return;
   }
   render();

@@ -95,7 +95,7 @@
       var preview = el('ul', 'outcome-preview');
       preview.id = 'outcome-preview-' + p.id;
       card.appendChild(preview);
-      if (tb) tb.addEventListener('change', function () { st.tookPart = tb.checked; if (!tb.checked) st.killed = false; fields.hidden = !tb.checked; changed(); });
+      if (tb) tb.addEventListener('change', function () { st.tookPart = tb.checked; if (!tb.checked) { st.killed = false; ui[p.id].killedBox.checked = false; } fields.hidden = !tb.checked; changed(); });
       body.appendChild(card);
     });
     var mission = byScope('mission');
@@ -231,7 +231,7 @@
         lines.push(money('Assigned to pilots', (res.paid || 0) + ' SP'));
       }
       if (res.warchest) {
-        lines.push(money('Total SP', (res.warchest > 0 ? '+' : '') + res.warchest + ' SP'));
+        lines.push(money('To the warchest', (res.warchest > 0 ? '+' : '') + res.warchest + ' SP'));
         lines.push(money('Warchest', isNaN(before) ? (res.warchest > 0 ? '+' : '') + res.warchest + ' SP' : before + ' \u2192 ' + (before + res.warchest) + ' SP'));
       }
       if (res.keywords && res.keywords.length) lines.push({ text: 'Keywords: ' + (res.keywordNames || res.keywords).join(', ') });
@@ -304,11 +304,11 @@
   document.getElementById('outcome-form').addEventListener('submit', function (e) {
     e.preventDefault();
     if (!valid || commit.disabled) return;
-    var ask = window.Confirm ? Confirm.ask({
+    var ask = Confirm.ask({
       title: 'Commit this outcome?',
       message: 'The rewards and losses are applied now and the mission is marked completed. This cannot be undone here.',
       confirmLabel: 'Commit', danger: true
-    }) : Promise.resolve(true);
+    });
     ask.then(function (yes) {
       if (!yes) return;
       commit.disabled = true;

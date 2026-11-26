@@ -39,6 +39,8 @@
     if (m) return 'Armor lost in: ' + locNames(m[1]) + '. Its internal structure is untouched.';
     m = /^Internal structure damaged: (.+)$/.exec(note || '');
     if (m) return 'Internal structure lost in: ' + locNames(m[1]) + '.';
+    m = /^Critical hits: (.+)$/.exec(note || '');
+    if (m) return 'Critical hits in: ' + locNames(m[1]) + '.';
     m = /^(?:Crippled|Truly destroyed): (.+)$/.exec(note || '');
     if (m) return sentence(m[1]);
     if (note === 'Destroyed') return 'Destroyed in play. It can still be repaired between scenarios.';
