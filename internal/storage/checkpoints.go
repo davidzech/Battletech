@@ -229,6 +229,9 @@ func (s *Store) RestoreCheckpoint(ctx context.Context, playthroughID, campaign s
 		return nil, err
 	}
 	defer tx.Rollback()
+	if err := s.lockRun(ctx, tx, playthroughID, campaign); err != nil { // before the pilots' rows, as everywhere
+		return nil, err
+	}
 	for i := len(snapshotTables) - 1; i >= 0; i-- {
 		t := snapshotTables[i]
 		if _, err := tx.ExecContext(ctx, s.q("DELETE FROM "+t.table+" WHERE "+t.where), playthroughID, campaign); err != nil {
