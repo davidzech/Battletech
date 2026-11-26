@@ -239,7 +239,10 @@ func (s *Server) abortBattle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	line := "Aborted " + c.MissionName(*sc) + ", keeping every change since the last checkpoint."
-	if cps, err := s.store.Checkpoints(r.Context(), pt.ID, c.Slug); err == nil && len(cps) > 0 && mode == "rollback" {
+	if cps, err := s.store.Checkpoints(r.Context(), pt.ID, c.Slug); err != nil && mode == "rollback" {
+		http.Error(w, "could not load the campaign's checkpoints", http.StatusInternalServerError) // not a silent "keep": the player asked for a rollback
+		return
+	} else if len(cps) > 0 && mode == "rollback" {
 		label, err := s.rollbackTo(r.Context(), currentSeed(r), pt.ID, c.Slug, cps[0].Seq)
 		if err != nil {
 			log.Printf("roll back on abort: %v", err)
