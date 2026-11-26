@@ -24,6 +24,9 @@ func TestConditionPrecedenceAndCrippleRules(t *testing.T) {
 		{"one torso, fusion, check failed", HangarUnit{Locations: map[string]LocationLoss{"LT": {Internal: 5}}, TorsoCheckFailed: true}, "Fusion", CondCrippled},
 		{"one torso, XL needs no check", loc(map[string]LocationLoss{"LT": {Internal: 5}}), "XL (Clan)", CondCrippled},
 		{"two torsos", loc(map[string]LocationLoss{"LT": {Internal: 5}, "RT": {Internal: 5}}), "Fusion", CondCrippled},
+		{"a critical hit alone is structure-level", HangarUnit{Crits: []CritDamage{{Loc: "RT"}}}, "Fusion", CondStructure},
+		{"an engine hit alone is structure-level", HangarUnit{EngineHits: 1, Crits: []CritDamage{{Loc: "CT", Engine: true}}}, "Fusion", CondStructure},
+		{"a critical hit beats armor damage", HangarUnit{Crits: []CritDamage{{Loc: "RT"}}, Locations: map[string]LocationLoss{"CT": {Armor: 4}}}, "Fusion", CondStructure},
 		{"armor only", loc(map[string]LocationLoss{"CT": {Armor: 4}}), "Fusion", CondArmor},
 	}
 	for _, c := range cases {

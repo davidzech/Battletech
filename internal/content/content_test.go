@@ -168,3 +168,42 @@ func TestScenarioBVLimit(t *testing.T) {
 		t.Errorf("scenario 000 should have no BV limit, got %d", sc.BVLimit)
 	}
 }
+
+// The OpFors list in number order (opfor2 before opfor10, which a plain sort gets wrong), then any other key by name.
+func TestForceFilesAreInNumberOrder(t *testing.T) {
+	var got []string
+	for _, f := range forceFiles(map[string]string{"opfor10": "J.mul", "opfor2": "B.mul", "opfor1": "A.mul", "reserve": "R.mul", "OpFor3": "C.mul", "opfor4": "../X.mul", "opfor5": ""}) {
+		got = append(got, f.Label+"="+f.File)
+	}
+	if want := "OpFor 1=A.mul,OpFor 2=B.mul,OpFor 3=C.mul,OpFor 10=J.mul,reserve=R.mul"; strings.Join(got, ",") != want {
+		t.Errorf("forceFiles = %s, want %s", strings.Join(got, ","), want)
+	}
+}
+
+// Front matter that is opened and never closed is an error, not page text with its settings ignored; empty front matter is simply left out of the body.
+func TestReadMarkdownFrontMatterMustClose(t *testing.T) {
+	dir := t.TempDir()
+	read := func(text string) (string, setupMeta, error) {
+		path := filepath.Join(dir, "Setup.md")
+		if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		var meta setupMeta
+		body, err := readMarkdown(path, &meta)
+		return body, meta, err
+	}
+	if _, _, err := read("---\ntitle: First\nbv_limit: 9000\n\n# First\n"); err == nil || !strings.Contains(err.Error(), "closing ---") {
+		t.Errorf("unterminated front matter: %v", err)
+	}
+	if body, meta, err := read("---\ntitle: First\n---\n# First\n"); err != nil || meta.Title != "First" || body != "# First\n" {
+		t.Errorf("closed front matter: %q %+v %v", body, meta, err)
+	}
+	for _, text := range []string{"---\n---\n# First\n", "---\r\n---\r\n# First\n"} {
+		if body, _, err := read(text); err != nil || body != "# First\n" {
+			t.Errorf("empty front matter %q: body %q, %v", text, body, err)
+		}
+	}
+	if body, _, err := read("# First\n\n---\n\nA rule further down is not front matter.\n"); err != nil || !strings.HasPrefix(body, "# First") {
+		t.Errorf("no front matter: %q %v", body, err)
+	}
+}
