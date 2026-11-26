@@ -43,6 +43,7 @@ func (s *Server) sellUnit(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Only mechs in the catalog can be sold here.", http.StatusBadRequest)
 		return
 	}
+	defer s.hangarEdits.lock(pt.ID + "/" + c.Slug)() // a sale edits the hangar force too: one edit at a time (see keyedMutex)
 	value := hangar.SellValue(cat.BV, hangar.Pristine(hu))
 	after, err := s.mekbay.SellUnit(r.Context(), mekbay.SellRequest{OwnerUID: mekbay.AccountUID(currentSeed(r), mekbay.SlotHangar), Instance: run.HangarInstance, UnitID: hu.ID})
 	if err != nil {

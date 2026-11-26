@@ -163,6 +163,8 @@ type Server struct {
 	pages  map[string]*template.Template
 	mekbay mekbay.MekBay
 
+	hangarEdits keyedMutex // serializes the MekBay edits of each run's hangar (hangaredit.go)
+
 	// The MekBay proxy (mekbayproxy.go), served on the hosts mekbay-<link id>.<site host> (and mekbay.localhost).
 	upstream *[3]string // web, WebSocket and Origin of the MekBay to proxy; tests replace it
 	proxy    *mekbayproxy.Proxy
