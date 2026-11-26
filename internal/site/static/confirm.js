@@ -1,4 +1,5 @@
-// The site's own confirmation dialog, used instead of the browser's window.confirm so it matches the rest of the page.
+// The site's own confirmation dialog, used instead of the browser's window.confirm so it matches the rest of the page. A browser without <dialog> can't be asked
+// anything: there the answer is always false, and no action runs.
 //
 //   Confirm.ask({ title, message, items, detail, confirmLabel, cancelLabel, danger, action, busyLabel }) -> Promise<boolean>
 //
@@ -86,7 +87,7 @@
   function ask(o) {
     o = o || {};
     if (typeof HTMLDialogElement === 'undefined' || typeof document.createElement('dialog').showModal !== 'function') {
-      return Promise.resolve(window.confirm((o.title ? o.title + '\n\n' : '') + (o.message || '')));
+      return Promise.resolve(false); // no <dialog>: nothing can be asked, so nothing is confirmed and no action runs
     }
     if (!dialog) build();
     if (settle) { var previous = settle; settle = null; previous(false); } // a second question replaces the first
