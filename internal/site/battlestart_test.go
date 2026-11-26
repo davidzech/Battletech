@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -527,5 +528,53 @@ func TestBattleLockIgnoresLeftoversAndHonoursClaims(t *testing.T) {
 	}
 	if ok, _ := store.ClaimBattle(ctx, id, "refusalwar", "scenario_001"); !ok {
 		t.Error("an expired claim can be taken over")
+	}
+}
+
+// An abort that fails (here the rollback can't restore the hangar) leaves the battle as it was, in MekBay too: the campaign is still locked on it, so the
+// mission can still be completed, or the abort tried again.
+func TestFailedAbortKeepsTheBattleInMekBay(t *testing.T) {
+	fake := &fakeMekBay{hangar: startingHangar()}
+	srv, store := newMekBayTestServer(t, fake)
+	ctx := context.Background()
+	const seed = "wolfpack2026"
+	cookie := post(t, srv, "/api/seed", url.Values{"seed": {seed}}, nil, "").Cookies()[0]
+	post(t, srv, "/api/account", url.Values{"account": {"Wolf Pack"}}, cookie, srv.URL)
+	if r := post(t, srv, "/api/campaign/start", startForm(goodHangar, "Alrek", "Katarina"), cookie, srv.URL); r.StatusCode != http.StatusNoContent {
+		t.Fatalf("start: %d", r.StatusCode)
+	}
+	id := playthroughID(seed)
+	if err := store.SaveMekBayOperation(ctx, id, "refusalwar", "scenario_000", storage.MekBayOperation{OpForInstance: "opfor", OperationID: "op-stuck"}); err != nil {
+		t.Fatal(err)
+	}
+	abort := func() int {
+		return post(t, srv, "/api/battle/abort", url.Values{"campaign": {"refusalwar"}, "scenario": {"scenario_000"}, "mode": {"rollback"}}, cookie, srv.URL).StatusCode
+	}
+	deleted := func() []string {
+		fake.mu.Lock()
+		defer fake.mu.Unlock()
+		return slices.Clone(fake.battleDeletes)
+	}
+	fake.mu.Lock()
+	fake.copyErr = errors.New("mekbay is down")
+	fake.mu.Unlock()
+	if got := abort(); got != http.StatusBadGateway {
+		t.Fatalf("an abort whose rollback fails: %d", got)
+	}
+	if _, had, _ := store.MekBayOperation(ctx, id, "refusalwar", "scenario_000"); !had {
+		t.Error("a failed abort leaves the battle recorded")
+	}
+	if d := deleted(); len(d) != 0 {
+		t.Errorf("a failed abort deleted the battle in MekBay: %v", d)
+	}
+	// Tried again once MekBay answers, the abort goes through and cleans up.
+	fake.mu.Lock()
+	fake.copyErr = nil
+	fake.mu.Unlock()
+	if got := abort(); got != http.StatusNoContent {
+		t.Fatalf("the abort tried again: %d", got)
+	}
+	if d := deleted(); !slices.Contains(d, "op-stuck") {
+		t.Errorf("the abort that went through cleans up in MekBay: %v", d)
 	}
 }
