@@ -7,9 +7,19 @@ bv_limit: 8000
 forces:
   opfor1: OpFor1.mul
 images: []   # the Evciler banner is still to be made
-readout:
-  - Planet: Evciler
-  - Continent: Messian
+readout:   # from Sarna, except the 3057 population, which is invented (Sarna gives 11,235,700 in 3150)
+  - Star: Evciler (K4V)
+  - Orbit: 2nd
+  - Satellites: 2 (Cosmas, Damian)
+  - Recharge: 195 hours
+  - Gravity: 0.99 g
+  - Atmosphere: Standard (breathable)
+  - Equatorial temp: 25 °C
+  - Surface water: 35%
+  - Landmasses: 2 (Messian, Moundain)
+  - Capital: St. Nicholas
+  - Population: 14,800,000 (3057)
+  - Location: Messian
   - Date: 20 November 3057
 ---
 

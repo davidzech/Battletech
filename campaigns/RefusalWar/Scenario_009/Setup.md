@@ -5,8 +5,17 @@ planet: Wotan
 map: Tundra
 forces: {}   # OpFor .mul files TBD
 images: []
-readout:
-  - Planet: Wotan
+readout:   # from Sarna, except the 3057 population, which is invented (Sarna gives only 1,298,000 in 3150, after Borealtown was razed)
+  - Star: Wotan (G2V)
+  - Orbit: 5th of 6
+  - Satellites: None
+  - Recharge: 183 hours
+  - Gravity: 0.94 g
+  - Atmosphere: Standard (breathable)
+  - Equatorial temp: 40 °C (arid)
+  - Surface water: 40%
+  - Capital: Borealtown
+  - Population: 1,120,000,000 (3057)
   - Location: near Borealtown
   - Date: 7 December 3057
 ---

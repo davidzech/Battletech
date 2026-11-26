@@ -5,6 +5,17 @@ planet: Strana Mechty
 map: ""   # TBD
 forces: {}   # OpFor .mul files TBD
 images: []
+readout:   # Strana Mechty, as on Scenario 000's survey
+  - Star: Rodina (G3VI)
+  - Orbit: 4th of 7
+  - Satellites: 2 (Petrograd, Magadan)
+  - Gravity: 1.1 g
+  - Atmosphere: Standard (breathable)
+  - Equatorial temp: 25 °C
+  - Surface water: 70%
+  - Landmasses: 4
+  - Capital: Katyusha City
+  - Population: 130,000,000 (3048)
 ---
 
 # Scenario 013: Epilogue

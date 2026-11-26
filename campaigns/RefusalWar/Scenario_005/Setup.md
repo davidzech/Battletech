@@ -9,11 +9,18 @@ forces:
 images:
   - images/macduff.png
 readout_title: Lunar survey
-readout:
+readout:   # Sarna gives Devin only an M-class star and a 208-hour recharge; the moon itself is invented, an airless cratered moon (MechWarrior 2)
   - Planet: Devin
   - Moon: MacDuff
-  - Gravity: 0.5 g
+  - Star: Devin (M3V)
+  - Recharge: 208 hours
+  - Orbital period: 19.4 days
+  - Gravity: 0.51 g
   - Atmosphere: Vacuum
+  - Surface temp: −158 to 112 °C
+  - Surface water: None (polar ice traces)
+  - Settlements: 1 (sensor array dome)
+  - Population: Sensor array staff
   - Date: 17 October 3057
 ---
 

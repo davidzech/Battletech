@@ -6,9 +6,17 @@ map: ""   # TBD
 forces: {}   # OpFor .mul files TBD
 images: []
 readout_title: Lunar survey
-readout:
+readout:   # Morges' star and recharge as on its survey; the moon itself is invented: small, cold, its thin air being worked by the Falcons' terraformer (MechWarrior 2)
   - Planet: Morges
   - Moon: Karetah
+  - Star: Morges (G4V)
+  - Recharge: 187 hours
+  - Orbital period: 31.2 days
+  - Gravity: 0.38 g
+  - Atmosphere: Thin (unbreathable, terraforming)
+  - Surface temp: −41 °C
+  - Surface water: Ice only
+  - Population: Terraforming crews
   - Location: Batista Flats
 ---
 

@@ -7,9 +7,21 @@ bv_limit: 9000
 forces:
   opfor1: OpFor1.mul
   opfor2: OpFor2.mul
-images: []   # the Twycross banner is still to be made
-readout:
-  - Planet: Twycross
+images:
+  - images/twycross.png
+readout:   # from Sarna
+  - Star: Twycross (F0IV)
+  - Orbit: 3rd
+  - Satellites: 1
+  - Recharge: 171 hours
+  - Gravity: 1.0 g
+  - Atmosphere: Standard (breathable)
+  - Equatorial temp: 65 °C (desert)
+  - Surface water: 40%
+  - Landmasses: 3
+  - Capital: Camora
+  - Population: 1,237,735,000 (3067)
+  - Location: Plain of Curtains
   - Date: 7 December 3057
 ---
 
