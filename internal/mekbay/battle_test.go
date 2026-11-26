@@ -22,6 +22,9 @@ type fakeForceServer struct {
 	forces map[string]map[string]any // instance -> saved data
 	owners map[string]string         // instance -> account
 	ops    map[string]map[string]any // operation id -> saved data
+	// refuse is the name of a force the server refuses to save (none when ""); saves counts the forces it did save.
+	refuse string
+	saves  int
 }
 
 func newFakeForceServer(t *testing.T) *fakeForceServer {
@@ -68,8 +71,22 @@ func (f *fakeForceServer) serve(w http.ResponseWriter, r *http.Request) {
 				reply(map[string]any{"action": "error", "code": "not_owner", "message": "not the owner"})
 				break
 			}
+			if name, _ := data["name"].(string); f.refuse != "" && name == f.refuse {
+				reply(map[string]any{"action": "error", "message": "refused"})
+				break
+			}
 			f.forces[inst], f.owners[inst] = data, account
+			f.saves++
 			reply(map[string]any{"action": "forceSaved", "instanceId": inst})
+		case "delForce": // not acknowledged, like the real one
+			inst, _ := m["instanceId"].(string)
+			if f.owners[inst] == account {
+				delete(f.forces, inst)
+				delete(f.owners, inst)
+			}
+		case "delOperation":
+			id, _ := m["operationId"].(string)
+			delete(f.ops, id)
 		case "getForce":
 			inst, _ := m["instanceId"].(string)
 			owned, _ := m["ownedOnly"].(bool)
@@ -360,5 +377,79 @@ func TestStartBattleWithAllies(t *testing.T) {
 		Players: []BattlePlayer{{Number: 1, Name: "P1", Draft: ForceDraft{Name: "P1", Groups: []GroupDraft{{Name: "Deployed", Units: []UnitDraft{{Unit: "BMGrizzly"}}}}}}}})
 	if err != nil || plain.AlliesInstance != "" {
 		t.Errorf("no allies, no allies' force: %+v %v", plain, err)
+	}
+}
+
+// A start that fails leaves nothing behind in MekBay: a plan that can't be built saves nothing at all, and a save that fails part-way deletes the forces saved
+// before it (the caller gets no result, so nothing else would ever delete them). A reused OpFor is not this start's to delete.
+func TestStartBattleLeavesNothingBehindWhenItFails(t *testing.T) {
+	f := newFakeForceServer(t)
+	cl := &Client{URL: f.wsURL()}
+	f.mu.Lock()
+	hangar, ids := f.saveHangar(tableAccount, ForceDraft{Name: "Hangar", Groups: []GroupDraft{{Name: "G", Units: []UnitDraft{{Unit: "BMMadCat_H"}, {Unit: "BMKoshi_E"}}}}})
+	f.mu.Unlock()
+	opfor := BattleOpFor{Draft: ForceDraft{Name: "OpFor", Groups: []GroupDraft{{Name: "OpFor 1", Units: []UnitDraft{{Unit: "BMLoki_Prime"}}}}}}
+	allies := ForceDraft{Name: "Allies", Groups: []GroupDraft{{Name: "Allies", Units: []UnitDraft{{Unit: "BMKoshi_C"}}}}}
+	left := func() (forces []string, ops, saves int) {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		for inst := range f.forces {
+			if inst != hangar {
+				forces = append(forces, inst)
+			}
+		}
+		return forces, len(f.ops), f.saves
+	}
+
+	// Player 2 takes a unit that is not in the hangar, and then a crew for a mech they didn't take: neither start saves the OpFor or player 1's force first.
+	for name, p2 := range map[string]BattlePlayer{
+		"a unit not in the hangar":    {Number: 2, Name: "P2", Units: []string{"no-such-unit"}},
+		"a crew for a mech not taken": {Number: 2, Name: "P2", Units: []string{ids[1]}, Crew: []CrewAssignment{{UnitID: ids[0], Name: "Alrek", Gunnery: 3, Piloting: 4}}},
+	} {
+		_, err := cl.StartBattle(context.Background(), BattleRequest{Account: tableAccount, HangarInstance: hangar, OperationName: "S", OpFor: opfor,
+			Players: []BattlePlayer{{Number: 1, Name: "P1", Units: []string{ids[0]}}, p2}})
+		if err == nil {
+			t.Fatalf("%s: the start should fail", name)
+		}
+		if forces, ops, saves := left(); len(forces) != 0 || ops != 0 || saves != 0 {
+			t.Errorf("%s: nothing is saved before every force is built: %v, %d operations, %d saves", name, forces, ops, saves)
+		}
+	}
+
+	// The allies' force can't be saved, after the OpFor's and the player's were: both are deleted again.
+	f.mu.Lock()
+	f.refuse = "Allies"
+	f.mu.Unlock()
+	good := BattleRequest{Account: tableAccount, HangarInstance: hangar, OperationName: "S", OpFor: opfor, Allies: allies,
+		Players: []BattlePlayer{{Number: 1, Name: "P1", Units: []string{ids[0]}}}}
+	if _, err := cl.StartBattle(context.Background(), good); err == nil || !strings.Contains(err.Error(), "refused") {
+		t.Fatalf("a refused save fails the start: %v", err)
+	}
+	if forces, ops, saves := left(); len(forces) != 0 || ops != 0 || saves != 2 {
+		t.Errorf("the forces saved before the failure are deleted: %v left, %d operations, %d saved", forces, ops, saves)
+	}
+
+	// With an OpFor kept from an earlier start, the failure deletes the new forces and leaves that OpFor alone.
+	f.mu.Lock()
+	f.refuse = ""
+	f.mu.Unlock()
+	first, err := cl.StartBattle(context.Background(), good)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.mu.Lock()
+	f.refuse = "Allies"
+	f.mu.Unlock()
+	again := good
+	again.OpFor.Reuse, again.OperationID = first.OpForInstance, first.OperationID
+	if _, err := cl.StartBattle(context.Background(), again); err == nil {
+		t.Fatal("the second start should fail")
+	}
+	forces, ops, _ := left()
+	slices.Sort(forces)
+	want := []string{first.OpForInstance, first.PlayerInstances[0], first.AlliesInstance}
+	slices.Sort(want)
+	if !slices.Equal(forces, want) || ops != 1 {
+		t.Errorf("the earlier start's forces and operation are all that is left: %v, want %v (%d operations)", forces, want, ops)
 	}
 }

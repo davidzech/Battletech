@@ -157,10 +157,13 @@ func (s *Server) startCampaign(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if err := s.store.StartRunWithPilots(r.Context(), id, c.Slug, hangar, pilots, c.StartingWarchest, players, forceName); errors.Is(err, storage.ErrAlreadyStarted) {
-		http.Error(w, "This campaign has already been started.", http.StatusConflict)
-		return
-	} else if err != nil {
+	if err := s.store.StartRunWithPilots(r.Context(), id, c.Slug, hangar, pilots, c.StartingWarchest, players, forceName); err != nil {
+		// The hangar just built or cloned belongs to no campaign (another start got there first, or the run could not be saved), so it is deleted again.
+		s.deleteHangars(r.Context(), seed, []string{hangar.Instance})
+		if errors.Is(err, storage.ErrAlreadyStarted) {
+			http.Error(w, "This campaign has already been started.", http.StatusConflict)
+			return
+		}
 		http.Error(w, "could not start the campaign", http.StatusInternalServerError)
 		return
 	}

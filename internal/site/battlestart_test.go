@@ -272,6 +272,47 @@ func TestStartBattleWithProvidedMechs(t *testing.T) {
 	}
 }
 
+// A battle built in MekBay that then can't be recorded here is deleted there again (nothing would remember it), and the mission can be started again.
+func TestABattleThatCantBeRecordedIsDeleted(t *testing.T) {
+	const seed = "wolfpack2026"
+	fake := &fakeMekBay{hangar: startingHangar()}
+	srv, store := newMekBayTestServer(t, fake)
+	ctx := context.Background()
+	cookie := post(t, srv, "/api/seed", url.Values{"seed": {seed}}, nil, "").Cookies()[0]
+	post(t, srv, "/api/account", url.Values{"account": {"Wolf Pack"}}, cookie, srv.URL)
+	if r := post(t, srv, "/api/campaign/start", startForm(goodHangar, "Alrek", "Katarina"), cookie, srv.URL); r.StatusCode != http.StatusNoContent {
+		t.Fatalf("start: %d", r.StatusCode)
+	}
+	units := []string{providedPrefix + "bmblackhawk_prime", providedPrefix + "bmryoken_prime"}
+	form := url.Values{"campaign": {"refusalwar"}, "scenario": {"scenario_000"}, "players": {"1"}, "p1_units": units, "p1_assign_unit": units, "p1_assign_pilot": {"Alrek", "Katarina"}}
+	// The database refuses to record a battle (SQLite, which these tests run on).
+	if _, err := store.DB().ExecContext(ctx, `CREATE TRIGGER refuse_battles BEFORE INSERT ON mekbay_operations BEGIN SELECT RAISE(ABORT, 'refused'); END`); err != nil {
+		t.Fatal(err)
+	}
+	res := post(t, srv, "/api/battle/start", form, cookie, srv.URL)
+	if msg, _ := io.ReadAll(res.Body); res.StatusCode != http.StatusInternalServerError || strings.Contains(string(msg), "refused") {
+		t.Fatalf("a battle that can't be recorded: %d %s", res.StatusCode, msg)
+	}
+	fake.mu.Lock()
+	built, deleted := len(fake.battles), len(fake.battleDeletes)
+	fake.mu.Unlock()
+	if built != 1 || deleted != 1 {
+		t.Fatalf("the battle built in MekBay is deleted there: %d built, %d deleted", built, deleted)
+	}
+	id := playthroughID(seed)
+	if _, had, _ := store.MekBayOperation(ctx, id, "refusalwar", "scenario_000"); had {
+		t.Error("no battle is in progress")
+	}
+	if h, _ := store.History(ctx, id, "refusalwar"); strings.HasPrefix(h[len(h)-1].Text, "Deployed") {
+		t.Errorf("a battle that was not started is not in the history: %+v", h[len(h)-1])
+	}
+	// Once the database is well again the mission starts: the failed start left no claim behind.
+	if _, err := store.DB().ExecContext(ctx, `DROP TRIGGER refuse_battles`); err != nil {
+		t.Fatal(err)
+	}
+	readBattle(t, post(t, srv, "/api/battle/start", form, cookie, srv.URL))
+}
+
 // A battle in progress is read back from MekBay: every force with each mech's live condition, the link, and a way to give the battle up.
 func TestBattleStatusAndAbort(t *testing.T) {
 	const seed = "wolfpack2026"

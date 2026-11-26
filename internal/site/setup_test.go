@@ -4,7 +4,9 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/davidzech/Battletech/internal/mekbay"
@@ -55,6 +57,63 @@ func TestStartClonesTheHangar(t *testing.T) {
 	}
 	if _, ok, _ := store2.Run(ctx, playthroughID("wolfpack2027"), "refusalwar"); ok {
 		t.Error("a failed clone must not start the campaign")
+	}
+}
+
+// twoClones is a MekBay whose hangar clones wait for each other: neither returns until both have been asked for, so two starts sent together both get past the
+// "already started" check and both make a hangar.
+type twoClones struct {
+	*fakeMekBay
+	both sync.WaitGroup
+}
+
+func (m *twoClones) CloneHangar(ctx context.Context, req mekbay.CloneRequest) (mekbay.HangarForce, error) {
+	m.both.Done()
+	m.both.Wait()
+	return m.fakeMekBay.CloneHangar(ctx, req)
+}
+
+// Two starts at once (a double submit) make two hangars in MekBay, and only one campaign: the hangar of the start that lost is deleted again.
+func TestALostStartDeletesItsHangar(t *testing.T) {
+	fake := &twoClones{fakeMekBay: &fakeMekBay{hangar: startingHangar()}}
+	fake.both.Add(2)
+	srv, store := newMekBayTestServer(t, fake)
+	cookie := post(t, srv, "/api/seed", url.Values{"seed": {"wolfpack2026"}}, nil, "").Cookies()[0]
+	post(t, srv, "/api/account", url.Values{"account": {"Wolf Pack"}}, cookie, srv.URL)
+	codes := make([]int, 2)
+	var wg sync.WaitGroup
+	for i := range codes {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			req, _ := http.NewRequest("POST", srv.URL+"/api/campaign/start", strings.NewReader(startForm(goodHangar, "Alrek", "Katarina").Encode()))
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			req.Header.Set("Origin", srv.URL)
+			req.AddCookie(cookie)
+			res, err := http.DefaultClient.Do(req)
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			res.Body.Close()
+			codes[i] = res.StatusCode
+		}()
+	}
+	wg.Wait()
+	slices.Sort(codes)
+	if !slices.Equal(codes, []int{http.StatusNoContent, http.StatusConflict}) {
+		t.Fatalf("one start goes through and the other is told the campaign is started: %v", codes)
+	}
+	run, _, _ := store.Run(context.Background(), playthroughID("wolfpack2026"), "refusalwar")
+	fake.mu.Lock()
+	defer fake.mu.Unlock()
+	if len(fake.clones) != 2 {
+		t.Fatalf("both starts cloned the hangar: %+v", fake.clones)
+	}
+	for _, c := range fake.clones {
+		if kept, deleted := c.Target == run.HangarInstance, slices.Contains(fake.deletes, c.Target); kept == deleted {
+			t.Errorf("the campaign's hangar is kept and the other is deleted: %s kept=%v deleted=%v", c.Target, kept, deleted)
+		}
 	}
 }
 

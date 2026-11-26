@@ -266,7 +266,7 @@ func (s *Server) setPortrait(w http.ResponseWriter, r *http.Request) {
 }
 
 // deleteCampaign deletes the playthrough's progress in one campaign (see Store.DeleteRun). The browser asks the player
-// to confirm first.
+// to confirm first. Nothing is deleted in MekBay: the campaign's hangar, its checkpoints' frozen copies and its battles' forces stay there.
 func (s *Server) deleteCampaign(w http.ResponseWriter, r *http.Request) {
 	pt, c, _, ok := s.openRunRequest(w, r) // deleting is allowed during a battle: it removes the battle with everything else
 	if !ok {
