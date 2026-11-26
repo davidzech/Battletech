@@ -304,11 +304,11 @@
   document.getElementById('outcome-form').addEventListener('submit', function (e) {
     e.preventDefault();
     if (!valid || commit.disabled) return;
-    var ask = window.Confirm ? Confirm.ask({
+    var ask = Confirm.ask({
       title: 'Commit this outcome?',
       message: 'The rewards and losses are applied now and the mission is marked completed. This cannot be undone here.',
       confirmLabel: 'Commit', danger: true
-    }) : Promise.resolve(true);
+    });
     ask.then(function (yes) {
       if (!yes) return;
       commit.disabled = true;

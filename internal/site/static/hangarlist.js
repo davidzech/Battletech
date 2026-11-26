@@ -250,6 +250,7 @@
 
   function render(data) {
     var units = data.units || [];
+    MechRow.hideTip(); // the rows are about to be replaced, so a card open on one would point at nothing
     list.textContent = '';
     summary.textContent = '';
     var card = typeof ForceSummary !== 'undefined' ? ForceSummary.stats(data) : null;

@@ -32,7 +32,7 @@ var VariantPicker = (function () {
       var d = dir(o, u);
       opt.value = o.unit;
       opt.className = 'swap-' + d;
-      opt.textContent = (d === 'up' ? '▲ ' : d === 'down' ? '▼ ' : '') + (o.model || o.unit) + ' — ' + commas(o.bv) + ' BV' + (opts.price ? ' — ' + opts.price(o) : '');
+      opt.textContent = (d === 'up' ? '▲ ' : d === 'down' ? '▼ ' : '') + (o.model || o.name) + ' — ' + commas(o.bv) + ' BV' + (opts.price ? ' — ' + opts.price(o) : '');
       select.appendChild(opt);
     });
     select.value = opts.value || '';
