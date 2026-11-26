@@ -287,8 +287,7 @@ func (s *Store) RestoreCheckpoint(ctx context.Context, playthroughID, campaign s
 	return dropped, tx.Commit()
 }
 
-// CheckpointHangars lists every frozen hangar a campaign's checkpoints hold. Nothing calls it: deleting a campaign leaves its frozen hangars in MekBay, like
-// everything else it saved there (see DeleteRun). It is what a deletion that cleaned them up would start from.
+// CheckpointHangars lists every frozen hangar a campaign's checkpoints hold, so that deleting the campaign can delete them in MekBay too.
 func (s *Store) CheckpointHangars(ctx context.Context, playthroughID, campaign string) ([]string, error) {
 	cps, err := s.Checkpoints(ctx, playthroughID, campaign)
 	if err != nil {

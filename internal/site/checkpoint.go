@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/davidzech/Battletech/internal/mekbay"
 	"github.com/davidzech/Battletech/internal/storage"
@@ -42,6 +43,25 @@ func (s *Server) deleteHangars(ctx context.Context, seed string, instances []str
 	if err := s.mekbay.DeleteForce(context.WithoutCancel(ctx), mekbay.AccountUID(seed, mekbay.SlotHangar), instances...); err != nil {
 		log.Printf("delete %d unused forces in MekBay: %v", len(instances), err)
 	}
+}
+
+// cleanupTimeout bounds a background clean-up in MekBay.
+const cleanupTimeout = 2 * time.Minute
+
+// cleanUpInBackground deletes forces and battles (operations with every force in them) that nothing on the site refers to any more, in a goroutine of its own:
+// the player doesn't wait for MekBay, and a failure only leaves them behind there, which affects nothing (it is logged).
+func (s *Server) cleanUpInBackground(seed string, forces, operations []string) {
+	if len(forces) == 0 && len(operations) == 0 {
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), cleanupTimeout)
+		defer cancel()
+		for _, op := range operations {
+			s.deleteBattle(ctx, seed, op)
+		}
+		s.deleteHangars(ctx, seed, forces)
+	}()
 }
 
 // recordCheckpoint snapshots the campaign as it is now as a new checkpoint holding the frozen hangar copy; the frozen hangars of checkpoints dropped for age are

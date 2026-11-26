@@ -265,9 +265,8 @@ func (s *Server) abortBattle(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// deleteBattle cleans up a battle that was aborted, or built but never recorded, in MekBay (its operation and every force in it), in the background of the
-// request: a failure only leaves them behind. A completed mission's battle is not cleaned up: completing only forgets the operation here
-// (Store.DeleteMekBayOperation), and its operation and forces stay in MekBay.
+// deleteBattle deletes a battle the site is done with in MekBay (its operation and every force in it): one aborted, built but never recorded, completed, or
+// part of a deleted campaign. It runs to the end even if the request doesn't; a failure only leaves them behind.
 func (s *Server) deleteBattle(ctx context.Context, seed, operationID string) {
 	if err := s.mekbay.DeleteBattle(context.WithoutCancel(ctx), mekbay.AccountUID(seed, mekbay.SlotHangar), operationID); err != nil {
 		log.Printf("delete the battle in MekBay: %v", err)

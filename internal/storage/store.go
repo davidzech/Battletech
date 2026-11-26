@@ -576,8 +576,8 @@ func (s *Store) StartRunWithPilots(ctx context.Context, playthroughID, campaign 
 }
 
 // DeleteRun removes a started campaign from a playthrough: its named pilots, its saved MekBay operation IDs and the run
-// itself, in one transaction. The account, its other campaigns and anything saved in MekBay (the hangar, the checkpoints'
-// frozen copies of it, battles' forces and operations) are left alone. It reports whether there was a run to delete.
+// itself, in one transaction. The account and its other campaigns are left alone, and so is MekBay: the caller deletes what
+// the campaign saved there (the site's deleteCampaign does, once this has succeeded). It reports whether there was a run to delete.
 func (s *Store) DeleteRun(ctx context.Context, playthroughID, campaign string) (bool, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {

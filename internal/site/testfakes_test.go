@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/davidzech/Battletech/internal/mekbay"
 	"github.com/davidzech/Battletech/internal/storage"
@@ -283,4 +284,21 @@ A plain scenario for the tests.
 		t.Fatal(err)
 	}
 	return dst
+}
+
+// eventually waits for something the site does in the background (a clean-up in MekBay) to show in the fake, failing the test with what it last saw.
+func eventually(t *testing.T, what string, done func() (bool, any)) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		ok, saw := done()
+		if ok {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Errorf("%s: never happened, last saw %v", what, saw)
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }
