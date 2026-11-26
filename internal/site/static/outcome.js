@@ -231,7 +231,7 @@
         lines.push(money('Assigned to pilots', (res.paid || 0) + ' SP'));
       }
       if (res.warchest) {
-        lines.push(money('Total SP', (res.warchest > 0 ? '+' : '') + res.warchest + ' SP'));
+        lines.push(money('To the warchest', (res.warchest > 0 ? '+' : '') + res.warchest + ' SP'));
         lines.push(money('Warchest', isNaN(before) ? (res.warchest > 0 ? '+' : '') + res.warchest + ' SP' : before + ' \u2192 ' + (before + res.warchest) + ' SP'));
       }
       if (res.keywords && res.keywords.length) lines.push({ text: 'Keywords: ' + (res.keywordNames || res.keywords).join(', ') });

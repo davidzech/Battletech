@@ -54,7 +54,7 @@ var VariantPicker = (function () {
     if (v.mekbayUrl) view.externalUrl = v.mekbayUrl;
     var built = MechRow.build(view);
     if (card && typeof UnitCard !== 'undefined') {
-      MechRow.attachTip(built, { focusable: false, align: 'right', build: card });
+      MechRow.attachTip(built, { align: 'right', build: card });
       built.addEventListener('mouseover', function (e) {
         var own = e.target.closest && e.target.closest('[aria-describedby]');
         if ((!own || own === built) && !built.classList.contains('tip-open')) built.dispatchEvent(new Event('mouseenter'));

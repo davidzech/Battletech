@@ -33,7 +33,7 @@
           return res.text().then(function (t) { return t.trim() || 'Could not roll back.'; });
         }, function () { return 'Could not reach the server.'; });
       };
-      var message = 'The campaign goes back to just after "' + btn.dataset.label + '": pilots, SP, warchest, completed missions and the hangar are put back as they were, and everything after it is forgotten, here in the history too. A battle in progress is given up. This cannot be undone.';
+      var message = 'The campaign goes back to just after "' + btn.dataset.label + '": pilots, SP, warchest, completed missions and the hangar are put back as they were, and everything after it is forgotten, here in the history too. This cannot be undone.';
       if (!window.Confirm) {
         post().then(function (err) { if (err) { if (error) error.textContent = err; } else location.reload(); });
         return;
