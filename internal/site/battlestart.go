@@ -212,7 +212,7 @@ func (s *Server) battleStatus(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(out)
 }
 
-// abortBattle is POST /api/battle/abort: give the battle up. The scenario goes back to not started, with no rewards; its forces stay in MekBay, which is told nothing.
+// abortBattle is POST /api/battle/abort: give the battle up. The scenario goes back to not started, with no rewards; once the battle is forgotten here, its operation and forces are deleted in MekBay.
 func (s *Server) abortBattle(w http.ResponseWriter, r *http.Request) {
 	if !sameOrigin(r) {
 		http.Error(w, "cross-origin request refused", http.StatusForbidden)
@@ -238,9 +238,11 @@ func (s *Server) abortBattle(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Choose how to abort: keep your changes or roll back.", http.StatusBadRequest)
 		return
 	}
-	defer s.deleteBattle(r.Context(), currentSeed(r), op.OperationID)
 	line := "Aborted " + c.MissionName(*sc) + ", keeping every change since the last checkpoint."
-	if cps, err := s.store.Checkpoints(r.Context(), pt.ID, c.Slug); err == nil && len(cps) > 0 && mode == "rollback" {
+	if cps, err := s.store.Checkpoints(r.Context(), pt.ID, c.Slug); err != nil && mode == "rollback" {
+		http.Error(w, "could not load the campaign's checkpoints", http.StatusInternalServerError) // not a silent "keep": the player asked for a rollback
+		return
+	} else if len(cps) > 0 && mode == "rollback" {
 		label, err := s.rollbackTo(r.Context(), currentSeed(r), pt.ID, c.Slug, cps[0].Seq)
 		if err != nil {
 			log.Printf("roll back on abort: %v", err)
@@ -254,6 +256,8 @@ func (s *Server) abortBattle(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not abort the battle", http.StatusInternalServerError)
 		return
 	}
+	// Only once the abort has gone through: a failed abort leaves the battle, which still locks the campaign, intact in MekBay.
+	s.deleteBattle(r.Context(), currentSeed(r), op.OperationID)
 	s.logHistory(r, pt.ID, c.Slug, storage.HistoryMission, 0, line) // only once the battle is gone, so the history never says it ended while it still locks the campaign
 	w.WriteHeader(http.StatusNoContent)
 }

@@ -1,6 +1,7 @@
 package site
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -15,7 +16,8 @@ import (
 // Selling units: the price is package hangar (sell.go), removing the unit from the force package mekbay.
 
 // sellUnit is POST /api/hangar/sell: sell the hangar unit named by `unit`. The server works out the price itself from the unit's state. The unit is taken out of
-// the hangar first and the warchest paid after, so a failure in MekBay never pays for a unit the player still has.
+// the hangar first and the warchest paid after, so a failure in MekBay never pays for a unit the player still has. Once the sale starts it is seen through even
+// if the request stops (the player closes the tab), so a unit never leaves the hangar unpaid.
 func (s *Server) sellUnit(w http.ResponseWriter, r *http.Request) {
 	pt, c, run, ok := s.hangarRequest(w, r)
 	if !ok {
@@ -45,14 +47,15 @@ func (s *Server) sellUnit(w http.ResponseWriter, r *http.Request) {
 	}
 	defer s.hangarEdits.lock(pt.ID + "/" + c.Slug)() // a sale edits the hangar force too: one edit at a time (see keyedMutex)
 	value := hangar.SellValue(cat.BV, hangar.Pristine(hu))
-	after, err := s.mekbay.SellUnit(r.Context(), mekbay.SellRequest{OwnerUID: mekbay.AccountUID(currentSeed(r), mekbay.SlotHangar), Instance: run.HangarInstance, UnitID: hu.ID})
+	ctx := context.WithoutCancel(r.Context())
+	after, err := s.mekbay.SellUnit(ctx, mekbay.SellRequest{OwnerUID: mekbay.AccountUID(currentSeed(r), mekbay.SlotHangar), Instance: run.HangarInstance, UnitID: hu.ID})
 	if err != nil {
 		log.Printf("sell a unit in MekBay: %v", err) // never log the owner UID
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
-	s.cacheHangar(r.Context(), pt.ID, c.Slug, run.HangarInstance, after) // the page that reloads next shows the unit gone at once
-	if err := s.store.RefundWarchest(r.Context(), pt.ID, c.Slug, value); err != nil {
+	s.cacheHangar(ctx, pt.ID, c.Slug, run.HangarInstance, after) // the page that reloads next shows the unit gone at once
+	if err := s.store.RefundWarchest(ctx, pt.ID, c.Slug, value); err != nil {
 		log.Printf("could not pay %d SP for a sold unit: %v", value, err)
 		http.Error(w, "The unit was sold but the warchest could not be paid. Set the funds under Advanced Management.", http.StatusInternalServerError)
 		return

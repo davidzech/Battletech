@@ -179,7 +179,8 @@ func (k *keyedMutex) lock(key string) (unlock func()) {
 }
 
 // payForHangarChange charges cost SP to the warchest and then makes the change in MekBay (change); if that fails the SP are refunded, so the player never pays
-// for a change that wasn't made. It answers the request itself: {"cost", "warchest"} on success. what names the change for the log ("repair a unit").
+// for a change that wasn't made. The refund doesn't stop when the request does: a player who closes the tab during the MekBay call would otherwise lose the SP.
+// It answers the request itself: {"cost", "warchest"} on success. what names the change for the log ("repair a unit").
 //
 // change returns the hangar force as MekBay saved it, which becomes the cached copy, so the page that reloads next paints the change at once instead of the
 // hangar from before it until a live read catches up.
@@ -198,7 +199,7 @@ func (s *Server) payForHangarChange(w http.ResponseWriter, r *http.Request, pt s
 	unlock()
 	if err != nil {
 		log.Printf("%s in MekBay: %v", what, err) // never log the owner UID
-		if rerr := s.store.RefundWarchest(r.Context(), pt.ID, c.Slug, cost); rerr != nil {
+		if rerr := s.store.RefundWarchest(context.WithoutCancel(r.Context()), pt.ID, c.Slug, cost); rerr != nil {
 			log.Printf("could not refund %d SP: %v", cost, rerr)
 		}
 		status := http.StatusBadGateway
@@ -208,7 +209,7 @@ func (s *Server) payForHangarChange(w http.ResponseWriter, r *http.Request, pt s
 		http.Error(w, err.Error(), status)
 		return
 	}
-	s.cacheHangar(r.Context(), pt.ID, c.Slug, run.HangarInstance, h)
+	s.cacheHangar(context.WithoutCancel(r.Context()), pt.ID, c.Slug, run.HangarInstance, h)
 	s.logHistory(r, pt.ID, c.Slug, storage.HistoryHangar, -cost, history)
 	w.Header().Set("Content-Type", "application/json")
 	fmt.Fprintf(w, `{"cost":%d,"warchest":%d}`, cost, run.Warchest-cost)
