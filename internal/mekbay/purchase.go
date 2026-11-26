@@ -43,7 +43,7 @@ func addUnitsToForce(force map[string]any, unitIDs []string, now time.Time) {
 		units = append(units, map[string]any{
 			"id": NewID(), "unit": id, "alias": "", "updatedTs": now.UnixMilli(),
 			"state": map[string]any{
-				"crew":      []any{map[string]any{"id": 0, "name": "", "gunnerySkill": 4, "pilotingSkill": 5, "hits": 0, "state": 0}},
+				"crew":      unnamedCrew(),
 				"crits":     []any{},
 				"heat":      map[string]any{"current": 0, "previous": 0},
 				"locations": map[string]any{},

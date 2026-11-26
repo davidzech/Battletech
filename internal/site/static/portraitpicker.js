@@ -8,22 +8,18 @@
 // as text, never HTML.
 (function () {
   var dialog = null;
+  var el = Dom.el;
 
   function build() {
-    dialog = document.createElement('dialog');
-    dialog.className = 'portrait-dialog';
+    dialog = el('dialog', 'portrait-dialog');
     dialog.setAttribute('aria-labelledby', 'portrait-title');
-    var form = document.createElement('div');
-    var h = document.createElement('h2');
+    var form = el('div');
+    var h = el('h2', null, 'Choose a portrait');
     h.id = 'portrait-title';
-    h.textContent = 'Choose a portrait';
-    var grid = document.createElement('div');
-    grid.className = 'portrait-scroll';
-    var actions = document.createElement('div');
-    actions.className = 'form-actions';
-    var cancel = document.createElement('button');
+    var grid = el('div', 'portrait-scroll');
+    var actions = el('div', 'form-actions');
+    var cancel = el('button', null, 'Cancel');
     cancel.type = 'button';
-    cancel.textContent = 'Cancel';
     cancel.addEventListener('click', function () { dialog.close(); });
     actions.appendChild(cancel);
     form.appendChild(h);
@@ -46,19 +42,15 @@
     opts.portraits.forEach(function (p) {
       if (p.group !== group) {
         group = p.group;
-        var head = document.createElement('h3');
-        head.textContent = group;
-        section = document.createElement('div');
-        section.className = 'portrait-grid';
-        grid.appendChild(head);
+        section = el('div', 'portrait-grid');
+        grid.appendChild(el('h3', null, group));
         grid.appendChild(section);
       }
-      var b = document.createElement('button');
+      var b = el('button', 'portrait-choice');
       b.type = 'button';
-      b.className = 'portrait-choice';
       b.title = p.label + (taken[p.file] ? ' (used by another pilot)' : '');
       b.setAttribute('aria-label', b.title);
-      var img = document.createElement('img');
+      var img = el('img');
       img.src = '/portraits/' + p.file;
       img.alt = '';
       img.loading = 'lazy';

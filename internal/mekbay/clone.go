@@ -22,6 +22,11 @@ type CloneRequest struct {
 	Target   string // the instance ID the copy is saved under
 }
 
+// unnamedCrew is the crew of a unit nobody in particular drives, in MekBay's save format: one unnamed pilot with the default skills and no wounds.
+func unnamedCrew() []any {
+	return []any{map[string]any{"id": 0, "name": "", "gunnerySkill": DefaultGunnery, "pilotingSkill": DefaultPiloting, "hits": 0, "state": 0}}
+}
+
 // pristineUnit resets one unit of a saved force (the decoded JSON of a unit) to a clean state: every location's armor and structure restored, every critical
 // hit and the destroyed flag cleared, spent ammunition refilled, heat and the torso-crippling check cleared, and the crew replaced by one unnamed 4/5 pilot with
 // no wounds.
@@ -45,7 +50,7 @@ func pristineUnit(um map[string]any, now time.Time) {
 			}
 		}
 	}
-	state["crew"] = []any{map[string]any{"id": 0, "name": "", "gunnerySkill": DefaultGunnery, "pilotingSkill": DefaultPiloting, "hits": 0, "state": 0}}
+	state["crew"] = unnamedCrew()
 	um["updatedTs"] = now.UnixMilli()
 }
 

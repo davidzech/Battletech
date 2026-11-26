@@ -18,13 +18,18 @@ type KeywordView struct {
 	From string // "Scenario 001: Pyre Light", or "" when that scenario isn't known
 }
 
-// keywordViews reads the campaign's ledger for the overview ("" on a failure, which is logged).
-func (s *Server) keywordViews(r *http.Request, playthroughID string, c *content.Campaign) []KeywordView {
+// campaignLedger reads the campaign's keyword ledger once for a page; ok is false on a failure, which is logged.
+func (s *Server) campaignLedger(r *http.Request, playthroughID string, c *content.Campaign) (ledger []storage.LedgerEntry, ok bool) {
 	ledger, err := s.store.Ledger(r.Context(), playthroughID, c.Slug)
 	if err != nil {
 		log.Printf("load the campaign ledger: %v", err)
-		return nil
+		return nil, false
 	}
+	return ledger, true
+}
+
+// keywordViews describes the keywords the campaign's ledger holds, for the overview.
+func keywordViews(c *content.Campaign, ledger []storage.LedgerEntry) []KeywordView {
 	out := make([]KeywordView, 0, len(ledger))
 	for _, e := range ledger {
 		// A registered keyword comes from its own scenario, even one ticked by hand in Edit keywords; one the
@@ -53,11 +58,7 @@ type KeywordChoice struct {
 }
 
 // keywordChoices lists every keyword Keywords.md registers, in its order, marking the ones the ledger holds.
-func (s *Server) keywordChoices(r *http.Request, playthroughID string, c *content.Campaign) []KeywordChoice {
-	ledger, err := s.store.Ledger(r.Context(), playthroughID, c.Slug)
-	if err != nil {
-		log.Printf("load the campaign ledger: %v", err)
-	}
+func keywordChoices(c *content.Campaign, ledger []storage.LedgerEntry) []KeywordChoice {
 	held := map[string]bool{}
 	for _, e := range ledger {
 		held[e.Keyword] = true

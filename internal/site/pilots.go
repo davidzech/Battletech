@@ -48,16 +48,10 @@ func (s *Server) addPilot(w http.ResponseWriter, r *http.Request) {
 	}
 	rank := c.RecruitRank() // every recruit joins at the campaign's recruit_rank (Refusal War: MechWarrior); it isn't chosen
 	// A recruit starts with the campaign's starting SP (150 in Refusal War), spent as the player chose and the rest unallocated.
-	var start pilot.SPAllocation
-	for field, dst := range map[string]*int{
-		"gunnery": &start.Gunnery, "piloting": &start.Piloting, "edge_tokens": &start.EdgeTokens, "edge_abilities": &start.EdgeAbilities,
-	} {
-		n, err := parseSP(r.PostFormValue(field))
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		*dst = n
+	start, err := parseSPAllocation(r, "")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
 	if start.Total() > c.StartingPilotSP {
 		http.Error(w, fmt.Sprintf("A new pilot has %d SP to allocate.", c.StartingPilotSP), http.StatusBadRequest)
@@ -143,6 +137,19 @@ func parseSP(raw string) (int, error) {
 	return n, nil
 }
 
+// parseSPAllocation reads the four SP columns of a request (the fields gunnery, piloting, edge_tokens and edge_abilities after the prefix; an empty one is 0).
+func parseSPAllocation(r *http.Request, prefix string) (a pilot.SPAllocation, err error) {
+	for _, f := range []struct {
+		field string
+		dst   *int
+	}{{"gunnery", &a.Gunnery}, {"piloting", &a.Piloting}, {"edge_tokens", &a.EdgeTokens}, {"edge_abilities", &a.EdgeAbilities}} {
+		if *f.dst, err = parseSP(r.PostFormValue(prefix + f.field)); err != nil {
+			return pilot.SPAllocation{}, err
+		}
+	}
+	return a, nil
+}
+
 // pilotFallen records that a named pilot died. They are permanently removed from the campaign.
 func (s *Server) pilotFallen(w http.ResponseWriter, r *http.Request) {
 	pt, c, ok := s.pilotRequest(w, r)
@@ -178,15 +185,9 @@ func parseStartingPilots(r *http.Request, c *content.Campaign) ([]pilot.NewPilot
 			return nil, errors.New("Two of your pilots can't share a name.")
 		}
 		seen[strings.ToLower(name)] = true
-		var a pilot.SPAllocation
-		for field, dst := range map[string]*int{
-			"gunnery": &a.Gunnery, "piloting": &a.Piloting, "edge_tokens": &a.EdgeTokens, "edge_abilities": &a.EdgeAbilities,
-		} {
-			n, err := parseSP(r.PostFormValue(prefix + field))
-			if err != nil {
-				return nil, fmt.Errorf("%s: %w", name, err)
-			}
-			*dst = n
+		a, err := parseSPAllocation(r, prefix)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", name, err)
 		}
 		if a.Total() != c.StartingPilotSP {
 			return nil, fmt.Errorf("%s must allocate exactly %d SP (%d allocated).", name, c.StartingPilotSP, a.Total())
@@ -288,16 +289,10 @@ func (s *Server) allocateSP(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	var a pilot.SPAllocation
-	for field, dst := range map[string]*int{
-		"gunnery": &a.Gunnery, "piloting": &a.Piloting, "edge_tokens": &a.EdgeTokens, "edge_abilities": &a.EdgeAbilities,
-	} {
-		n, err := parseSP(r.PostFormValue(field))
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		*dst = n
+	a, err := parseSPAllocation(r, "")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
 	earned, err := parseSP(r.PostFormValue("earned"))
 	if err != nil {

@@ -27,10 +27,10 @@ import (
 const (
 	mekbayWebURL    = "https://mekbay.com"
 	UpstreamWS      = "wss://mekbay.com/ws"
-	mekbayOriginURL = "https://mekbay.com"
+	mekbayOriginURL = mekbayWebURL
 
 	// mekbayWSLiteral is the string in MekBay's compiled JavaScript that the proxy replaces.
-	mekbayWSLiteral = "wss://mekbay.com/ws"
+	mekbayWSLiteral = UpstreamWS
 
 	// proxyCacheEntries bounds the file cache so arbitrary request paths can't grow it forever.
 	proxyCacheEntries = 1000

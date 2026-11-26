@@ -146,11 +146,11 @@ func TestPortraits(t *testing.T) {
 func TestRankHelpers(t *testing.T) {
 	ranks := []string{"MechWarrior", "Star Commander", "Khan"}
 	for stored, want := range map[string]string{"": "MechWarrior", "Khan": "Khan", "Star Commander": "Star Commander", "General": "MechWarrior", "khan": "MechWarrior"} {
-		if got := rankFor(ranks, stored); got != want {
-			t.Errorf("rankFor(%q) = %q, want %q", stored, got, want)
+		if got := RankFor(ranks, stored); got != want {
+			t.Errorf("RankFor(%q) = %q, want %q", stored, got, want)
 		}
 	}
-	if rankFor(nil, "Khan") != "" {
+	if RankFor(nil, "Khan") != "" {
 		t.Error("a campaign without ranks shows none")
 	}
 	if !ValidRank(ranks, "Khan") || ValidRank(ranks, "khan") || ValidRank(ranks, "") || ValidRank(nil, "Khan") {
