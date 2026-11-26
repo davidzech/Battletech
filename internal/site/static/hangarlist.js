@@ -145,7 +145,7 @@
   // Gives a mech row its unit card (build() makes it): shown on hover or focus under the row, right-aligned with it, the row lit while it is open. The row's
   // status pills have cards of their own, so coming back off a pill onto the row brings the unit's card back.
   function withCard(r, build) {
-    MechRow.attachTip(r, { focusable: false, align: 'right', build: build });
+    MechRow.attachTip(r, { align: 'right', build: build });
     r.addEventListener('mouseover', function (e) {
       var own = e.target.closest && e.target.closest('[aria-describedby]');
       if ((!own || own === r) && !r.classList.contains('tip-open')) r.dispatchEvent(new Event('mouseenter'));
@@ -250,12 +250,13 @@
 
   function render(data) {
     var units = data.units || [];
+    MechRow.hideTip(); // the rows are about to be replaced, so a card open on one would point at nothing
     list.textContent = '';
     summary.textContent = '';
     var card = typeof ForceSummary !== 'undefined' ? ForceSummary.stats(data) : null;
     if (card) summary.appendChild(card);
     if (!units.length) {
-      list.appendChild(el('p', 'muted', 'Your hangar has no units in it yet. Add some in MekBay.'));
+      list.appendChild(el('p', 'muted', 'Your hangar has no units in it yet. Buy some with Purchase New Units.'));
       return;
     }
     // The hangar's pilot skills are a matter of assigning pilots, not something the mech itself has, so the rows leave them out.

@@ -86,7 +86,9 @@ func (s *Server) serviceUnit(w http.ResponseWriter, r *http.Request) {
 	if kind == "repair" {
 		history = fmt.Sprintf("Repaired %s (%s) for %s SP.", catalog.DisplayName(cat), repairLevelText[level], format.Commas(cost))
 	}
+	cond, _ := mekbay.ConditionOf(hu, cat.Tons, cat.Engine)
+	crippled := cond == mekbay.CondCrippled || cond == mekbay.CondDestroyed // decides what the structure level restores
 	s.payForHangarChange(w, r, pt, c, run, cost, kind+" a unit", history, func() (mekbay.HangarForce, error) {
-		return s.mekbay.ServiceUnit(r.Context(), mekbay.ServiceRequest{OwnerUID: mekbay.AccountUID(currentSeed(r), mekbay.SlotHangar), Instance: run.HangarInstance, UnitID: hu.ID, Kind: kind, Level: level, Tons: cat.Tons})
+		return s.mekbay.ServiceUnit(r.Context(), mekbay.ServiceRequest{OwnerUID: mekbay.AccountUID(currentSeed(r), mekbay.SlotHangar), Instance: run.HangarInstance, UnitID: hu.ID, Kind: kind, Level: level, Tons: cat.Tons, Crippled: crippled})
 	})
 }
