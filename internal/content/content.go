@@ -27,7 +27,7 @@ import (
 type Scenario struct {
 	Dir     string // absolute path
 	Slug    string // URL segment, e.g. "scenario_000"
-	ID      string // from front matter
+	ID      string // always the Slug; a front matter id that differs is a campaign problem
 	Number  string // "000"
 	Title   string
 	Map     string
@@ -190,7 +190,7 @@ func (c *Campaign) Scenario(slug string) (*Scenario, bool) {
 	return nil, false
 }
 
-// ScenarioByID returns the scenario with the given front matter id.
+// ScenarioByID returns the scenario with the given ID (the same as its slug).
 func (c *Campaign) ScenarioByID(id string) (*Scenario, bool) {
 	for i := range c.Scenarios {
 		if c.Scenarios[i].ID == id {
@@ -522,9 +522,15 @@ func (l Library) load(name string) (*Campaign, bool) {
 		if outcome.MVPSP != nil {
 			s.MVPSP = *outcome.MVPSP
 		}
-		if s.ID == "" {
-			s.ID = s.Slug
+		// The scenario's ID is its folder name, lowercased, whatever the files say: battles are keyed by ID and everything else by slug, and a Setup.md
+		// copied from another scenario with its old id would otherwise be taken for that scenario. An id that disagrees is a campaign problem.
+		if setup.ID != "" && setup.ID != s.Slug {
+			c.Problems = append(c.Problems, fmt.Sprintf("%s/Setup.md: id %q must be the folder's name in lowercase, %q", s.Slug, setup.ID, s.Slug))
 		}
+		if outcome.ID != "" && outcome.ID != s.Slug {
+			c.Problems = append(c.Problems, fmt.Sprintf("%s/Outcome.md: id %q must be the folder's name in lowercase, %q", s.Slug, outcome.ID, s.Slug))
+		}
+		s.ID = s.Slug
 		if s.ReadoutTitle == "" {
 			s.ReadoutTitle = "Planetary survey"
 		}
