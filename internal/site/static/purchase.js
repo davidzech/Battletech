@@ -17,8 +17,7 @@
   var NO_UID = 'This hangar is from before the site kept its own copy. Delete the campaign and start it again to import your hangar.';
   var LIMIT = 10; // the server's limit on units per purchase
 
-  var staged = [];  // { key, unit }
-  var nextKey = 1;
+  var staged = [];  // { unit }
 
   var listEl = document.getElementById('purchase-staged');
   var headEl = document.getElementById('purchase-staged-head');
@@ -57,7 +56,7 @@
     if (countOf(unit.unit)) return false;
     if (staged.length >= LIMIT) { errEl.textContent = 'You can buy at most ' + LIMIT + ' units at a time.'; return false; }
     errEl.textContent = '';
-    staged.push({ key: nextKey++, unit: unit });
+    staged.push({ unit: unit });
     render();
     paintResults();
     return true;
@@ -103,6 +102,5 @@
     }, function () { errEl.textContent = 'Could not reach the server.'; render(); });
   });
 
-  window.Purchase = { stage: stage, staged: function () { return staged.map(function (s) { return s.unit; }); } };
   render();
 })();

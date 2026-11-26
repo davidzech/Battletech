@@ -3,7 +3,6 @@ package site
 import (
 	"errors"
 	"fmt"
-	"net/http"
 	"strings"
 
 	"github.com/davidzech/Battletech/internal/mekbay"
@@ -11,17 +10,12 @@ import (
 )
 
 // Assigning named pilots to mechs. MekBay already stores a crew on every unit (a name and Gunnery and Piloting skills), so an assignment is just
-// that: the named pilot's name and their current skill levels written into the unit's crew in the hangar force. The player arranges the
-// assignments in the Deploy popup and they are saved to MekBay with the deploy. One pilot drives one mech at a time, so assigning a pilot to a
-// unit takes them off any other unit; a unit with no named pilot goes back to an unnamed 4/5 crew.
+// that: the named pilot's name and their current skill levels written into the unit's crew. The player arranges the assignments in the Deploy
+// popup and they are written into the battle's forces only: the hangar never holds a named pilot. One pilot drives one mech at a time; a unit
+// with no named pilot keeps an unnamed 4/5 crew.
 
-// parseCrew reads the pairs of assign_unit and assign_pilot fields a deploy carries into assignments, checking them against the hangar and the
-// campaign's living named pilots. The skills come from the pilot's current levels, never from the request.
-func parseCrew(r *http.Request, h mekbay.HangarForce, pilots []pilot.NamedPilot) ([]mekbay.CrewAssignment, error) {
-	return parseCrewPairs(r.PostForm["assign_unit"], r.PostForm["assign_pilot"], h, pilots)
-}
-
-// parseCrewPairs is parseCrew over already-split fields: units[i] gets the pilot names[i] (empty clears it).
+// parseCrewPairs reads the pairs of unit and pilot fields a deploy carries into assignments, checking them against the hangar and the campaign's
+// living named pilots: units[i] gets the pilot names[i] (empty clears it). The skills come from the pilot's current levels, never from the request.
 func parseCrewPairs(units, names []string, h mekbay.HangarForce, pilots []pilot.NamedPilot) ([]mekbay.CrewAssignment, error) {
 	if len(units) != len(names) {
 		return nil, errors.New("The pilot assignments are incomplete.")

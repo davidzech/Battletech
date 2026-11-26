@@ -122,7 +122,7 @@ func SnapshotHangarInstance(raw string) string {
 }
 
 // AddCheckpoint snapshots the campaign as it is now and records it as the newest checkpoint, with the frozen hangar copy (which may be empty). It returns the
-// frozen hangars of the oldest checkpoints dropped to stay within maxCheckpoints, for the caller to delete in MekBay.
+// frozen hangars of the oldest checkpoints dropped to stay within MaxCheckpoints, for the caller to delete in MekBay.
 //
 // The snapshot and the last history line are read in the one transaction that records the checkpoint, the line first, so the two agree: every change is made
 // before its line is logged, so a change whose line the checkpoint keeps is in its snapshot, and the snapshot's tables are all read as of one moment (SQLite has
@@ -273,6 +273,9 @@ func (s *Store) RestoreCheckpoint(ctx context.Context, playthroughID, campaign s
 		}
 	}
 	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	// The history goes back with the rest: what happened after the checkpoint never happened.
 	if _, err := tx.ExecContext(ctx, s.q(`DELETE FROM campaign_history WHERE playthrough_id = ? AND campaign = ?
 		AND seq > (SELECT history_seq FROM campaign_checkpoints WHERE playthrough_id = ? AND campaign = ? AND seq = ?)`), playthroughID, campaign, playthroughID, campaign, seq); err != nil {

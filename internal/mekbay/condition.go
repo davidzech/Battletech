@@ -41,7 +41,7 @@ var structureByTons = map[int][5]int{
 var (
 	armKeys   = []string{"LA", "RA"}
 	legKeys   = []string{"LL", "RL", "FLL", "FRL", "RLL", "RRL"}
-	torsoKeys = []string{"LT", "RT", "CT"}
+	torsoKeys = []string{"LT", "RT"} // the side torsos: a unit whose center torso is gone is truly destroyed before this is asked
 )
 
 // maxStructure is the internal structure a location starts with at a tonnage, 0 if unknown.

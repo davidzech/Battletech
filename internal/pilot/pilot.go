@@ -62,8 +62,6 @@ func (l ladder) next(sp int) (r ladderRow, ok bool) {
 	return ladderRow{}, false
 }
 
-// LaddersJSON is the four ladders as JSON, handed to the campaign page so the pilot builder can preview levels with
-// exactly the rules the server uses.
 // boxLabels are shorter names for the stat boxes, where "Edge abilities" would wrap onto two lines. Everywhere else (the slider
 // rows, for instance) a column keeps its full name.
 var boxLabels = map[string]string{"edge_abilities": "Abilities"}
@@ -82,6 +80,8 @@ type ladderView struct {
 	Short string `json:"short"`
 }
 
+// LaddersJSON is the four ladders as JSON, handed to the campaign page so the pilot builder can preview levels with
+// exactly the rules the server uses.
 var LaddersJSON = func() string {
 	var views []ladderView
 	for _, l := range []ladder{gunneryLadder, pilotingLadder, edgeTokensLadder, EdgeAbilitiesLadder} {
@@ -105,8 +105,8 @@ type SPAllocation struct {
 // Total is all the SP in the allocation.
 func (a SPAllocation) Total() int { return a.Gunnery + a.Piloting + a.EdgeTokens + a.EdgeAbilities }
 
-// NamedPilot is one of a command's named pilots. Their SP lives only as allocations, because the book has a pilot
-// allocate every SP the moment they earn it, so the "total SP earned" is just the sum.
+// NamedPilot is one of a command's named pilots: the SP they have earned in all (TotalSP) and how much of it is
+// allocated to each of the four columns (SP); the rest is unallocated.
 type NamedPilot struct {
 	ID   string
 	Name string
@@ -229,7 +229,7 @@ type NewPilot struct {
 var ErrPortraitTaken = errors.New("another pilot already has that portrait")
 
 // ErrPilotLimit is returned when a command already has the most named pilots it may have.
-var ErrPilotLimit = errors.New("you can have at most four named pilots at a time")
+var ErrPilotLimit = errors.New("you already have as many named pilots as you can have at a time")
 
 // ParsePilotName validates a named pilot's name: 1 to 30 characters, in the same style as an account or force name.
 func ParsePilotName(raw string) (string, error) {

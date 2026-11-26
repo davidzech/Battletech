@@ -137,9 +137,7 @@ func (s *Session) saveOperation(ctx context.Context, op map[string]any, opID str
 			return err
 		}
 		var back struct {
-			Data *struct {
-				Owned bool `json:"owned"`
-			} `json:"data"`
+			Data *struct{} `json:"data"`
 		}
 		if json.Unmarshal(got, &back) == nil && back.Data != nil {
 			return nil

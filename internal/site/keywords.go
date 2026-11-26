@@ -48,7 +48,7 @@ func keywordViews(c *content.Campaign, ledger []storage.LedgerEntry) []KeywordVi
 	return out
 }
 
-// KeywordChoice is one of the campaign's registered keywords in the Manage page's Edit keywords dialog, ticked
+// KeywordChoice is one of the campaign's registered keywords in the campaign page's Edit keywords dialog, ticked
 // when the campaign holds it.
 type KeywordChoice struct {
 	ID   string

@@ -9,7 +9,7 @@ import (
 	"github.com/davidzech/Battletech/internal/content"
 )
 
-// The outcome engine's storage: completing a mission with its outcome, the recorded report, free recruits and the keyword ledger (see outcomes.go).
+// The outcome engine's storage: completing a mission with its outcome, the recorded report, free recruits and the keyword ledger (see internal/content/outcome.go).
 
 // ErrAlreadyCompleted is returned when a mission that has already been completed is completed again.
 var ErrAlreadyCompleted = errors.New("this mission is already completed")
@@ -96,7 +96,7 @@ func (s *Store) CompleteWithOutcome(ctx context.Context, playthroughID, campaign
 	return tx.Commit()
 }
 
-// CompletionOutcome returns the recorded report of a completed mission ("" with ok when it was completed without an outcome); ok is false if it isn't completed.
+// CompletionOutcome returns the recorded report of a completed mission (nil with ok when it was completed without an outcome); ok is false if it isn't completed.
 func (s *Store) CompletionOutcome(ctx context.Context, playthroughID, campaign, scenario string) (res *content.OutcomeResult, ok bool, err error) {
 	var raw string
 	err = s.db.QueryRowContext(ctx, s.q(`SELECT outcome FROM scenario_completions WHERE playthrough_id = ? AND campaign = ? AND scenario_id = ?`), playthroughID, campaign, scenario).Scan(&raw)

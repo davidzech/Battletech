@@ -89,7 +89,7 @@ type Page struct {
 	Portraits      string          // the portrait list as JSON, for the portrait picker
 	InProgress     bool            // the scenario has a battle in progress (an operation that is neither completed nor aborted)
 	OperationURL   string          // the table's link to that battle, so the Operation in progress view can show it before anything is read from MekBay
-	KeywordChoices []KeywordChoice // every registered keyword, ticked when held (the Manage page's Edit keywords dialog)
+	KeywordChoices []KeywordChoice // every registered keyword, ticked when held (the campaign page's Edit keywords dialog)
 	BattleCache    string          // the last status read of that battle as JSON ({forces, updatedAt}), so the view paints it at once while a fresh read is made
 	Commit         string          // git commit the server was built from, short form ("dev" if unknown)
 	DevReload      bool            // the server runs with -dev-reload, so the layout loads static/devreload.js

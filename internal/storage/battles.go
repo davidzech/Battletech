@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// A battle in progress is a row of mekbay_operations: its MekBay operation and OpFor, and the last status read of it (see battle.go).
+// A battle in progress is a row of mekbay_operations: its MekBay operation and OpFor, and the last status read of it (see internal/mekbay/battle.go).
 
 // MekBayOperation records the MekBay force and operation the site synthesized for one scenario of a campaign run.
 type MekBayOperation struct {

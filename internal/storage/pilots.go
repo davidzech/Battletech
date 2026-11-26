@@ -73,8 +73,6 @@ func (s *Store) lockRun(ctx context.Context, tx *sql.Tx, playthroughID, campaign
 	return err
 }
 
-// AddPilot names a new pilot with the given starting SP. A command may have at most max living named pilots
-// (ErrPilotLimit otherwise).
 // AddPilot adds a pilot with the lowest rank and every SP allocated (see AddPilotWithRank).
 func (s *Store) AddPilot(ctx context.Context, playthroughID, campaign, name, portrait string, start pilot.SPAllocation, limit int) (pilot.NamedPilot, error) {
 	return s.AddPilotWithRank(ctx, playthroughID, campaign, name, portrait, "", start, start.Total(), limit)

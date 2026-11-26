@@ -1,5 +1,5 @@
 // A unit's hover card, the same everywhere: a scenario's unit links (unitlinks.js) and the overview's unit icons (forcesummary.js). The server sends the
-// card's data (unitCard in unitlinks.go); this builds it. Names are inserted as text, never HTML.
+// card's data (catalog.CardFor in internal/catalog/card.go); this builds it. Names are inserted as text, never HTML.
 //
 //   UnitCard.build(card, extra) -> HTMLElement
 //     card:  the unit's catalog card (name, model, icon, role, class, ..., weapons), with gunnery/piloting/skillBV when skills were written beside it

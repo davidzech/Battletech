@@ -1,8 +1,8 @@
 //go:build ignore
 
-// gen_portraits.go vendors the named-pilot portraits into internal/site/portraits. Give it a folder of PNG portraits
+// gen_portraits.go vendors the named-pilot portraits into internal/pilot/portraits. Give it a folder of PNG portraits
 // (square, with a transparent background); it writes each one under a lowercase, filesystem-safe name, scaled down to
-// 192x192 so the picker stays light (they are shown at most about 144 px wide). From internal/site:
+// 192x192 so the picker stays light (they are shown at most about 144 px wide). From internal/pilot:
 //
 //	go run gen_portraits.go -src <folder of portraits>
 //

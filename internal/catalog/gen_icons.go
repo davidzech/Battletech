@@ -1,6 +1,6 @@
 //go:build ignore
 
-// gen_icons.go vendors the unit icons the site shows into internal/site/icons, so nothing is hotlinked from MekBay or
+// gen_icons.go vendors the unit icons the site shows into internal/catalog/icons, so nothing is hotlinked from MekBay or
 // GitHub. The icons come from MegaMek's mm-data repository (data/images/units), licensed CC BY-NC-SA 4.0; see
 // icons/NOTICE.md. mm-data is large (hundreds of MB), so fetch only the folders needed:
 //

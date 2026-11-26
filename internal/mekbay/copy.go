@@ -38,6 +38,9 @@ func (c *Client) CopyForce(ctx context.Context, req CopyRequest) error {
 func (c *Client) DeleteForce(ctx context.Context, owner string, instances ...string) error {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
+	if len(instances) == 0 {
+		return nil
+	}
 	s, err := Dial(ctx, c.url(), owner)
 	if err != nil {
 		return err

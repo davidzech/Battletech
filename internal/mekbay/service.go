@@ -44,7 +44,7 @@ var ErrNoChange = errors.New("That has already been done to the unit (it may hav
 // crippled says whether the unit is crippled or destroyed, which the state alone can't tell (it takes the engine type).
 //
 // A rearm refills the ammunition and leaves the damage. A service that changes nothing in the unit's state is ErrNoChange.
-func serviceUnitState(force map[string]any, unitID, kind, level string, tons float64, crippled bool) error {
+func serviceUnitState(force map[string]any, unitID, kind, level string, tons float64, crippled bool, now time.Time) error {
 	groups, _ := force["groups"].([]any)
 	for _, g := range groups {
 		gm, _ := g.(map[string]any)
@@ -79,7 +79,7 @@ func serviceUnitState(force map[string]any, unitID, kind, level string, tons flo
 			if after, _ := json.Marshal(state); bytes.Equal(before, after) {
 				return ErrNoChange
 			}
-			um["updatedTs"] = time.Now().UnixMilli()
+			um["updatedTs"] = now.UnixMilli()
 			return nil
 		}
 	}
@@ -164,7 +164,7 @@ func repairState(state map[string]any, crits []any, level string, tons float64, 
 
 // ServiceUnit repairs or rearms a unit in the player's hangar force. It needs the owner's UID, because MekBay only accepts the owner's saves.
 func (c *Client) ServiceUnit(ctx context.Context, req ServiceRequest) (HangarForce, error) {
-	return c.editForce(ctx, req.OwnerUID, req.Instance, func(force map[string]any, _ time.Time) error {
-		return serviceUnitState(force, req.UnitID, req.Kind, req.Level, req.Tons, req.Crippled)
+	return c.editForce(ctx, req.OwnerUID, req.Instance, func(force map[string]any, now time.Time) error {
+		return serviceUnitState(force, req.UnitID, req.Kind, req.Level, req.Tons, req.Crippled, now)
 	})
 }
