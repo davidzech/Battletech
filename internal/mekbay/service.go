@@ -1,7 +1,9 @@
 package mekbay
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -27,6 +29,10 @@ type ServiceRequest struct {
 	Crippled bool    // the unit is crippled or destroyed (see ConditionOf), which leaves its destroyed locations and engine hits to the crippled level
 }
 
+// ErrNoChange is what an edit to a unit answers when the force as it was just read leaves it nothing to do: the repair, rearm or reconfiguration asked for has
+// already been made (by a second click, or by another player at the table). Nothing is saved, and the site gives the SP back.
+var ErrNoChange = errors.New("That has already been done to the unit (it may have changed). Reload and check your hangar.")
+
 // serviceUnitState applies a repair or rearm to the unit with this ID inside a force in MekBay's save format. Each repair level fixes its own
 // damage and the levels beneath it, and nothing above:
 //
@@ -38,7 +44,7 @@ type ServiceRequest struct {
 //
 // crippled says whether the unit is crippled or destroyed, which the state alone can't tell (it takes the engine type).
 //
-// A rearm refills the ammunition and leaves the damage.
+// A rearm refills the ammunition and leaves the damage. A service that changes nothing in the unit's state is ErrNoChange.
 func serviceUnitState(force map[string]any, unitID, kind, level string, tons float64, crippled bool) error {
 	groups, _ := force["groups"].([]any)
 	for _, g := range groups {
@@ -54,6 +60,7 @@ func serviceUnitState(force map[string]any, unitID, kind, level string, tons flo
 				return errors.New("that unit has no recorded state to change")
 			}
 			crits, _ := state["crits"].([]any)
+			before, _ := json.Marshal(state)
 			switch kind {
 			case "repair":
 				if err := repairState(state, crits, level, tons, crippled); err != nil {
@@ -69,6 +76,9 @@ func serviceUnitState(force map[string]any, unitID, kind, level string, tons flo
 				}
 			default:
 				return fmt.Errorf("unknown service %q", kind)
+			}
+			if after, _ := json.Marshal(state); bytes.Equal(before, after) {
+				return ErrNoChange
 			}
 			um["updatedTs"] = time.Now().UnixMilli()
 			return nil

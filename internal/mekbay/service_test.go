@@ -2,6 +2,7 @@ package mekbay
 
 import (
 	"encoding/json"
+	"errors"
 	"testing"
 )
 
@@ -47,6 +48,27 @@ func TestServiceUnitState(t *testing.T) {
 	ra := readBack(t, f)
 	if c, _ := ConditionOf(ra, 20, "Fusion"); c != CondCrippled || ra.AmmoBins != 0 || ra.AmmoUsed != 0 {
 		t.Errorf("after rearm: %s bins=%d used=%d", c, ra.AmmoBins, ra.AmmoUsed)
+	}
+	// The same service asked for twice (a double click, or two players at the table) changes nothing the second time, which is an error, so it isn't paid for twice.
+	for _, again := range [][2]string{{"repair", RepairArmor}, {"repair", RepairStructure}, {"repair", RepairCrippled}, {"rearm", ""}} {
+		f := load()
+		if err := serviceUnitState(f, "c", again[0], again[1], 20, true); err != nil {
+			t.Fatal(err)
+		}
+		if err := serviceUnitState(f, "c", again[0], again[1], 20, true); !errors.Is(err, ErrNoChange) {
+			t.Errorf("%s %s a second time: %v", again[0], again[1], err)
+		}
+	}
+	// A lower repair after a higher one has nothing left to fix either; a rearm after a repair still has.
+	f = load()
+	if err := serviceUnitState(f, "c", "repair", RepairCrippled, 20, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := serviceUnitState(f, "c", "repair", RepairArmor, 20, true); !errors.Is(err, ErrNoChange) {
+		t.Errorf("an armor repair after a full one: %v", err)
+	}
+	if err := serviceUnitState(f, "c", "rearm", "", 20, true); err != nil {
+		t.Errorf("a rearm after a full repair: %v", err)
 	}
 	if err := serviceUnitState(load(), "nope", "repair", RepairArmor, 20, true); err == nil {
 		t.Error("an unknown unit should be refused")
