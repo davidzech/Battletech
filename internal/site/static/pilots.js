@@ -71,7 +71,7 @@
       form.addEventListener('submit', function (e) {
         e.preventDefault();
         e.stopPropagation();
-        var name = input.value.trim();
+        var name = input.value.trim().replace(/\s+/g, ' '); // as the server saves it: runs of spaces collapsed
         if (!name) { o.error('Give your pilot a name.'); return; }
         if (name === o.current()) { close(); return; }
         ok.disabled = true;

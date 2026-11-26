@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sync"
 
 	"github.com/davidzech/Battletech/internal/content"
 	"github.com/davidzech/Battletech/internal/mekbay"
@@ -148,11 +149,53 @@ func (s *Server) hangarRequest(w http.ResponseWriter, r *http.Request) (pt stora
 	return pt, c, run, true
 }
 
+// keyedMutex is one mutex per key, made when first locked and forgotten when nobody holds or waits for it. The server keeps one per campaign run for the
+// edits to its hangar: a MekBay force edit is read-modify-save, so two at once would both start from the same force and the later save would undo the earlier
+// one, with both paid for. One at a time, the second starts from what the first saved, and an edit that then has nothing left to do (the same repair clicked
+// twice) fails with mekbay.ErrNoChange and is refunded. It only serializes edits made by this process: several servers on one database would need a lock in
+// the database, as Store.ClaimBattle is for battle starts.
+type keyedMutex struct {
+	mu    sync.Mutex
+	locks map[string]*keyedLock
+}
+
+type keyedLock struct {
+	mu      sync.Mutex
+	holders int // goroutines holding or waiting for mu
+}
+
+// lock locks the key's mutex and returns the function that unlocks it.
+func (k *keyedMutex) lock(key string) (unlock func()) {
+	k.mu.Lock()
+	if k.locks == nil {
+		k.locks = map[string]*keyedLock{}
+	}
+	l := k.locks[key]
+	if l == nil {
+		l = &keyedLock{}
+		k.locks[key] = l
+	}
+	l.holders++
+	k.mu.Unlock()
+	l.mu.Lock()
+	return func() {
+		l.mu.Unlock()
+		k.mu.Lock()
+		if l.holders--; l.holders == 0 {
+			delete(k.locks, key)
+		}
+		k.mu.Unlock()
+	}
+}
+
 // payForHangarChange charges cost SP to the warchest and then makes the change in MekBay (change); if that fails the SP are refunded, so the player never pays
-// for a change that wasn't made. It answers the request itself: {"cost", "warchest"} on success. what names the change for the log ("repair a unit").
+// for a change that wasn't made. The refund doesn't stop when the request does: a player who closes the tab during the MekBay call would otherwise lose the SP.
+// It answers the request itself: {"cost", "warchest"} on success. what names the change for the log ("repair a unit").
 //
 // change returns the hangar force as MekBay saved it, which becomes the cached copy, so the page that reloads next paints the change at once instead of the
 // hangar from before it until a live read catches up.
+//
+// The change runs under the run's hangar lock (keyedMutex). One that had already been made (mekbay.ErrNoChange) is refunded like any failed change, and answered 409.
 func (s *Server) payForHangarChange(w http.ResponseWriter, r *http.Request, pt storage.Playthrough, c *content.Campaign, run storage.CampaignRun, cost int, what, history string, change func() (mekbay.HangarForce, error)) {
 	if err := s.store.SpendWarchest(r.Context(), pt.ID, c.Slug, cost); errors.Is(err, storage.ErrInsufficientFunds) {
 		http.Error(w, fmt.Sprintf("Not enough in the warchest: that costs %d SP and you have %d.", cost, run.Warchest), http.StatusConflict)
@@ -161,16 +204,22 @@ func (s *Server) payForHangarChange(w http.ResponseWriter, r *http.Request, pt s
 		http.Error(w, "could not charge the warchest", http.StatusInternalServerError)
 		return
 	}
+	unlock := s.hangarEdits.lock(pt.ID + "/" + c.Slug) // one edit of the run's hangar at a time (see keyedMutex)
 	h, err := change()
+	unlock()
 	if err != nil {
 		log.Printf("%s in MekBay: %v", what, err) // never log the owner UID
-		if rerr := s.store.RefundWarchest(r.Context(), pt.ID, c.Slug, cost); rerr != nil {
+		if rerr := s.store.RefundWarchest(context.WithoutCancel(r.Context()), pt.ID, c.Slug, cost); rerr != nil {
 			log.Printf("could not refund %d SP: %v", cost, rerr)
 		}
-		http.Error(w, err.Error(), http.StatusBadGateway)
+		status := http.StatusBadGateway
+		if errors.Is(err, mekbay.ErrNoChange) {
+			status = http.StatusConflict // nothing was wrong with MekBay: the change had already been made
+		}
+		http.Error(w, err.Error(), status)
 		return
 	}
-	s.cacheHangar(r.Context(), pt.ID, c.Slug, run.HangarInstance, h)
+	s.cacheHangar(context.WithoutCancel(r.Context()), pt.ID, c.Slug, run.HangarInstance, h)
 	s.logHistory(r, pt.ID, c.Slug, storage.HistoryHangar, -cost, history)
 	w.Header().Set("Content-Type", "application/json")
 	fmt.Fprintf(w, `{"cost":%d,"warchest":%d}`, cost, run.Warchest-cost)

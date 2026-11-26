@@ -163,6 +163,8 @@ type Server struct {
 	pages  map[string]*template.Template
 	mekbay mekbay.MekBay
 
+	hangarEdits keyedMutex // serializes the MekBay edits of each run's hangar (hangaredit.go)
+
 	// The MekBay proxy (mekbayproxy.go), served on the hosts mekbay-<link id>.<site host> (and mekbay.localhost).
 	upstream *[3]string // web, WebSocket and Origin of the MekBay to proxy; tests replace it
 	proxy    *mekbayproxy.Proxy
@@ -270,9 +272,9 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name
 	if seed := currentSeed(r); seed != "" {
 		p.Seed = seed
 		id := playthroughID(seed)
-		if _, err := s.store.EnsurePlaythrough(r.Context(), id); err != nil {
-			log.Printf("ensure playthrough: %v", err)
-		} else if pt, _, err := s.store.Playthrough(r.Context(), id); err != nil {
+		// A seed nobody has named an account for has no row yet (setAccount makes it) and reads as the zero playthrough: a page view never writes one, or
+		// a client sending made-up seed cookies could fill the table.
+		if pt, _, err := s.store.Playthrough(r.Context(), id); err != nil {
 			log.Printf("load playthrough: %v", err)
 		} else {
 			p.Play = pt
@@ -334,7 +336,15 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name
 		http.Error(w, "could not render the page", http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	h := w.Header()
+	h.Set("Content-Type", "text/html; charset=utf-8")
+	// Every page holds the visitor's seed, which is their only credential: no cache keeps the page, nothing else may frame it, and a link out of it
+	// (to mekbay.com, or to a MekBay link's host) says nothing of where it came from.
+	h.Set("Cache-Control", "no-store")
+	h.Set("X-Content-Type-Options", "nosniff")
+	h.Set("Referrer-Policy", "same-origin")
+	h.Set("X-Frame-Options", "DENY")
+	h.Set("Content-Security-Policy", "frame-ancestors 'none'")
 	w.WriteHeader(status)
 	_, _ = buf.WriteTo(w)
 }

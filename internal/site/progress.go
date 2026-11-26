@@ -66,7 +66,10 @@ func (s *Server) setScenarioCompleted(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Report this mission's outcome to complete it.", http.StatusBadRequest)
 			return
 		}
-		if rec, was, err := s.store.CompletionOutcome(r.Context(), pt.ID, c.Slug, sc.Slug); err == nil && was && rec != nil {
+		if rec, was, err := s.store.CompletionOutcome(r.Context(), pt.ID, c.Slug, sc.Slug); err != nil {
+			http.Error(w, "could not load the campaign log", http.StatusInternalServerError)
+			return
+		} else if was && rec != nil {
 			http.Error(w, "This mission's outcome has been committed. To correct it, adjust the pilots and funds under Manage force.", http.StatusConflict)
 			return
 		}
