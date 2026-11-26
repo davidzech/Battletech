@@ -170,3 +170,50 @@ func TestCampaignHistory(t *testing.T) {
 		t.Errorf("a deleted campaign keeps no history: %v", h)
 	}
 }
+
+// A checkpoint whose last history line is one the dialog hides (a portrait changed just before it was recorded) is still offered: on the newest line shown before it.
+func TestCheckpointAfterAHiddenLineIsOffered(t *testing.T) {
+	fake := &fakeMekBay{hangar: startingHangar()}
+	srv, store := newMekBayTestServer(t, fake)
+	ctx := context.Background()
+	const seed = "wolfpack2026"
+	cookie := post(t, srv, "/api/seed", url.Values{"seed": {seed}}, nil, "").Cookies()[0]
+	post(t, srv, "/api/account", url.Values{"account": {"Wolf Pack"}}, cookie, srv.URL)
+	if r := post(t, srv, "/api/campaign/start", startForm(goodHangar, "Alrek", "Katarina"), cookie, srv.URL); r.StatusCode != http.StatusNoContent {
+		t.Fatalf("start: %d", r.StatusCode)
+	}
+	id := playthroughID(seed)
+	if err := store.LogHistory(ctx, id, "refusalwar", storage.HistoryHangar, "Repaired a Mad Dog.", -200); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.LogHistory(ctx, id, "refusalwar", storage.HistoryPilot, "Alrek"+portraitHistorySuffix, 0); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.AddCheckpoint(ctx, id, "refusalwar", "After the repair", ""); err != nil {
+		t.Fatal(err)
+	}
+	cps, _ := store.Checkpoints(ctx, id, "refusalwar")
+	h, _ := store.History(ctx, id, "refusalwar")
+	if len(cps) != 2 || cps[0].HistorySeq != h[len(h)-1].Seq {
+		t.Fatalf("the checkpoint follows the hidden line: %+v %+v", cps, h)
+	}
+	page := body(t, srv, "/refusalwar/", cookie)
+	offer := `data-checkpoint="` + strconv.Itoa(cps[0].Seq) + `" data-label="After the repair"`
+	line := strings.Index(page, "Repaired a Mad Dog.")
+	if line < 0 || !strings.Contains(page, offer) {
+		t.Fatalf("the checkpoint is offered: line at %d, offered %v", line, strings.Contains(page, offer))
+	}
+	if at := strings.Index(page, offer); at < line || strings.Contains(page[line:at], "<li ") {
+		t.Error("it is offered on the repair's line, the newest one shown before it")
+	}
+	if !strings.Contains(page, `data-checkpoint="`+strconv.Itoa(cps[1].Seq)+`" data-label="Campaign started"`) {
+		t.Error("the start's checkpoint is still offered on its own line")
+	}
+	// Rolling back to it keeps every line up to its own, the hidden one included.
+	if got := post(t, srv, "/api/campaign/rollback", url.Values{"campaign": {"refusalwar"}, "checkpoint": {strconv.Itoa(cps[0].Seq)}}, cookie, srv.URL).StatusCode; got != http.StatusNoContent {
+		t.Fatalf("rollback: %d", got)
+	}
+	if after, _ := store.History(ctx, id, "refusalwar"); len(after) != len(h)+1 || after[len(h)-1].Text != h[len(h)-1].Text {
+		t.Errorf("the rollback keeps the lines up to the checkpoint and adds its own: %+v", after)
+	}
+}

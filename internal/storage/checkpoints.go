@@ -32,7 +32,7 @@ type Checkpoint struct {
 	At         int64  // Unix time
 	HangarCopy string // the frozen hangar force's instance ID in MekBay ("" if the run's hangar isn't one the site owns)
 	Snapshot   string // the campaign's rows as JSON (only loaded by Store.Checkpoint)
-	HistorySeq int    // the last history line when it was taken, so the history can offer it on that line (0 for a checkpoint older than the history; only loaded by Store.Checkpoints)
+	HistorySeq int    // the last history line when it was taken, so the history can offer it on that line, or the newest one it shows before it (0 for a checkpoint older than the history; only loaded by Store.Checkpoints)
 }
 
 type snapshotQuerier interface {
@@ -123,22 +123,30 @@ func SnapshotHangarInstance(raw string) string {
 
 // AddCheckpoint snapshots the campaign as it is now and records it as the newest checkpoint, with the frozen hangar copy (which may be empty). It returns the
 // frozen hangars of the oldest checkpoints dropped to stay within maxCheckpoints, for the caller to delete in MekBay.
+//
+// The snapshot and the last history line are read in the one transaction that records the checkpoint, the line first, so the two agree: every change is made
+// before its line is logged, so a change whose line the checkpoint keeps is in its snapshot, and the snapshot's tables are all read as of one moment (SQLite has
+// one connection, which the transaction holds; PostgreSQL is asked for a transaction that reads one snapshot of the database throughout).
 func (s *Store) AddCheckpoint(ctx context.Context, playthroughID, campaign, label, hangarCopy string) (dropped []string, err error) {
-	snap, err := s.snapshot(ctx, s.db, playthroughID, campaign)
-	if err != nil {
-		return nil, err
+	var opts *sql.TxOptions
+	if s.postgres {
+		opts = &sql.TxOptions{Isolation: sql.LevelRepeatableRead}
 	}
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.db.BeginTx(ctx, opts)
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback()
-	var seq int
-	if err := tx.QueryRowContext(ctx, s.q(`SELECT COALESCE(MAX(seq), 0) + 1 FROM campaign_checkpoints WHERE playthrough_id = ? AND campaign = ?`), playthroughID, campaign).Scan(&seq); err != nil {
-		return nil, err
-	}
 	var historySeq int
 	if err := tx.QueryRowContext(ctx, s.q(`SELECT COALESCE(MAX(seq), 0) FROM campaign_history WHERE playthrough_id = ? AND campaign = ?`), playthroughID, campaign).Scan(&historySeq); err != nil {
+		return nil, err
+	}
+	snap, err := s.snapshot(ctx, tx, playthroughID, campaign)
+	if err != nil {
+		return nil, err
+	}
+	var seq int
+	if err := tx.QueryRowContext(ctx, s.q(`SELECT COALESCE(MAX(seq), 0) + 1 FROM campaign_checkpoints WHERE playthrough_id = ? AND campaign = ?`), playthroughID, campaign).Scan(&seq); err != nil {
 		return nil, err
 	}
 	if _, err := tx.ExecContext(ctx, s.q(`INSERT INTO campaign_checkpoints (playthrough_id, campaign, seq, label, created_at, hangar_copy, snapshot, history_seq) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`),

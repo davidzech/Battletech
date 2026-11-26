@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sort"
 	"strings"
 
 	"github.com/davidzech/Battletech/internal/content"
@@ -144,7 +145,8 @@ func (s *Server) historyViews(r *http.Request, playthroughID string, c *content.
 		held[e.Kind] = true
 	}
 	// The lines a checkpoint was taken right after (the start, each completed mission) can be rolled back to. A checkpoint older than the history (history_seq 0)
-	// belongs to the backfilled start line only if it is the start's own.
+	// belongs to the backfilled start line only if it is the start's own. A checkpoint's own last line may be one the dialog hides (a portrait changed while the
+	// hangar was being frozen), so it is offered on the newest line shown at or before it.
 	atLine := map[int]storage.Checkpoint{}
 	if cps, err := s.store.Checkpoints(r.Context(), playthroughID, c.Slug); err != nil {
 		log.Printf("read the checkpoints for the history: %v", err)
@@ -153,8 +155,13 @@ func (s *Server) historyViews(r *http.Request, playthroughID string, c *content.
 			if cp.HistorySeq == 0 && cp.Label != startCheckpointLabel {
 				continue
 			}
-			if _, taken := atLine[cp.HistorySeq]; !taken { // newest first: the latest checkpoint at a line wins
-				atLine[cp.HistorySeq] = cp
+			n := sort.Search(len(entries), func(i int) bool { return entries[i].Seq > cp.HistorySeq }) // entries are oldest first
+			if n == 0 {
+				continue
+			}
+			line := entries[n-1].Seq
+			if _, taken := atLine[line]; !taken { // newest first: the latest checkpoint at a line wins
+				atLine[line] = cp
 			}
 		}
 	}
