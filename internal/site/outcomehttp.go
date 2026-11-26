@@ -11,7 +11,7 @@ import (
 	"github.com/davidzech/Battletech/internal/storage"
 )
 
-// The outcome engine's endpoints: previewing and committing a mission's outcome (see outcomes.go).
+// The outcome engine's endpoints: previewing and committing a mission's outcome (see internal/content/outcome.go).
 
 // outcomeRequest checks a scenario-outcome request and evaluates it: a same-origin request from a started campaign, for an available scenario with an outcome engine
 // that is not completed yet. It returns what the engine makes of the reported inputs.
@@ -130,7 +130,7 @@ func (s *Server) commitOutcome(w http.ResponseWriter, r *http.Request) {
 }
 
 // writeBackBattle, for a mission fought with the player's own force (not a provided one) that has a battle in progress, writes the battle's units back into the
-// hangar before the mission is completed (see commitbattle.go), so a failure leaves the mission open to try again (writing the same state twice changes nothing). It
+// hangar before the mission is completed (see internal/mekbay/commit.go), so a failure leaves the mission open to try again (writing the same state twice changes nothing). It
 // answers the request itself and returns false when it fails.
 func (s *Server) writeBackBattle(w http.ResponseWriter, r *http.Request, pt storage.Playthrough, c *content.Campaign, sc *content.Scenario) bool {
 	if sc.Provides() {

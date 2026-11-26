@@ -49,7 +49,7 @@ type hangarUnitView struct {
 	SellFull  bool `json:"sellFull"`
 	// SwapOptions are the other variants an omnimech can be reconfigured to, with their prices (see swap.go); empty for any other unit.
 	SwapOptions []hangar.SwapOption `json:"swapOptions,omitempty"`
-	// Card is the unit's catalog card, the same as a scenario's unit links show (unitlinks.go), for the overview's hover card; nil for an unknown unit.
+	// Card is the unit's catalog card, the same as a scenario's unit links show (catalog.CardFor), for the overview's hover card; nil for an unknown unit.
 	Card *catalog.UnitCard `json:"card,omitempty"`
 }
 

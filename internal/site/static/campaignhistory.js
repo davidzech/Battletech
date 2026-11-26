@@ -1,6 +1,6 @@
 // The campaign page's History dialog: every change to the campaign, newest first, rendered by the server. The filter buttons show one kind of entry at a time.
 // A line a checkpoint was taken right after (the start, each completed mission) has a Roll back button: after two confirmations it rolls the campaign back to
-// that checkpoint (POST /api/campaign/rollback, as the Manage page's Rollback does) and reloads the page.
+// that checkpoint (POST /api/campaign/rollback) and reloads the page.
 (function () {
   var box = document.getElementById('history-dialog');
   var open = document.getElementById('history-open');
@@ -34,10 +34,6 @@
         }, function () { return 'Could not reach the server.'; });
       };
       var message = 'The campaign goes back to just after "' + btn.dataset.label + '": pilots, SP, warchest, completed missions and the hangar are put back as they were, and everything after it is forgotten, here in the history too. A battle in progress is given up. This cannot be undone.';
-      if (!window.Confirm) {
-        post().then(function (err) { if (err) { if (error) error.textContent = err; } else location.reload(); });
-        return;
-      }
       // Two confirmations: what a rollback does, then a plain "Are you sure?", which does the work.
       Confirm.ask({ title: 'Roll back the campaign?', message: message, confirmLabel: 'Roll back', danger: true })
         .then(function (yes) {

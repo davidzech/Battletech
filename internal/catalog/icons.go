@@ -2,7 +2,6 @@ package catalog
 
 import (
 	"embed"
-	_ "embed"
 	"io/fs"
 	"regexp"
 	"strings"

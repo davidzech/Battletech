@@ -2,7 +2,6 @@ package pilot
 
 import (
 	"embed"
-	_ "embed"
 	"encoding/json"
 	"hash/fnv"
 	"math/rand/v2"
@@ -57,6 +56,9 @@ var Portraits = sync.OnceValue(func() []Portrait {
 			k.p.Label = k.p.Group + ", rank " + m[2] + ", no. " + m[3]
 		} else {
 			name := strings.TrimSuffix(strings.TrimSuffix(file, ".png"), "_pilot")
+			if name == "" {
+				continue
+			}
 			k.p.Label = strings.ToUpper(name[:1]) + name[1:]
 		}
 		all = append(all, k)

@@ -1,7 +1,6 @@
 package site
 
 import (
-	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
@@ -10,7 +9,7 @@ import (
 	"github.com/davidzech/Battletech/internal/pilot"
 )
 
-func TestParseCrew(t *testing.T) {
+func TestParseCrewPairs(t *testing.T) {
 	pilots := []pilot.NamedPilot{
 		{Name: "Alrek", SP: pilot.SPAllocation{Gunnery: 90, Piloting: 100}},
 		{Name: "Katarina", SP: pilot.SPAllocation{Gunnery: 90}},
@@ -23,10 +22,7 @@ func TestParseCrew(t *testing.T) {
 			v.Add("assign_unit", pairs[i])
 			v.Add("assign_pilot", pairs[i+1])
 		}
-		r := httptest.NewRequest("POST", "/", strings.NewReader(v.Encode()))
-		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-		_ = r.ParseForm()
-		return parseCrew(r, h, pilots)
+		return parseCrewPairs(v["assign_unit"], v["assign_pilot"], h, pilots)
 	}
 	got, err := parse("ua", "alrek", "ub", "", "uc", "Katarina")
 	if err != nil || len(got) != 3 {
@@ -49,10 +45,7 @@ func TestParseCrew(t *testing.T) {
 			t.Errorf("%s should be refused", name)
 		}
 	}
-	r := httptest.NewRequest("POST", "/", strings.NewReader("assign_unit=ua"))
-	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	_ = r.ParseForm()
-	if _, err := parseCrew(r, h, pilots); err == nil {
+	if _, err := parseCrewPairs([]string{"ua"}, nil, h, pilots); err == nil {
 		t.Error("unit and pilot fields must pair up")
 	}
 	if got, err := parse(); err != nil || got != nil {

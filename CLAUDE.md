@@ -36,7 +36,7 @@ Packages under `internal/`, dependencies only pointing down this list:
 
 Conventions:
 - Tests live with their package; a test file is named after the source file it tests (suffix like `pilots_recruit_test.go` when needed). Shared site fakes/helpers are in `internal/site/testfakes_test.go`.
-- Every endpoint that changes a campaign starts with `runRequest` (same origin, seed, named account, started campaign) or `pilotRequest` (no run needed); hangar changes use `hangarRequest` (needs a site-owned hangar); paid hangar changes go through `payForHangarChange` (charge warchest, change MekBay, refund on failure) (`hangaredit.go`). Endpoints are same-origin only.
+- Every endpoint that changes a campaign starts with `runRequest` (same origin, seed, named account, started campaign) or `pilotRequest` (the same checks, for handlers that do not need the run itself); hangar changes use `hangarRequest` (needs a site-owned hangar); paid hangar changes go through `payForHangarChange` (charge warchest, change MekBay, refund on failure) (`hangaredit.go`). Endpoints are same-origin only.
 - Every MekBay force change is read-modify-save through `mekbay.Client.editForce`, which returns the saved force for the hangar cache.
 - Every endpoint that changes a campaign logs a history line once the change is made (`Server.logHistory`, `site/history.go`).
 - Pages render into a buffer first, so a template error is a clean 500.

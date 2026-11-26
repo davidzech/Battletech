@@ -42,7 +42,6 @@ type UnitDraft struct {
 	Commander bool // the force's commander (MekBay's formation commander, shown on the record sheet)
 }
 
-// HangarUnit is one unit of a player's hangar force as MekBay stores it.
 // CritDamage is one hit or destroyed critical slot: where it is and whether it belongs to the engine.
 type CritDamage struct {
 	Loc    string
@@ -56,6 +55,7 @@ type AmmoUse struct {
 	Used int // shots used
 }
 
+// HangarUnit is one unit of a player's hangar force as MekBay stores it.
 type HangarUnit struct {
 	ID        string // the unit's own ID inside the force
 	Unit      string // MekBay unit ID, e.g. BMMadCat_H
@@ -105,7 +105,7 @@ type MekBay interface {
 	StartBattle(ctx context.Context, req BattleRequest) (BattleResult, error)
 	// ReadBattle reads an operation and every force in it, anonymously, for the battle's live status.
 	ReadBattle(ctx context.Context, operationID string) (BattleStatus, error)
-	// CommitBattle writes the units' state from a finished battle back into the matching hangar units (see commitbattle.go).
+	// CommitBattle writes the units' state from a finished battle back into the matching hangar units (see commit.go).
 	CommitBattle(ctx context.Context, req CommitBattleRequest) (CommitBattleReport, error)
 	// CopyForce saves a copy of one of the owner's forces under another instance ID (checkpoints, see checkpoint.go).
 	CopyForce(ctx context.Context, req CopyRequest) error

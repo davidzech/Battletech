@@ -10,7 +10,7 @@ import (
 	"github.com/davidzech/Battletech/internal/mekbay"
 )
 
-// A scenario's OpFor and operation as the battle builds them in MekBay (see battle.go).
+// A scenario's OpFor and operation as the battle builds them in MekBay (see internal/mekbay/battle.go).
 
 // operationName is the operation's name in MekBay, e.g. "Refusal War - Scenario 001".
 func operationName(c *content.Campaign, sc *content.Scenario) string {

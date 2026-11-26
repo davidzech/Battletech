@@ -1,4 +1,4 @@
-// The Manage page's Edit keywords (Danger zone): tick the keywords the campaign holds and Save, which posts them all to
+// The campaign page's Edit keywords (Danger zone): tick the keywords the campaign holds and Save, which posts them all to
 // POST /api/campaign/keywords and reloads the page. Cancel, Escape or a click on the backdrop changes nothing.
 (function () {
   var box = document.getElementById('keywords-dialog');

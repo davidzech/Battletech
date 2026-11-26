@@ -44,12 +44,12 @@ type Scenario struct {
 	// AlliedUnits are the units of those files, for the page to name (filled at load; an unreadable file or unknown unit is a campaign problem).
 	AlliedUnits []AlliedUnit
 	// ProvidedUnits, when set (front matter provided_units: MekBay unit IDs), replace the player's hangar for this scenario: the players pick from this fixed pool
-	// instead, for story reasons. The units exist only for this scenario and never touch the hangar (see provided.go).
+	// instead, for story reasons. The units exist only for this scenario and never touch the hangar (see internal/site/provided.go).
 	ProvidedUnits []string
 	// ProvidedSwaps (front matter provided_swaps) lets the players reconfigure the provided omnimechs to another variant for free before the battle, in a step of the
 	// Deploy wizard: any variant of the chassis the campaign's faction fields in its era. It needs provided_units.
 	ProvidedSwaps bool
-	// OutcomeInputs and OutcomeRules are the scenario's outcome engine (Outcome.md front matter `inputs` and `outcomes`, see outcomes.go); OutcomeError says what is wrong
+	// OutcomeInputs and OutcomeRules are the scenario's outcome engine (Outcome.md front matter `inputs` and `outcomes`, see outcome.go); OutcomeError says what is wrong
 	// with them, in which case the scenario has no engine.
 	OutcomeInputs     []OutcomeInput
 	OutcomeObjectives []OutcomeObjective
@@ -144,7 +144,7 @@ type Campaign struct {
 	// availability.go); both empty means no such filter.
 	AvailabilityFaction, AvailabilityEra string
 	// Faction is the side the player's force fights for (Intro.md front matter faction), which decides the ranks of its named
-	// pilots; see factions.go. Empty or unknown turns ranks off.
+	// pilots; see internal/pilot/ranks.go. Empty or unknown turns ranks off.
 	Faction string
 	// Ranks is the rank ladder of the campaign's named pilots, lowest first: the Intro.md `ranks` list if it has one, else its
 	// faction's.
@@ -341,7 +341,7 @@ type setupMeta struct {
 	Allies       []string            `yaml:"allies"`
 }
 
-// outcomeMeta is a scenario's Outcome.md front matter: where it leads, and its outcome engine (see outcomes.go).
+// outcomeMeta is a scenario's Outcome.md front matter: where it leads, and its outcome engine (see outcome.go).
 type outcomeMeta struct {
 	ID          string             `yaml:"id"`
 	DefaultNext string             `yaml:"default_next"`
@@ -390,7 +390,7 @@ func RenderMarkdown(src string, stripTitle bool) template.HTML {
 	}
 	// External links (MekBay etc.) open in a new tab.
 	out := externalLink.ReplaceAllString(buf.String(), `<a href="$1" target="_blank" rel="noopener noreferrer"`)
-	return template.HTML(catalog.AnnotateUnitLinks(out)) // a link to a unit's MekBay page carries the unit's details for its hover card (unitlinks.go)
+	return template.HTML(catalog.AnnotateUnitLinks(out)) // a link to a unit's MekBay page carries the unit's details for its hover card (catalog/links.go)
 }
 
 // Campaigns lists every campaign, sorted by folder name.

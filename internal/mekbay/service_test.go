@@ -3,6 +3,7 @@ package mekbay
 import (
 	"encoding/json"
 	"testing"
+	"time"
 )
 
 func TestServiceUnitState(t *testing.T) {
@@ -15,7 +16,7 @@ func TestServiceUnitState(t *testing.T) {
 	}
 	repaired := func(level string) HangarUnit {
 		f := load()
-		if err := serviceUnitState(f, "c", "repair", level, 20); err != nil {
+		if err := serviceUnitState(f, "c", "repair", level, 20, time.Now()); err != nil {
 			t.Fatal(err)
 		}
 		return readBack(t, f)
@@ -41,20 +42,20 @@ func TestServiceUnitState(t *testing.T) {
 	}
 	// A rearm refills the ammunition and leaves the damage.
 	f := load()
-	if err := serviceUnitState(f, "c", "rearm", "", 20); err != nil {
+	if err := serviceUnitState(f, "c", "rearm", "", 20, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	ra := readBack(t, f)
 	if c, _ := ConditionOf(ra, 20, "Fusion"); c != CondCrippled || ra.AmmoBins != 0 || ra.AmmoUsed != 0 {
 		t.Errorf("after rearm: %s bins=%d used=%d", c, ra.AmmoBins, ra.AmmoUsed)
 	}
-	if err := serviceUnitState(load(), "nope", "repair", RepairArmor, 20); err == nil {
+	if err := serviceUnitState(load(), "nope", "repair", RepairArmor, 20, time.Now()); err == nil {
 		t.Error("an unknown unit should be refused")
 	}
-	if err := serviceUnitState(load(), "c", "paint", "", 20); err == nil {
+	if err := serviceUnitState(load(), "c", "paint", "", 20, time.Now()); err == nil {
 		t.Error("an unknown service should be refused")
 	}
-	if err := serviceUnitState(load(), "c", "repair", "polish", 20); err == nil {
+	if err := serviceUnitState(load(), "c", "repair", "polish", 20, time.Now()); err == nil {
 		t.Error("an unknown repair level should be refused")
 	}
 
@@ -63,7 +64,7 @@ func TestServiceUnitState(t *testing.T) {
 	_ = json.Unmarshal([]byte(`{"groups":[{"units":[{"id":"x","unit":"BMBaboon","state":{"destroyed":false,
 	 "locations":{"CT":{"armor":3,"internal":2}},
 	 "crits":[{"name":"Gyro","loc":"CT","destroyed":1,"hits":0},{"name":"Clan XL Engine","loc":"CT","destroyed":1,"hits":0}],"crew":[]}}]}]}`), &g)
-	if err := serviceUnitState(g, "x", "repair", RepairStructure, 20); err != nil {
+	if err := serviceUnitState(g, "x", "repair", RepairStructure, 20, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	x := readBack(t, g)

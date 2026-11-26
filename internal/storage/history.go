@@ -2,7 +2,11 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgconn"
+	"modernc.org/sqlite"
 )
 
 // The campaign history is a ledger of everything that has happened to a started campaign, oldest first: the start, every purchase, sale, repair, rearm and
@@ -38,11 +42,30 @@ func (s *Store) LogHistory(ctx context.Context, playthroughID, campaign, kind, t
 		_, err = s.db.ExecContext(ctx, s.q(`INSERT INTO campaign_history (playthrough_id, campaign, seq, at, kind, text, sp)
 			SELECT ?, ?, COALESCE(MAX(seq), 0) + 1, ?, ?, ?, ? FROM campaign_history WHERE playthrough_id = ? AND campaign = ?`),
 			playthroughID, campaign, time.Now().Unix(), kind, text, sp, playthroughID, campaign)
-		if err == nil {
-			return nil
+		if err == nil || !keyCollision(err) {
+			return err
 		}
 	}
 	return err
+}
+
+// SQLite's extended result codes for a row that breaks a primary key or a unique constraint.
+const (
+	sqliteConstraintPrimaryKey = 1555
+	sqliteConstraintUnique     = 2067
+)
+
+// keyCollision reports whether a write failed because a row with its key already exists, in either database.
+func keyCollision(err error) bool {
+	var pg *pgconn.PgError
+	if errors.As(err, &pg) {
+		return pg.Code == "23505" // unique_violation
+	}
+	var lite *sqlite.Error
+	if errors.As(err, &lite) {
+		return lite.Code() == sqliteConstraintPrimaryKey || lite.Code() == sqliteConstraintUnique
+	}
+	return false
 }
 
 // History returns a campaign's history, oldest first.

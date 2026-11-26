@@ -46,7 +46,7 @@ func playerDraft(name string, h mekbay.HangarForce, units []string, crews []mekb
 }
 
 // startBattle is POST /api/battle/start: the Deploy wizard's last step. It takes the same fields as POST /api/deploy/plan (and checks them the same way). It
-// then builds a force for each player and one for the OpFor in MekBay, saves the operation that pits them against each other (see battle.go), records the
+// then builds a force for each player and one for the OpFor in MekBay, saves the operation that pits them against each other (see internal/mekbay/battle.go), records the
 // scenario as started and answers with the one link the whole table opens. There is one battle at a time: a campaign with a battle in progress refuses a
 // start (it is completed or aborted first), and the start claims the campaign while it builds (Store.ClaimBattle), so two starts at once can't both go ahead.
 func (s *Server) startBattle(w http.ResponseWriter, r *http.Request) {

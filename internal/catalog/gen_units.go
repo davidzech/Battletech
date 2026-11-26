@@ -5,7 +5,7 @@
 // (Intro.md front matter availability_faction and availability_era, looked up in data/factions.json and data/eras.json, both MekBay's, by Master
 // Unit List ID). Run it after refreshing data/units.json, factions.json or eras.json, or after a campaign names a new faction or era:
 //
-//	go generate ./internal/site
+//	go generate ./internal/catalog
 package main
 
 import (
@@ -34,7 +34,7 @@ type entry struct {
 	Omni    int     `json:"omni,omitempty"`   // 1 for an omnimech, whose variants can be swapped (see swap.go)
 	Engine  string  `json:"engine,omitempty"` // Fusion, XL (Clan), ...; the crippling rule needs to know Fusion from the rest
 	Icon    string  `json:"icon,omitempty"`   // in data/units.json: the path inside mm-data; written to the index as iconFile(path)
-	// A mech's construction, for the unit card (unitlinks.go); left out for anything else to keep the index small.
+	// A mech's construction, for the unit card (card.go); left out for anything else to keep the index small.
 	Armor         int    `json:"armor,omitempty"`         // armor points in all
 	ArmorType     string `json:"armorType,omitempty"`     // e.g. "Ferro-Fibrous"
 	Internal      int    `json:"internal,omitempty"`      // internal structure points in all

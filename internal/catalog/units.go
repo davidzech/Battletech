@@ -16,8 +16,6 @@ import (
 //go:embed units_index.json
 var unitsIndexJSON []byte
 
-// Unit is one catalog entry: Name is MekBay's unit ID (e.g. BMMadCat_H), which is what a saved force
-// stores in each unit's `unit` field.
 // AmmoBin is one ammo entry of a unit: the bins of one ammo type in one location (Slots tons, Shots shots in all of them).
 type AmmoBin struct {
 	ID    string `json:"id"` // MekBay's name for the ammo, as it appears on a critical slot
@@ -27,6 +25,8 @@ type AmmoBin struct {
 	Shots int    `json:"s"`
 }
 
+// Unit is one catalog entry: Name is MekBay's unit ID (e.g. BMMadCat_H), which is what a saved force
+// stores in each unit's `unit` field.
 type Unit struct {
 	Name     string    `json:"name"`
 	Chassis  string    `json:"chassis"`

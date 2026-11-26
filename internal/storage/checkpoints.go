@@ -122,7 +122,7 @@ func SnapshotHangarInstance(raw string) string {
 }
 
 // AddCheckpoint snapshots the campaign as it is now and records it as the newest checkpoint, with the frozen hangar copy (which may be empty). It returns the
-// frozen hangars of the oldest checkpoints dropped to stay within maxCheckpoints, for the caller to delete in MekBay.
+// frozen hangars of the oldest checkpoints dropped to stay within MaxCheckpoints, for the caller to delete in MekBay.
 func (s *Store) AddCheckpoint(ctx context.Context, playthroughID, campaign, label, hangarCopy string) (dropped []string, err error) {
 	snap, err := s.snapshot(ctx, s.db, playthroughID, campaign)
 	if err != nil {
@@ -262,6 +262,9 @@ func (s *Store) RestoreCheckpoint(ctx context.Context, playthroughID, campaign s
 		}
 	}
 	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	// The history goes back with the rest: what happened after the checkpoint never happened.
 	if _, err := tx.ExecContext(ctx, s.q(`DELETE FROM campaign_history WHERE playthrough_id = ? AND campaign = ?
 		AND seq > (SELECT history_seq FROM campaign_checkpoints WHERE playthrough_id = ? AND campaign = ? AND seq = ?)`), playthroughID, campaign, playthroughID, campaign, seq); err != nil {

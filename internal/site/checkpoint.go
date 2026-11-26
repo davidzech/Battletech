@@ -19,11 +19,7 @@ import (
 // campaign starts and right after each mission is completed: a snapshot of the campaign's rows in the database, and a frozen copy of the hangar force in MekBay (a
 // force of its own that nothing touches). Rolling back to one restores the rows and copies the frozen hangar back over the live one, so the campaign is exactly as
 // it was at that moment. Aborting a mission rolls back to the latest checkpoint, which is the end of the previous mission. A campaign keeps at most
-// maxCheckpoints; the oldest are dropped and their frozen hangars deleted, as are the frozen hangars of every checkpoint after one rolled back to.
-
-// ---- MekBay: frozen copies
-
-// ---- the server
+// storage.MaxCheckpoints; the oldest are dropped and their frozen hangars deleted, as are the frozen hangars of every checkpoint after one rolled back to.
 
 // checkpointCopy makes the frozen hangar copy a new checkpoint will hold: a copy of the run's live hangar as it is now. It returns "" for a run whose hangar the
 // site doesn't own (nothing to freeze).

@@ -18,7 +18,7 @@ type KeywordView struct {
 	From string // "Scenario 001: Pyre Light", or "" when that scenario isn't known
 }
 
-// keywordViews reads the campaign's ledger for the overview ("" on a failure, which is logged).
+// keywordViews reads the campaign's ledger for the overview (nil on a failure, which is logged).
 func (s *Server) keywordViews(r *http.Request, playthroughID string, c *content.Campaign) []KeywordView {
 	ledger, err := s.store.Ledger(r.Context(), playthroughID, c.Slug)
 	if err != nil {
@@ -43,7 +43,7 @@ func (s *Server) keywordViews(r *http.Request, playthroughID string, c *content.
 	return out
 }
 
-// KeywordChoice is one of the campaign's registered keywords in the Manage page's Edit keywords dialog, ticked
+// KeywordChoice is one of the campaign's registered keywords in the campaign page's Edit keywords dialog, ticked
 // when the campaign holds it.
 type KeywordChoice struct {
 	ID   string

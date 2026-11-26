@@ -438,7 +438,11 @@ func (s *Server) setWarchest(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("The funds must be a whole number from 0 to %d.", maxWarchest), http.StatusBadRequest)
 		return
 	}
-	before, _, _ := s.store.Run(r.Context(), pt.ID, c.Slug)
+	before, _, err := s.store.Run(r.Context(), pt.ID, c.Slug)
+	if err != nil {
+		http.Error(w, "could not load the campaign", http.StatusInternalServerError)
+		return
+	}
 	if err := s.store.SetWarchest(r.Context(), pt.ID, c.Slug, funds); err != nil {
 		http.Error(w, "could not save the funds", http.StatusInternalServerError)
 		return

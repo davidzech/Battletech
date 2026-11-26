@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -104,4 +105,51 @@ func TestHistoryKindsMigrate(t *testing.T) {
 			t.Errorf("%q: kind %q, want %q", e.Text, e.Kind, want[i])
 		}
 	}
+}
+
+// TestKeyCollision: only a write that lost the race for a key is told apart as a collision (what LogHistory tries again on); any other failure is not.
+func TestKeyCollision(t *testing.T) {
+	ctx := context.Background()
+	check := func(t *testing.T, s *Store) {
+		const id = "pt-collision"
+		if _, err := s.EnsurePlaythrough(ctx, id); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _, _ = s.db.Exec(s.q(`DELETE FROM playthroughs WHERE id = ?`), id) })
+		if err := s.LogHistory(ctx, id, "refusalwar", HistoryHangar, "One.", 0); err != nil {
+			t.Fatal(err)
+		}
+		insert := s.q(`INSERT INTO campaign_history (playthrough_id, campaign, seq, at, kind, text, sp) VALUES (?, ?, 1, 0, 'hangar', 'Again.', 0)`)
+		if _, err := s.db.ExecContext(ctx, insert, id, "refusalwar"); err == nil || !keyCollision(err) {
+			t.Errorf("a second line 1 should be a key collision: %v", err)
+		}
+		if _, err := s.db.ExecContext(ctx, s.q(`INSERT INTO campaign_history (playthrough_id) VALUES (?)`), id); err == nil || keyCollision(err) {
+			t.Errorf("a line with missing columns is not a key collision: %v", err)
+		}
+		gone, cancel := context.WithCancel(ctx)
+		cancel()
+		if err := s.LogHistory(gone, id, "refusalwar", HistoryHangar, "Two.", 0); err == nil || keyCollision(err) {
+			t.Errorf("a cancelled write is not a key collision: %v", err)
+		}
+	}
+	t.Run("sqlite", func(t *testing.T) {
+		s, err := OpenSQLite(filepath.Join(t.TempDir(), "test.db"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { s.Close() })
+		check(t, s)
+	})
+	t.Run("postgres", func(t *testing.T) {
+		url := os.Getenv("TEST_DATABASE_URL")
+		if url == "" {
+			t.Skip("TEST_DATABASE_URL not set")
+		}
+		s, err := OpenPostgres(url)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { s.Close() })
+		check(t, s)
+	})
 }

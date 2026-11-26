@@ -144,6 +144,9 @@ func TestCampaignHistory(t *testing.T) {
 	if !strings.Contains(page, `<span class="history-sp gain">&#43;5,000 SP</span>`) {
 		t.Error("the start's warchest shows as a gain")
 	}
+	if !strings.Contains(page, `<span class="history-sp"></span>`) || strings.Contains(page, `<span class="history-sp loss"></span>`) {
+		t.Error("a line that changed no SP is neither a gain nor a loss")
+	}
 	if !strings.Contains(page, `data-kind="mission" aria-pressed="false">Mission</button>`) || !strings.Contains(page, `data-kind="hangar" aria-pressed="false" disabled title="Nothing of this kind yet">Hangar</button>`) {
 		t.Error("every kind has a filter, disabled for a kind the history doesn't hold")
 	}

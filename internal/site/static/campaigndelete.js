@@ -29,15 +29,6 @@
   form.addEventListener('submit', function (e) {
     e.preventDefault();
     error.textContent = '';
-    if (!window.Confirm) {
-      confirmBtn.disabled = true;
-      post().then(function (err) {
-        if (!err) { location.reload(); return; }
-        confirmBtn.disabled = false;
-        error.textContent = err;
-      });
-      return;
-    }
     dialog.close();
     Confirm.ask({
       title: 'Are you sure?',

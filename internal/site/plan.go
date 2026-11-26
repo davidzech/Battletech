@@ -15,9 +15,8 @@ import (
 )
 
 // The deployment plan: which mechs and pilots each player takes on a scenario. The Deploy wizard steps through the players one at a time, each choosing from what
-// the earlier ones left, and ends with a review of the whole plan. This endpoint checks that plan on the server and describes it back. It does not touch MekBay yet:
-// building each player's force in their own MekBay account, and the OpFor in the OpFor's, comes next, and the old single-player deploy (POST /api/mekbay/deploy)
-// is still in the code but is not used by the wizard.
+// the earlier ones left, and ends with a review of the whole plan. This endpoint checks that plan on the server and describes it back. It does not touch MekBay:
+// POST /api/battle/start (battlestart.go) checks the same plan the same way and then builds the players' forces and the OpFor there.
 
 // playerRange is how many players a campaign can be deployed with (Intro.md min_players and max_players); a campaign that doesn't say is a one-player campaign.
 func playerRange(c *content.Campaign) (lo, hi int) {

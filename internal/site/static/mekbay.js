@@ -68,7 +68,6 @@
   // The count chosen when the campaign was started is where every deploy begins (the picker can change it for one deploy); a run from before that was
   // asked, or a count outside the range, starts at the minimum.
   var defaultPlayers = Math.min(maxPlayers, Math.max(minPlayers, parseInt(dialog.dataset.defaultPlayers, 10) || minPlayers));
-  // page is told which are saved, never the IDs). A saved default whose IDs have since been forgotten steps down to what the IDs cover.
   var playerCount = defaultPlayers;
   var step = 0;
   var finished = null;    // the server's answer once the battle has been started: the link the table opens
@@ -247,11 +246,9 @@
       e.dataTransfer.setData('text/plain', 'pilot:' + name);
       e.dataTransfer.effectAllowed = 'move';
       node.classList.add('dragging');
-      dialog.classList.add('dragging-pilot');
     });
     node.addEventListener('dragend', function () {
       node.classList.remove('dragging');
-      dialog.classList.remove('dragging-pilot');
       dialog.querySelectorAll('.over').forEach(function (o) { o.classList.remove('over'); }); // a drag given up (Escape, or let go elsewhere) leaves nothing lit
     });
   }

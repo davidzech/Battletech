@@ -20,7 +20,7 @@ import (
 // parseAccountName validates the account's name: whatever the player likes to call their account.
 func parseAccountName(raw string) (string, error) { return pilot.ParseName(raw, "account") }
 
-// setAccount saves the account's name and the players' optional MekBay user IDs for the visitor's playthrough.
+// setAccount saves the account's name for the visitor's playthrough.
 func (s *Server) setAccount(w http.ResponseWriter, r *http.Request) {
 	if !sameOrigin(r) {
 		http.Error(w, "cross-origin request refused", http.StatusForbidden)
@@ -55,7 +55,7 @@ func (s *Server) setAccount(w http.ResponseWriter, r *http.Request) {
 
 // startCampaign starts one of the campaigns for the visitor's playthrough, with that campaign's own MekBay hangar and
 // its starting named pilots (see parseStartingPilots), all together. Posting again for a campaign that is already
-// started just changes its hangar link.
+// started is refused with 409.
 func (s *Server) startCampaign(w http.ResponseWriter, r *http.Request) {
 	if !sameOrigin(r) {
 		http.Error(w, "cross-origin request refused", http.StatusForbidden)

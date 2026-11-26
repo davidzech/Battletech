@@ -11,8 +11,6 @@
 
   var el = Dom.el;
   // The count and total BV as big yellow numbers with labels; the rows underneath carry the per-unit detail, so no icons here.
-  var hangarLink = section.dataset.hangarUrl || ''; // the player's MekBay hangar, which a row click opens with that unit selected
-
   var canModify = section.dataset.canModify === '1';
   var warchest = parseInt(section.dataset.warchest, 10) || 0;
   var NO_UID = 'This hangar is from before the site kept its own copy. Delete the campaign and start it again to import your hangar.';
@@ -263,8 +261,6 @@
       var row = {};
       Object.keys(u).forEach(function (k) { if (k !== 'gunnery' && k !== 'piloting' && k !== 'pilot') row[k] = u[k]; });
       if (u.mekbayUrl) row.externalUrl = u.mekbayUrl; // the unit's own page on MekBay, opened in a new tab
-      // Clicking the row opens the player's hangar on MekBay with this unit selected (MekBay's `sel` parameter is the force unit's ID).
-      if (hangarLink && u.id) row.rowUrl = hangarLink + (hangarLink.indexOf('?') < 0 ? '?' : '&') + 'sel=' + encodeURIComponent(u.id);
       row.actions = actionsFor(u);
       var built = MechRow.build(row);
       // Hovering the row (or focusing it) shows the unit's card, the same card as the overview's and a scenario's unit links, under the row and

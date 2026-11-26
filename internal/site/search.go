@@ -1,7 +1,6 @@
 package site
 
 import (
-	_ "embed"
 	"encoding/json"
 	"net/http"
 	"strings"

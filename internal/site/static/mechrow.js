@@ -5,14 +5,14 @@
 //   MechRow.build({ name, model, role, icon, tons, bv, gunnery, piloting, pilot,
 //                   unknown, destroyed, damaged, notMech, externalUrl }) -> HTMLElement
 //
-// rowUrl makes the whole row open a link; externalUrl (a https://mekbay.com/ link) adds an "opens in a new tab" button at the right of the row. It is opt-in: the deploy popup's rows are
+// externalUrl (a https://mekbay.com/ link) adds an "opens in a new tab" button at the right of the row. It is opt-in: the deploy popup's rows are
 // checkbox labels and have none.
 (function () {
   // Small icons for the tonnage and pilot chips, drawn for this site.
   var WEIGHT = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.2 9h9.6l2.4 11H4.8z"/><circle cx="12" cy="5.8" r="2.6"/></svg>';
-  // The standard "opens in a new tab" icon: a box with an arrow leaving its top right corner.
   var HELMET = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 13.5a8.5 8.5 0 0 1 17 0V20h-5v-3.5h-7V20h-5z"/></svg>';
 
+  // The standard "opens in a new tab" icon: a box with an arrow leaving its top right corner.
   var EXTERNAL = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6"/><path d="M10 14 21 3"/></svg>';
 
   // The pill for each condition: its label and colour class (see .mr-chip.cond-* in style.css). "ok" has none.
@@ -255,19 +255,6 @@
       row.addEventListener('click', function (e) { if (!e.target.closest('.mr-ext, .mr-actions button')) u.onPick(); });
       row.addEventListener('keydown', function (e) {
         if ((e.key === 'Enter' || e.key === ' ') && e.target === row) { e.preventDefault(); u.onPick(); }
-      });
-    }
-    // rowUrl (a https://mekbay.com/ link) makes the whole row a link opened in a new tab, e.g. the player's hangar with this unit selected.
-    // The (i) after the name keeps its own target.
-    if (u.rowUrl && /^https:\/\/mekbay\.com\//.test(u.rowUrl)) {
-      row.classList.add('has-row-link');
-      row.tabIndex = 0;
-      row.setAttribute('role', 'link');
-      row.title = 'Open in your hangar on MekBay';
-      var go = function () { window.open(u.rowUrl, '_blank', 'noopener,noreferrer'); };
-      row.addEventListener('click', function (e) { if (!e.target.closest('.mr-ext, .mr-actions')) go(); });
-      row.addEventListener('keydown', function (e) {
-        if ((e.key === 'Enter' || e.key === ' ') && e.target === row) { e.preventDefault(); go(); }
       });
     }
     return row;
