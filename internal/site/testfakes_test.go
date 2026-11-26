@@ -43,6 +43,7 @@ type fakeMekBay struct {
 	swaps      []mekbay.SwapRequest
 	cloneErr   error
 	serviceErr error
+	onEdit     func() // called at the start of every hangar edit (say, to cancel the request while MekBay is being called)
 	// battles records Start battle requests; battleErr makes them fail.
 	battles       []mekbay.BattleRequest
 	battleErr     error
@@ -162,6 +163,9 @@ func (f *fakeMekBay) ReadBattle(_ context.Context, operationID string) (mekbay.B
 // The fake's edits save and return the hangar as it would be after them: a sale without the unit sold, a purchase with the units bought; repairs and swaps
 // leave it as is.
 func (f *fakeMekBay) edited(change func(h *mekbay.HangarForce)) (mekbay.HangarForce, error) {
+	if f.onEdit != nil {
+		f.onEdit()
+	}
 	if f.serviceErr != nil {
 		return mekbay.HangarForce{}, f.serviceErr
 	}
