@@ -109,17 +109,20 @@ func TestServiceUnitEndpoint(t *testing.T) {
 	if last := fake.services[len(fake.services)-1]; last.Level != "armor" || last.Kind != "repair" || last.UnitID != "ud" || last.Tons != 30 {
 		t.Errorf("MekBay was asked: %+v", last)
 	}
-	// One destroyed arm does not cripple the Kit Fox, but only the crippled level restores it (30 x 3 x 1.5 = 135 SP), so that level is offered; the history
-	// names what it fixed rather than calling the unit crippled.
+	// One destroyed arm does not cripple the Kit Fox, so it is structure damage (30 x 2 x 1.5 = 90 SP): the crippled level isn't offered, and the structure
+	// repair is told the unit isn't crippled, which is what lets it restore the arm.
 	h.Units[3].Locations = map[string]mekbay.LocationLoss{"LA": {Internal: 5}}
 	fake.setHangar(h, nil)
-	if got := status(form("kind", "repair", "unit", "ud", "level", "structure")); got != http.StatusConflict || funds() != 4367 {
+	if got := status(form("kind", "repair", "unit", "ud", "level", "crippled")); got != http.StatusConflict || funds() != 4367 {
+		t.Errorf("crippled-level repair of a unit that isn't crippled: %d, funds %d", got, funds())
+	}
+	if got := status(form("kind", "repair", "unit", "ud", "level", "structure")); got != http.StatusOK || funds() != 4277 {
 		t.Errorf("structure repair of a destroyed arm: %d, funds %d", got, funds())
 	}
-	if got := status(form("kind", "repair", "unit", "ud", "level", "crippled")); got != http.StatusOK || funds() != 4232 {
-		t.Errorf("crippled-level repair of a destroyed arm: %d, funds %d", got, funds())
+	if last := fake.services[len(fake.services)-1]; last.Level != mekbay.RepairStructure || last.Crippled {
+		t.Errorf("the structure repair sent to MekBay: %+v", last)
 	}
-	if hist, _ := store.History(ctx, id, "refusalwar"); len(hist) == 0 || hist[len(hist)-1].Text != "Repaired Kit Fox J (destroyed locations and engine hits) for 135 SP." {
+	if hist, _ := store.History(ctx, id, "refusalwar"); len(hist) == 0 || hist[len(hist)-1].Text != "Repaired Kit Fox J (structure and critical hits) for 90 SP." {
 		t.Errorf("history: %+v", hist)
 	}
 	// Not enough funds, and a MekBay failure refunds the charge.
@@ -158,7 +161,7 @@ func TestServiceCostsInTheHangarViews(t *testing.T) {
 	h.Units[1].Damaged, h.Units[1].EngineHits, h.Units[1].Crits = true, 1, []mekbay.CritDamage{{Loc: "CT", Engine: true}}
 	h.Units[2].Damaged, h.Units[2].Locations = true, map[string]mekbay.LocationLoss{"LA": {Internal: 3}}
 	v = hangarViews(h)
-	for i, want := range []string{"structure", "crippled", "crippled"} {
+	for i, want := range []string{"structure", "structure", "structure"} {
 		if v[i].Condition != string(mekbay.CondStructure) || strings.Join(v[i].RepairLevels, ",") != want || v[i].SellFull {
 			t.Errorf("unit %d: condition %s (%s), repairs %v, want %s", i, v[i].Condition, v[i].ConditionNote, v[i].RepairLevels, want)
 		}

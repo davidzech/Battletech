@@ -94,18 +94,15 @@ func ConditionOf(hu HangarUnit, tons float64, engine string) (Condition, string)
 	if len(hurt) > 0 {
 		return CondStructure, "Internal structure damaged: " + strings.Join(hurt, ", ")
 	}
-	// A critical hit is damage of the structure level even where no internal structure is recorded lost (say, after a repair that left an engine hit).
-	if len(hu.Crits) > 0 || hu.EngineHits > 0 {
+	// A critical hit is damage of the structure level even where no internal structure is recorded lost.
+	if len(hu.Crits) > 0 {
 		seen := map[string]bool{}
 		var hit []string
 		for _, cr := range hu.Crits {
-			if cr.Loc != "" && !seen[cr.Loc] {
+			if !seen[cr.Loc] {
 				seen[cr.Loc] = true
 				hit = append(hit, cr.Loc)
 			}
-		}
-		if len(hit) == 0 {
-			return CondStructure, "Critical hits: engine"
 		}
 		sort.Strings(hit)
 		return CondStructure, "Critical hits: " + strings.Join(hit, ", ")

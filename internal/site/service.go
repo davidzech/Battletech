@@ -84,13 +84,11 @@ func (s *Server) serviceUnit(w http.ResponseWriter, r *http.Request) {
 	}
 	history := fmt.Sprintf("Rearmed %s (%d ammo bins) for %s SP.", catalog.DisplayName(cat), hu.AmmoBins, format.Commas(cost))
 	if kind == "repair" {
-		what := repairLevelText[level]
-		if cond, _ := mekbay.ConditionOf(hu, cat.Tons, cat.Engine); level == mekbay.RepairCrippled && cond != mekbay.CondCrippled && cond != mekbay.CondDestroyed {
-			what = "destroyed locations and engine hits" // the crippled level also restores these on a unit that isn't crippled
-		}
-		history = fmt.Sprintf("Repaired %s (%s) for %s SP.", catalog.DisplayName(cat), what, format.Commas(cost))
+		history = fmt.Sprintf("Repaired %s (%s) for %s SP.", catalog.DisplayName(cat), repairLevelText[level], format.Commas(cost))
 	}
+	cond, _ := mekbay.ConditionOf(hu, cat.Tons, cat.Engine)
+	crippled := cond == mekbay.CondCrippled || cond == mekbay.CondDestroyed // decides what the structure level restores
 	s.payForHangarChange(w, r, pt, c, run, cost, kind+" a unit", history, func() (mekbay.HangarForce, error) {
-		return s.mekbay.ServiceUnit(r.Context(), mekbay.ServiceRequest{OwnerUID: mekbay.AccountUID(currentSeed(r), mekbay.SlotHangar), Instance: run.HangarInstance, UnitID: hu.ID, Kind: kind, Level: level, Tons: cat.Tons})
+		return s.mekbay.ServiceUnit(r.Context(), mekbay.ServiceRequest{OwnerUID: mekbay.AccountUID(currentSeed(r), mekbay.SlotHangar), Instance: run.HangarInstance, UnitID: hu.ID, Kind: kind, Level: level, Tons: cat.Tons, Crippled: crippled})
 	})
 }
