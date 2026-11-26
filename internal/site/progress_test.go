@@ -6,6 +6,8 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+
+	"github.com/davidzech/Battletech/internal/storage"
 )
 
 func TestCampaignLog(t *testing.T) {
@@ -129,7 +131,7 @@ func TestCampaignLog(t *testing.T) {
 		strings.Count(p, `<path class="sg-next" d="M8 0V50"`) != 1 || strings.Count(p, `<path class="sg-next" d="M8 50V100"`) != 1 {
 		t.Error("001's next missions are drawn as a bracket")
 	}
-	if err := store.SetScenarioCompleted(ctx, id, "refusalwar", "scenario_002", true); err != nil {
+	if _, err := store.SetScenarioCompleted(ctx, id, "refusalwar", "scenario_002", true); err != nil {
 		t.Fatal(err)
 	}
 	if p := body(t, srv, "/refusalwar/scenario_003/", cookie); !strings.Contains(p, "<span>Not available</span>") {
@@ -144,7 +146,7 @@ func TestCampaignLog(t *testing.T) {
 	if p := body(t, srv, "/refusalwar/scenario_001/", cookie); strings.Contains(p, `href="/refusalwar/scenario_003/"><span class="num">`) || !strings.Contains(p, `<a class="card completed" href="/refusalwar/scenario_002/">`) {
 		t.Error("001 no longer links to the branch not taken, and the one taken shows completed")
 	}
-	if err := store.SetScenarioCompleted(ctx, id, "refusalwar", "scenario_002", false); err != nil {
+	if _, err := store.SetScenarioCompleted(ctx, id, "refusalwar", "scenario_002", false); err != nil {
 		t.Fatal(err)
 	}
 	if p := body(t, srv, "/refusalwar/scenario_003/", cookie); strings.Contains(p, "<span>Not available</span>") {
@@ -167,5 +169,81 @@ func TestCampaignLog(t *testing.T) {
 	}
 	if done, _ := store.Completions(ctx, id, "refusalwar"); len(done) != 0 {
 		t.Errorf("a deleted campaign keeps no log: %v", done)
+	}
+}
+
+// Repeating a completion toggle changes nothing: no second history line, no second checkpoint or hangar copy, and un-marking a mission that was never completed
+// is not logged.
+func TestRepeatedCompletionChangesNothing(t *testing.T) {
+	fake := &fakeMekBay{hangar: startingHangar()}
+	srv, store := newMekBayTestServer(t, fake)
+	ctx := context.Background()
+	cookie := post(t, srv, "/api/seed", url.Values{"seed": {"wolfpack2026"}}, nil, "").Cookies()[0]
+	id := playthroughID("wolfpack2026")
+	post(t, srv, "/api/account", url.Values{"account": {"Wolf Pack"}}, cookie, srv.URL)
+	if r := post(t, srv, "/api/campaign/start", startForm(goodHangar, "Alrek", "Katarina"), cookie, srv.URL); r.StatusCode != http.StatusNoContent {
+		t.Fatalf("start: %d", r.StatusCode)
+	}
+	if got := post(t, srv, "/api/campaign/scenario-outcome/commit", url.Values{"campaign": {"refusalwar"}, "scenario": {"scenario_000"}, "inputs": {`{"pilots":[],"mission":{}}`}}, cookie, srv.URL).StatusCode; got != http.StatusNoContent {
+		t.Fatalf("complete 000: %d", got)
+	}
+	mark := func(scenario, done string) {
+		t.Helper()
+		if got := post(t, srv, "/api/campaign/scenario-complete", url.Values{"campaign": {"refusalwar"}, "scenario": {scenario}, "done": {done}}, cookie, srv.URL).StatusCode; got != http.StatusNoContent {
+			t.Fatalf("mark %s done=%s: %d", scenario, done, got)
+		}
+	}
+	// counts are the history lines, the checkpoints and the hangar copies made so far.
+	counts := func() [3]int {
+		t.Helper()
+		h, err := store.History(ctx, id, "refusalwar")
+		if err != nil {
+			t.Fatal(err)
+		}
+		cps, err := store.Checkpoints(ctx, id, "refusalwar")
+		if err != nil {
+			t.Fatal(err)
+		}
+		fake.mu.Lock()
+		defer fake.mu.Unlock()
+		return [3]int{len(h), len(cps), len(fake.copies)}
+	}
+
+	base := counts()
+	mark("scenario_001", "1")
+	once := counts()
+	if once != [3]int{base[0] + 1, base[1] + 1, base[2] + 1} {
+		t.Fatalf("completing logs one line and takes one checkpoint with one hangar copy: %v after %v", once, base)
+	}
+	mark("scenario_001", "1")
+	if got := counts(); got != once {
+		t.Errorf("completing again changes nothing (lines, checkpoints, copies): %v, was %v", got, once)
+	}
+	mark("scenario_001", "0")
+	undone := counts()
+	if undone != [3]int{once[0] + 1, once[1], once[2]} {
+		t.Fatalf("un-marking logs one line and no checkpoint: %v after %v", undone, once)
+	}
+	mark("scenario_001", "0")
+	mark("scenario_002", "0") // never completed
+	if got := counts(); got != undone {
+		t.Errorf("un-marking what is not completed changes nothing: %v, was %v", got, undone)
+	}
+
+	// The store says whether anything changed, and completing forgets the battle whether or not it did.
+	if changed, err := store.SetScenarioCompleted(ctx, id, "refusalwar", "scenario_001", true); err != nil || !changed {
+		t.Fatalf("a first completion is a change: %v %v", changed, err)
+	}
+	if err := store.SaveMekBayOperation(ctx, id, "refusalwar", "scenario_001", storage.MekBayOperation{OpForInstance: "of", OperationID: "op"}); err != nil {
+		t.Fatal(err)
+	}
+	if changed, err := store.SetScenarioCompleted(ctx, id, "refusalwar", "scenario_001", true); err != nil || changed {
+		t.Errorf("a second completion is not: %v %v", changed, err)
+	}
+	if _, had, _ := store.MekBayOperation(ctx, id, "refusalwar", "scenario_001"); had {
+		t.Error("a completed mission has no battle in progress")
+	}
+	if changed, err := store.SetScenarioCompleted(ctx, id, "refusalwar", "scenario_003", false); err != nil || changed {
+		t.Errorf("un-marking what was never completed is not a change: %v %v", changed, err)
 	}
 }
