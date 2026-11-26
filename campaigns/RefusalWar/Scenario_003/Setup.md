@@ -2,11 +2,12 @@
 id: scenario_003
 title: Blade Splint
 planet: Zoetermeer
-map: City Central Park
+map: Blank Desert
 bv_limit: 10000
 forces:
   opfor1: OpFor1.mul
-images: []   # the Zoetermeer banner is still to be made
+images:
+  - images/zoetermeer.png
 readout:
   - Star: Zoetermeer (G9V)
   - Orbit: 2nd
