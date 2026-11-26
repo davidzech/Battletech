@@ -273,6 +273,8 @@ type Library struct{ Root string }
 var (
 	scenarioDir  = regexp.MustCompile(`(?i)^scenario_(\d+)$`)
 	frontMatter  = regexp.MustCompile(`(?s)\A---\r?\n(.*?)\r?\n---\r?\n?(.*)\z`)
+	emptyMatter  = regexp.MustCompile(`\A---\r?\n---(\r?\n|\z)`)
+	opensMatter  = regexp.MustCompile(`\A---\r?\n`)
 	leadingTitle = regexp.MustCompile(`\A\s*#\s.*\r?\n`)
 	opforKey     = regexp.MustCompile(`(?i)^opfor(\d+)$`)
 	camelGap     = regexp.MustCompile(`([a-z])([A-Z])`)
@@ -355,7 +357,8 @@ type outcomeMeta struct {
 }
 
 // readMarkdown reads a Markdown file with optional YAML front matter into dst, and returns the body. The front matter is decoded strictly, so a misspelt or
-// misplaced key is an error rather than a setting silently ignored; a missing file is not an error (it yields an empty body).
+// misplaced key is an error rather than a setting silently ignored; a missing file is not an error (it yields an empty body). Front matter that is opened
+// with `---` and never closed is an error too, since its settings would otherwise be ignored and shown as page text; empty front matter is just left out.
 func readMarkdown(path string, dst any) (string, error) {
 	raw, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
@@ -367,6 +370,12 @@ func readMarkdown(path string, dst any) (string, error) {
 	text := string(bytes.TrimPrefix(raw, []byte{0xEF, 0xBB, 0xBF}))
 	m := frontMatter.FindStringSubmatch(text)
 	if m == nil {
+		if loc := emptyMatter.FindStringIndex(text); loc != nil {
+			return text[loc[1]:], nil
+		}
+		if opensMatter.MatchString(text) {
+			return text, fmt.Errorf("front matter: opens with --- but has no closing --- line")
+		}
 		return text, nil
 	}
 	dec := yaml.NewDecoder(strings.NewReader(m[1]))
@@ -523,7 +532,7 @@ func (l Library) load(name string) (*Campaign, bool) {
 			c.Problems = append(c.Problems, s.Slug+"/Setup.md: provided_swaps needs provided_units (there are no provided mechs to reconfigure)")
 		}
 		s.CompileOutcomes()
-		for _, p := range s.loadAllies() {
+		for _, p := range append(forceProblems(sdir, setup.Forces), s.loadAllies()...) {
 			c.Problems = append(c.Problems, s.Slug+"/Setup.md: "+p)
 		}
 		if err := s.compileAftermath(); err != nil {
@@ -684,14 +693,28 @@ func readoutRows(items []map[string]string) []ReadoutRow {
 	return out
 }
 
-// forceFiles turns the front matter `forces` map (opfor1: OpFor1.mul) into an ordered list.
-// Only plain file names are kept, so a scenario can't point downloads outside its folder.
+// forceFiles turns the front matter `forces` map (opfor1: OpFor1.mul) into an ordered list: the opforN keys by number (opfor2 before opfor10), then any
+// other key by name. Only plain file names are kept, so a scenario can't point downloads outside its folder (forceProblems reports the ones left out).
 func forceFiles(m map[string]string) []ForceFile {
 	keys := make([]string, 0, len(m))
 	for k := range m {
 		keys = append(keys, k)
 	}
-	sort.Strings(keys)
+	sort.Slice(keys, func(i, j int) bool {
+		a, b := opforKey.FindStringSubmatch(keys[i]), opforKey.FindStringSubmatch(keys[j])
+		if a == nil || b == nil {
+			if (a == nil) != (b == nil) {
+				return a != nil
+			}
+			return keys[i] < keys[j]
+		}
+		x, _ := strconv.Atoi(a[1])
+		y, _ := strconv.Atoi(b[1])
+		if x != y {
+			return x < y
+		}
+		return keys[i] < keys[j]
+	})
 	var out []ForceFile
 	for _, k := range keys {
 		file := m[k]
