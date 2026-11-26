@@ -64,7 +64,7 @@ func TestCampaignHistory(t *testing.T) {
 		t.Errorf("earned SP: %+v", e)
 	}
 	// A mission completed by hand is a checkpoint; its line is written before the checkpoint, so rolling back to it keeps the line.
-	if err := store.SetScenarioCompleted(ctx, id, "refusalwar", "scenario_000", true); err != nil {
+	if _, err := store.SetScenarioCompleted(ctx, id, "refusalwar", "scenario_000", true); err != nil {
 		t.Fatal(err)
 	}
 	if got := post(t, srv, "/api/campaign/scenario-complete", form("scenario", "scenario_001", "done", "1"), cookie, srv.URL).StatusCode; got != http.StatusNoContent {
@@ -149,7 +149,7 @@ func TestCampaignHistory(t *testing.T) {
 	}
 
 	// With one kind of entry, the other filters are disabled.
-	if err := store.SetScenarioCompleted(ctx, id, "refusalwar", "scenario_001", false); err != nil {
+	if _, err := store.SetScenarioCompleted(ctx, id, "refusalwar", "scenario_001", false); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := store.RestoreCheckpoint(ctx, id, "refusalwar", cps[len(cps)-1].Seq); err != nil { // back to the start: only its line is left

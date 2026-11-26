@@ -29,9 +29,11 @@ func (s *Store) MekBayOperation(ctx context.Context, playthroughID, campaign, sc
 	return op, err == nil, err
 }
 
+const deleteMekBayOperationSQL = `DELETE FROM mekbay_operations WHERE playthrough_id = ? AND campaign = ? AND scenario_id = ?`
+
 // DeleteMekBayOperation forgets a scenario's operation: the battle is over (the mission was completed or aborted). Nothing is deleted in MekBay.
 func (s *Store) DeleteMekBayOperation(ctx context.Context, playthroughID, campaign, scenarioID string) (bool, error) {
-	res, err := s.db.ExecContext(ctx, s.q(`DELETE FROM mekbay_operations WHERE playthrough_id = ? AND campaign = ? AND scenario_id = ?`), playthroughID, campaign, scenarioID)
+	res, err := s.db.ExecContext(ctx, s.q(deleteMekBayOperationSQL), playthroughID, campaign, scenarioID)
 	if err != nil {
 		return false, err
 	}

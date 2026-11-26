@@ -85,8 +85,13 @@ func (s *Server) setScenarioCompleted(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if err := s.store.SetScenarioCompleted(r.Context(), pt.ID, c.Slug, sc.Slug, done); err != nil {
+	changed, err := s.store.SetScenarioCompleted(r.Context(), pt.ID, c.Slug, sc.Slug, done)
+	if err != nil {
 		http.Error(w, "could not save the campaign log", http.StatusInternalServerError)
+		return
+	}
+	if !changed {
+		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 	if done {

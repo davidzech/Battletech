@@ -70,7 +70,7 @@ func TestStartBattleEndpoint(t *testing.T) {
 	if got := start(srv.URL, two...).StatusCode; got != http.StatusConflict || len(fake.battles) != 0 {
 		t.Errorf("locked mission: %d, want 409", got)
 	}
-	if err := store.SetScenarioCompleted(ctx, id, "refusalwar", "scenario_000", true); err != nil {
+	if _, err := store.SetScenarioCompleted(ctx, id, "refusalwar", "scenario_000", true); err != nil {
 		t.Fatal(err)
 	}
 
@@ -285,7 +285,7 @@ func TestBattleStatusAndAbort(t *testing.T) {
 		t.Fatalf("start: %d", r.StatusCode)
 	}
 	id := playthroughID(seed)
-	if err := store.SetScenarioCompleted(ctx, id, "refusalwar", "scenario_000", true); err != nil { // unlocks 001
+	if _, err := store.SetScenarioCompleted(ctx, id, "refusalwar", "scenario_000", true); err != nil { // unlocks 001
 		t.Fatal(err)
 	}
 	q := "campaign=refusalwar&scenario=scenario_001"
@@ -390,7 +390,10 @@ func TestCompletingTheMissionEndsTheBattle(t *testing.T) {
 	id := playthroughID("wolfpack2026")
 	op := storage.MekBayOperation{OpForInstance: "of", OperationID: "op"}
 	for name, complete := range map[string]func(scenario string) error{
-		"marked completed": func(sc string) error { return store.SetScenarioCompleted(ctx, id, "refusalwar", sc, true) },
+		"marked completed": func(sc string) error {
+			_, err := store.SetScenarioCompleted(ctx, id, "refusalwar", sc, true)
+			return err
+		},
 		"completed with an outcome": func(sc string) error {
 			return store.CompleteWithOutcome(ctx, id, "refusalwar", sc, content.OutcomeResult{})
 		},
@@ -483,7 +486,7 @@ func TestBattleLockIgnoresLeftoversAndHonoursClaims(t *testing.T) {
 	}
 
 	// Leftovers: a completed scenario's battle and an unknown scenario's battle.
-	if err := store.SetScenarioCompleted(ctx, id, "refusalwar", "scenario_000", true); err != nil {
+	if _, err := store.SetScenarioCompleted(ctx, id, "refusalwar", "scenario_000", true); err != nil {
 		t.Fatal(err)
 	}
 	for _, sc := range []string{"scenario_000", "scenario_999"} {

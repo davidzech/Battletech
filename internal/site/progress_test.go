@@ -129,7 +129,7 @@ func TestCampaignLog(t *testing.T) {
 		strings.Count(p, `<path class="sg-next" d="M8 0V50"`) != 1 || strings.Count(p, `<path class="sg-next" d="M8 50V100"`) != 1 {
 		t.Error("001's next missions are drawn as a bracket")
 	}
-	if err := store.SetScenarioCompleted(ctx, id, "refusalwar", "scenario_002", true); err != nil {
+	if _, err := store.SetScenarioCompleted(ctx, id, "refusalwar", "scenario_002", true); err != nil {
 		t.Fatal(err)
 	}
 	if p := body(t, srv, "/refusalwar/scenario_003/", cookie); !strings.Contains(p, "<span>Not available</span>") {
@@ -144,7 +144,7 @@ func TestCampaignLog(t *testing.T) {
 	if p := body(t, srv, "/refusalwar/scenario_001/", cookie); strings.Contains(p, `href="/refusalwar/scenario_003/"><span class="num">`) || !strings.Contains(p, `<a class="card completed" href="/refusalwar/scenario_002/">`) {
 		t.Error("001 no longer links to the branch not taken, and the one taken shows completed")
 	}
-	if err := store.SetScenarioCompleted(ctx, id, "refusalwar", "scenario_002", false); err != nil {
+	if _, err := store.SetScenarioCompleted(ctx, id, "refusalwar", "scenario_002", false); err != nil {
 		t.Fatal(err)
 	}
 	if p := body(t, srv, "/refusalwar/scenario_003/", cookie); strings.Contains(p, "<span>Not available</span>") {
@@ -167,5 +167,65 @@ func TestCampaignLog(t *testing.T) {
 	}
 	if done, _ := store.Completions(ctx, id, "refusalwar"); len(done) != 0 {
 		t.Errorf("a deleted campaign keeps no log: %v", done)
+	}
+}
+
+// Repeating a manual completion must not create another history line,
+// copy the hangar again, or displace a previously retained checkpoint.
+func TestManualCompletionDoesNotRepeatSideEffects(t *testing.T) {
+	fake := &fakeMekBay{hangar: startingHangar()}
+	srv, store := newMekBayTestServer(t, fake)
+	ctx := t.Context()
+	const seed = "wolfpack2026"
+	const campaign = "refusalwar"
+	id := playthroughID(seed)
+	cookie := post(t, srv, "/api/seed", url.Values{"seed": {seed}}, nil, "").Cookies()[0]
+	post(t, srv, "/api/account", url.Values{"account": {"Wolf Pack"}}, cookie, srv.URL)
+	if got := post(t, srv, "/api/campaign/start", startForm(goodHangar, "Alrek", "Katarina"), cookie, srv.URL).StatusCode; got != http.StatusNoContent {
+		t.Fatalf("start: got status %d", got)
+	}
+	if got := post(t, srv, "/api/campaign/scenario-outcome/commit", url.Values{
+		"campaign": {campaign}, "scenario": {"scenario_000"}, "inputs": {`{"pilots":[],"mission":{}}`},
+	}, cookie, srv.URL).StatusCode; got != http.StatusNoContent {
+		t.Fatalf("complete scenario_000: got status %d", got)
+	}
+
+	counts := func() (int, int, int) {
+		t.Helper()
+		history, err := store.History(ctx, id, campaign)
+		if err != nil {
+			t.Fatal(err)
+		}
+		checkpoints, err := store.Checkpoints(ctx, id, campaign)
+		if err != nil {
+			t.Fatal(err)
+		}
+		fake.mu.Lock()
+		defer fake.mu.Unlock()
+		return len(history), len(checkpoints), len(fake.copies)
+	}
+	history, checkpoints, copies := counts()
+	for _, step := range []struct {
+		name, done                string
+		addHistory, addCheckpoint int
+	}{
+		{"clear an uncompleted mission", "0", 0, 0},
+		{"complete the mission", "1", 1, 1},
+		{"retry completion", "1", 1, 1},
+		{"clear completion", "0", 2, 1},
+		{"retry clearing", "0", 2, 1},
+	} {
+		t.Run(step.name, func(t *testing.T) {
+			if got := post(t, srv, "/api/campaign/scenario-complete", url.Values{
+				"campaign": {campaign}, "scenario": {"scenario_001"}, "done": {step.done},
+			}, cookie, srv.URL).StatusCode; got != http.StatusNoContent {
+				t.Fatalf("got status %d, want 204", got)
+			}
+			h, c, m := counts()
+			if h != history+step.addHistory || c != checkpoints+step.addCheckpoint || m != copies+step.addCheckpoint {
+				t.Errorf("added history, checkpoints, hangar copies = %d, %d, %d; want %d, %d, %d",
+					h-history, c-checkpoints, m-copies, step.addHistory, step.addCheckpoint, step.addCheckpoint)
+			}
+		})
 	}
 }
