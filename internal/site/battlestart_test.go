@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -527,5 +528,99 @@ func TestBattleLockIgnoresLeftoversAndHonoursClaims(t *testing.T) {
 	}
 	if ok, _ := store.ClaimBattle(ctx, id, "refusalwar", "scenario_001"); !ok {
 		t.Error("an expired claim can be taken over")
+	}
+}
+
+// Aborting a battle is guarded like every other change to a campaign: its fields come from the posted form only, and the form is bounded.
+func TestAbortBattleGuards(t *testing.T) {
+	srv, store, cookie := startedCompany(t)
+	ctx := context.Background()
+	id := playthroughID("wolfpack2026")
+	if err := store.SaveMekBayOperation(ctx, id, "refusalwar", "scenario_001", storage.MekBayOperation{OperationID: "op-1"}); err != nil {
+		t.Fatal(err)
+	}
+	inProgress := func() bool {
+		t.Helper()
+		_, ok, err := store.MekBayOperation(ctx, id, "refusalwar", "scenario_001")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return ok
+	}
+	form := url.Values{"campaign": {"refusalwar"}, "scenario": {"scenario_001"}}
+
+	// The campaign and scenario are not read from the address.
+	if r := post(t, srv, "/api/battle/abort?"+form.Encode(), url.Values{}, cookie, srv.URL); r.StatusCode != http.StatusNotFound || !inProgress() {
+		t.Errorf("fields in the query string are ignored: %d, battle in progress %v", r.StatusCode, inProgress())
+	}
+	if r := post(t, srv, "/api/battle/abort?scenario=scenario_001", url.Values{"campaign": {"refusalwar"}}, cookie, srv.URL); r.StatusCode != http.StatusNotFound || !inProgress() {
+		t.Errorf("a scenario in the query string is ignored: %d", r.StatusCode)
+	}
+	// A body past the limit is refused before anything is read from it.
+	big := url.Values{"campaign": {"refusalwar"}, "scenario": {"scenario_001"}, "pad": {strings.Repeat("x", 70<<10)}}
+	if r := post(t, srv, "/api/battle/abort", big, cookie, srv.URL); r.StatusCode != http.StatusBadRequest || !inProgress() {
+		t.Errorf("an oversized form is refused: %d", r.StatusCode)
+	}
+	for name, r := range map[string]*http.Response{
+		"another origin":   post(t, srv, "/api/battle/abort", form, cookie, "https://evil.example"),
+		"no seed":          post(t, srv, "/api/battle/abort", form, nil, srv.URL),
+		"an unknown seed":  post(t, srv, "/api/battle/abort", form, &http.Cookie{Name: "seed", Value: "nobodyatall"}, srv.URL),
+		"unknown scenario": post(t, srv, "/api/battle/abort", url.Values{"campaign": {"refusalwar"}, "scenario": {"scenario_999"}}, cookie, srv.URL),
+	} {
+		if r.StatusCode < 400 || !inProgress() {
+			t.Errorf("%s is refused: %d", name, r.StatusCode)
+		}
+	}
+	// The posted form still aborts.
+	if r := post(t, srv, "/api/battle/abort", form, cookie, srv.URL); r.StatusCode != http.StatusNoContent || inProgress() {
+		t.Errorf("a proper request aborts the battle: %d, battle in progress %v", r.StatusCode, inProgress())
+	}
+}
+
+// An abort that fails (here the rollback can't restore the hangar) leaves the battle as it was, in MekBay too: the campaign is still locked on it, so the
+// mission can still be completed, or the abort tried again.
+func TestFailedAbortKeepsTheBattleInMekBay(t *testing.T) {
+	fake := &fakeMekBay{hangar: startingHangar()}
+	srv, store := newMekBayTestServer(t, fake)
+	ctx := context.Background()
+	const seed = "wolfpack2026"
+	cookie := post(t, srv, "/api/seed", url.Values{"seed": {seed}}, nil, "").Cookies()[0]
+	post(t, srv, "/api/account", url.Values{"account": {"Wolf Pack"}}, cookie, srv.URL)
+	if r := post(t, srv, "/api/campaign/start", startForm(goodHangar, "Alrek", "Katarina"), cookie, srv.URL); r.StatusCode != http.StatusNoContent {
+		t.Fatalf("start: %d", r.StatusCode)
+	}
+	id := playthroughID(seed)
+	if err := store.SaveMekBayOperation(ctx, id, "refusalwar", "scenario_000", storage.MekBayOperation{OpForInstance: "opfor", OperationID: "op-stuck"}); err != nil {
+		t.Fatal(err)
+	}
+	abort := func() int {
+		return post(t, srv, "/api/battle/abort", url.Values{"campaign": {"refusalwar"}, "scenario": {"scenario_000"}, "mode": {"rollback"}}, cookie, srv.URL).StatusCode
+	}
+	deleted := func() []string {
+		fake.mu.Lock()
+		defer fake.mu.Unlock()
+		return slices.Clone(fake.battleDeletes)
+	}
+	fake.mu.Lock()
+	fake.copyErr = errors.New("mekbay is down")
+	fake.mu.Unlock()
+	if got := abort(); got != http.StatusBadGateway {
+		t.Fatalf("an abort whose rollback fails: %d", got)
+	}
+	if _, had, _ := store.MekBayOperation(ctx, id, "refusalwar", "scenario_000"); !had {
+		t.Error("a failed abort leaves the battle recorded")
+	}
+	if d := deleted(); len(d) != 0 {
+		t.Errorf("a failed abort deleted the battle in MekBay: %v", d)
+	}
+	// Tried again once MekBay answers, the abort goes through and cleans up.
+	fake.mu.Lock()
+	fake.copyErr = nil
+	fake.mu.Unlock()
+	if got := abort(); got != http.StatusNoContent {
+		t.Fatalf("the abort tried again: %d", got)
+	}
+	if d := deleted(); !slices.Contains(d, "op-stuck") {
+		t.Errorf("the abort that went through cleans up in MekBay: %v", d)
 	}
 }
