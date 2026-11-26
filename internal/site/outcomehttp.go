@@ -101,7 +101,10 @@ func (s *Server) commitOutcome(w http.ResponseWriter, r *http.Request) {
 	}
 	// Two stages for the hangar: its frozen copy is made now, and the checkpoint that holds it is recorded once the completion is saved.
 	copyID, cerr := "", error(nil)
-	if run, ok, err := s.store.Run(r.Context(), pt.ID, c.Slug); err == nil && ok {
+	if run, ok, err := s.store.Run(r.Context(), pt.ID, c.Slug); err != nil {
+		http.Error(w, "could not load campaign", http.StatusInternalServerError)
+		return
+	} else if ok {
 		copyID, cerr = s.checkpointCopy(r.Context(), currentSeed(r), run)
 	}
 	if cerr != nil {
@@ -142,7 +145,11 @@ func (s *Server) writeBackBattle(w http.ResponseWriter, r *http.Request, pt stor
 		return false
 	}
 	run, started, err := s.store.Run(r.Context(), pt.ID, c.Slug)
-	if !had || err != nil || !started || !run.Owned() {
+	if err != nil {
+		http.Error(w, "could not load campaign", http.StatusInternalServerError)
+		return false
+	}
+	if !had || !started || !run.Owned() {
 		return true // no battle to write back, or a hangar the site doesn't own
 	}
 	rep, err := s.mekbay.CommitBattle(r.Context(), mekbay.CommitBattleRequest{OwnerUID: mekbay.AccountUID(currentSeed(r), mekbay.SlotHangar), HangarInstance: run.HangarInstance, OperationID: op.OperationID, Skip: skipAllies(op.AlliesInstance)})

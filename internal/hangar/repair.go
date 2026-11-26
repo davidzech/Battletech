@@ -30,11 +30,13 @@ var repairLevels = []struct {
 const rearmCostPerTon = 10
 
 // RepairOptions lists the repairs that would actually fix something on a unit, lowest first. Any of them can be chosen on its own, so a crippled
-// or destroyed unit may have only its armor repaired: armor if any armor is lost; structure if a surviving location has lost internal structure or
-// has a critical hit (the engine's hits and destroyed locations belong to the crippled level); crippled for a crippled or destroyed unit; and
-// destroyed for a destroyed one. A truly destroyed or undamaged unit has none.
+// or destroyed unit may have only its armor repaired: armor if any armor is lost; structure for lost internal structure and critical hits; crippled
+// for a crippled or destroyed unit; and destroyed for a destroyed one. What the structure level covers depends on the unit: on one that is neither
+// crippled nor destroyed it is all of the structure and critical damage, a destroyed limb and an engine hit included (the SP Activity Cost Table's
+// "structure and/or critical damage"), while on a crippled or destroyed unit the destroyed locations and the engine's hits belong to the crippled
+// level. Every kind of damage is covered by some level, so a unit can always be brought back to pristine. A truly destroyed or undamaged unit has none.
 func RepairOptions(hu mekbay.HangarUnit, c mekbay.Condition, tons float64) []string {
-	if c == mekbay.CondTruly || c == mekbay.CondOK {
+	if c == mekbay.CondTruly {
 		return nil
 	}
 	var out []string
@@ -44,21 +46,22 @@ func RepairOptions(hu mekbay.HangarUnit, c mekbay.Condition, tons float64) []str
 			break
 		}
 	}
+	crippled := c == mekbay.CondCrippled || c == mekbay.CondDestroyed
 	structure := false
 	for k, l := range hu.Locations {
-		if l.Internal > 0 && !mekbay.InternalGone(hu, k, tons) {
+		if l.Internal > 0 && (!crippled || !mekbay.InternalGone(hu, k, tons)) {
 			structure = true
 		}
 	}
 	for _, cr := range hu.Crits {
-		if !cr.Engine && !mekbay.InternalGone(hu, cr.Loc, tons) {
+		if !crippled || (!cr.Engine && !mekbay.InternalGone(hu, cr.Loc, tons)) {
 			structure = true
 		}
 	}
 	if structure {
 		out = append(out, mekbay.RepairStructure)
 	}
-	if c == mekbay.CondCrippled || c == mekbay.CondDestroyed {
+	if crippled {
 		out = append(out, mekbay.RepairCrippled)
 	}
 	if c == mekbay.CondDestroyed {

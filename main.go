@@ -7,7 +7,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/davidzech/Battletech/internal/mekbayproxy"
@@ -65,5 +67,39 @@ func main() {
 		opts = append(opts, site.WithDevReload())
 		log.Printf("live reload on: open pages reload when the server restarts")
 	}
-	log.Fatal(http.ListenAndServe(*addr, site.NewHandler(*content, store, opts...)))
+	// Only the wait for a request's headers and an idle keep-alive connection are timed. A read or write timeout would cut the MekBay relay's
+	// WebSocket, the live-reload stream and requests that wait on MekBay.
+	srv := &http.Server{
+		Addr:              *addr,
+		Handler:           site.NewHandler(*content, store, opts...),
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       2 * time.Minute,
+	}
+	stopped, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	failed := make(chan error, 1)
+	go func() { failed <- srv.ListenAndServe() }()
+	select {
+	case err := <-failed:
+		store.Close()
+		log.Fatal(err)
+	case <-stopped.Done():
+	}
+	stop() // a second signal stops the process at once
+	// Requests in progress get a moment to finish, so a change to a campaign is not cut off half-way; then whatever is left (the streams that never
+	// end by themselves) is closed. With live reload on, every open page holds such a stream, so there is nothing to wait for.
+	grace := shutdownGrace
+	if *devReload {
+		grace = 0
+	}
+	log.Printf("shutting down")
+	ctx, cancel := context.WithTimeout(context.Background(), grace)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		srv.Close()
+	}
 }
+
+// shutdownGrace is how long requests in progress may take to finish once the server is told to stop. It stays under the ten seconds a container
+// runtime usually waits before it kills the process, so the database is still closed properly.
+const shutdownGrace = 8 * time.Second
