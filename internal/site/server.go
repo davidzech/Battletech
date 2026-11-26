@@ -491,7 +491,14 @@ func (s *Server) image(w http.ResponseWriter, r *http.Request) {
 		s.notFound(w, r)
 		return
 	}
-	http.ServeFile(w, r, filepath.Join(sc.Dir, "images", filepath.Base(r.PathValue("file"))))
+	serveCampaignFile(w, r, filepath.Join(sc.Dir, "images", filepath.Base(r.PathValue("file"))))
+}
+
+// serveCampaignFile serves an image from a campaign's folders. The browser must check back each time (no-cache): an author replaces a banner under the same
+// name, and without it Safari kept the old one for days on a guess from its age. An unchanged file costs only a 304, from its Last-Modified.
+func serveCampaignFile(w http.ResponseWriter, r *http.Request, file string) {
+	w.Header().Set("Cache-Control", "no-cache")
+	http.ServeFile(w, r, file)
 }
 
 // campaignImage serves files from a campaign's own images/ folder (its icon). Only the base name of the file is used, so URLs can't reach outside that folder.
@@ -501,7 +508,7 @@ func (s *Server) campaignImage(w http.ResponseWriter, r *http.Request) {
 		s.notFound(w, r)
 		return
 	}
-	http.ServeFile(w, r, filepath.Join(c.Dir, "images", filepath.Base(r.PathValue("file"))))
+	serveCampaignFile(w, r, filepath.Join(c.Dir, "images", filepath.Base(r.PathValue("file"))))
 }
 
 // force serves a scenario's .mul force file as a download. Only files listed in the scenario's

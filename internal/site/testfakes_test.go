@@ -110,6 +110,9 @@ func (f *fakeMekBay) StartBattle(_ context.Context, req mekbay.BattleRequest) (m
 	if res.OpForInstance == "" {
 		res.OpForInstance = mekbay.NewID()
 	}
+	if len(req.Allies.Groups) > 0 {
+		res.AlliesInstance = mekbay.NewID()
+	}
 	for range req.Players {
 		res.PlayerInstances = append(res.PlayerInstances, mekbay.NewID())
 	}

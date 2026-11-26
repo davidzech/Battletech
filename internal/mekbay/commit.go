@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 )
 
@@ -20,6 +21,8 @@ type CommitBattleRequest struct {
 	OwnerUID       string // the account that owns the hangar copy
 	HangarInstance string
 	OperationID    string
+	// Skip are friendly forces of the operation whose units never go back into the hangar: the scenario's allies, which aren't the players' mechs.
+	Skip []string
 }
 
 // CommitBattleReport says what was written back.
@@ -105,7 +108,7 @@ func (c *Client) CommitBattle(ctx context.Context, req CommitBattleRequest) (Com
 	}
 	battle := map[string]map[string]any{}
 	for _, f := range op.Data.Forces {
-		if f.Alignment != "friendly" {
+		if f.Alignment != "friendly" || slices.Contains(req.Skip, f.InstanceID) {
 			continue
 		}
 		force, err := read(f.InstanceID)

@@ -2,6 +2,7 @@ package mekbay
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -131,5 +132,36 @@ func TestCommitBattleWritesTheHangar(t *testing.T) {
 	}
 	if _, err := cl.CommitBattle(context.Background(), CommitBattleRequest{OwnerUID: tableAccount, HangarInstance: hangar, OperationID: "nope"}); err == nil || !strings.Contains(err.Error(), "no such operation") {
 		t.Errorf("an operation that is not there: %v", err)
+	}
+}
+
+// The scenario's allies are a friendly force of the operation, but their units are never the players' mechs: the write-back leaves out a force it is told to skip.
+func TestCommitBattleSkipsTheAllies(t *testing.T) {
+	f := newFakeForceServer(t)
+	cl := &Client{URL: f.wsURL()}
+	hangar, ids := f.saveHangar(tableAccount, ForceDraft{Name: "Hangar", Groups: []GroupDraft{{Name: "G", Units: []UnitDraft{{Unit: "BMGrizzly"}}}}})
+	f.mu.Lock()
+	p1, err := subsetForce(f.forces[hangar], []string{ids[0]}, "P1", "Player 1", time.Now())
+	if err != nil {
+		f.mu.Unlock()
+		t.Fatal(err)
+	}
+	allies := BuildForce("ALLIES", time.Now(), ForceDraft{Name: "Allies", Groups: []GroupDraft{{Name: "Allies", Units: []UnitDraft{{Unit: "BMKoshi_C"}, {Unit: "SVSaviorRepairVehicle"}}}}})
+	b, _ := json.Marshal(allies)
+	var am map[string]any
+	_ = json.Unmarshal(b, &am)
+	f.forces["P1"], f.owners["P1"] = p1, tableAccount
+	f.forces["ALLIES"], f.owners["ALLIES"] = am, tableAccount
+	f.ops["op1"] = map[string]any{"name": "S", "forces": []any{
+		map[string]any{"instanceId": "P1", "alignment": "friendly"}, map[string]any{"instanceId": "ALLIES", "alignment": "friendly"}, map[string]any{"instanceId": "OPFOR", "alignment": "enemy"}}}
+	f.mu.Unlock()
+
+	rep, err := cl.CommitBattle(context.Background(), CommitBattleRequest{OwnerUID: tableAccount, HangarInstance: hangar, OperationID: "op1"})
+	if err != nil || rep.Matched != 1 || len(rep.Skipped) != 2 {
+		t.Fatalf("without Skip the allies' units are read and find no hangar unit: %+v %v", rep, err)
+	}
+	rep, err = cl.CommitBattle(context.Background(), CommitBattleRequest{OwnerUID: tableAccount, HangarInstance: hangar, OperationID: "op1", Skip: []string{"ALLIES"}})
+	if err != nil || rep.Matched != 1 || len(rep.Skipped) != 0 {
+		t.Fatalf("with Skip the allies' force is left out: %+v %v", rep, err)
 	}
 }

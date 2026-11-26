@@ -193,10 +193,14 @@ func main() {
 			u := &doc.Units[i]
 			u.Armor, u.ArmorType, u.Internal, u.StructureType, u.Heat, u.Dissipation, u.Walk, u.Run, u.Jump = 0, "", 0, "", 0, 0, 0, 0, 0
 		}
-		// Only mechs have vendored icons (see gen_icons.go); anything else shows a default one.
-		if doc.Units[i].Type == "Mek" && doc.Units[i].Icon != "" {
-			doc.Units[i].Icon = iconFile(doc.Units[i].Icon)
-		} else {
+		// Mechs, vehicles and battle armor have vendored icons (see gen_icons.go); anything else shows a default one. A mech whose catalog icon is in a folder
+		// that isn't vendored (BMHammerhead_2 points at the Hammerhead fighter's) takes the mech icon of the same name, if there is one.
+		switch ic := doc.Units[i].Icon; {
+		case vendoredIcon(ic):
+			doc.Units[i].Icon = iconFile(ic)
+		case doc.Units[i].Type == "Mek" && ic != "":
+			doc.Units[i].Icon = iconFile("meks/" + ic[strings.LastIndex(ic, "/")+1:])
+		default:
 			doc.Units[i].Icon = ""
 		}
 	}

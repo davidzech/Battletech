@@ -256,6 +256,9 @@ func (s *Store) init() error {
 	if err := s.ensureColumn("mekbay_operations", "status_json", "TEXT NOT NULL DEFAULT ''"); err != nil {
 		return err
 	}
+	if err := s.ensureColumn("mekbay_operations", "allies_instance", "TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
 	if err := s.ensureColumn("mekbay_operations", "status_at", "INTEGER NOT NULL DEFAULT 0"); err != nil {
 		return err
 	}

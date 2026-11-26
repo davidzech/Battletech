@@ -106,7 +106,14 @@ func (s *Server) startBattle(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not read the scenario's OpFor", http.StatusInternalServerError)
 		return
 	}
+	allies, err := alliesDraft(bp.c, bp.sc)
+	if err != nil {
+		log.Printf("build the allies for %s: %v", bp.sc.ID, err)
+		http.Error(w, "could not read the scenario's allies", http.StatusInternalServerError)
+		return
+	}
 	req := mekbay.BattleRequest{
+		Allies:         allies,
 		Account:        account,
 		HangarInstance: bp.run.HangarInstance,
 		Provided:       bp.sc.Provides(),
@@ -131,7 +138,7 @@ func (s *Server) startBattle(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
-	if err := s.store.SaveMekBayOperation(ctx, bp.pt.ID, bp.c.Slug, bp.sc.ID, storage.MekBayOperation{OpForInstance: got.OpForInstance, OperationID: got.OperationID}); err != nil {
+	if err := s.store.SaveMekBayOperation(ctx, bp.pt.ID, bp.c.Slug, bp.sc.ID, storage.MekBayOperation{OpForInstance: got.OpForInstance, OperationID: got.OperationID, AlliesInstance: got.AlliesInstance}); err != nil {
 		log.Printf("record operation: %v", err)
 		http.Error(w, "The battle was started in MekBay but could not be recorded here.", http.StatusInternalServerError)
 		return
@@ -151,7 +158,8 @@ func (s *Server) startBattle(w http.ResponseWriter, r *http.Request) {
 // statusForce is one force of a battle's status, with its mechs described as the Hangar rows describe them (condition, ammunition and so on).
 type statusForce struct {
 	Name      string           `json:"name"`
-	Alignment string           `json:"alignment"` // always "friendly": the page shows the players' forces, not the OpFor's
+	Alignment string           `json:"alignment"`        // always "friendly": the page shows the players' forces, not the OpFor's
+	Allies    bool             `json:"allies,omitempty"` // the scenario's allies (its automata), not a player's force
 	Units     []hangarUnitView `json:"units"`
 }
 
@@ -192,7 +200,7 @@ func (s *Server) battleStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	out := battleStatusResponse{URL: link, Operation: op.OperationID, Forces: []statusForce{}, UpdatedAt: time.Now().Unix()}
 	for _, f := range got.Forces {
-		out.Forces = append(out.Forces, statusForce{Name: f.Force.Name, Alignment: f.Alignment, Units: hangarViews(f.Force)})
+		out.Forces = append(out.Forces, statusForce{Name: f.Force.Name, Alignment: f.Alignment, Allies: op.AlliesInstance != "" && f.InstanceID == op.AlliesInstance, Units: hangarViews(f.Force)})
 	}
 	if b, err := json.Marshal(out.Forces); err == nil { // kept so the next visit paints at once (the link is never stored: it is built from the request)
 		if err := s.store.SaveBattleStatus(r.Context(), pt.ID, c.Slug, sc.ID, string(b), out.UpdatedAt); err != nil {

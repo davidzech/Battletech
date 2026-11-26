@@ -6,7 +6,9 @@ map: Lunar Base
 bv_limit: 12000
 forces:
   opfor1: OpFor1.mul
-images: []   # the MacDuff banner is still to be made
+images:
+  - images/macduff.png
+readout_title: Lunar survey
 readout:
   - Planet: Devin
   - Moon: MacDuff

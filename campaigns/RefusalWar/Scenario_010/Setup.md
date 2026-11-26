@@ -5,6 +5,7 @@ planet: Karetah
 map: ""   # TBD
 forces: {}   # OpFor .mul files TBD
 images: []
+readout_title: Lunar survey
 readout:
   - Planet: Morges
   - Moon: Karetah

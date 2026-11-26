@@ -6,7 +6,7 @@
 {{template "battlelock" .}}
 {{range $i, $img := .Images}}<figure class="scenario-art"><div class="scenario-art-pic"><img src="{{$img}}" alt=""></div>{{if and (eq $i 0) $.Scenario.Readout}}
 <div class="readout">
-<p class="readout-head">Planetary survey<span>{{$.Scenario.Planet}}</span></p>
+<p class="readout-head">{{$.Scenario.ReadoutTitle}}<span>{{$.Scenario.Planet}}</span></p>
 <dl>
 {{range $.Scenario.Readout}}<div><dt>{{.Label}}</dt><dd>{{.Value}}</dd></div>
 {{end}}</dl>
@@ -41,6 +41,7 @@
 {{if and .Run.Started .Scenario.Forces}}<section class="mekbay" id="mekbay-op">
 <h2>{{if .InProgress}}Operation in progress{{else}}Deploy your force{{end}}</h2>
 {{if .InProgress}}<p class="muted">A battle is in progress. View the operation to open it in MekBay, see how it stands, and complete or abort the mission.</p>{{else if .Scenario.ProvidedUnits}}<p class="muted">This mission provides its own mechs. They are only used for this mission, and will be lost upon completion.</p>{{else}}<p class="muted">Choose which mechs from your hangar fly this mission{{if .Scenario.BVLimit}}, up to {{.Scenario.BVLimit}} BV{{end}}. The site sorts your MekBay hangar into <em>Deployed</em> and <em>Hangar</em> groups and sets up the OpFor against them.</p>{{end}}
+{{if .Scenario.AlliedUnits}}<p class="deploy-note deploy-allies">Allies: this mission adds {{range $i, $u := .Scenario.AlliedUnits}}{{if $i}}, {{end}}<b>{{$u.Name}}</b> ({{$u.Gunnery}}/{{$u.Piloting}}){{end}} to the battle on your side, for free, as a force of their own after yours.</p>{{end}}
 <p class="downloads"><button type="button" class="button" id="deploy-open"{{if eq .ScenarioState "completed"}} disabled title="This mission is completed."{{else if and (eq .ScenarioState "locked") (not .InProgress)}} disabled title="This mission isn't available: it doesn't follow your last completed mission."{{else if .OtherBattle}} disabled title="{{.Lock.Mission}} is in progress. Complete or abort it first."{{end}}>{{if .InProgress}}View operation{{else}}Deploy force{{end}}</button>{{if and (not .Scenario.ProvidedUnits) (not .InProgress)}}<a class="button" id="manage-link" href="/{{.Campaign.Slug}}/manage/?back={{.Scenario.Slug}}">Manage force</a>{{end}}</p>
 </section>
 <dialog id="deploy-dialog" class="deploy" aria-labelledby="deploy-title" data-campaign="{{.Campaign.Slug}}" data-scenario="{{.Scenario.Slug}}" data-in-progress="{{if .InProgress}}1{{end}}" data-operation-url="{{.OperationURL}}"{{if .BattleCache}} data-cached-status="{{.BattleCache}}"{{end}} data-limit="{{.Scenario.BVLimit}}" data-unit-limit="{{.Scenario.UnitLimit}}" data-pilots-required="{{if .Scenario.PilotsRequired}}1{{end}}" data-commander="{{if .Scenario.ChoosesCommander}}1{{end}}" data-can-modify="{{if .Run.Owned}}1{{end}}" data-default-players="{{.Run.Players}}" data-min-players="{{.Campaign.MinPlayers}}" data-max-players="{{.Campaign.MaxPlayers}}" data-pilots="{{.PilotsJSON}}" data-abilities="{{.Abilities}}" data-cached="{{.DeployJSON}}">
@@ -54,6 +55,7 @@
 <p class="muted" id="deploy-status">Loading your hangar&hellip;</p>
 <p class="deploy-note" id="deploy-provided" hidden>This mission provides its own mechs. They are only used for this mission, and will be lost upon completion.</p>
 <p class="deploy-note" id="deploy-rules" hidden></p>
+{{if .Scenario.AlliedUnits}}<p class="deploy-note deploy-allies" id="deploy-allies">Allies: this mission adds {{range $i, $u := .Scenario.AlliedUnits}}{{if $i}}, {{end}}<b>{{$u.Name}}</b> ({{$u.Gunnery}}/{{$u.Piloting}}){{end}} to the battle on your side, for free, as a force of their own after yours.</p>{{end}}
 <section class="deploy-pilots" id="deploy-pilots" hidden>
 <p class="deploy-pilots-head">Pilots</p>
 <p class="muted">Drag a pilot onto a mech to assign them, or click a pilot and then a mech. Only pilots no other player has taken are listed.</p>
