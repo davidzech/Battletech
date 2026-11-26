@@ -48,11 +48,37 @@ func TestRepairOptions(t *testing.T) {
 		{"crippled with surviving structure damage too", loc(map[string]mekbay.LocationLoss{"LL": {Internal: 4}, "RA": {Internal: 3}, "CT": {Internal: 1}}), mekbay.CondCrippled, "structure,crippled"},
 		{"crippled by engine hits only", mekbay.HangarUnit{EngineHits: 2, Crits: []mekbay.CritDamage{{Loc: "CT", Engine: true}}}, mekbay.CondCrippled, "crippled"},
 		{"destroyed", mekbay.HangarUnit{Destroyed: true, Locations: map[string]mekbay.LocationLoss{"HD": {Armor: 1, Internal: 3}}}, mekbay.CondDestroyed, "armor,crippled,destroyed"},
+		{"one destroyed arm, not crippled", loc(map[string]mekbay.LocationLoss{"LA": {Armor: 2, Internal: 3}, "CT": {Internal: 1}}), mekbay.CondStructure, "armor,structure,crippled"},
+		{"one destroyed leg and nothing else", loc(map[string]mekbay.LocationLoss{"LL": {Internal: 4}}), mekbay.CondStructure, "crippled"},
+		{"a crit in a destroyed location goes with the location", mekbay.HangarUnit{Locations: map[string]mekbay.LocationLoss{"LL": {Internal: 4}}, Crits: []mekbay.CritDamage{{Loc: "LL"}}}, mekbay.CondStructure, "crippled"},
+		{"one engine hit", mekbay.HangarUnit{EngineHits: 1, Crits: []mekbay.CritDamage{{Loc: "CT", Engine: true}}}, mekbay.CondStructure, "crippled"},
+		{"one engine hit and structure damage", mekbay.HangarUnit{EngineHits: 1, Crits: []mekbay.CritDamage{{Loc: "CT", Engine: true}}, Locations: map[string]mekbay.LocationLoss{"CT": {Internal: 1}}}, mekbay.CondStructure, "structure,crippled"},
 		{"truly destroyed", loc(map[string]mekbay.LocationLoss{"CT": {Internal: 6}}), mekbay.CondTruly, ""},
 	}
 	for _, c := range cases {
 		if got := strings.Join(RepairOptions(c.hu, c.cond, 20), ","); got != c.want {
 			t.Errorf("%s: %q, want %q", c.name, got, c.want)
+		}
+	}
+}
+
+// Whatever a unit's damage, short of truly destroyed, some offered repair must be able to fix all of it: the conditions here come from ConditionOf,
+// as the site works them out, not written by hand.
+func TestEveryDamageHasARepair(t *testing.T) {
+	cases := map[string]mekbay.HangarUnit{
+		"critical hit only":   {Damaged: true, Crits: []mekbay.CritDamage{{Loc: "RT"}}},
+		"engine hit only":     {Damaged: true, EngineHits: 1, Crits: []mekbay.CritDamage{{Loc: "CT", Engine: true}}},
+		"one destroyed arm":   {Damaged: true, Locations: map[string]mekbay.LocationLoss{"LA": {Internal: 3}}},
+		"one destroyed leg":   {Damaged: true, Locations: map[string]mekbay.LocationLoss{"RL": {Armor: 4, Internal: 4}}},
+		"destroyed head only": {Damaged: true, Locations: map[string]mekbay.LocationLoss{"HD": {Internal: 3}}},
+	}
+	for name, hu := range cases {
+		cond, note := mekbay.ConditionOf(hu, 20, "Fusion")
+		if cond == mekbay.CondOK {
+			t.Errorf("%s: reported as undamaged (%s)", name, note)
+		}
+		if len(RepairOptions(hu, cond, 20)) == 0 {
+			t.Errorf("%s: no repair offered (condition %s)", name, cond)
 		}
 	}
 }

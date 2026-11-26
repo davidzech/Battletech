@@ -31,10 +31,11 @@ const rearmCostPerTon = 10
 
 // RepairOptions lists the repairs that would actually fix something on a unit, lowest first. Any of them can be chosen on its own, so a crippled
 // or destroyed unit may have only its armor repaired: armor if any armor is lost; structure if a surviving location has lost internal structure or
-// has a critical hit (the engine's hits and destroyed locations belong to the crippled level); crippled for a crippled or destroyed unit; and
-// destroyed for a destroyed one. A truly destroyed or undamaged unit has none.
+// has a critical hit (the engine's hits and destroyed locations belong to the crippled level); crippled for a crippled or destroyed unit, and for
+// any unit with a destroyed location or an engine hit, since no lower level restores those; and destroyed for a destroyed one. Every kind of damage
+// is covered by some level, so a unit can always be brought back to pristine. A truly destroyed or undamaged unit has none.
 func RepairOptions(hu mekbay.HangarUnit, c mekbay.Condition, tons float64) []string {
-	if c == mekbay.CondTruly || c == mekbay.CondOK {
+	if c == mekbay.CondTruly {
 		return nil
 	}
 	var out []string
@@ -45,20 +46,27 @@ func RepairOptions(hu mekbay.HangarUnit, c mekbay.Condition, tons float64) []str
 		}
 	}
 	structure := false
+	crippled := c == mekbay.CondCrippled || c == mekbay.CondDestroyed || hu.EngineHits > 0
 	for k, l := range hu.Locations {
-		if l.Internal > 0 && !mekbay.InternalGone(hu, k, tons) {
-			structure = true
+		if l.Internal > 0 {
+			if mekbay.InternalGone(hu, k, tons) {
+				crippled = true
+			} else {
+				structure = true
+			}
 		}
 	}
 	for _, cr := range hu.Crits {
-		if !cr.Engine && !mekbay.InternalGone(hu, cr.Loc, tons) {
+		if cr.Engine || mekbay.InternalGone(hu, cr.Loc, tons) {
+			crippled = true
+		} else {
 			structure = true
 		}
 	}
 	if structure {
 		out = append(out, mekbay.RepairStructure)
 	}
-	if c == mekbay.CondCrippled || c == mekbay.CondDestroyed {
+	if crippled {
 		out = append(out, mekbay.RepairCrippled)
 	}
 	if c == mekbay.CondDestroyed {

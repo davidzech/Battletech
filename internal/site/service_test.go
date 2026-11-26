@@ -109,6 +109,19 @@ func TestServiceUnitEndpoint(t *testing.T) {
 	if last := fake.services[len(fake.services)-1]; last.Level != "armor" || last.Kind != "repair" || last.UnitID != "ud" || last.Tons != 30 {
 		t.Errorf("MekBay was asked: %+v", last)
 	}
+	// One destroyed arm does not cripple the Kit Fox, but only the crippled level restores it (30 x 3 x 1.5 = 135 SP), so that level is offered; the history
+	// names what it fixed rather than calling the unit crippled.
+	h.Units[3].Locations = map[string]mekbay.LocationLoss{"LA": {Internal: 5}}
+	fake.setHangar(h, nil)
+	if got := status(form("kind", "repair", "unit", "ud", "level", "structure")); got != http.StatusConflict || funds() != 4367 {
+		t.Errorf("structure repair of a destroyed arm: %d, funds %d", got, funds())
+	}
+	if got := status(form("kind", "repair", "unit", "ud", "level", "crippled")); got != http.StatusOK || funds() != 4232 {
+		t.Errorf("crippled-level repair of a destroyed arm: %d, funds %d", got, funds())
+	}
+	if hist, _ := store.History(ctx, id, "refusalwar"); len(hist) == 0 || hist[len(hist)-1].Text != "Repaired Kit Fox J (destroyed locations and engine hits) for 135 SP." {
+		t.Errorf("history: %+v", hist)
+	}
 	// Not enough funds, and a MekBay failure refunds the charge.
 	if err := store.SetWarchest(ctx, id, "refusalwar", 50); err != nil {
 		t.Fatal(err)
@@ -138,6 +151,17 @@ func TestServiceCostsInTheHangarViews(t *testing.T) {
 	}
 	if b, _ := json.Marshal(v[1]); !strings.Contains(string(b), `"repairLevels":null`) {
 		t.Errorf("the view should say there is no repair level: %s", b)
+	}
+	// Damage that doesn't cripple still has a repair: a lone critical hit, a lone engine hit, one destroyed arm (a 20-ton arm has 3 points).
+	h = hangarOf("BMDasher_Prime", "BMDasher_Prime", "BMDasher_Prime")
+	h.Units[0].Damaged, h.Units[0].Crits = true, []mekbay.CritDamage{{Loc: "RT"}}
+	h.Units[1].Damaged, h.Units[1].EngineHits, h.Units[1].Crits = true, 1, []mekbay.CritDamage{{Loc: "CT", Engine: true}}
+	h.Units[2].Damaged, h.Units[2].Locations = true, map[string]mekbay.LocationLoss{"LA": {Internal: 3}}
+	v = hangarViews(h)
+	for i, want := range []string{"structure", "crippled", "crippled"} {
+		if v[i].Condition != string(mekbay.CondStructure) || strings.Join(v[i].RepairLevels, ",") != want || v[i].SellFull {
+			t.Errorf("unit %d: condition %s (%s), repairs %v, want %s", i, v[i].Condition, v[i].ConditionNote, v[i].RepairLevels, want)
+		}
 	}
 }
 

@@ -71,3 +71,38 @@ func TestServiceUnitState(t *testing.T) {
 		t.Errorf("structure repair should leave only the engine hit: %+v %+v", x.Locations, x.Crits)
 	}
 }
+
+// A unit that is not crippled can still carry damage only the crippled level restores: one destroyed limb, or one engine hit. The structure repair leaves
+// it (and the unit still reads as damaged), the crippled repair clears it.
+func TestCrippledRepairRestoresOneLimbOrEngineHit(t *testing.T) {
+	for name, state := range map[string]string{
+		"one destroyed arm": `{"destroyed":false,"locations":{"LA":{"armor":2,"internal":3},"CT":{"armor":1,"internal":1}},"crits":[{"name":"Hand Actuator","loc":"LA","destroyed":1,"hits":0}],"crew":[]}`,
+		"one engine hit":    `{"destroyed":false,"locations":{"CT":{"armor":1,"internal":1}},"crits":[{"name":"Fusion Engine","loc":"CT","destroyed":1,"hits":0}],"crew":[]}`,
+	} {
+		load := func() map[string]any {
+			var f map[string]any
+			if err := json.Unmarshal([]byte(`{"name":"t","groups":[{"name":"","units":[{"id":"c","unit":"BMBaboon","updatedTs":1,"state":`+state+`}]}]}`), &f); err != nil {
+				t.Fatal(err)
+			}
+			return f
+		}
+		if c, _ := ConditionOf(readBack(t, load()), 20, "Fusion"); c != CondStructure {
+			t.Fatalf("%s before: %s", name, c)
+		}
+		f := load()
+		if err := serviceUnitState(f, "c", "repair", RepairStructure, 20); err != nil {
+			t.Fatal(err)
+		}
+		st := readBack(t, f)
+		if c, _ := ConditionOf(st, 20, "Fusion"); c != CondStructure || len(st.Crits) != 1 || st.Locations["CT"].Internal != 0 {
+			t.Errorf("%s after a structure repair: %s, crits %d, %+v (the damage it can't fix must still show)", name, c, len(st.Crits), st.Locations)
+		}
+		if err := serviceUnitState(f, "c", "repair", RepairCrippled, 20); err != nil {
+			t.Fatal(err)
+		}
+		cr := readBack(t, f)
+		if c, _ := ConditionOf(cr, 20, "Fusion"); c != CondOK || cr.Damaged || len(cr.Crits) != 0 || len(cr.Locations) != 0 {
+			t.Errorf("%s after a crippled repair: %s damaged=%v crits=%d %+v", name, c, cr.Damaged, len(cr.Crits), cr.Locations)
+		}
+	}
+}

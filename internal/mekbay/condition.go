@@ -9,7 +9,7 @@ import (
 // The state a hangar unit is in, for the pills on its row. MekBay stores a unit's raw damage (armor and internal structure points lost
 // per location, critical hit slots, ammo consumed, the pilot's hits, and a destroyed flag); there is no stored "crippled", so that is
 // worked out here from the book's own crippling rules. The unit shows the worst state it is in: destroyed beats crippled beats internal
-// structure damage beats armor damage. Ammo is tracked beside it, since rearming is a different need from repair.
+// structure damage (or a critical hit) beats armor damage. Ammo is tracked beside it, since rearming is a different need from repair.
 
 // Condition is the worst state a unit is in.
 type Condition string
@@ -17,7 +17,7 @@ type Condition string
 const (
 	CondOK        Condition = "ok"
 	CondArmor     Condition = "armor"     // armor lost, no internal structure lost
-	CondStructure Condition = "structure" // internal structure lost somewhere
+	CondStructure Condition = "structure" // internal structure lost somewhere, or a critical slot hit
 	CondCrippled  Condition = "crippled"  // meets one of the crippling rules below
 	CondDestroyed Condition = "destroyed" // MekBay's destroyed flag
 	CondTruly     Condition = "truly"     // destroyed for good: a mech whose center torso structure is gone can't be repaired or salvaged
@@ -93,6 +93,22 @@ func ConditionOf(hu HangarUnit, tons float64, engine string) (Condition, string)
 	}
 	if len(hurt) > 0 {
 		return CondStructure, "Internal structure damaged: " + strings.Join(hurt, ", ")
+	}
+	// A critical hit is damage of the structure level even where no internal structure is recorded lost (say, after a repair that left an engine hit).
+	if len(hu.Crits) > 0 || hu.EngineHits > 0 {
+		seen := map[string]bool{}
+		var hit []string
+		for _, cr := range hu.Crits {
+			if cr.Loc != "" && !seen[cr.Loc] {
+				seen[cr.Loc] = true
+				hit = append(hit, cr.Loc)
+			}
+		}
+		if len(hit) == 0 {
+			return CondStructure, "Critical hits: engine"
+		}
+		sort.Strings(hit)
+		return CondStructure, "Critical hits: " + strings.Join(hit, ", ")
 	}
 	var scuffed []string
 	for k, l := range hu.Locations {

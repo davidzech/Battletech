@@ -96,6 +96,11 @@
     crippled: 'Repair Crippled Unit',
     destroyed: 'Repair Destroyed Unit'
   };
+  // The crippled level is also the one that restores a destroyed location or an engine hit on a unit that is not crippled, so there it is named for what it fixes.
+  function levelLabel(u, level) {
+    if (level === 'crippled' && u.condition !== 'crippled' && u.condition !== 'destroyed') return 'Repair Destroyed Locations and Engine Hits';
+    return LEVELS[level] || level;
+  }
   var repairDlg = document.getElementById('repair-dialog');
   var repairUnit = null;
   function repairCostText() {
@@ -117,7 +122,7 @@
     levels.forEach(function (level) {
       var o = document.createElement('option');
       o.value = level;
-      o.textContent = (LEVELS[level] || level) + ' \u2014 ' + (u.repairCosts[level] || 0) + ' SP';
+      o.textContent = levelLabel(u, level) + ' \u2014 ' + (u.repairCosts[level] || 0) + ' SP';
       select.appendChild(o);
     });
     select.value = levels[levels.length - 1];
