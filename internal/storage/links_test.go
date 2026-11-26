@@ -2,7 +2,9 @@ package storage
 
 import (
 	"context"
+	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -124,4 +126,58 @@ func TestMekBayLinkStore(t *testing.T) {
 	if _, ok, _ := store.MekBayLink(ctx, keep, now.Add(200*24*time.Hour)); !ok {
 		t.Error("another campaign's links are untouched")
 	}
+}
+
+// linkRace asks for the same new link from many requests at once: every one gets the same id and none fails.
+func linkRace(t *testing.T, s *Store) {
+	t.Helper()
+	ctx := context.Background()
+	pt := "link-race-" + t.Name()
+	t.Cleanup(func() { _, _ = s.db.Exec(s.q(`DELETE FROM playthroughs WHERE id = ?`), pt) })
+	if _, err := s.EnsurePlaythrough(ctx, pt); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 11, 18, 12, 0, 0, 0, time.UTC)
+	for round := 0; round < 20; round++ {
+		label := "player-" + string(rune('a'+round))
+		const n = 8
+		ids, errs := make([]string, n), make([]error, n)
+		var wg sync.WaitGroup
+		for i := 0; i < n; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				ids[i], errs[i] = s.EnsureMekBayLink(ctx, pt, "camp", label, testAccount, LinkTTL, now)
+			}()
+		}
+		wg.Wait()
+		for i := range ids {
+			if errs[i] != nil || !ValidLinkID(ids[i]) || ids[i] != ids[0] {
+				t.Fatalf("round %d, request %d: every request gets the one link: %q vs %q, %v", round, i, ids[i], ids[0], errs[i])
+			}
+		}
+	}
+}
+
+func TestEnsureMekBayLinkAtOnceSQLite(t *testing.T) {
+	s, err := OpenSQLite(t.TempDir() + "/links.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { s.Close() })
+	linkRace(t, s)
+}
+
+// TestEnsureMekBayLinkAtOncePostgres runs only when TEST_DATABASE_URL points at a throwaway PostgreSQL database.
+func TestEnsureMekBayLinkAtOncePostgres(t *testing.T) {
+	url := os.Getenv("TEST_DATABASE_URL")
+	if url == "" {
+		t.Skip("TEST_DATABASE_URL not set")
+	}
+	s, err := OpenPostgres(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { s.Close() })
+	linkRace(t, s)
 }
