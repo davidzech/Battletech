@@ -140,7 +140,8 @@ func (s *Server) startBattle(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := s.store.SaveMekBayOperation(ctx, bp.pt.ID, bp.c.Slug, bp.sc.ID, storage.MekBayOperation{OpForInstance: got.OpForInstance, OperationID: got.OperationID, AlliesInstance: got.AlliesInstance}); err != nil {
 		log.Printf("record operation: %v", err)
-		http.Error(w, "The battle was started in MekBay but could not be recorded here.", http.StatusInternalServerError)
+		s.deleteBattle(ctx, seed, got.OperationID) // nothing remembers the battle just built, so it is deleted in MekBay rather than left behind
+		http.Error(w, "The battle could not be recorded, so it was not started. Try again.", http.StatusInternalServerError)
 		return
 	}
 	s.logHistory(r, bp.pt.ID, bp.c.Slug, storage.HistoryMission, 0, battleHistory(bp))
@@ -264,9 +265,11 @@ func (s *Server) abortBattle(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// deleteBattle cleans up an aborted battle in MekBay (its operation and every force in it), in the background of the request: a failure only leaves them behind.
+// deleteBattle cleans up a battle that was aborted, or built but never recorded, in MekBay (its operation and every force in it), in the background of the
+// request: a failure only leaves them behind. A completed mission's battle is not cleaned up: completing only forgets the operation here
+// (Store.DeleteMekBayOperation), and its operation and forces stay in MekBay.
 func (s *Server) deleteBattle(ctx context.Context, seed, operationID string) {
 	if err := s.mekbay.DeleteBattle(context.WithoutCancel(ctx), mekbay.AccountUID(seed, mekbay.SlotHangar), operationID); err != nil {
-		log.Printf("delete the aborted battle in MekBay: %v", err)
+		log.Printf("delete the battle in MekBay: %v", err)
 	}
 }
