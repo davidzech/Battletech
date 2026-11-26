@@ -29,6 +29,8 @@ inputs:
     help: 200 SP each
 outcomes:
   - pool: falcon_mechs * 200
+  - when: plant_large and plant_small   # the chemical plant completely destroyed
+    grants: [scorched_earth]
 aftermath:
   - when: plant_large and plant_small
     text: |
@@ -51,6 +53,10 @@ Objectives met fill the mission's pool of SP. Each pilot who took part draws a f
 | Each Jade Falcon mech crippled or destroyed                  | 200        |
 | Objective 1: occupy an adjacent hex                           | 100        |
 | Objective 5: destroy the firebase remains                     | 100        |
+
+## Keywords
+
+- **Scorched Earth** if the chemical plant was completely destroyed (both buildings).
 
 ## Aftermath
 

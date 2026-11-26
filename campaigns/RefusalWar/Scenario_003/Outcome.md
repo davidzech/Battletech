@@ -1,6 +1,7 @@
 ---
 id: scenario_003
 default_next: ""
+branches: [scenario_004, scenario_006]   # Baker 3, or Evciler (only from Zoetermeer)
 pilot_sp: 100   # SP each pilot who took part draws from the pool; the only place the amount is set
 objectives:
   - id: converter_inspected

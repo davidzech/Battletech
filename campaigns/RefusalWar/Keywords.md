@@ -24,6 +24,14 @@ keywords:
     name: Counter Intelligence
     scenario: scenario_004
     description: The Mist Lynx C5 was repaired and extracted.
+  - id: savior
+    name: Savior
+    scenario: scenario_005
+    description: Every member of the sensor array's staff on MacDuff was rescued.
+  - id: blackout
+    name: Blackout
+    scenario: scenario_005
+    description: Two or more of the sensor array's staff on MacDuff were killed; the Wolves know little of Falcon movements in the rear.
 ---
 
 # Keywords

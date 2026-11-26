@@ -1,7 +1,7 @@
 ---
 id: scenario_002
 default_next: ""
-branches: []   # ends this path: completing Flame Tongue does not lead on to Scenario 003
+branches: [scenario_004, scenario_005]   # Baker 3, or MacDuff (only from Sudeten)
 pilot_sp: 100   # SP each pilot who took part draws from the pool; the only place the amount is set
 objectives:
   - id: buhallin_killed

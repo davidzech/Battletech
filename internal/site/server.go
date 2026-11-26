@@ -419,21 +419,26 @@ func (s *Server) scenario(w http.ResponseWriter, r *http.Request) {
 	var outcome *content.OutcomeResult
 	var aftermath, nextSteps template.HTML
 	nextLanes := 1
-	if completed[sc.Slug] {
+	state := scenarioState(sc.Slug, completed, available)
+	if completed[sc.Slug] || state == "locked" {
+		// A completed mission lists the branches still open to it (a branch not taken, the other choice once a later mission is done, is not offered); a
+		// locked one, previewed, lists everything it leads to.
 		for _, b := range sc.Branches {
-			if n, ok := c.Scenario(b); ok && available[b] { // a branch not taken (the other choice, once a later mission is done) is not offered
+			if n, ok := c.Scenario(b); ok && (state == "locked" || available[b]) {
 				next = append(next, Card{Num: n.Number, Name: n.Title, Sub: n.Planet, URL: "/" + c.Slug + "/" + n.Slug + "/", State: scenarioState(n.Slug, completed, available)})
 			}
 		}
-		var done []bool
+		var states []string
 		for _, n := range next {
-			done = append(done, n.State == "completed")
+			states = append(states, n.State)
 		}
-		graph, lanes := nextGraph(done)
+		graph, lanes := nextGraph(states, state == "locked")
 		for i := range next {
 			next[i].Graph = graph[i]
 		}
 		nextLanes = lanes
+	}
+	if completed[sc.Slug] {
 		outcome = s.recordedOutcome(r, c, sc, completed)
 		aftermath = sc.AftermathFor(outcome)
 		if len(next) == len(sc.Branches) { // once a branch has been passed over, the text describing the choice no longer fits
@@ -451,7 +456,7 @@ func (s *Server) scenario(w http.ResponseWriter, r *http.Request) {
 		Crumbs:        []Crumb{{Label: c.Label, URL: "/" + c.Slug + "/"}, scenarioCrumb(c, sc, available)},
 		Campaign:      c,
 		Scenario:      sc,
-		ScenarioState: scenarioState(sc.Slug, completed, available),
+		ScenarioState: state,
 		Outcome:       outcome,
 		Aftermath:     aftermath,
 		NextSteps:     nextSteps,

@@ -136,24 +136,36 @@ func scenarioGraph(scs []content.Scenario, completed, available map[string]bool)
 
 // nextGraph draws the path beside a completed mission's Next missions cards, in the campaign page's style. A choice of several missions is a bracket: the line
 // runs from the first card to the last, and each option hangs off it on a stub (dotted and yellow while the choice is open). A single mission (the only way on,
-// or the option already played) is just its node, with no line. done says which of the cards' missions are completed. It returns each row's drawing and the
-// number of lanes.
-func nextGraph(done []bool) ([]template.HTML, int) {
-	n := len(done)
+// or the option already played) is just its node, with no line. states are the cards' missions' states (completed, available or locked), which colour their
+// nodes. A preview (a locked mission's page, showing what it would lead to) draws the line muted, since none of it is open yet. It returns each row's drawing
+// and the number of lanes.
+func nextGraph(states []string, preview bool) ([]template.HTML, int) {
+	n := len(states)
+	line := graphNext
+	if preview {
+		line = graphPassed
+	}
 	cells := make([]graphCell, n)
-	for r, d := range done {
+	for r, st := range states {
 		c := &cells[r]
-		c.node = graphNext
-		if d {
+		switch st {
+		case "completed":
 			c.node = graphDone
+		case "available":
+			c.node = graphNext
+		default:
+			c.node = graphLocked
 		}
 		if n > 1 {
-			c.lane, c.stub = 1, c.node
+			c.lane, c.stub = 1, line
+			if !preview {
+				c.stub = c.node
+			}
 			if r > 0 {
-				c.top = graphNext
+				c.top = line
 			}
 			if r < n-1 {
-				c.bottom = graphNext
+				c.bottom = line
 			}
 		}
 	}

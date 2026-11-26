@@ -80,19 +80,37 @@ func TestScenarioBranches(t *testing.T) {
 			t.Errorf("%s: %s, want %s", name, got, c2.want)
 		}
 	}
-	// Refusal War: 000 leads to 001, 001 to a choice of 002 or 003, and both are the end for now.
+	// Refusal War's paths cross and differ in length, but every one runs from 000 to the Epilogue, 013, always forward, in 6 to 8 sorties.
 	rw := refusalWar(t)
-	if s0, _ := rw.Scenario("scenario_000"); strings.Join(s0.Branches, ",") != "scenario_001" {
-		t.Errorf("Scenario 000 leads to 001: %v", s0.Branches)
+	var walk func(id string, path []string)
+	paths := 0
+	walk = func(id string, path []string) {
+		path = append(path, id)
+		s, ok := rw.Scenario(id)
+		if !ok {
+			t.Fatalf("%v: %s is not a scenario", path, id)
+		}
+		if len(s.Branches) == 0 {
+			paths++
+			if id != "scenario_013" || len(path) < 6 || len(path) > 8 {
+				t.Errorf("a run should end at the Epilogue after 6 to 8 sorties: %v", path)
+			}
+			return
+		}
+		for _, b := range s.Branches {
+			if b <= id {
+				t.Errorf("%s branches back to %s", id, b)
+				continue
+			}
+			walk(b, path)
+		}
+	}
+	walk("scenario_000", nil)
+	if paths < 10 {
+		t.Errorf("only %d paths", paths)
 	}
 	if s1, _ := rw.Scenario("scenario_001"); strings.Join(s1.Branches, ",") != "scenario_002,scenario_003" {
-		t.Errorf("Scenario 001 leads to a choice of 002 or 003: %v", s1.Branches)
-	}
-	if s2, _ := rw.Scenario("scenario_002"); len(s2.Branches) != 0 {
-		t.Errorf("Scenario 002 leads nowhere: %v", s2.Branches)
-	}
-	if s3, _ := rw.Scenario("scenario_003"); len(s3.Branches) != 0 {
-		t.Errorf("Scenario 003 leads nowhere yet: %v", s3.Branches)
+		t.Errorf("Scenario 001 offers a choice of 002 or 003: %v", s1.Branches)
 	}
 	for _, camp := range []*Campaign{rw, c} {
 		for _, sc := range camp.Scenarios {
