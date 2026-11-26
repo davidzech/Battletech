@@ -113,8 +113,8 @@
 {{if .Scenario.HasOutcome}}<button type="button" class="button button-outline button-large" id="outcome-open"{{if .OtherBattle}} disabled title="{{.Lock.Mission}} is in progress."{{end}}>Complete mission</button>{{else}}<button type="button" class="button button-outline button-large" id="mission-log-toggle"{{if .OtherBattle}} disabled title="{{.Lock.Mission}} is in progress."{{end}}>{{if eq .ScenarioState "completed"}}Mark not completed{{else}}Mark completed{{end}}</button>{{end}}
 <p class="form-error" id="mission-log-error" role="alert"></p>
 </section>
-{{end}}{{if and .Run.Started (eq .ScenarioState "completed") .NextScenarios}}<section class="next-missions" id="next-missions">
-<h2>{{if eq (len .NextScenarios) 1}}Next mission{{else}}Next missions{{end}}</h2>
-<ul class="cards scenarios" style="--graph-lanes: {{.GraphLanes}}">{{range .NextScenarios}}<li class="{{.State}}"><span class="sgraph">{{.Graph}}</span><a class="card {{.State}}" href="{{.URL}}"><span class="num">{{.Num}}</span><span class="name">{{.Name}}{{if .Sub}}<span class="sub">{{.Sub}}</span>{{end}}</span><span class="go">{{if eq .State "completed"}}Completed{{else}}Open &rsaquo;{{end}}</span></a></li>{{end}}</ul>
+{{end}}{{if and (or (and .Run.Started (eq .ScenarioState "completed")) (eq .ScenarioState "locked")) .NextScenarios}}<section class="next-missions{{if eq .ScenarioState "locked"}} preview{{end}}" id="next-missions">
+<h2>{{if eq .ScenarioState "locked"}}Leads to{{else if eq (len .NextScenarios) 1}}Next mission{{else}}Next missions{{end}}</h2>
+<ul class="cards scenarios" style="--graph-lanes: {{.GraphLanes}}">{{range .NextScenarios}}<li class="{{.State}}"><span class="sgraph">{{.Graph}}</span><a class="card {{.State}}" href="{{.URL}}"><span class="num">{{.Num}}</span><span class="name">{{.Name}}{{if .Sub}}<span class="sub">{{.Sub}}</span>{{end}}</span><span class="go">{{if eq .State "completed"}}Completed{{else if eq .State "locked"}}Locked{{else}}Open &rsaquo;{{end}}</span></a></li>{{end}}</ul>
 </section>{{end}}
 {{end}}

@@ -22,6 +22,13 @@ func TestCampaignLog(t *testing.T) {
 	}
 	cards := func() string { return body(t, srv, "/refusalwar/", cookie) }
 
+	// A locked mission, previewed, shows what it leads to: 001's choice of 002 or 003, locked too, on a muted bracket.
+	if p := body(t, srv, "/refusalwar/scenario_001/", cookie); !strings.Contains(p, `<section class="next-missions preview" id="next-missions">`) || !strings.Contains(p, "<h2>Leads to</h2>") ||
+		!strings.Contains(p, `<a class="card locked" href="/refusalwar/scenario_002/">`) || !strings.Contains(p, `<a class="card locked" href="/refusalwar/scenario_003/">`) ||
+		strings.Count(p, `<span class="go">Locked</span>`) != 2 || strings.Count(p, `<path class="sg-passed" d="M8 50H24"`) != 2 {
+		t.Errorf("a locked mission previews its branches: %.300s", p)
+	}
+
 	// Before the account is named or the campaign started, only Scenario 000 shows, and Show all reveals the rest.
 	page := cards()
 	if !strings.Contains(page, `<a class="card available" href="/refusalwar/scenario_000/">`) || !strings.Contains(page, `<a class="card locked" href="/refusalwar/scenario_001/">`) {

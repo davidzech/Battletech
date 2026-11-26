@@ -140,6 +140,10 @@ func TestScenario001Outcome(t *testing.T) {
 	if res.Pool != 1700 || res.Pilots[0].SP != 100 || res.Pilots[1].SP != 0 || !res.Pilots[1].KIA || res.Warchest != 1600 {
 		t.Errorf("pool %d, pilots %+v, warchest %d", res.Pool, res.Pilots, res.Warchest)
 	}
+	// The chemical plant completely destroyed (both buildings, which are required) grants Scorched Earth.
+	if strings.Join(res.Keywords, ",") != "scorched_earth" {
+		t.Errorf("keywords %v", res.Keywords)
+	}
 }
 
 // The primary objectives are required: the mission cannot be completed without them, whatever the form says.
@@ -256,5 +260,67 @@ func TestPromotionToAnUnknownRank(t *testing.T) {
 	c.checkPromotions()
 	if !strings.Contains(sc.OutcomeError, `"Grand Poobah", which is not one of the campaign's ranks`) {
 		t.Errorf("OutcomeError = %q", sc.OutcomeError)
+	}
+}
+
+// Scenario 004: getting the repaired Mist Lynx out (1,000 SP and Counter Intelligence) replaces the primary's 600 SP; each Falcon mech crippled or destroyed adds
+// 100. The aftermath follows which of the two got out.
+func TestScenario004Outcome(t *testing.T) {
+	sc, ok := refusalWar(t).Scenario("scenario_004")
+	if !ok || !sc.HasOutcome() {
+		t.Fatalf("Scenario 004 has an outcome engine: %+v", sc)
+	}
+	for _, tc := range []struct {
+		core, lynx bool
+		pool       int
+		keywords   string
+		aftermath  string
+	}{
+		{true, false, 600 + 200, "", "partially corrupted"},
+		{false, true, 1000 + 200, "counter_intelligence", "The Keshik is pleased"},
+		{true, true, 1000 + 200, "counter_intelligence", "The Keshik is pleased"},
+		{false, false, 200, "", ""},
+	} {
+		res, err := sc.EvaluateOutcome(OutcomeInputs{
+			Pilots:  []OutcomeEntry{{PilotID: "a", TookPart: true}},
+			Mission: map[string]any{"data_core": tc.core, "mist_lynx": tc.lynx, "falcon_mechs": float64(2)},
+		}, map[string]string{"a": "Alrek"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		after := string(sc.AftermathFor(&res))
+		if res.Pool != tc.pool || strings.Join(res.Keywords, ",") != tc.keywords || (tc.aftermath == "") != (after == "") || !strings.Contains(after, tc.aftermath) {
+			t.Errorf("%+v: pool %d, keywords %v, aftermath %q", tc, res.Pool, res.Keywords, after)
+		}
+	}
+}
+
+// Scenario 005: each member of the staff rescued pays SP; all four rescued earn Savior, two or more killed Blackout, and the aftermath follows the count.
+func TestScenario005Outcome(t *testing.T) {
+	sc, ok := refusalWar(t).Scenario("scenario_005")
+	if !ok || !sc.HasOutcome() {
+		t.Fatalf("Scenario 005 has an outcome engine: %+v", sc)
+	}
+	for _, tc := range []struct {
+		radio, tech, worker, cmdr bool
+		pool                      int
+		keywords, aftermath       string
+	}{
+		{true, true, true, true, 800 + 500, "savior", "Honorable deeds beget praise"},
+		{true, true, false, true, 800 + 450, "", "will not hamper"},
+		{true, false, false, true, 800 + 350, "blackout", "no survivors"},
+		{false, false, false, false, 800, "blackout", "no survivors"},
+	} {
+		res, err := sc.EvaluateOutcome(OutcomeInputs{
+			Pilots:  []OutcomeEntry{{PilotID: "a", TookPart: true}},
+			Mission: map[string]any{"defenders_destroyed": true, "radio_operative": tc.radio, "technician": tc.tech, "worker": tc.worker, "array_commander": tc.cmdr},
+		}, map[string]string{"a": "Alrek"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		after := string(sc.AftermathFor(&res))
+		if res.Pool != tc.pool || strings.Join(res.Keywords, ",") != tc.keywords || !strings.Contains(after, tc.aftermath) || strings.Count(after, "The sensor array dome is secure")+strings.Count(after, "integrity was compromised") != 1 {
+			t.Errorf("%+v: pool %d, keywords %v, aftermath %q", tc, res.Pool, res.Keywords, after)
+		}
 	}
 }
