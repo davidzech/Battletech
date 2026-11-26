@@ -62,8 +62,22 @@ func (s *Server) recordCheckpoint(ctx context.Context, seed, playthroughID, camp
 	s.deleteHangars(ctx, seed, dropped)
 }
 
-// rollbackTo puts the campaign back as it was at a checkpoint: the frozen hangar is copied over the live one first (if that fails nothing has changed), then the
-// database rows are restored and the later checkpoints forgotten, and their frozen hangars deleted.
+// errRollbackHangar marks a rollback that failed in MekBay (rather than in the database), whose message can be shown to the player.
+var errRollbackHangar = errors.New("could not restore the hangar in MekBay")
+
+// rollbackFailure is what a failed rollback answers: MekBay's own explanation when the hangar could not be restored, and a fixed message for anything else (a
+// database error is logged, never sent).
+func rollbackFailure(err error) (string, int) {
+	if errors.Is(err, errRollbackHangar) {
+		return err.Error(), http.StatusBadGateway
+	}
+	return "Could not roll the campaign back.", http.StatusInternalServerError
+}
+
+// rollbackTo puts the campaign back as it was at a checkpoint: the frozen hangar is copied over the live one, then the database rows are restored and the later
+// checkpoints forgotten, and their frozen hangars deleted. The two halves fail together: the live hangar is first set aside in a copy of its own, and if the rows
+// can't be restored it is put back, so a failed rollback leaves the campaign as it was (hangar and rows alike) and can simply be tried again. If a copy fails
+// before the rows are touched nothing has changed.
 func (s *Server) rollbackTo(ctx context.Context, seed, playthroughID, campaign string, seq int) (string, error) {
 	cp, ok, err := s.store.Checkpoint(ctx, playthroughID, campaign, seq)
 	if err != nil {
@@ -76,15 +90,35 @@ func (s *Server) rollbackTo(ctx context.Context, seed, playthroughID, campaign s
 	if err != nil {
 		return "", err
 	}
+	owner := mekbay.AccountUID(seed, mekbay.SlotHangar)
 	live := storage.SnapshotHangarInstance(cp.Snapshot)
+	aside := "" // the copy the live hangar is set aside in while the rows are restored
 	if cp.HangarCopy != "" && live != "" {
-		if err := s.mekbay.CopyForce(ctx, mekbay.CopyRequest{OwnerUID: mekbay.AccountUID(seed, mekbay.SlotHangar), Source: cp.HangarCopy, Target: live}); err != nil {
-			return "", fmt.Errorf("could not restore the hangar in MekBay: %w", err)
+		aside = mekbay.NewID()
+		if err := s.mekbay.CopyForce(ctx, mekbay.CopyRequest{OwnerUID: owner, Source: live, Target: aside}); err != nil {
+			s.deleteHangars(ctx, seed, []string{aside}) // whatever part of it was saved
+			return "", fmt.Errorf("%w: %w", errRollbackHangar, err)
+		}
+		if err := s.mekbay.CopyForce(ctx, mekbay.CopyRequest{OwnerUID: owner, Source: cp.HangarCopy, Target: live}); err != nil {
+			s.deleteHangars(ctx, seed, []string{aside})
+			return "", fmt.Errorf("%w: %w", errRollbackHangar, err)
 		}
 	}
 	dropped, err := s.store.RestoreCheckpoint(ctx, playthroughID, campaign, seq)
 	if err != nil {
+		if aside != "" {
+			// The rows are as they were, so the hangar goes back to how it was too. This is not abandoned if the browser goes away.
+			if back := s.mekbay.CopyForce(context.WithoutCancel(ctx), mekbay.CopyRequest{OwnerUID: owner, Source: aside, Target: live}); back != nil {
+				// The hangar is the checkpoint's and the rows are not. The copy set aside is kept: it is the only record of the hangar as it was.
+				log.Printf("roll back: the rows could not be restored (%v) and the hangar could not be put back, it is kept in force %s: %v", err, aside, back)
+				return "", err
+			}
+			s.deleteHangars(ctx, seed, []string{aside})
+		}
 		return "", err
+	}
+	if aside != "" {
+		dropped = append(dropped, aside)
 	}
 	if cur.Owned() && cur.HangarInstance != live && cur.HangarInstance != "" {
 		dropped = append(dropped, cur.HangarInstance) // a hangar imported since is not part of the campaign any more
@@ -110,7 +144,8 @@ func (s *Server) rollbackCampaign(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "That checkpoint no longer exists.", http.StatusNotFound)
 	case err != nil:
 		log.Printf("roll back: %v", err)
-		http.Error(w, err.Error(), http.StatusBadGateway)
+		msg, code := rollbackFailure(err)
+		http.Error(w, msg, code)
 	default:
 		// The lines after the checkpoint are gone with the rollback; this one says it happened.
 		s.logHistory(r, pt.ID, c.Slug, storage.HistoryCorrections, 0, "Rolled back to \u201c"+label+"\u201d.")
