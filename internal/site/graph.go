@@ -131,8 +131,42 @@ func scenarioGraph(scs []content.Scenario, completed, available map[string]bool)
 		kinds[r] = c.node
 	}
 
+	return renderGraph(cells, lanes), kinds, lanes
+}
+
+// nextGraph draws the path beside a completed mission's Next missions cards, in the campaign page's style. A choice of several missions is a bracket: the line
+// runs from the first card to the last, and each option hangs off it on a stub (dotted and yellow while the choice is open). A single mission (the only way on,
+// or the option already played) is just its node, with no line. done says which of the cards' missions are completed. It returns each row's drawing and the
+// number of lanes.
+func nextGraph(done []bool) ([]template.HTML, int) {
+	n := len(done)
+	cells := make([]graphCell, n)
+	for r, d := range done {
+		c := &cells[r]
+		c.node = graphNext
+		if d {
+			c.node = graphDone
+		}
+		if n > 1 {
+			c.lane, c.stub = 1, c.node
+			if r > 0 {
+				c.top = graphNext
+			}
+			if r < n-1 {
+				c.bottom = graphNext
+			}
+		}
+	}
+	if n > 1 {
+		return renderGraph(cells, 2), 2
+	}
+	return renderGraph(cells, 1), 1
+}
+
+// renderGraph draws each row's slice of a path as an SVG and its node.
+func renderGraph(cells []graphCell, lanes int) []template.HTML {
 	x := func(lane int) int { return 8 + 16*lane }
-	out := make([]template.HTML, n)
+	out := make([]template.HTML, len(cells))
 	for r, c := range cells {
 		var b strings.Builder
 		fmt.Fprintf(&b, `<svg class="sgraph-lines" viewBox="0 0 %d 100" preserveAspectRatio="none" aria-hidden="true">`, 16*lanes)
@@ -152,5 +186,5 @@ func scenarioGraph(scs []content.Scenario, completed, available map[string]bool)
 		fmt.Fprintf(&b, `<i class="sg-node sg-%s" style="--lane-n: %d"></i>`, c.node, c.lane)
 		out[r] = template.HTML(b.String())
 	}
-	return out, kinds, lanes
+	return out
 }

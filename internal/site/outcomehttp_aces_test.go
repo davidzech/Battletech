@@ -55,7 +55,22 @@ outcomes:
   - when: not depot and not data
     label: A total failure
     warchest: -100
+aftermath:
+  - when: depot
+    text: The depot burns behind you.
+  - when: not depot
+    text: The depot still stands.
+  - text: The Keshik takes note.
 ---
+# Raid - Outcome
+
+## Aftermath
+
+The war goes on without you.
+
+## Next Steps
+
+Rest, then raid again.
 `)
 	write("Scenario_001/Setup.md", "---\nid: scenario_001\ntitle: Next\n---\n# Next\n")
 
@@ -157,6 +172,15 @@ outcomes:
 		if !strings.Contains(page, want) {
 			t.Errorf("the report on the page is missing %q", want)
 		}
+	}
+	// The aftermath follows the report (the depot was destroyed), then the Next Steps, each shown once: they are not repeated in the Outcome fold.
+	for _, want := range []string{`id="aftermath"`, "The depot burns behind you.", "The Keshik takes note.", "The war goes on without you.", `class="next-steps"`, "Rest, then raid again."} {
+		if strings.Count(page, want) != 1 {
+			t.Errorf("the completed page should show %q once: %d", want, strings.Count(page, want))
+		}
+	}
+	if strings.Contains(page, "The depot still stands.") {
+		t.Error("an aftermath whose condition didn't hold is not shown")
 	}
 	// The next scenario is open; a second report is refused.
 	if !strings.Contains(body(t, srv, "/refusalwar/", cookie), `class="card available" href="/refusalwar/scenario_001/"`) {

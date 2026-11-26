@@ -61,10 +61,12 @@ type Page struct {
 	Scenario           *content.Scenario
 	Cards              []Card
 	HasLocked          bool                   // some scenario cards are locked and hidden, so the campaign page offers 'Show all scenarios'
-	GraphLanes         int                    // how many lanes the campaign page's path graph needs
+	GraphLanes         int                    // how many lanes the path graph needs (the campaign page's, or a scenario page's Next missions)
 	ScenarioState      string                 // on a scenario page: completed, available or locked
-	NextScenarios      []content.Scenario     // on a completed scenario's page: the scenarios it leads to, which are now available
+	NextScenarios      []Card                 // on a completed scenario's page: the scenarios it leads to, which are now available, as the campaign page's cards
 	Outcome            *content.OutcomeResult // on a completed scenario page: the recorded report of its outcome
+	Aftermath          template.HTML          // on a completed scenario page: its aftermath, following the recorded report (content.Scenario.AftermathFor)
+	NextSteps          template.HTML          // on a completed scenario page: its Next Steps text, while the choice it describes is still open
 	Images             []string               // URLs of the scenario's images
 	Seed               string                 // the visitor's seed ("" if none chosen yet)
 	Play               storage.Playthrough    // the visitor's playthrough (zero value if no seed)
@@ -413,17 +415,35 @@ func (s *Server) scenario(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	var next []content.Scenario
+	var next []Card
+	var outcome *content.OutcomeResult
+	var aftermath, nextSteps template.HTML
+	nextLanes := 1
 	if completed[sc.Slug] {
 		for _, b := range sc.Branches {
 			if n, ok := c.Scenario(b); ok && available[b] { // a branch not taken (the other choice, once a later mission is done) is not offered
-				next = append(next, *n)
+				next = append(next, Card{Num: n.Number, Name: n.Title, Sub: n.Planet, URL: "/" + c.Slug + "/" + n.Slug + "/", State: scenarioState(n.Slug, completed, available)})
 			}
+		}
+		var done []bool
+		for _, n := range next {
+			done = append(done, n.State == "completed")
+		}
+		graph, lanes := nextGraph(done)
+		for i := range next {
+			next[i].Graph = graph[i]
+		}
+		nextLanes = lanes
+		outcome = s.recordedOutcome(r, c, sc, completed)
+		aftermath = sc.AftermathFor(outcome)
+		if len(next) == len(sc.Branches) { // once a branch has been passed over, the text describing the choice no longer fits
+			nextSteps = sc.NextStepsHTML
 		}
 	}
 	s.render(w, r, http.StatusOK, "scenario", Page{
 		InProgress:    inProgress,
 		NextScenarios: next,
+		GraphLanes:    nextLanes,
 		OperationURL:  operationURL,
 		BattleCache:   battleCache,
 		Images:        images,
@@ -432,7 +452,9 @@ func (s *Server) scenario(w http.ResponseWriter, r *http.Request) {
 		Campaign:      c,
 		Scenario:      sc,
 		ScenarioState: scenarioState(sc.Slug, completed, available),
-		Outcome:       s.recordedOutcome(r, c, sc, completed),
+		Outcome:       outcome,
+		Aftermath:     aftermath,
+		NextSteps:     nextSteps,
 	})
 }
 

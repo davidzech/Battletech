@@ -317,6 +317,8 @@ type OutcomeResult struct {
 	Keywords     []string       `json:"keywords"`               // keywords added to the campaign ledger
 	KeywordNames []string       `json:"keywordNames,omitempty"` // the same keywords as players see them (Campaign.KeywordName); filled by the site for the preview
 	Notes        []string       `json:"notes"`                  // notes about the mission as a whole
+	// Mission is what was reported for the mission as a whole (its objectives and mission inputs), kept in the recorded report so the aftermath can follow it.
+	Mission map[string]any `json:"mission,omitempty"`
 	// MVPCandidates are the pilots who can be the mission's MVP (IDs, in report order): every pilot who took part and stays in the campaign. When there are any, one
 	// of them must be chosen before the mission can be committed (MVPMissing); the MVP's SP is free, not drawn from the pool.
 	MVPCandidates []string `json:"mvpCandidates"`
@@ -415,6 +417,7 @@ func (sc *Scenario) EvaluateOutcome(in OutcomeInputs, names map[string]string) (
 	if err != nil {
 		return res, err
 	}
+	res.Mission = mission
 	seen := map[string]bool{}
 	mvps := 0
 	type taken struct {

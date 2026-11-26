@@ -88,7 +88,7 @@ func TestCampaignLog(t *testing.T) {
 		t.Errorf("unmark 001 for now: %d", got)
 	}
 	// Only a completed scenario's page lists the missions it leads to, one link each.
-	if p := body(t, srv, "/refusalwar/scenario_000/", cookie); !strings.Contains(p, `id="next-missions"`) || !strings.Contains(p, "<h2>Next mission</h2>") || !strings.Contains(p, `<li><a class="button" href="/refusalwar/scenario_001/">`) {
+	if p := body(t, srv, "/refusalwar/scenario_000/", cookie); !strings.Contains(p, `id="next-missions"`) || !strings.Contains(p, "<h2>Next mission</h2>") || !strings.Contains(p, `<a class="card available" href="/refusalwar/scenario_001/"><span class="num">001</span>`) {
 		t.Errorf("a completed scenario links to its next missions: %.300s", p)
 	}
 	if p := body(t, srv, "/refusalwar/scenario_001/", cookie); strings.Contains(p, `id="next-missions"`) {
@@ -114,8 +114,13 @@ func TestCampaignLog(t *testing.T) {
 		t.Error("a completed scenario without an outcome offers to be unmarked")
 	}
 	// 001 offers a choice of 002 or 003; once 002 is completed, 003 (the path not taken) closes and 001 no longer links to it.
-	if p := body(t, srv, "/refusalwar/scenario_001/", cookie); !strings.Contains(p, `href="/refusalwar/scenario_002/"`) || !strings.Contains(p, `<li><a class="button" href="/refusalwar/scenario_003/">`) {
+	if p := body(t, srv, "/refusalwar/scenario_001/", cookie); !strings.Contains(p, `href="/refusalwar/scenario_002/"`) || !strings.Contains(p, `<a class="card available" href="/refusalwar/scenario_003/">`) {
 		t.Error("001 offers both 002 and 003")
+	}
+	// The choice is a bracket: a dotted line from the first card to the last (nothing above the first or below the last), each option on a stub.
+	if p := body(t, srv, "/refusalwar/scenario_001/", cookie); strings.Count(p, `<i class="sg-node sg-next" style="--lane-n: 1">`) != 2 || strings.Count(p, `<path class="sg-next" d="M8 50H24"`) != 2 ||
+		strings.Count(p, `<path class="sg-next" d="M8 0V50"`) != 1 || strings.Count(p, `<path class="sg-next" d="M8 50V100"`) != 1 {
+		t.Error("001's next missions are drawn as a bracket")
 	}
 	if err := store.SetScenarioCompleted(ctx, id, "refusalwar", "scenario_002", true); err != nil {
 		t.Fatal(err)
@@ -129,8 +134,8 @@ func TestCampaignLog(t *testing.T) {
 	if p := cards(); !strings.Contains(p, `href="/refusalwar/scenario_003/"><span class="num">003</span><span class="name">Blade Splint<span class="sub">Zoetermeer</span></span><span class="go">Not available</span>`) {
 		t.Error("a mission passed over reads Not available, not Locked")
 	}
-	if p := body(t, srv, "/refusalwar/scenario_001/", cookie); strings.Contains(p, `<li><a class="button" href="/refusalwar/scenario_003/">`) {
-		t.Error("001 no longer links to the branch not taken")
+	if p := body(t, srv, "/refusalwar/scenario_001/", cookie); strings.Contains(p, `href="/refusalwar/scenario_003/"><span class="num">`) || !strings.Contains(p, `<a class="card completed" href="/refusalwar/scenario_002/">`) {
+		t.Error("001 no longer links to the branch not taken, and the one taken shows completed")
 	}
 	if err := store.SetScenarioCompleted(ctx, id, "refusalwar", "scenario_002", false); err != nil {
 		t.Fatal(err)

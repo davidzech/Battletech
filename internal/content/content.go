@@ -70,6 +70,12 @@ type Scenario struct {
 	BriefingHTML     template.HTML // the fluff: a leading blockquote in Setup.md
 	SetupHTML        template.HTML
 	OutcomeHTML      template.HTML
+	// AftermathHTML is the `## Aftermath` section of Outcome.md (what became of the war after the mission, shown once it is completed), taken out of OutcomeHTML;
+	// Aftermath are the front matter's `aftermath` transmissions, each shown when its condition held in the recorded report (see aftermath.go).
+	AftermathHTML template.HTML
+	Aftermath     []AftermathText
+	// NextStepsHTML is the `## Next Steps` section of Outcome.md: what the players do next, and the choice when the mission branches, shown with the Next missions.
+	NextStepsHTML template.HTML
 }
 
 // ReadoutRow is one line of the technical readout drawn over a scenario's image.
@@ -325,6 +331,7 @@ type outcomeMeta struct {
 	PilotSP     any                `yaml:"pilot_sp"`
 	Outcomes    []OutcomeRule      `yaml:"outcomes"`
 	MVPSP       *int               `yaml:"mvp_sp"` // overrides the campaign's
+	Aftermath   []AftermathText    `yaml:"aftermath"`
 }
 
 // readMarkdown reads a Markdown file with optional YAML front matter into dst, and returns the body. The front matter is decoded strictly, so a misspelt or
@@ -433,11 +440,13 @@ func (l Library) load(name string) (*Campaign, bool) {
 		var setup setupMeta
 		setupBody, err := readMarkdown(filepath.Join(sdir, "Setup.md"), &setup)
 		problem(e.Name()+"/Setup.md", err)
-		setupBody, briefing := splitBriefing(leadingTitle.ReplaceAllString(setupBody, ""))
+		setupBody, briefing := splitSection(leadingTitle.ReplaceAllString(setupBody, ""), "Briefing")
 		setupBody, waypoints := splitWaypoints(setupBody)
 		var outcome outcomeMeta
 		outcomeBody, err := readMarkdown(filepath.Join(sdir, "Outcome.md"), &outcome)
 		problem(e.Name()+"/Outcome.md", err)
+		outcomeBody, aftermath := splitSection(outcomeBody, "Aftermath")
+		outcomeBody, nextSteps := splitSection(outcomeBody, "Next Steps")
 		s := Scenario{
 			Dir:               sdir,
 			Slug:              strings.ToLower(e.Name()),
@@ -467,6 +476,9 @@ func (l Library) load(name string) (*Campaign, bool) {
 			BriefingHTML:      renderBriefing(briefing),
 			SetupHTML:         RenderMarkdown(setupBody, false),
 			OutcomeHTML:       RenderMarkdown(outcomeBody, true),
+			AftermathHTML:     renderBriefing(aftermath),
+			Aftermath:         outcome.Aftermath,
+			NextStepsHTML:     RenderMarkdown(nextSteps, false),
 		}
 		if outcome.MVPSP != nil {
 			s.MVPSP = *outcome.MVPSP
@@ -478,6 +490,9 @@ func (l Library) load(name string) (*Campaign, bool) {
 			c.Problems = append(c.Problems, s.Slug+"/Setup.md: provided_swaps needs provided_units (there are no provided mechs to reconfigure)")
 		}
 		s.CompileOutcomes()
+		if err := s.compileAftermath(); err != nil {
+			c.Problems = append(c.Problems, s.Slug+"/Outcome.md: "+err.Error())
+		}
 		if s.Title == "" {
 			s.Title = humanize(e.Name())
 		}
@@ -656,26 +671,26 @@ func forceFiles(m map[string]string) []ForceFile {
 	return out
 }
 
-// splitBriefing takes the `## Briefing` section (the in-world fluff, up to the next `#` or `##` heading) out
-// of a body and returns the rest and the section's text without its heading. A body with no such section is
-// returned whole, with an empty briefing.
-func splitBriefing(body string) (rest, briefing string) {
-	var keep, section []string
+// splitSection takes the `## <heading>` section (up to the next `#` or `##` heading) out of a body and returns the rest and the section's text without its
+// heading: Setup.md's `## Briefing` (the in-world fluff), Outcome.md's `## Aftermath` and `## Next Steps`. A body with no such section is returned whole, with
+// an empty section.
+func splitSection(body, heading string) (rest, section string) {
+	var keep, lines []string
 	in, found := false, false
 	for _, line := range strings.Split(strings.ReplaceAll(body, "\r\n", "\n"), "\n") {
 		switch {
-		case !found && strings.TrimSpace(line) == "## Briefing":
+		case !found && strings.EqualFold(strings.TrimSpace(line), "## "+heading):
 			in, found = true, true
 		case in && (strings.HasPrefix(line, "## ") || strings.HasPrefix(line, "# ")):
 			in = false
 			keep = append(keep, line)
 		case in:
-			section = append(section, line)
+			lines = append(lines, line)
 		default:
 			keep = append(keep, line)
 		}
 	}
-	return strings.Join(keep, "\n"), strings.TrimSpace(strings.Join(section, "\n"))
+	return strings.Join(keep, "\n"), strings.TrimSpace(strings.Join(lines, "\n"))
 }
 
 // leadingHeading matches a body's first line when it is a `## ` heading.

@@ -39,7 +39,7 @@ func TestPlayersLabel(t *testing.T) {
 
 func TestSplitBriefing(t *testing.T) {
 	body := "## Briefing\n\nFirst line.\n\n> Second.\n\n## Overview\n\nText.\n"
-	rest, briefing := splitBriefing(body)
+	rest, briefing := splitSection(body, "Briefing")
 	if briefing != "First line.\n\n> Second." {
 		t.Errorf("briefing = %q", briefing)
 	}
@@ -48,13 +48,13 @@ func TestSplitBriefing(t *testing.T) {
 	}
 
 	// No briefing section: a blockquote is just a blockquote and everything stays in the body.
-	r, b := splitBriefing("> not fluff\n\n## Overview\n")
+	r, b := splitSection("> not fluff\n\n## Overview\n", "Briefing")
 	if b != "" || !strings.Contains(r, "> not fluff") || !strings.Contains(r, "## Overview") {
 		t.Errorf("unexpected split: %q / %q", r, b)
 	}
 
 	// The section runs to the end of the body, and Windows line endings are fine.
-	if r, b := splitBriefing("Before.\r\n## Briefing\r\nA\r\nB\r\n"); b != "A\nB" || strings.TrimSpace(r) != "Before." {
+	if r, b := splitSection("Before.\r\n## Briefing\r\nA\r\nB\r\n", "Briefing"); b != "A\nB" || strings.TrimSpace(r) != "Before." {
 		t.Errorf("CRLF split = %q / %q", r, b)
 	}
 }
