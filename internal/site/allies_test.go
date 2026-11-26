@@ -25,7 +25,7 @@ func TestScenarioAlliesJoinTheBattle(t *testing.T) {
 		t.Fatalf("start: %d", r.StatusCode)
 	}
 	for _, sc := range []string{"scenario_000", "scenario_001", "scenario_002"} { // Sudeten leads to Temper Edge
-		if err := store.SetScenarioCompleted(ctx, id, "refusalwar", sc, true); err != nil {
+		if _, err := store.SetScenarioCompleted(ctx, id, "refusalwar", sc, true); err != nil {
 			t.Fatal(err)
 		}
 	}
