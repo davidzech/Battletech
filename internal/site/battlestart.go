@@ -214,12 +214,13 @@ func (s *Server) battleStatus(w http.ResponseWriter, r *http.Request) {
 
 // abortBattle is POST /api/battle/abort: give the battle up. The scenario goes back to not started, with no rewards; its forces stay in MekBay, which is told nothing.
 func (s *Server) abortBattle(w http.ResponseWriter, r *http.Request) {
-	if !sameOrigin(r) {
-		http.Error(w, "cross-origin request refused", http.StatusForbidden)
+	pt, c, _, ok := s.openRunRequest(w, r) // not runRequest: the battle in progress is the very thing this ends
+	if !ok {
 		return
 	}
-	pt, _, c, sc, ok := s.mekbayRequest(w, r)
-	if !ok {
+	sc, found := c.Scenario(r.PostFormValue("scenario"))
+	if !found || len(sc.Forces) == 0 {
+		http.Error(w, "unknown scenario, or it has no OpFor to deploy against", http.StatusNotFound)
 		return
 	}
 	op, had, err := s.store.MekBayOperation(r.Context(), pt.ID, c.Slug, sc.ID)

@@ -529,3 +529,49 @@ func TestBattleLockIgnoresLeftoversAndHonoursClaims(t *testing.T) {
 		t.Error("an expired claim can be taken over")
 	}
 }
+
+// Aborting a battle is guarded like every other change to a campaign: its fields come from the posted form only, and the form is bounded.
+func TestAbortBattleGuards(t *testing.T) {
+	srv, store, cookie := startedCompany(t)
+	ctx := context.Background()
+	id := playthroughID("wolfpack2026")
+	if err := store.SaveMekBayOperation(ctx, id, "refusalwar", "scenario_001", storage.MekBayOperation{OperationID: "op-1"}); err != nil {
+		t.Fatal(err)
+	}
+	inProgress := func() bool {
+		t.Helper()
+		_, ok, err := store.MekBayOperation(ctx, id, "refusalwar", "scenario_001")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return ok
+	}
+	form := url.Values{"campaign": {"refusalwar"}, "scenario": {"scenario_001"}}
+
+	// The campaign and scenario are not read from the address.
+	if r := post(t, srv, "/api/battle/abort?"+form.Encode(), url.Values{}, cookie, srv.URL); r.StatusCode != http.StatusNotFound || !inProgress() {
+		t.Errorf("fields in the query string are ignored: %d, battle in progress %v", r.StatusCode, inProgress())
+	}
+	if r := post(t, srv, "/api/battle/abort?scenario=scenario_001", url.Values{"campaign": {"refusalwar"}}, cookie, srv.URL); r.StatusCode != http.StatusNotFound || !inProgress() {
+		t.Errorf("a scenario in the query string is ignored: %d", r.StatusCode)
+	}
+	// A body past the limit is refused before anything is read from it.
+	big := url.Values{"campaign": {"refusalwar"}, "scenario": {"scenario_001"}, "pad": {strings.Repeat("x", 70<<10)}}
+	if r := post(t, srv, "/api/battle/abort", big, cookie, srv.URL); r.StatusCode != http.StatusBadRequest || !inProgress() {
+		t.Errorf("an oversized form is refused: %d", r.StatusCode)
+	}
+	for name, r := range map[string]*http.Response{
+		"another origin":   post(t, srv, "/api/battle/abort", form, cookie, "https://evil.example"),
+		"no seed":          post(t, srv, "/api/battle/abort", form, nil, srv.URL),
+		"an unknown seed":  post(t, srv, "/api/battle/abort", form, &http.Cookie{Name: "seed", Value: "nobodyatall"}, srv.URL),
+		"unknown scenario": post(t, srv, "/api/battle/abort", url.Values{"campaign": {"refusalwar"}, "scenario": {"scenario_999"}}, cookie, srv.URL),
+	} {
+		if r.StatusCode < 400 || !inProgress() {
+			t.Errorf("%s is refused: %d", name, r.StatusCode)
+		}
+	}
+	// The posted form still aborts.
+	if r := post(t, srv, "/api/battle/abort", form, cookie, srv.URL); r.StatusCode != http.StatusNoContent || inProgress() {
+		t.Errorf("a proper request aborts the battle: %d, battle in progress %v", r.StatusCode, inProgress())
+	}
+}
