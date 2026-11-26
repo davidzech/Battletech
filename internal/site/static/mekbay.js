@@ -351,7 +351,7 @@
 
   function withUnitCard(row, u) {
     if (!u || typeof UnitCard === 'undefined') return row;
-    MechRow.attachTip(row, { focusable: false, align: 'right', build: function () { return UnitCard.forUnit(u); } });
+    MechRow.attachTip(row, { align: 'right', build: function () { return UnitCard.forUnit(u); } });
     row.addEventListener('mouseover', function (e) {
       var own = e.target.closest && e.target.closest('[aria-describedby]');
       if ((!own || own === row) && !row.classList.contains('tip-open')) row.dispatchEvent(new Event('mouseenter'));
@@ -876,7 +876,7 @@
     });
     document.getElementById('deploy-provided').hidden = !provided;
     status.hidden = units.length > 0;
-    if (!units.length) status.textContent = 'Your hangar force has no mechs in it yet. Add some in MekBay first.';
+    if (!units.length) status.textContent = 'Your hangar has no mechs in it yet. Purchase some under Manage force first.';
     render();
   }
 
