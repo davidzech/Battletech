@@ -33,6 +33,9 @@ func (s *Store) CompleteWithOutcome(ctx context.Context, playthroughID, campaign
 		return err
 	}
 	defer tx.Rollback()
+	if err := s.lockRun(ctx, tx, playthroughID, campaign); err != nil { // before the pilots' rows, as everywhere
+		return err
+	}
 	var n int
 	if err := tx.QueryRowContext(ctx, s.q(`SELECT COUNT(*) FROM scenario_completions WHERE playthrough_id = ? AND campaign = ? AND scenario_id = ?`), playthroughID, campaign, scenario).Scan(&n); err != nil {
 		return err

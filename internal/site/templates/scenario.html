@@ -19,6 +19,7 @@
 {{end}}{{if .Outcome.Pool}}<li class="outcome-note outcome-sp">Awarded: {{.Outcome.Pool}} SP</li><li class="outcome-note outcome-sp">Assigned to pilots: {{.Outcome.Paid}} SP</li><li class="outcome-note outcome-sp">Warchest: +{{.Outcome.Warchest}} SP</li>{{end}}{{if and .Outcome.Warchest (not .Outcome.Pool)}}<li class="outcome-note">{{.Outcome.Warchest}} SP to the warchest</li>{{end}}{{if .Outcome.FreeRecruits}}<li class="outcome-note">{{.Outcome.FreeRecruits}} free recruit{{if ne .Outcome.FreeRecruits 1}}s{{end}}: {{if eq .Outcome.FreeRecruits 1}}a replacement pilot can{{else}}replacement pilots can{{end}} be recruited for free.</li>{{end}}{{if .Outcome.Keywords}}<li class="outcome-note">Keywords granted: {{range $i, $k := .Outcome.Keywords}}{{if $i}}, {{end}}<b>{{$.Campaign.KeywordName $k}}</b>{{end}}</li>{{end}}</ul>{{end}}
 </section>
 <script src="/static/missionlog.js" defer></script>
+<script src="/static/confirm.js" defer></script>
 {{if and .Scenario.HasOutcome (ne .ScenarioState "locked") (ne .ScenarioState "completed")}}<dialog id="outcome-dialog" class="wizard outcome" aria-labelledby="outcome-title" data-in-battle="{{if .InProgress}}1{{end}}" data-mvp-sp="{{.Scenario.MVPSP}}" data-warchest="{{.Run.Warchest}}" data-campaign="{{.Campaign.Slug}}" data-scenario="{{.Scenario.Slug}}" data-inputs="{{.OutcomeInputsJSON}}" data-pilots="{{.OutcomePilotsJSON}}">
   <form id="outcome-form" autocomplete="off" novalidate>
     <h2 id="outcome-title">Complete mission</h2>
@@ -73,7 +74,6 @@
 <div class="deploy-progress" id="deploy-progress" hidden><div class="wiz-progress" id="deploy-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="1" aria-valuenow="0"><span id="deploy-bar"></span></div><span class="deploy-progress-count" id="deploy-count"></span></div>
 <div class="form-actions"><button type="button" id="deploy-back" data-wizard-back hidden>Back</button><button type="button" class="button" id="deploy-next" data-wizard-next hidden disabled>Next</button><button type="button" class="button alert" id="deploy-go" disabled>Start battle</button><button type="button" id="deploy-cancel">Cancel</button></div>
 </dialog>
-<script src="/static/confirm.js" defer></script>
 <script src="/static/qrcode.js" defer></script>
 <script src="/static/abilitycard.js" defer></script>
 <script src="/static/pilotcard.js" defer></script>

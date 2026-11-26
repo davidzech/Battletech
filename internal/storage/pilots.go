@@ -63,6 +63,16 @@ func (s *Store) Pilots(ctx context.Context, playthroughID, campaign string) ([]p
 	return out, arows.Err()
 }
 
+// lockRun makes a transaction wait for every other one that starts the same way for the same campaign run, so a check it makes (how many pilots are alive, who
+// has a name or a portrait, how many abilities a pilot holds) still holds when it writes. PostgreSQL would otherwise let two such transactions both pass the
+// check: its default isolation shows each only what was committed, not what the other is about to write. The statement changes nothing; it takes the run's row
+// lock, held until the transaction ends. SQLite has one connection, so its transactions already run one at a time. A transaction that writes both the pilots' rows
+// and the run's own takes this lock first, so that two of them never wait on each other.
+func (s *Store) lockRun(ctx context.Context, tx *sql.Tx, playthroughID, campaign string) error {
+	_, err := tx.ExecContext(ctx, s.q(`UPDATE campaign_runs SET warchest = warchest WHERE playthrough_id = ? AND campaign = ?`), playthroughID, campaign)
+	return err
+}
+
 // AddPilot adds a pilot with the lowest rank and every SP allocated (see AddPilotWithRank).
 func (s *Store) AddPilot(ctx context.Context, playthroughID, campaign, name, portrait string, start pilot.SPAllocation, limit int) (pilot.NamedPilot, error) {
 	return s.AddPilotWithRank(ctx, playthroughID, campaign, name, portrait, "", start, start.Total(), limit)
@@ -78,6 +88,9 @@ func (s *Store) AddPilotWithRank(ctx context.Context, playthroughID, campaign, n
 		return pilot.NamedPilot{}, err
 	}
 	defer tx.Rollback()
+	if err := s.lockRun(ctx, tx, playthroughID, campaign); err != nil {
+		return pilot.NamedPilot{}, err
+	}
 	var alive int
 	if err := tx.QueryRowContext(ctx,
 		s.q(`SELECT COUNT(*) FROM named_pilots WHERE playthrough_id = ? AND campaign = ? AND fallen = 0`),
@@ -208,6 +221,9 @@ func (s *Store) SetPilotPortrait(ctx context.Context, playthroughID, campaign, p
 		return err
 	}
 	defer tx.Rollback()
+	if err := s.lockRun(ctx, tx, playthroughID, campaign); err != nil {
+		return err
+	}
 	var same int
 	if err := tx.QueryRowContext(ctx,
 		s.q(`SELECT COUNT(*) FROM named_pilots WHERE playthrough_id = ? AND campaign = ? AND fallen = 0 AND portrait = ? AND id <> ?`),
@@ -238,6 +254,9 @@ func (s *Store) RevivePilot(ctx context.Context, playthroughID, campaign, pilotI
 		return err
 	}
 	defer tx.Rollback()
+	if err := s.lockRun(ctx, tx, playthroughID, campaign); err != nil {
+		return err
+	}
 	var portrait string
 	if err := tx.QueryRowContext(ctx,
 		s.q(`SELECT portrait FROM named_pilots WHERE id = ? AND playthrough_id = ? AND campaign = ? AND fallen = 1`),
@@ -378,6 +397,9 @@ func (s *Store) RenamePilot(ctx context.Context, playthroughID, campaign, pilotI
 		return err
 	}
 	defer tx.Rollback()
+	if err := s.lockRun(ctx, tx, playthroughID, campaign); err != nil {
+		return err
+	}
 	var same int
 	if err := tx.QueryRowContext(ctx,
 		s.q(`SELECT COUNT(*) FROM named_pilots WHERE playthrough_id = ? AND campaign = ? AND LOWER(name) = LOWER(?) AND id <> ?`),
@@ -429,6 +451,9 @@ func (s *Store) LearnAbilities(ctx context.Context, playthroughID, campaign, pil
 		return err
 	}
 	defer tx.Rollback()
+	if err := s.lockRun(ctx, tx, playthroughID, campaign); err != nil {
+		return err
+	}
 	var sp int
 	if err := tx.QueryRowContext(ctx,
 		s.q(`SELECT sp_edge_abilities FROM named_pilots WHERE id = ? AND playthrough_id = ? AND campaign = ? AND fallen = 0`),

@@ -546,19 +546,18 @@ func (s *Store) StartRunWithPilots(ctx context.Context, playthroughID, campaign 
 		return err
 	}
 	defer tx.Rollback()
-	var existing int
-	if err := tx.QueryRowContext(ctx,
-		s.q(`SELECT COUNT(*) FROM campaign_runs WHERE playthrough_id = ? AND campaign = ?`),
-		playthroughID, campaign).Scan(&existing); err != nil {
+	// The run is inserted unless it is there: of two starts at once the second waits for the first, then finds its row and inserts nothing.
+	res, err := tx.ExecContext(ctx,
+		s.q(`INSERT INTO campaign_runs (playthrough_id, campaign, hangar_url, hangar_instance, source_url, warchest, players, force_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		     ON CONFLICT (playthrough_id, campaign) DO NOTHING`),
+		playthroughID, campaign, h.URL, h.Instance, h.Source, warchest, players, forceName)
+	if err != nil {
 		return err
 	}
-	if existing > 0 {
+	if n, err := res.RowsAffected(); err != nil {
+		return err
+	} else if n == 0 {
 		return ErrAlreadyStarted
-	}
-	if _, err := tx.ExecContext(ctx,
-		s.q(`INSERT INTO campaign_runs (playthrough_id, campaign, hangar_url, hangar_instance, source_url, warchest, players, force_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`),
-		playthroughID, campaign, h.URL, h.Instance, h.Source, warchest, players, forceName); err != nil {
-		return err
 	}
 	for _, p := range pilots {
 		id := mekbay.NewID()
@@ -585,6 +584,9 @@ func (s *Store) DeleteRun(ctx context.Context, playthroughID, campaign string) (
 		return false, err
 	}
 	defer tx.Rollback()
+	if err := s.lockRun(ctx, tx, playthroughID, campaign); err != nil { // before the pilots' rows, as everywhere
+		return false, err
+	}
 	if _, err := tx.ExecContext(ctx,
 		s.q(`DELETE FROM pilot_abilities WHERE pilot_id IN (SELECT id FROM named_pilots WHERE playthrough_id = ? AND campaign = ?)`),
 		playthroughID, campaign); err != nil {

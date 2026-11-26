@@ -78,21 +78,18 @@ func (s *Store) EnsureMekBayLink(ctx context.Context, playthroughID, campaign, l
 	if _, err := s.db.ExecContext(ctx, s.q(`DELETE FROM mekbay_links WHERE expires_at <= ?`), now.Unix()); err != nil {
 		return "", err
 	}
+	// One statement makes the link or refreshes the one that is there, so two requests asking for a new label at once both get the same id
+	// (the id offered by the one that loses is simply not used).
 	var id string
 	err := s.db.QueryRowContext(ctx,
-		s.q(`SELECT id FROM mekbay_links WHERE playthrough_id = ? AND campaign = ? AND label = ?`), playthroughID, campaign, label).Scan(&id)
-	switch {
-	case err == nil:
-		_, err = s.db.ExecContext(ctx, s.q(`UPDATE mekbay_links SET account = ?, ttl_seconds = ?, expires_at = ? WHERE id = ?`), account, secs, expires, id)
-		return id, err
-	case errors.Is(err, sql.ErrNoRows):
-		id = NewLinkID()
-		_, err = s.db.ExecContext(ctx,
-			s.q(`INSERT INTO mekbay_links (id, playthrough_id, campaign, label, account, ttl_seconds, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)`),
-			id, playthroughID, campaign, label, account, secs, expires)
-		return id, err
+		s.q(`INSERT INTO mekbay_links (id, playthrough_id, campaign, label, account, ttl_seconds, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+		     ON CONFLICT (playthrough_id, campaign, label) DO UPDATE SET account = excluded.account, ttl_seconds = excluded.ttl_seconds, expires_at = excluded.expires_at
+		     RETURNING id`),
+		NewLinkID(), playthroughID, campaign, label, account, secs, expires).Scan(&id)
+	if err != nil {
+		return "", err
 	}
-	return "", err
+	return id, nil
 }
 
 // MekBayLink looks a link up by id. It reports the link's account when the link exists and has not expired, and slides the expiry forward

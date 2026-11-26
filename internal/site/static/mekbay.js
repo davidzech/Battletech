@@ -348,7 +348,7 @@
 
   function withUnitCard(row, u) {
     if (!u || typeof UnitCard === 'undefined') return row;
-    MechRow.attachTip(row, { focusable: false, align: 'right', build: function () { return UnitCard.forUnit(u); } });
+    MechRow.attachTip(row, { align: 'right', build: function () { return UnitCard.forUnit(u); } });
     row.addEventListener('mouseover', function (e) {
       var own = e.target.closest && e.target.closest('[aria-describedby]');
       if ((!own || own === row) && !row.classList.contains('tip-open')) row.dispatchEvent(new Event('mouseenter'));
@@ -668,6 +668,7 @@
   // The Operation in progress view: the link, and how the battle stands, with each mech's live condition as MekBay has it (armor and structure lost, critical hits,
   // ammunition used), refreshed every few seconds and on demand.
   function renderOperation() {
+    if (typeof MechRow.hideTip === 'function') MechRow.hideTip(); // the rows are about to be replaced, so a card open on one would point at nothing
     review.textContent = '';
     var box = el('div', 'op-view');
     if (statusData && statusData.url) box.appendChild(linkPanel(statusData.url));
@@ -873,7 +874,7 @@
     });
     document.getElementById('deploy-provided').hidden = !provided;
     status.hidden = units.length > 0;
-    if (!units.length) status.textContent = 'Your hangar force has no mechs in it yet. Add some in MekBay first.';
+    if (!units.length) status.textContent = 'Your hangar has no mechs in it yet. Purchase some under Manage force first.';
     render();
   }
 
@@ -881,6 +882,12 @@
   function failed(message) {
     status.hidden = false;
     status.textContent = units.length ? 'Showing your last known hangar. ' + message : message;
+    if (units.length) return;
+    var retry = el('button', null, 'Try again'); // with nothing on screen it is an error with a retry, as on the campaign and Manage pages
+    retry.type = 'button';
+    retry.addEventListener('click', load);
+    status.appendChild(document.createTextNode(' '));
+    status.appendChild(retry);
   }
 
   function load() {
@@ -973,13 +980,16 @@
 
   if (abortOpen) abortOpen.addEventListener('click', function () {
     chooseAbort().then(function (mode) {
-      if (!mode) return;
+      if (!mode || abortOpen.disabled) return;
+      abortOpen.disabled = true; // a rollback can be slow: a second click must not send a second abort
+      error.textContent = '';
       fetch('/api/battle/abort', {
         method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: query + '&mode=' + mode, credentials: 'same-origin'
       }).then(function (res) {
         if (res.ok || res.status === 404) { location.reload(); return; }
+        abortOpen.disabled = false;
         return res.text().then(function (t) { error.textContent = t.trim() || 'Could not abort the battle.'; });
-      }, function () { error.textContent = 'Could not reach the server.'; });
+      }, function () { abortOpen.disabled = false; error.textContent = 'Could not reach the server.'; });
     });
   });
 

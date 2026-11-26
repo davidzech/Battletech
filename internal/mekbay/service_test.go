@@ -2,6 +2,7 @@ package mekbay
 
 import (
 	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 )
@@ -16,7 +17,7 @@ func TestServiceUnitState(t *testing.T) {
 	}
 	repaired := func(level string) HangarUnit {
 		f := load()
-		if err := serviceUnitState(f, "c", "repair", level, 20, time.Now()); err != nil {
+		if err := serviceUnitState(f, "c", "repair", level, 20, true, time.Now()); err != nil {
 			t.Fatal(err)
 		}
 		return readBack(t, f)
@@ -42,33 +43,79 @@ func TestServiceUnitState(t *testing.T) {
 	}
 	// A rearm refills the ammunition and leaves the damage.
 	f := load()
-	if err := serviceUnitState(f, "c", "rearm", "", 20, time.Now()); err != nil {
+	if err := serviceUnitState(f, "c", "rearm", "", 20, true, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	ra := readBack(t, f)
 	if c, _ := ConditionOf(ra, 20, "Fusion"); c != CondCrippled || ra.AmmoBins != 0 || ra.AmmoUsed != 0 {
 		t.Errorf("after rearm: %s bins=%d used=%d", c, ra.AmmoBins, ra.AmmoUsed)
 	}
-	if err := serviceUnitState(load(), "nope", "repair", RepairArmor, 20, time.Now()); err == nil {
+	// The same service asked for twice (a double click, or two players at the table) changes nothing the second time, which is an error, so it isn't paid for twice.
+	for _, again := range [][2]string{{"repair", RepairArmor}, {"repair", RepairStructure}, {"repair", RepairCrippled}, {"rearm", ""}} {
+		f := load()
+		if err := serviceUnitState(f, "c", again[0], again[1], 20, true, time.Now()); err != nil {
+			t.Fatal(err)
+		}
+		if err := serviceUnitState(f, "c", again[0], again[1], 20, true, time.Now()); !errors.Is(err, ErrNoChange) {
+			t.Errorf("%s %s a second time: %v", again[0], again[1], err)
+		}
+	}
+	// A lower repair after a higher one has nothing left to fix either; a rearm after a repair still has.
+	f = load()
+	if err := serviceUnitState(f, "c", "repair", RepairCrippled, 20, true, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if err := serviceUnitState(f, "c", "repair", RepairArmor, 20, true, time.Now()); !errors.Is(err, ErrNoChange) {
+		t.Errorf("an armor repair after a full one: %v", err)
+	}
+	if err := serviceUnitState(f, "c", "rearm", "", 20, true, time.Now()); err != nil {
+		t.Errorf("a rearm after a full repair: %v", err)
+	}
+	if err := serviceUnitState(load(), "nope", "repair", RepairArmor, 20, true, time.Now()); err == nil {
 		t.Error("an unknown unit should be refused")
 	}
-	if err := serviceUnitState(load(), "c", "paint", "", 20, time.Now()); err == nil {
+	if err := serviceUnitState(load(), "c", "paint", "", 20, true, time.Now()); err == nil {
 		t.Error("an unknown service should be refused")
 	}
-	if err := serviceUnitState(load(), "c", "repair", "polish", 20, time.Now()); err == nil {
+	if err := serviceUnitState(load(), "c", "repair", "polish", 20, true, time.Now()); err == nil {
 		t.Error("an unknown repair level should be refused")
 	}
 
-	// A unit with structure damage in a surviving location, a critical hit there and an engine hit: structure repair fixes the first two only.
+	// A crippled unit with structure damage in a surviving location, a critical hit there and an engine hit: structure repair fixes the first two only.
 	var g map[string]any
 	_ = json.Unmarshal([]byte(`{"groups":[{"units":[{"id":"x","unit":"BMBaboon","state":{"destroyed":false,
 	 "locations":{"CT":{"armor":3,"internal":2}},
 	 "crits":[{"name":"Gyro","loc":"CT","destroyed":1,"hits":0},{"name":"Clan XL Engine","loc":"CT","destroyed":1,"hits":0}],"crew":[]}}]}]}`), &g)
-	if err := serviceUnitState(g, "x", "repair", RepairStructure, 20, time.Now()); err != nil {
+	if err := serviceUnitState(g, "x", "repair", RepairStructure, 20, true, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	x := readBack(t, g)
 	if len(x.Locations) != 0 || len(x.Crits) != 1 || !x.Crits[0].Engine {
 		t.Errorf("structure repair should leave only the engine hit: %+v %+v", x.Locations, x.Crits)
+	}
+}
+
+// A unit that is neither crippled nor destroyed has no damage above the structure level: one destroyed limb, one engine hit, or a side torso lost on a
+// fusion engine that passed its check are all restored by the structure repair, which leaves the unit undamaged.
+func TestStructureRepairRestoresALostLimbOrEngineHit(t *testing.T) {
+	for name, state := range map[string]string{
+		"one destroyed arm":   `{"destroyed":false,"locations":{"LA":{"armor":2,"internal":3},"CT":{"armor":1,"internal":1}},"crits":[{"name":"Hand Actuator","loc":"LA","destroyed":1,"hits":0}],"crew":[]}`,
+		"one engine hit":      `{"destroyed":false,"locations":{"CT":{"armor":1,"internal":1}},"crits":[{"name":"Fusion Engine","loc":"CT","destroyed":1,"hits":0}],"crew":[]}`,
+		"one destroyed torso": `{"destroyed":false,"locations":{"RT":{"armor":6,"internal":5},"RA":{"armor":3,"internal":3}},"crits":[{"name":"Medium Laser","loc":"RT","destroyed":1,"hits":0}],"crew":[]}`,
+	} {
+		var f map[string]any
+		if err := json.Unmarshal([]byte(`{"name":"t","groups":[{"name":"","units":[{"id":"c","unit":"BMBaboon","updatedTs":1,"state":`+state+`}]}]}`), &f); err != nil {
+			t.Fatal(err)
+		}
+		if c, _ := ConditionOf(readBack(t, f), 20, "Fusion"); c != CondStructure {
+			t.Fatalf("%s before: %s", name, c)
+		}
+		if err := serviceUnitState(f, "c", "repair", RepairStructure, 20, false, time.Now()); err != nil {
+			t.Fatal(err)
+		}
+		st := readBack(t, f)
+		if c, _ := ConditionOf(st, 20, "Fusion"); c != CondOK || st.Damaged || len(st.Crits) != 0 || len(st.Locations) != 0 {
+			t.Errorf("%s after a structure repair: %s damaged=%v crits=%d %+v", name, c, st.Damaged, len(st.Crits), st.Locations)
+		}
 	}
 }
