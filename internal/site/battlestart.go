@@ -247,7 +247,8 @@ func (s *Server) abortBattle(w http.ResponseWriter, r *http.Request) {
 		label, err := s.rollbackTo(r.Context(), currentSeed(r), pt.ID, c.Slug, cps[0].Seq)
 		if err != nil {
 			log.Printf("roll back on abort: %v", err)
-			http.Error(w, "Could not roll the campaign back: "+err.Error(), http.StatusBadGateway)
+			msg, code := rollbackFailure(err)
+			http.Error(w, msg, code)
 			return
 		}
 		// The history goes back with the campaign (the deployment's line too); one line, once the battle is forgotten, says it was aborted and rolled back.

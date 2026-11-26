@@ -2,6 +2,7 @@ package site
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/url"
 	"slices"
@@ -378,5 +379,59 @@ func TestRollbackRestoresKeywords(t *testing.T) {
 	cps, _ = store.Checkpoints(ctx, id, "refusalwar")
 	if got := rb(cps[len(cps)-1].Seq); got != http.StatusNoContent || keywords() != "" {
 		t.Errorf("back at the start no keyword is held: %d %q", got, keywords())
+	}
+}
+
+// A rollback whose rows can't be restored leaves the campaign as it was: the live hangar, already overwritten by the frozen one, is put back from the copy it was
+// set aside in, and the player is told nothing of the database's error.
+func TestRollbackPutsTheHangarBackWhenTheRowsFail(t *testing.T) {
+	fake := &fakeMekBay{hangar: startingHangar()}
+	srv, store := newMekBayTestServer(t, fake)
+	ctx := context.Background()
+	const seed = "wolfpack2026"
+	cookie := post(t, srv, "/api/seed", url.Values{"seed": {seed}}, nil, "").Cookies()[0]
+	post(t, srv, "/api/account", url.Values{"account": {"Wolf Pack"}}, cookie, srv.URL)
+	if r := post(t, srv, "/api/campaign/start", startForm(goodHangar, "Alrek", "Katarina"), cookie, srv.URL); r.StatusCode != http.StatusNoContent {
+		t.Fatalf("start: %d", r.StatusCode)
+	}
+	id := playthroughID(seed)
+	cps, _ := store.Checkpoints(ctx, id, "refusalwar")
+	run, _, _ := store.Run(ctx, id, "refusalwar")
+	live, frozen := run.HangarInstance, cps[0].HangarCopy
+	post(t, srv, "/api/warchest", url.Values{"campaign": {"refusalwar"}, "funds": {"42"}}, cookie, srv.URL)
+
+	// The checkpoint's snapshot names a column the table doesn't have (as one taken before a column was dropped would), so restoring it fails.
+	broken := `{"campaign_runs":[{"playthrough_id":"` + id + `","campaign":"refusalwar","hangar_instance":"` + live + `","no_such_column":1}]}`
+	if _, err := store.DB().ExecContext(ctx, store.Rebind(`UPDATE campaign_checkpoints SET snapshot = ? WHERE playthrough_id = ? AND campaign = ?`), broken, id, "refusalwar"); err != nil {
+		t.Fatal(err)
+	}
+	fake.mu.Lock()
+	before := len(fake.copies)
+	fake.mu.Unlock()
+	res := post(t, srv, "/api/campaign/rollback", url.Values{"campaign": {"refusalwar"}, "checkpoint": {strconv.Itoa(cps[0].Seq)}}, cookie, srv.URL)
+	msg, _ := io.ReadAll(res.Body)
+	if res.StatusCode != http.StatusInternalServerError || strings.TrimSpace(string(msg)) != "Could not roll the campaign back." {
+		t.Errorf("a database failure answers a fixed message: %d %q", res.StatusCode, msg)
+	}
+	fake.mu.Lock()
+	copies, deletes := slices.Clone(fake.copies[before:]), slices.Clone(fake.deletes)
+	fake.mu.Unlock()
+	if len(copies) != 3 || copies[0].Source != live || copies[1].Source != frozen || copies[1].Target != live || copies[2].Source != copies[0].Target || copies[2].Target != live {
+		t.Fatalf("the live hangar is set aside, overwritten, and put back: %+v", copies)
+	}
+	if aside := copies[0].Target; aside == live || aside == frozen || !slices.Contains(deletes, aside) {
+		t.Errorf("the copy set aside is a force of its own, deleted once the hangar is back: %q %v", aside, deletes)
+	}
+	if slices.Contains(deletes, frozen) || slices.Contains(deletes, live) {
+		t.Errorf("neither the frozen hangar nor the live one is deleted: %v", deletes)
+	}
+	if now, _, _ := store.Run(ctx, id, "refusalwar"); now.Warchest != 42 || now.HangarInstance != live {
+		t.Errorf("the rows are as they were: %+v", now)
+	}
+	if left, _ := store.Checkpoints(ctx, id, "refusalwar"); len(left) != 1 {
+		t.Errorf("the checkpoint is still there to try again: %+v", left)
+	}
+	if h, _ := store.History(ctx, id, "refusalwar"); len(h) == 0 || strings.Contains(h[len(h)-1].Text, "Rolled back") {
+		t.Errorf("a failed rollback is not in the history: %+v", h)
 	}
 }
