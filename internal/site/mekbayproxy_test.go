@@ -3,6 +3,7 @@ package site
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -26,6 +27,13 @@ const (
 	otherAccount = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
 )
 
+// What makes the fake MekBay close a WebSocket, and the code and reason it closes with.
+const (
+	fakeCloseMessage = "fake: close this connection"
+	fakeCloseCode    = websocket.StatusCode(4321)
+	fakeCloseReason  = "session replaced"
+)
+
 // fakeUpstream is a stand-in for mekbay.com: a static page and script naming the WebSocket the way the real build does, a manifest, and a
 // WebSocket that records what it is sent.
 type fakeUpstream struct {
@@ -33,6 +41,7 @@ type fakeUpstream struct {
 	mu       sync.Mutex
 	received []string
 	origins  []string
+	closes   []websocket.CloseError // how each browser's connection ended, as MekBay saw it
 	hits     map[string]int
 	scripts  string // contents of /chunk-abc.js
 }
@@ -58,6 +67,17 @@ func newFakeUpstream(t *testing.T) *fakeUpstream {
 		for {
 			typ, b, err := c.Read(r.Context())
 			if err != nil {
+				var ce websocket.CloseError
+				if !errors.As(err, &ce) {
+					ce.Code = -1 // the connection just broke
+				}
+				f.mu.Lock()
+				f.closes = append(f.closes, ce)
+				f.mu.Unlock()
+				return
+			}
+			if string(b) == fakeCloseMessage { // MekBay ends the connection itself, with its own code
+				_ = c.Close(fakeCloseCode, fakeCloseReason)
 				return
 			}
 			f.mu.Lock()
@@ -291,7 +311,7 @@ func TestMekBayProxyRefusesBadLinks(t *testing.T) {
 		if resp.Header.Get("Referrer-Policy") != "no-referrer" || resp.Header.Get("Cache-Control") != "no-store" {
 			t.Errorf("%s: the refusal keeps its headers: %v", name, resp.Header)
 		}
-		if _, resp, err := p.dial(t, host, nil); err == nil || resp == nil || resp.StatusCode != http.StatusUnauthorized {
+		if _, resp, err := p.dial(t, host, nil); err == nil || resp == nil || resp.StatusCode != http.StatusForbidden {
 			t.Errorf("%s gets no relay: %v %v", name, resp, err)
 		}
 		// Files are public MekBay files, so they are not refused.
@@ -421,7 +441,7 @@ func TestMekBayRelayTwoLinksTwoAccounts(t *testing.T) {
 	if ok, err := p.store.RevokeMekBayLink(context.Background(), "pt", "camp", "player-1"); err != nil || !ok {
 		t.Fatal(ok, err)
 	}
-	if _, resp, err := p.dial(t, player, nil); err == nil || resp == nil || resp.StatusCode != http.StatusUnauthorized {
+	if _, resp, err := p.dial(t, player, nil); err == nil || resp == nil || resp.StatusCode != http.StatusForbidden {
 		t.Errorf("a revoked link no longer connects: %v %v", resp, err)
 	}
 	if fresh := p.link(t, "player-1", testAccount); fresh == player {
@@ -461,7 +481,7 @@ func TestMekBayRelaySandbox(t *testing.T) {
 	if got := whoIs(t, c); got != testAccount {
 		t.Errorf("a link acts as its own account: %q", got)
 	}
-	if _, resp, err := p.dial(t, "mekbay-nope.localhost", nil); err == nil || resp == nil || resp.StatusCode != http.StatusUnauthorized {
+	if _, resp, err := p.dial(t, "mekbay-nope.localhost", nil); err == nil || resp == nil || resp.StatusCode != http.StatusForbidden {
 		t.Errorf("a broken link host gets no sandbox: %v %v", resp, err)
 	}
 
@@ -476,7 +496,7 @@ func TestMekBayRelaySandbox(t *testing.T) {
 		"behind a proxy (Fwd)":  {"mekbay.localhost", http.Header{"Forwarded": {"for=203.0.113.9"}}},
 		"behind a proxy (host)": {"mekbay.localhost", http.Header{"X-Forwarded-Host": {"battletech.zech.io"}}},
 	} {
-		if _, resp, err := p.dial(t, c.host, c.extra); err == nil || resp == nil || resp.StatusCode != http.StatusUnauthorized {
+		if _, resp, err := p.dial(t, c.host, c.extra); err == nil || resp == nil || resp.StatusCode != http.StatusForbidden {
 			t.Errorf("%s gets no sandbox: %v %v", name, resp, err)
 		}
 	}
@@ -570,5 +590,65 @@ func TestDeletingTheCampaignRevokesItsLinks(t *testing.T) {
 	}
 	if _, ok, _ := store.MekBayLink(ctx, id, time.Now()); ok {
 		t.Error("deleting the campaign revokes its links")
+	}
+}
+
+// Each side learns how the other ended the connection: MekBay's close code and reason reach the browser, and the browser's reach MekBay.
+func TestMekBayRelayPassesCloseCodesOn(t *testing.T) {
+	p := newProxyFixture(t)
+	host := p.link(t, "player-1", testAccount)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	conn, _, err := p.dial(t, host, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.CloseNow()
+	if got := whoIs(t, conn); got != testAccount {
+		t.Fatalf("the relay is up: %q", got)
+	}
+	if err := conn.Write(ctx, websocket.MessageText, []byte(fakeCloseMessage)); err != nil {
+		t.Fatal(err)
+	}
+	_, _, err = conn.Read(ctx)
+	var ce websocket.CloseError
+	if !errors.As(err, &ce) || ce.Code != fakeCloseCode || ce.Reason != fakeCloseReason {
+		t.Errorf("the browser sees MekBay's close code and reason, not an abnormal close: %v", err)
+	}
+
+	conn, _, err = p.dial(t, host, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.CloseNow()
+	whoIs(t, conn)
+	if err := conn.Close(4999, "tab closed"); err != nil {
+		t.Errorf("the browser's close handshake completes: %v", err)
+	}
+	var closes []websocket.CloseError
+	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
+		p.fake.mu.Lock()
+		closes = append([]websocket.CloseError(nil), p.fake.closes...)
+		p.fake.mu.Unlock()
+		if len(closes) > 0 {
+			break
+		}
+	}
+	if len(closes) != 1 || closes[0].Code != 4999 || closes[0].Reason != "tab closed" {
+		t.Errorf("MekBay sees the browser's close code and reason: %+v", closes)
+	}
+}
+
+// A link that couldn't be looked up is the server's failure, not a bad link: the relay says so, as the pages do.
+func TestMekBayRelayReportsALookupFailure(t *testing.T) {
+	p := newProxyFixture(t)
+	host := p.link(t, "player-1", testAccount)
+	p.store.Close() // every lookup now fails
+	if _, resp, err := p.dial(t, host, nil); err == nil || resp == nil || resp.StatusCode != http.StatusInternalServerError {
+		t.Errorf("a failed lookup is a 500: %v %v", resp, err)
+	}
+	if resp, _ := p.get(t, host, "/"); resp.StatusCode != http.StatusInternalServerError {
+		t.Errorf("the page answers the same way: %d", resp.StatusCode)
 	}
 }

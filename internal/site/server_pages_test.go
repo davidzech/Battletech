@@ -3,6 +3,7 @@ package site
 import (
 	"context"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -374,6 +375,89 @@ func TestCampaignImagesAreRevalidated(t *testing.T) {
 		again.Body.Close()
 		if again.StatusCode != http.StatusNotModified {
 			t.Errorf("%s: an unchanged image is a 304, got %d", u, again.StatusCode)
+		}
+	}
+}
+
+// Every page holds the seed, so every page says: don't keep me, don't frame me, don't tell other sites where a link came from. Files that hold no
+// seed keep their own caching.
+func TestPagesCarryProtectiveHeaders(t *testing.T) {
+	srv, _, cookie := startedCompany(t)
+	fetch := func(path string) *http.Response {
+		t.Helper()
+		res := get(t, srv, path, cookie)
+		res.Body.Close()
+		return res
+	}
+	for _, path := range []string{"/", "/refusalwar/", "/refusalwar/manage/", "/refusalwar/scenario_001/", "/no/such/page/"} {
+		h := fetch(path).Header
+		if !strings.HasPrefix(h.Get("Content-Type"), "text/html") {
+			t.Errorf("%s is a page: %q", path, h.Get("Content-Type"))
+		}
+		for name, want := range map[string]string{
+			"Cache-Control":           "no-store",
+			"X-Content-Type-Options":  "nosniff",
+			"Referrer-Policy":         "same-origin",
+			"X-Frame-Options":         "DENY",
+			"Content-Security-Policy": "frame-ancestors 'none'",
+		} {
+			if got := h.Get(name); got != want {
+				t.Errorf("%s: %s is %q, want %q", path, name, got, want)
+			}
+		}
+	}
+	for _, path := range []string{"/static/dom.js", "/static/style.css", "/favicon.ico"} {
+		res := fetch(path)
+		if res.StatusCode != http.StatusOK || res.Header.Get("ETag") == "" || res.Header.Get("Cache-Control") == "no-store" || res.Header.Get("X-Frame-Options") != "" {
+			t.Errorf("%s keeps its own caching: %d %v", path, res.StatusCode, res.Header)
+		}
+	}
+}
+
+// The outcome dialog asks before committing (confirm.js), so every scenario page that has it loads confirm.js before it, with or without a Deploy section, and
+// no script falls back to the browser's own window.confirm.
+func TestOutcomeDialogLoadsConfirm(t *testing.T) {
+	root := plainScenario001Root(t)
+	setup := filepath.Join(root, "RefusalWar", "Scenario_000", "Setup.md")
+	data, err := os.ReadFile(setup)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const forces = "forces:\n  opfor1: OpFor1.mul\n  opfor2: OpFor2.mul\n"
+	if !strings.Contains(string(data), forces) {
+		t.Fatal("Scenario 000's forces are not where the test expects them")
+	}
+	for _, withForces := range []bool{true, false} {
+		if !withForces {
+			if err := os.WriteFile(setup, []byte(strings.Replace(string(data), forces, "", 1)), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		store, err := storage.OpenSQLite(t.TempDir() + "/test.db")
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { store.Close() })
+		srv := httptest.NewServer(NewHandler(root, store, WithMekBay(&fakeMekBay{hangar: startingHangar()})))
+		t.Cleanup(srv.Close)
+		cookie := post(t, srv, "/api/seed", url.Values{"seed": {"wolfpack2026"}}, nil, "").Cookies()[0]
+		post(t, srv, "/api/account", url.Values{"account": {"Wolf's Dragoons"}}, cookie, srv.URL)
+		if r := post(t, srv, "/api/campaign/start", startForm(goodHangar, "Alrek", "Katarina"), cookie, srv.URL); r.StatusCode != http.StatusNoContent {
+			t.Fatalf("start: %d", r.StatusCode)
+		}
+		page := body(t, srv, "/refusalwar/scenario_000/", cookie)
+		confirm, outcome := strings.Index(page, `src="/static/confirm.js"`), strings.Index(page, `src="/static/outcome.js"`)
+		if strings.Contains(page, "/static/mekbay.js") != withForces || outcome < 0 {
+			t.Fatalf("forces %v: the page should have the outcome dialog, and the Deploy section only with forces", withForces)
+		}
+		if strings.Count(page, `src="/static/confirm.js"`) != 1 || confirm > outcome {
+			t.Errorf("forces %v: confirm.js should load once, before outcome.js", withForces)
+		}
+	}
+	scripts, _ := filepath.Glob("static/*.js")
+	for _, f := range scripts {
+		if b, _ := os.ReadFile(f); regexp.MustCompile(`\bconfirm\(`).Match(b) {
+			t.Errorf("%s calls the browser's confirm", f)
 		}
 	}
 }

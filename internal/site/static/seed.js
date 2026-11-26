@@ -12,7 +12,8 @@
   var accountInput = document.getElementById('account-input');
   var setupError = document.getElementById('setup-error');
 
-  var hasSeed = dialog.dataset.seed !== '';
+  var seed = dialog.dataset.seed; // the seed in use
+  var hasSeed = seed !== '';
   var configured = dialog.dataset.configured === '1';
 
   var SEED_PATTERN = /^[a-z0-9]{8,32}$/;
@@ -125,8 +126,17 @@
     post('/api/seed', 'seed=' + encodeURIComponent(input.value)).then(function (res) {
       if (!res.ok) return res.text().then(function (t) { seedError.textContent = t.trim() || 'Could not save the seed.'; });
       return res.json().then(function (data) {
+        // A seed that replaces another one reloads even when its account is still unnamed: the page shows the old seed's campaign, and every request now runs as
+        // the new one. The setup step opens again after the reload (the skip belonged to the old seed).
+        if (data.configured || (seed && input.value !== seed)) {
+          try { sessionStorage.removeItem('seedSkipped'); } catch (e) {}
+          location.reload();
+          return;
+        }
+        seed = input.value;
         hasSeed = true;
-        if (data.configured) { location.reload(); } else { configured = false; showStep('setup'); }
+        configured = false;
+        showStep('setup');
       });
     }, function () { seedError.textContent = 'Could not reach the server.'; });
   });
