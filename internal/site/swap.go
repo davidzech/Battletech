@@ -41,13 +41,7 @@ func (s *Server) swapUnit(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
-	var hu mekbay.HangarUnit
-	found := false
-	for _, u := range h.Units {
-		if u.ID == r.PostFormValue("unit") {
-			hu, found = u, true
-		}
-	}
+	hu, found := hangarUnit(h, r.PostFormValue("unit"))
 	if !found {
 		http.Error(w, "That unit is no longer in your hangar.", http.StatusNotFound)
 		return

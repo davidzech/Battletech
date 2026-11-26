@@ -5,7 +5,6 @@ import (
 
 	"github.com/expr-lang/expr"
 	"github.com/expr-lang/expr/ast"
-	"github.com/expr-lang/expr/parser"
 	"github.com/expr-lang/expr/vm"
 )
 
@@ -31,16 +30,11 @@ func (e *Expr) Source() string { return e.src }
 func (e *Expr) Names() []string { return e.names }
 
 func compile(src string, env map[string]any, opts ...expr.Option) (*Expr, error) {
-	prog, err := expr.Compile(src, append([]expr.Option{expr.Env(env)}, opts...)...)
+	var v nameCollector // collects the names as the expression is compiled, so it is parsed once
+	prog, err := expr.Compile(src, append([]expr.Option{expr.Env(env), expr.Patch(&v)}, opts...)...)
 	if err != nil {
 		return nil, err
 	}
-	tree, err := parser.Parse(src)
-	if err != nil {
-		return nil, err
-	}
-	var v nameCollector
-	ast.Walk(&tree.Node, &v)
 	return &Expr{src: src, prog: prog, names: v.names}, nil
 }
 

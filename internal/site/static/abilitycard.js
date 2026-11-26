@@ -4,6 +4,7 @@
 //   AbilityCard.setCatalog(list)     the twelve abilities as { id, name, category, text } (from the page's data-abilities)
 //   AbilityCard.byId(id)             one of them, or null
 //   AbilityCard.fill(card, a)        fills a .skill-card element: the name, a category pill and the rule with its trigger in bold; null empties it
+//   AbilityCard.select(id, list)     a <select> with this id for choosing one of the listed abilities: a blank first option, then the abilities by category
 //   AbilityCard.attach(chip, id)     shows the card in a floating panel under the chip on hover and keyboard focus (above it when there is no room below)
 //
 // The floating panel is a popover where the browser has them, so it renders in the top layer: above a dialog or another popover (the Deploy popup's pilot
@@ -59,6 +60,28 @@
     card.appendChild(rule);
   }
 
+  // The categories in the order the pickers list them; one the list doesn't know comes after them.
+  var CATEGORY_ORDER = ['Attack', 'Indirect Fire', 'Defense', 'Heat', 'Melee', 'Movement'];
+
+  function select(id, list) {
+    var s = document.createElement('select');
+    s.id = id;
+    var blank = el('option', null, 'Choose an ability\u2026');
+    blank.value = '';
+    s.appendChild(blank);
+    var categories = CATEGORY_ORDER.slice();
+    list.forEach(function (a) { if (categories.indexOf(a.category) < 0) categories.push(a.category); });
+    categories.forEach(function (cat) {
+      var inCat = list.filter(function (a) { return a.category === cat; });
+      if (!inCat.length) return;
+      var group = document.createElement('optgroup');
+      group.label = cat;
+      inCat.forEach(function (a) { var o = el('option', null, a.name); o.value = a.id; group.appendChild(o); });
+      s.appendChild(group);
+    });
+    return s;
+  }
+
   // ---- The floating panel: one for the page.
   var canPopover = typeof HTMLElement !== 'undefined' && typeof HTMLElement.prototype.showPopover === 'function';
   var tip = null, tipCard = null;
@@ -109,5 +132,5 @@
     chip.addEventListener('blur', hide);
   }
 
-  window.AbilityCard = { setCatalog: setCatalog, byId: byId, fill: fill, attach: attach };
+  window.AbilityCard = { setCatalog: setCatalog, byId: byId, fill: fill, select: select, attach: attach };
 })();

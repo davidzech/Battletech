@@ -40,9 +40,6 @@ func FactionRanks(id string) []string {
 	return append([]string(nil), f.Ranks...)
 }
 
-// RankFor is rankFor for the other packages: the rank a pilot holding `stored` has in a campaign with these ranks.
-func RankFor(ranks []string, stored string) string { return rankFor(ranks, stored) }
-
 // RankIndex is a rank's place on the ladder (0 is the lowest), or -1 if the campaign doesn't have it.
 func RankIndex(ranks []string, rank string) int {
 	for i, r := range ranks {
@@ -53,26 +50,17 @@ func RankIndex(ranks []string, rank string) int {
 	return -1
 }
 
-// rankFor is the rank to show for a pilot who holds `stored`: that rank if the campaign has it, else the lowest rank (so a
-// new pilot, or one whose old rank is no longer in the list, is simply the lowest). "" when the campaign has no ranks.
-func rankFor(ranks []string, stored string) string {
+// RankFor is the rank to show for a pilot who holds `stored` in a campaign with these ranks: that rank if the campaign has it, else the lowest
+// rank (so a new pilot, or one whose old rank is no longer in the list, is simply the lowest). "" when the campaign has no ranks.
+func RankFor(ranks []string, stored string) string {
 	if len(ranks) == 0 {
 		return ""
 	}
-	for _, r := range ranks {
-		if r == stored {
-			return stored
-		}
+	if ValidRank(ranks, stored) {
+		return stored
 	}
 	return ranks[0]
 }
 
 // ValidRank reports whether the campaign has this rank.
-func ValidRank(ranks []string, rank string) bool {
-	for _, r := range ranks {
-		if r == rank {
-			return true
-		}
-	}
-	return false
-}
+func ValidRank(ranks []string, rank string) bool { return RankIndex(ranks, rank) >= 0 }

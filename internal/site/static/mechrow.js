@@ -187,7 +187,7 @@
     main.appendChild(nameLine);
 
     var chips = el('span', 'mr-chips');
-    chips.appendChild(chip('', u.unknown ? 'BV: ?' : 'BV: ' + Number(u.bv).toLocaleString('en-US')));
+    chips.appendChild(chip('', u.unknown ? 'BV: ?' : 'BV: ' + Dom.commas(u.bv)));
     if (u.tons) chips.appendChild(chip('', String(u.tons), WEIGHT));
     if (u.gunnery !== undefined && u.piloting !== undefined) {
       var pilot = chip('pilot', u.gunnery + '/' + u.piloting, HELMET);

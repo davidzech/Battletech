@@ -78,6 +78,16 @@ func battleLockMessage(c *content.Campaign, sc *content.Scenario) string {
 	return c.MissionName(*sc) + " is in progress. Complete or abort it before changing the campaign."
 }
 
+// hangarUnit finds the hangar's unit with this ID (the last one, should two share it).
+func hangarUnit(h mekbay.HangarForce, id string) (hu mekbay.HangarUnit, found bool) {
+	for _, u := range h.Units {
+		if u.ID == id {
+			hu, found = u, true
+		}
+	}
+	return hu, found
+}
+
 // openRunRequest is runRequest without the battle lock.
 func (s *Server) openRunRequest(w http.ResponseWriter, r *http.Request) (pt storage.Playthrough, c *content.Campaign, run storage.CampaignRun, ok bool) {
 	if !sameOrigin(r) {
