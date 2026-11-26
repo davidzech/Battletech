@@ -102,12 +102,19 @@
 <summary>Outcome</summary>
 <div class="fold-body"><section class="panel">{{.Scenario.OutcomeHTML}}</section></div>
 </details>
+{{end}}{{if or .Aftermath .NextSteps}}<section class="briefing aftermath" id="aftermath" aria-label="Aftermath">
+<p class="briefing-tag">Aftermath</p>
+{{if .Aftermath}}<div class="briefing-text">{{.Aftermath}}</div>
+{{end}}{{if .NextSteps}}<div class="next-steps">
+<h2>Next steps</h2>
+{{.NextSteps}}</div>
+{{end}}</section>
 {{end}}{{if and .Run.Started (ne .ScenarioState "locked") (or (not .Scenario.HasOutcome) (and (not .Scenario.Forces) (ne .ScenarioState "completed")))}}<section class="mission-actions" id="mission-actions">
 {{if .Scenario.HasOutcome}}<button type="button" class="button button-outline button-large" id="outcome-open"{{if .OtherBattle}} disabled title="{{.Lock.Mission}} is in progress."{{end}}>Complete mission</button>{{else}}<button type="button" class="button button-outline button-large" id="mission-log-toggle"{{if .OtherBattle}} disabled title="{{.Lock.Mission}} is in progress."{{end}}>{{if eq .ScenarioState "completed"}}Mark not completed{{else}}Mark completed{{end}}</button>{{end}}
 <p class="form-error" id="mission-log-error" role="alert"></p>
 </section>
 {{end}}{{if and .Run.Started (eq .ScenarioState "completed") .NextScenarios}}<section class="next-missions" id="next-missions">
 <h2>{{if eq (len .NextScenarios) 1}}Next mission{{else}}Next missions{{end}}</h2>
-<ul>{{range .NextScenarios}}<li><a class="button" href="/{{$.Campaign.Slug}}/{{.Slug}}/">{{$.Campaign.MissionName .}}</a></li>{{end}}</ul>
+<ul class="cards scenarios" style="--graph-lanes: {{.GraphLanes}}">{{range .NextScenarios}}<li class="{{.State}}"><span class="sgraph">{{.Graph}}</span><a class="card {{.State}}" href="{{.URL}}"><span class="num">{{.Num}}</span><span class="name">{{.Name}}{{if .Sub}}<span class="sub">{{.Sub}}</span>{{end}}</span><span class="go">{{if eq .State "completed"}}Completed{{else}}Open &rsaquo;{{end}}</span></a></li>{{end}}</ul>
 </section>{{end}}
 {{end}}

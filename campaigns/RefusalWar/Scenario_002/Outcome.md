@@ -51,3 +51,13 @@ Objectives met fill the mission's pool of SP. Each pilot who took part draws a f
 
 - **SIGINT** if the target of opportunity was not destroyed.
 - **Avenger** if Star Captain Rothgar Mattlov was not killed; **No Quarter** if he was.
+
+## Aftermath
+
+After engaging the Falcon garrison at Webster, Khan Phelan ordered his attack force to retreat to the Dargoth Plains. Under the cover of Wolf aerospace fighters, Khan Phelan's 'Mechs fired on the pursuing Falcon defenders as they went, and destroyed many of the Falcons' heavy and assault 'Mechs before they reached the plains.
+
+When the surviving Falcon units crested the first hills of Dargoth's grassy plains, they saw what appeared to be a disorganized army desperately trying to reach its DropShips some fifteen miles away. Then the hidden Wolf 'Mechs emerged from the tree-covered hills, and the Falcons found themselves surrounded. Waves of Wolf aerospace fighters dropped their remaining bombs on the trapped Falcons, and the battered Falcon 'Mechs made easy targets for the fresh Wolf BattleMechs.
+
+In the end, Khan Phelan's forces scored an impressive victory. They killed or captured some 100 Falcon 'Mechs, nearly all that had been on the planet. Eighty-five percent of the Falcon MechWarriors and pilots were killed, and the rest were injured. The Wolves lost only 35 units.
+
+After returning to the Wolf fleet, Khan Phelan tried to persuade Khan Natasha to include his forces in further battles, using his victory to bolster his arguments. Despite his protests, Khan Natasha remained adamant that he follow Ulric's original plan and lead Delta Galaxy into the Inner Sphere. On October 5, 3057, Khan Phelan's JumpShip *Werewolf* left Clan space with a very special cargo: the complete genetic heritage and future of the Wolf Clan.

@@ -1575,9 +1575,16 @@ dialog.qr-dialog { padding: 0; max-width: min(92vw, 24rem); }
 .deploy-slot .kia-stamp { font-size: 1.05rem; border-width: 2px; padding: 0 0.4rem; }
 #deploy-open:disabled { opacity: 0.4; cursor: not-allowed; filter: grayscale(1); }
 .next-missions { margin-top: 2.5rem; }
-.next-missions ul { list-style: none; margin: 0.6rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; align-items: flex-start; }
+.next-missions .cards { margin: 0.6rem 0 0; }
 .next-missions h2 { margin: 0; font: 0.85rem var(--display); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
-.next-missions li { display: block; }
+/* Next Steps sit inside the Aftermath block, under a thin rule, as plain text rather than the transmission's lede. */
+.aftermath .next-steps { margin-top: 1.4rem; padding-top: 1.1rem; border-top: 1px solid color-mix(in srgb, var(--accent) 30%, var(--line)); }
+.aftermath .next-steps:first-child, .aftermath .briefing-tag + .next-steps { margin-top: 0; padding-top: 0; border-top: 0; }
+.next-steps h2 { margin: 0 0 0.6rem; font: 700 0.8rem var(--display); letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); }
+.next-steps p, .next-steps li { margin: 0 0 0.6rem; }
+.next-steps > :last-child { margin-bottom: 0; }
+/* A completed mission's aftermath: the same transmission block as the briefing, under the Outcome. */
+.briefing.aftermath { margin-top: 2rem; }
 .deploy-unit.has-slot.wide { grid-template-columns: minmax(0, 1fr); }
 .deploy-unit.has-slot.wide .mech-row { min-height: 5.85rem; height: 100%; }
 /* In progress: a yellow LED, and the state is a button that opens the operation. */

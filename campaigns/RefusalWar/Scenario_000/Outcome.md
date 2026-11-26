@@ -45,3 +45,7 @@ Each named pilot earns the following SP for the number of kills for this scenari
 Every pilot who passes the Trial is promoted to MechWarrior, and the pilot with the most kills to Star Commander (on a tie, the mission's MVP).
 
 If your pilot dies, or fails to kill at least 1 opponent, they are permanently removed from the campaign. You will receive a new named pilot with 150 starting SP for Scenario 001.
+
+## Next Steps
+
+The cadets who passed the Trial take their place in the 352nd Assault Cluster of Beta Galaxy, which drops on Colmar to open the Refusal War. Recruit a replacement for every cadet the Trial took (free of SP), spend your pilots' new SP, and ready your hangar on the Manage page before you deploy.

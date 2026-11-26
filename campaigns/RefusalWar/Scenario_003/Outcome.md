@@ -30,6 +30,27 @@ outcomes:
     pool: 800
   - when: karyoplasma and not converter_destroyed
     grants: [full_power]
+aftermath:
+  - when: karyoplasma and converter_destroyed
+    text: |
+      The power converter was inspected and destroyed. The city has become useless to the enemy as a base of operations, and the 2nd Wolf Cavaliers are busy laying waste to the 10th.
+
+      The enemy is vanquished. The Keshik has noted your excellence in the field.
+  - when: karyoplasma and not converter_destroyed
+    text: |
+      You have failed your objective, and the power converter remains. The 2nd Wolf Cavaliers will take over in your stead for a second strike.
+
+      Your actions have disgraced the Clan.
+  - when: not karyoplasma and commander_scanned
+    text: |
+      The location of the hidden Falcon headquarters was found in the data files of the destroyed Star Commander's mech. The 2nd Wolf Cavaliers will find and destroy them.
+
+      The Keshik has noted your excellence in the field.
+  - when: not karyoplasma and not commander_scanned
+    text: |
+      Our intelligence network has failed us, and we have no further leads on the location of the hidden Falcon headquarters.
+
+      The Keshik is displeased.
 ---
 
 # Scenario 003: Blade Splint - Outcome
@@ -45,18 +66,6 @@ Objectives met fill the mission's pool of SP. Each pilot who took part draws a f
 | Primary: inspect the power converter                                         | 400 |
 | Secondary, if it was converting karyoplasma: destroy it                      | 800 |
 | Secondary, if it was not: destroy the force commander and scan their mech    | 800 |
-
-### If the converter was converting karyoplasma
-
-**Converter destroyed:** the power converter was inspected and destroyed. The city has become useless to the enemy as a base of operations, and the 2nd Wolf Cavaliers are busy laying waste to the 10th. The enemy is vanquished. The Keshik has noted your excellence in the field.
-
-**Converter not destroyed:** you have failed your objective, and the power converter remains. The 2nd Wolf Cavaliers will take over in your stead for a second strike. Your actions have disgraced the Clan.
-
-### If it was not
-
-**Intel obtained:** the location of the hidden Falcon HQ was found in the data files of the destroyed Star Commander's mech. The 2nd Wolf Cavaliers will find and destroy them. The Keshik has noted your excellence in the field.
-
-**Otherwise:** our intelligence network has failed us, and we have no further leads on the location of the hidden Falcon HQ. The Keshik is displeased.
 
 ## Keywords
 

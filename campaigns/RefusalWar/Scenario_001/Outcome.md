@@ -29,6 +29,12 @@ inputs:
     help: 200 SP each
 outcomes:
   - pool: falcon_mechs * 200
+aftermath:
+  - when: plant_large and plant_small
+    text: |
+      Your strike has left the chemical plant in ruins. No doubt the Falcon Regulars will be unable to fully resupply.
+
+      The Keshik is pleased.
 ---
 
 # Scenario 001: Pyre Light - Outcome
@@ -45,3 +51,14 @@ Objectives met fill the mission's pool of SP. Each pilot who took part draws a f
 | Each Jade Falcon mech crippled or destroyed                  | 200        |
 | Objective 1: occupy an adjacent hex                           | 100        |
 | Objective 5: destroy the firebase remains                     | 100        |
+
+## Aftermath
+
+The bitter rivalry between the Wolves and the Jade Falcons fueled fierce fighting on Colmar, a clash that set the tone for the entire Refusal War.
+
+## Next Steps
+
+Colmar is free, and the Falcons are reeling. The Keshik gives you the choice of where to strike next.
+
+- **Flame Tongue**, on Sudeten: saKhan Phelan's Delta Galaxy will not leave for the Inner Sphere before it draws Falcon blood. Hunt down Star Colonel Devin Buhallin in the 8th Falcon Regulars' headquarters, and leave his command nothing to fly away on.
+- **Blade Splint**, on Zoetermeer: the 10th Provisional Garrison has hidden its headquarters in the city of Salyn. Find the city's plasma converter and learn what it burns.
