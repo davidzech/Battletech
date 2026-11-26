@@ -209,11 +209,10 @@ func ParseHangarForce(raw json.RawMessage) (HangarForce, error) {
 			}
 			for _, c := range u.State.Crits {
 				gone := c.Destroyed != nil && c.Destroyed != float64(0)
+				engine := isEngineSlot(c.Name)
 				if c.Hits > 0 || gone { // spent ammunition is not damage: it is Ammo expended (AmmoBins), which a rearm fixes
 					hu.Damaged = true
-				}
-				if c.Hits > 0 || gone {
-					hu.Crits = append(hu.Crits, CritDamage{Loc: c.Loc, Engine: strings.Contains(strings.ToLower(c.Name), "engine")})
+					hu.Crits = append(hu.Crits, CritDamage{Loc: c.Loc, Engine: engine})
 				}
 				hu.AmmoUsed += c.Consumed
 				if c.Consumed > 0 {
@@ -225,15 +224,12 @@ func ParseHangarForce(raw json.RawMessage) (HangarForce, error) {
 				if gone && n < 1 {
 					n = 1
 				}
-				if strings.Contains(strings.ToLower(c.Name), "engine") {
+				if engine {
 					hu.EngineHits += n
 				}
-			}
-			// MekBay also counts a pilot dead when their cockpit is gone, whatever the crew's stored state says: the cockpit slot destroyed, or the head (which holds it)
-			// with no internal structure left. Every standard mech's head has 3 points of internal structure.
-			for _, c := range u.State.Crits {
-				name := strings.ToLower(c.Name)
-				if strings.Contains(name, "cockpit") && !strings.Contains(name, "command") && c.Destroyed != nil && c.Destroyed != float64(0) {
+				// MekBay also counts a pilot dead when their cockpit is gone, whatever the crew's stored state says: the cockpit slot destroyed, or (below) the head,
+				// which holds it, with no internal structure left. Every standard mech's head has 3 points of internal structure.
+				if name := strings.ToLower(c.Name); gone && strings.Contains(name, "cockpit") && !strings.Contains(name, "command") {
 					hu.PilotDead = true
 				}
 			}
@@ -246,6 +242,9 @@ func ParseHangarForce(raw json.RawMessage) (HangarForce, error) {
 	}
 	return h, nil
 }
+
+// isEngineSlot reports whether a critical slot with this name belongs to the engine.
+func isEngineSlot(name string) bool { return strings.Contains(strings.ToLower(name), "engine") }
 
 // Session is one registered WebSocket connection.
 type Session struct {

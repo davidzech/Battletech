@@ -311,11 +311,16 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name
 						p.Memorial = p.Memorial || v.Fallen
 					}
 					if name == "campaign" || name == "manage" {
-						p.Keywords = s.keywordViews(r, id, p.Campaign)
+						ledger, ok := s.campaignLedger(r, id, p.Campaign) // read once for the chips and the dialog
+						if ok {
+							p.Keywords = keywordViews(p.Campaign, ledger)
+						}
+						if name == "campaign" {
+							p.KeywordChoices = keywordChoices(p.Campaign, ledger) // the Danger zone's Edit keywords
+						}
 					}
 					if name == "campaign" {
 						p.History, p.HistoryFilters = s.historyViews(r, id, p.Campaign)
-						p.KeywordChoices = s.keywordChoices(r, id, p.Campaign) // the Danger zone's Edit keywords
 					}
 					p.MaxPilots = limit
 				}

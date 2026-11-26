@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 )
 
@@ -146,7 +145,7 @@ func repairState(state map[string]any, crits []any, level string, tons float64, 
 				if lm, _ := locs[loc].(map[string]any); lm != nil && gone(loc, lm) {
 					continue // a destroyed location's slots go with the location
 				}
-				if strings.Contains(strings.ToLower(name), "engine") {
+				if isEngineSlot(name) {
 					continue // engine hits are what cripples a unit
 				}
 				clearCrit(cm)

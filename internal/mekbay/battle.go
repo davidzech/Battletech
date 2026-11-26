@@ -147,6 +147,10 @@ func (s *Session) saveOperation(ctx context.Context, op map[string]any, opID str
 }
 
 // StartBattle builds the players' forces and the OpFor's and saves the operation that pits them against each other (see the notes at the top of this file).
+//
+// Every force is built and checked before the first one is saved, so a plan that can't be built (a unit that is not in the hangar, a crew for a mech that isn't
+// there) saves nothing. If a save then fails part-way, the forces this start has already saved (and its operation, if it is a new one) are deleted again, since
+// nothing would remember them: the caller gets no result to record.
 func (c *Client) StartBattle(ctx context.Context, req BattleRequest) (BattleResult, error) {
 	if len(req.Players) < 1 || len(req.Players) > MaxPlayers {
 		return BattleResult{}, fmt.Errorf("a battle has 1 to %d players", MaxPlayers)
@@ -161,11 +165,16 @@ func (c *Client) StartBattle(ctx context.Context, req BattleRequest) (BattleResu
 	get := func(instance string, ownedOnly bool) (map[string]any, error) {
 		return s.getForce(ctx, instance, ownedOnly)
 	}
-	save := func(force any) error { return s.saveData(ctx, force) }
+	// built is a force ready to be saved: nothing is saved until all of them are.
+	type built struct {
+		instance, timestamp string
+		data                any
+	}
 
 	// The OpFor's force: the one from an earlier start of this battle, or a fresh one.
 	res := BattleResult{OpForInstance: req.OpFor.Reuse}
 	var opforTS string
+	var toSave []built
 	if res.OpForInstance != "" {
 		d, err := get(res.OpForInstance, true)
 		if err != nil {
@@ -179,9 +188,7 @@ func (c *Client) StartBattle(ctx context.Context, req BattleRequest) (BattleResu
 		res.OpForInstance = NewID()
 		f := BuildForce(res.OpForInstance, time.Now().UTC(), req.OpFor.Draft)
 		opforTS = f.Timestamp
-		if err := save(f); err != nil {
-			return BattleResult{}, err
-		}
+		toSave = append(toSave, built{res.OpForInstance, f.Timestamp, f})
 	}
 
 	// Each player's force, from the hangar or built from their draft.
@@ -212,9 +219,7 @@ func (c *Client) StartBattle(ctx context.Context, req BattleRequest) (BattleResu
 			setCommander(f, p.Commander)
 			force, ts = f, f["timestamp"].(string)
 		}
-		if err := save(force); err != nil {
-			return BattleResult{}, err
-		}
+		toSave = append(toSave, built{instance, ts, force})
 		res.PlayerInstances = append(res.PlayerInstances, instance)
 		forces = append(forces, map[string]any{"instanceId": instance, "alignment": "friendly", "timestamp": ts})
 	}
@@ -223,23 +228,65 @@ func (c *Client) StartBattle(ctx context.Context, req BattleRequest) (BattleResu
 	if len(req.Allies.Groups) > 0 {
 		res.AlliesInstance = NewID()
 		f := BuildForce(res.AlliesInstance, time.Now().UTC(), req.Allies)
-		if err := save(f); err != nil {
-			return BattleResult{}, err
-		}
+		toSave = append(toSave, built{res.AlliesInstance, f.Timestamp, f})
 		forces = append(forces, map[string]any{"instanceId": res.AlliesInstance, "alignment": "friendly", "timestamp": f.Timestamp})
 	}
 
-	// The operation: every player's force (and the allies') on the friendly side, the OpFor on the other.
+	// Everything could be built, so it is saved: the forces, then the operation with every player's force (and the allies') on the friendly side and the OpFor
+	// on the other. From the first save on, a failure deletes what this start saved.
 	res.OperationID = req.OperationID
+	newOperation := ""
 	if res.OperationID == "" {
 		res.OperationID = NewID()
+		newOperation = res.OperationID
+	}
+	var saved []string
+	for _, f := range toSave {
+		// Counted before it is saved: a save that fails may have gone through all the same.
+		saved = append(saved, f.instance)
+		if err := s.saveData(ctx, f.data); err != nil {
+			c.discardBattle(ctx, req.Account, saved, "")
+			return BattleResult{}, err
+		}
 	}
 	forces = append(forces, map[string]any{"instanceId": res.OpForInstance, "alignment": "enemy", "timestamp": opforTS})
 	op := map[string]any{"operationId": res.OperationID, "name": req.OperationName, "note": "", "timestamp": time.Now().UnixMilli(), "forces": forces}
 	if err := s.saveOperation(ctx, op, res.OperationID); err != nil {
+		c.discardBattle(ctx, req.Account, saved, newOperation)
 		return BattleResult{}, err
 	}
 	return res, nil
+}
+
+// discardBattle deletes the forces a failed StartBattle saved, and its operation if operationID is given, best effort (MekBay does not acknowledge a deletion).
+// It uses a connection and a deadline of its own, since the battle's may be what failed.
+func (c *Client) discardBattle(ctx context.Context, account string, instances []string, operationID string) {
+	if len(instances) == 0 && operationID == "" {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
+	defer cancel()
+	s, err := Dial(ctx, c.url(), account)
+	if err != nil {
+		return
+	}
+	defer s.Close()
+	for _, in := range instances {
+		if err := s.Send(ctx, map[string]any{"action": "delForce", "uuid": account, "instanceId": in}); err != nil {
+			return
+		}
+	}
+	if operationID != "" {
+		if err := s.Send(ctx, map[string]any{"action": "delOperation", "operationId": operationID}); err != nil {
+			return
+		}
+	}
+	// A read on the same connection comes back after the deletions have been handled, so closing the connection does not cut them off.
+	if operationID != "" {
+		_, _ = s.Call(ctx, map[string]any{"action": "getOperation", "operationId": operationID})
+		return
+	}
+	_, _ = s.Call(ctx, map[string]any{"action": "getForce", "uuid": account, "instanceId": instances[len(instances)-1], "ownedOnly": true})
 }
 
 // BattleForce is one force of a battle as MekBay has it now.

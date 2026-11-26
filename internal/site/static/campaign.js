@@ -95,7 +95,6 @@
   var portraits = JSON.parse(wiz.dataset.portraits || '[]');
   // The Edge ability catalog and its card are shared with the Manage page's picker (abilitycard.js).
   var abilityCatalog = JSON.parse(wiz.dataset.abilities || '[]');
-  var CATEGORY_ORDER = ['Attack', 'Indirect Fire', 'Defense', 'Heat', 'Melee', 'Movement'];
   if (window.AbilityCard) AbilityCard.setCatalog(abilityCatalog);
   // How many Edge abilities a pilot's allocation entitles them to choose: their Edge abilities level.
   function abilitySlots(p) {
@@ -247,22 +246,8 @@
       for (var k = 0; k < n; k++) (function (k) {
         var slot = el('div', 'skill-slot');
         var label = el('label', null, 'Edge ability ' + (n > 1 ? (k + 1) : ''));
-        var select = document.createElement('select');
-        select.id = 'wiz-ability-' + k;
+        var select = AbilityCard.select('wiz-ability-' + k, abilityCatalog);
         label.setAttribute('for', select.id);
-        var blank = el('option', null, 'Choose an ability…');
-        blank.value = '';
-        select.appendChild(blank);
-        var categories = CATEGORY_ORDER.slice();
-        abilityCatalog.forEach(function (a) { if (categories.indexOf(a.category) < 0) categories.push(a.category); });
-        categories.forEach(function (cat) {
-          var inCat = abilityCatalog.filter(function (a) { return a.category === cat; });
-          if (!inCat.length) return;
-          var group = document.createElement('optgroup');
-          group.label = cat;
-          inCat.forEach(function (a) { var o = el('option', null, a.name); o.value = a.id; group.appendChild(o); });
-          select.appendChild(group);
-        });
         select.value = p.abilities[k] || '';
         select.addEventListener('change', function () { p.abilities[k] = select.value; error.textContent = ''; sync(); });
         slot.appendChild(label);

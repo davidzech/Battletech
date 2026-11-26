@@ -194,7 +194,7 @@ func (p NamedPilot) View(ranks []string) PilotView {
 		return c
 	}
 	return PilotView{
-		ID: p.ID, Name: p.Name, Rank: rankFor(ranks, p.Rank), Fallen: p.Fallen, Portrait: portraitOf(p.ID, p.Portrait), PortraitURL: portraitURL(portraitOf(p.ID, p.Portrait)),
+		ID: p.ID, Name: p.Name, Rank: RankFor(ranks, p.Rank), Fallen: p.Fallen, Portrait: portraitOf(p.ID, p.Portrait), PortraitURL: portraitURL(portraitOf(p.ID, p.Portrait)),
 		Gunnery: p.Gunnery(), Piloting: p.Piloting(), EdgeTokens: p.EdgeTokens(), Abilities: p.EdgeAbilities(),
 		Earned: p.Earned(), Unallocated: p.Unallocated(), Allocated: p.SP.Total(),
 		EdgeLearned: edgeAbilityList(p.Learned), EdgePending: p.PendingAbilities(),

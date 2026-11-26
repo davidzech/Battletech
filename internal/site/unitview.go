@@ -61,7 +61,8 @@ func hangarViews(h mekbay.HangarForce) []hangarUnitView {
 	views := make([]hangarUnitView, 0, len(h.Units))
 	for _, hu := range h.Units {
 		v := hangarUnitView{MekBayURL: catalog.PageURL(hu.Unit), ID: hu.ID, Pilot: hu.Pilot, PilotDead: hu.PilotDead, Gunnery: hu.Gunnery, Piloting: hu.Piloting, Damaged: hu.Damaged, Destroyed: hu.Destroyed, InDeployed: mekbay.SameGroupName(hu.Group, deployedGroup)}
-		if u, ok := catalog.ByName(hu.Unit); ok {
+		u, known := catalog.ByName(hu.Unit)
+		if known {
 			v.Name, v.Model = catalog.Names(u)
 			v.Class, v.Role, v.Tons, v.Icon = u.Class, catalog.RoleLabel(u), u.Tons, catalog.IconURL(u)
 			v.BV = u.BV // base BV: this campaign ignores pilot skills, so skill can never be a way to game the BV cap
@@ -69,14 +70,9 @@ func hangarViews(h mekbay.HangarForce) []hangarUnitView {
 		} else {
 			v.Name, v.Unknown, v.Icon = hu.Unit, true, catalog.DefaultIconURL("")
 		}
-		var tons float64
-		var engine string
-		if u, ok := catalog.ByName(hu.Unit); ok {
-			tons, engine = u.Tons, u.Engine
-		}
-		c, note := mekbay.ConditionOf(hu, tons, engine)
+		c, note := mekbay.ConditionOf(hu, u.Tons, u.Engine) // 0 and "" for an unknown unit
 		v.Condition, v.ConditionNote, v.AmmoExpended = string(c), note, hu.AmmoUsed > 0
-		if u, ok := catalog.ByName(hu.Unit); ok && u.Type == "Mek" {
+		if known && u.Type == "Mek" {
 			v.RepairLevels, v.RepairCosts, v.RearmCost = hangar.RepairOptions(hu, c, u.Tons), hangar.RepairCosts(u.Tons, u.TechBase), hangar.RearmCost(hu.AmmoBins)
 			v.AmmoBreakdown = hangar.AmmoBreakdown(hu, u)
 			v.SellFull = hangar.Pristine(hu)

@@ -168,7 +168,6 @@
   // combo box for each new ability. The choice is permanent: Advanced Management resets it.
   var skillDialog = document.getElementById('skill-dialog');
   var abilityCatalog = JSON.parse(box.dataset.abilities || '[]');
-  var CATEGORY_ORDER = ['Attack', 'Indirect Fire', 'Defense', 'Heat', 'Melee', 'Movement'];
   var skillPilot = null; // the pilot's row the picker is open for
   var skillSelects = [];
   var skillSlots = document.getElementById('skill-slots');
@@ -207,22 +206,8 @@
     for (var i = 0; i < pending; i++) {
       var slot = el('div', 'skill-slot');
       var label = el('label', null, 'Edge ability ' + (pending > 1 ? (i + 1) : ''));
-      var select = document.createElement('select');
-      select.id = 'skill-select-' + i;
+      var select = AbilityCard.select('skill-select-' + i, available);
       label.setAttribute('for', select.id);
-      var blank = el('option', null, 'Choose an ability\u2026');
-      blank.value = '';
-      select.appendChild(blank);
-      var categories = CATEGORY_ORDER.slice();
-      available.forEach(function (a) { if (categories.indexOf(a.category) < 0) categories.push(a.category); });
-      categories.forEach(function (cat) {
-        var inCat = available.filter(function (a) { return a.category === cat; });
-        if (!inCat.length) return;
-        var group = document.createElement('optgroup');
-        group.label = cat;
-        inCat.forEach(function (a) { var o = el('option', null, a.name); o.value = a.id; group.appendChild(o); });
-        select.appendChild(group);
-      });
       select.addEventListener('change', syncSkills);
       slot.appendChild(label);
       slot.appendChild(select);
