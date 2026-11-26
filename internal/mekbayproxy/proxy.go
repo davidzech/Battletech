@@ -369,7 +369,7 @@ func (p *Proxy) download(ctx context.Context, path string) (*proxiedFile, error)
 func (p *Proxy) relay(w http.ResponseWriter, r *http.Request) {
 	account, status, msg := p.Account(r)
 	if status != 0 {
-		http.Error(w, msg, http.StatusUnauthorized)
+		http.Error(w, msg, status) // as the pages answer: 403 for a link that isn't good, 500 when it couldn't be looked up
 		return
 	}
 	// The default origin check (the page's origin must be this host) stops another page from using a link's host through a visitor's browser.
@@ -394,10 +394,21 @@ func (p *Proxy) relay(w http.ResponseWriter, r *http.Request) {
 	done := make(chan error, 2)
 	go func() { done <- pump(ctx, up, browser, nil) }()
 	go func() { done <- pump(ctx, browser, up, func(b []byte) []byte { return swapUUID(b, account) }) }()
-	err = <-done
-	cancel()
-	_ = browser.Close(websocket.CloseStatus(err), "")
-	_ = up.Close(websocket.CloseStatus(err), "")
+	code, reason := closeOf(<-done)
+	// The side that ended is closed already; the other is told why, with the close handshake, before the context is cancelled: cancelling it first
+	// would drop that side's connection (its pump is still reading with the context) and the browser would see an abnormal close in place of MekBay's.
+	_ = browser.Close(code, reason)
+	_ = up.Close(code, reason)
+}
+
+// closeOf is the close code and reason to pass on to the other side when a pump ends with err: the ones the closing side gave, or "going away"
+// when its connection just broke.
+func closeOf(err error) (websocket.StatusCode, string) {
+	var ce websocket.CloseError
+	if errors.As(err, &ce) {
+		return ce.Code, ce.Reason
+	}
+	return websocket.StatusGoingAway, ""
 }
 
 // pump copies messages from one WebSocket to the other until either side ends, passing text messages through edit when it is set.

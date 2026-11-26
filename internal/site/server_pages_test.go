@@ -379,6 +379,41 @@ func TestCampaignImagesAreRevalidated(t *testing.T) {
 	}
 }
 
+// Every page holds the seed, so every page says: don't keep me, don't frame me, don't tell other sites where a link came from. Files that hold no
+// seed keep their own caching.
+func TestPagesCarryProtectiveHeaders(t *testing.T) {
+	srv, _, cookie := startedCompany(t)
+	fetch := func(path string) *http.Response {
+		t.Helper()
+		res := get(t, srv, path, cookie)
+		res.Body.Close()
+		return res
+	}
+	for _, path := range []string{"/", "/refusalwar/", "/refusalwar/manage/", "/refusalwar/scenario_001/", "/no/such/page/"} {
+		h := fetch(path).Header
+		if !strings.HasPrefix(h.Get("Content-Type"), "text/html") {
+			t.Errorf("%s is a page: %q", path, h.Get("Content-Type"))
+		}
+		for name, want := range map[string]string{
+			"Cache-Control":           "no-store",
+			"X-Content-Type-Options":  "nosniff",
+			"Referrer-Policy":         "same-origin",
+			"X-Frame-Options":         "DENY",
+			"Content-Security-Policy": "frame-ancestors 'none'",
+		} {
+			if got := h.Get(name); got != want {
+				t.Errorf("%s: %s is %q, want %q", path, name, got, want)
+			}
+		}
+	}
+	for _, path := range []string{"/static/dom.js", "/static/style.css", "/favicon.ico"} {
+		res := fetch(path)
+		if res.StatusCode != http.StatusOK || res.Header.Get("ETag") == "" || res.Header.Get("Cache-Control") == "no-store" || res.Header.Get("X-Frame-Options") != "" {
+			t.Errorf("%s keeps its own caching: %d %v", path, res.StatusCode, res.Header)
+		}
+	}
+}
+
 // The outcome dialog asks before committing (confirm.js), so every scenario page that has it loads confirm.js before it, with or without a Deploy section, and
 // no script falls back to the browser's own window.confirm.
 func TestOutcomeDialogLoadsConfirm(t *testing.T) {
