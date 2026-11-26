@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -133,7 +134,7 @@ func TestSeedAndCampaignFlow(t *testing.T) {
 		t.Fatalf("bad seed: got %d", res.StatusCode)
 	}
 
-	// A good seed sets an HttpOnly cookie, creates the playthrough, and reports it as not yet configured.
+	// A good seed sets an HttpOnly cookie and reports it as not yet configured.
 	res := post(t, srv, "/api/seed", url.Values{"seed": {"wolfpack2026"}}, nil, "")
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("good seed: got %d", res.StatusCode)
@@ -148,21 +149,22 @@ func TestSeedAndCampaignFlow(t *testing.T) {
 		t.Fatalf("bad seed cookie: %+v", cookie)
 	}
 	id := playthroughID("wolfpack2026")
-	if pt, ok, _ := store.Playthrough(ctx, id); !ok || pt.Configured() {
-		t.Fatalf("new playthrough should exist and be unconfigured: %+v (exists=%v)", pt, ok)
-	}
-	// The stored key must not be the seed.
-	var raw string
-	_ = store.DB().QueryRow(`SELECT id FROM playthroughs`).Scan(&raw)
-	if strings.Contains(raw, "wolfpack") {
-		t.Fatal("seed must not be stored")
-	}
 
 	// With the cookie, the page now asks to finish setup.
 	if page := body(t, srv, "/", cookie); !strings.Contains(page, `data-seed="wolfpack2026"`) || !strings.Contains(page, "Finish setup") {
 		t.Fatal("seeded but unconfigured page should say Finish setup")
 	} else if strings.Contains(page, `id="hangar-link"`) {
 		t.Fatal("no hangar link before setup")
+	}
+	// Neither choosing a seed nor viewing pages with one records anything: the playthrough's row is made when its account is named, so made-up
+	// seed cookies can't fill the table.
+	for _, path := range []string{"/refusalwar/", "/refusalwar/scenario_001/", "/nowhere/"} {
+		body(t, srv, path, cookie)
+		body(t, srv, path, &http.Cookie{Name: "seed", Value: "madeupseed" + strconv.Itoa(len(path))})
+	}
+	var rows int
+	if err := store.DB().QueryRow(`SELECT COUNT(*) FROM playthroughs`).Scan(&rows); err != nil || rows != 0 {
+		t.Fatalf("a seed with no named account has no row: %d rows (%v)", rows, err)
 	}
 
 	// Naming the company needs a seed cookie and a sensible name.
@@ -192,6 +194,11 @@ func TestSeedAndCampaignFlow(t *testing.T) {
 	}
 	if pt, _, _ := store.Playthrough(ctx, id); !pt.Configured() || pt.AccountName != "Wolf's Dragoons" {
 		t.Fatalf("company not saved correctly: %+v", pt)
+	}
+	// The stored key must not be the seed.
+	var raw string
+	if err := store.DB().QueryRow(`SELECT id FROM playthroughs`).Scan(&raw); err != nil || raw == "" || strings.Contains(raw, "wolfpack") {
+		t.Fatalf("seed must not be stored: %q (%v)", raw, err)
 	}
 
 	// Entering the same seed again (say, on another device) finds the named company.

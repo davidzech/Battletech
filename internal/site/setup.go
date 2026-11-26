@@ -211,9 +211,9 @@ func (s *Server) cloneHangar(ctx context.Context, seed string, source mekbay.Han
 	return mekbay.Hangar{URL: "https://mekbay.com/?instance=" + target, Instance: target, Source: source.URL}, got, nil
 }
 
-// setSeed validates a chosen seed, records its playthrough and stores the seed in a cookie. The
-// reply says whether that playthrough's account is already named, so the page knows whether to
-// ask for its name.
+// setSeed validates a chosen seed and stores it in a cookie. The reply says whether that seed's
+// account is already named, so the page knows whether to ask for its name. Nothing is recorded
+// until it is (setAccount): a seed alone is not worth a row.
 func (s *Server) setSeed(w http.ResponseWriter, r *http.Request) {
 	if !sameOrigin(r) {
 		http.Error(w, "cross-origin request refused", http.StatusForbidden)
@@ -229,12 +229,7 @@ func (s *Server) setSeed(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "A seed is 8 to 32 lowercase letters and digits.", http.StatusBadRequest)
 		return
 	}
-	id := playthroughID(seed)
-	if _, err := s.store.EnsurePlaythrough(r.Context(), id); err != nil {
-		http.Error(w, "could not save playthrough", http.StatusInternalServerError)
-		return
-	}
-	pt, _, err := s.store.Playthrough(r.Context(), id)
+	pt, _, err := s.store.Playthrough(r.Context(), playthroughID(seed))
 	if err != nil {
 		http.Error(w, "could not load playthrough", http.StatusInternalServerError)
 		return
