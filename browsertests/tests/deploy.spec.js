@@ -322,6 +322,7 @@ test('reconfigures an omnimech on the review to fit the BV limit', async ({ page
   // Start battle pays for the swap, then builds the battle; the warchest shows it once the page reloads.
   await dlg.locator('#deploy-go').click();
   await expect(dlg.locator('#deploy-title')).toHaveText('Operation in progress');
+  await expect(page).not.toHaveURL(/#deploy=/); // a battle started: nothing left to come back to
   await page.goto('/muster/manage/');
   await expect(page.locator('#overview')).toContainText('962 SP');
 });
@@ -447,4 +448,53 @@ test('the wizard opens on its title', async ({ page }) => {
   await startCampaign(page, 'refusalwar', ['Alrek', 'Katarina']);
   await openDeploy(page);
   await expect(page.locator('#deploy-title')).toBeFocused();
+});
+
+// The wizard's plan is in the URL's fragment, so a reload brings the player back where they were; closing the wizard clears it, and a restore keeps only what
+// still holds (a mech no longer in the hangar is dropped, with its pilot).
+test('a reload brings the wizard back where it was', async ({ page }) => {
+  await newAccount(page);
+  await startCampaign(page, 'muster', ['Alrek', 'Katarina']);
+  const hangar = [unit('ua', 'BMMadCat_Prime'), unit('ub', 'BMDasher_Prime'), unit('uc', 'BMGrizzly')];
+  await setHangar(page, hangar, 'muster');
+  await page.goto('/muster/scenario_000/');
+  await page.locator('#deploy-open').click();
+  const dlg = page.locator('#deploy-dialog');
+  const rows = dlg.locator('#deploy-list .deploy-unit');
+  await dlg.locator('#deploy-players-pick').getByRole('button', { name: '2 players' }).click();
+  // Player 1: the Timber Wolf as the B, with Alrek.
+  await rows.nth(0).getByRole('button', { name: 'Reconfigure' }).click();
+  const swap = page.locator('#swap-dialog');
+  await swap.locator('#swap-available').uncheck();
+  await swap.locator('#swap-select').selectOption('BMMadCat_B');
+  await swap.locator('#swap-apply').click();
+  await dlg.locator('#deploy-pilots-list .deploy-pilot', { hasText: 'Alrek' }).click();
+  await rows.nth(0).locator('.deploy-slot').click();
+  await dlg.locator('#deploy-next').click();
+  // Player 2: the Fire Moth.
+  await expect(dlg.locator('#deploy-step')).toHaveText('Player 2 of 2');
+  await rows.filter({ hasText: 'Fire Moth' }).locator('input[type=checkbox]').check();
+  await expect(page).toHaveURL(/#deploy=/);
+
+  await page.reload();
+  await expect(dlg).toBeVisible();
+  await expect(dlg.locator('#deploy-step')).toHaveText('Player 2 of 2');
+  await expect(rows.filter({ hasText: 'Fire Moth' }).locator('input[type=checkbox]')).toBeChecked();
+  await dlg.locator('#deploy-back').click();
+  await expect(rows.nth(0)).toContainText('Prime → B');
+  await expect(rows.nth(0).locator('.deploy-slot')).toContainText('Alrek');
+
+  // A mech gone from the hangar is dropped on restore, and its pilot with it.
+  await setHangar(page, hangar.slice(1), 'muster');
+  await page.reload();
+  await expect(dlg).toBeVisible();
+  await expect(dlg.locator('#deploy-step')).toHaveText('Player 1 of 2');
+  await expect(rows.filter({ hasText: 'Timber Wolf' })).toHaveCount(0);
+  await expect(dlg.locator('#deploy-pilots-list .deploy-pilot', { hasText: 'Alrek' })).not.toContainText('in ');
+
+  // Closing the wizard takes the plan out of the URL.
+  await dlg.locator('#deploy-cancel').click();
+  await expect(page).not.toHaveURL(/#deploy=/);
+  await page.reload();
+  await expect(dlg).toBeHidden();
 });

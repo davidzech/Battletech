@@ -591,7 +591,8 @@ dialog .link-field .refresh:disabled { opacity: 0.35; cursor: not-allowed; }
 dialog.deploy { width: min(68rem, calc(100vw - 2rem)); }
 .deploy-meter { margin: 0.5rem 0 0; font: 700 1.1rem var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
 .deploy-meter.over { color: #ff7a59; }
-.deploy-list { list-style: none; margin: 0.75rem 0; padding: 0; max-height: 42vh; overflow-y: auto; border-top: 1px solid var(--line); }
+/* The mech list scrolls inside a thin border all round, so its start and end are clear. */
+.deploy-list { list-style: none; margin: 0.75rem 0; padding: 0.5rem 0.5rem 0; max-height: 42vh; overflow-y: auto; border: 1px solid var(--line); }
 .deploy-unit { margin-bottom: 0.5rem; }
 dialog .deploy-unit label {
   display: grid;

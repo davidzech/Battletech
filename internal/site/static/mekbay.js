@@ -455,6 +455,7 @@
     setMeter();
     renderTray();
     renderFooter();
+    saveState();
   }
 
   // ---- Showing a step
@@ -937,6 +938,60 @@
     else { var allHave = true; for (var i = 0; i < playerCount; i++) if (countOf(i) === 0) allHave = false; go.disabled = !ok || overBV() || dropCost() > warchest || !allHave || anyUnmanned() || (needCommander() && !effectiveCommander()); }
   }
 
+  // ---- The plan in the URL
+  // The wizard's plan lives in the page's fragment (#deploy=...), so a reload brings the player back to where they were: the step, the number of players,
+  // each player's mechs and pilots, the proposed variants and the commander. A fragment never reaches the server and is replaced, not added to the history.
+  // Restoring keeps only what still holds (see restorePlan); a pilot held, an open Reconfigure dialog and the scroll are not kept.
+  var restoring = null; // a plan read from the URL, waiting for the hangar to restore it on
+  function encodePlan() {
+    var p = [];
+    for (var i = 0; i < playerCount; i++) {
+      var ids = units.filter(function (u) { return plan(i).selected[u.id]; }).map(function (u) { return u.id; });
+      var crew = {};
+      ids.forEach(function (id) { if (plan(i).crew[id]) crew[id] = plan(i).crew[id]; });
+      p.push({ u: ids, c: crew });
+    }
+    var json = JSON.stringify({ v: 1, n: playerCount, s: step, p: p, r: variants, k: commander });
+    return btoa(unescape(encodeURIComponent(json))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+  function decodePlan(text) {
+    try {
+      var b64 = text.replace(/-/g, '+').replace(/_/g, '/');
+      var d = JSON.parse(decodeURIComponent(escape(atob(b64 + '==='.slice((b64.length + 3) % 4)))));
+      return d && d.v === 1 && Array.isArray(d.p) ? d : null;
+    } catch (e) {
+      return null; // not a plan: the wizard isn't opened from it
+    }
+  }
+  // The URL follows the wizard: the plan while it is open and being planned, nothing once it is closed or the battle has started.
+  function saveState() {
+    if (restoring || !window.history || !history.replaceState) return;
+    var hash = dialog.open && !finished && units.length ? '#deploy=' + encodePlan() : '';
+    if (location.hash === hash || (!hash && location.hash.indexOf('#deploy=') !== 0)) return;
+    history.replaceState(history.state, '', location.pathname + location.search + hash);
+  }
+  // Puts a plan from the URL back, keeping only what still holds: the player count within the campaign's range, mechs still in the hangar and not destroyed
+  // (each taken once), living named pilots (each in one mech), and the commander; apply then drops variants no longer offered and caps the step.
+  function restorePlan(d, present) {
+    playerCount = Math.max(minPlayers, Math.min(maxPlayers, parseInt(d.n, 10) || defaultPlayers));
+    plans = [];
+    var taken = {}, crewed = {};
+    for (var i = 0; i < playerCount; i++) {
+      var saved = d.p[i] || {};
+      (Array.isArray(saved.u) ? saved.u : []).forEach(function (id) {
+        if (!present[id] || taken[id]) return;
+        taken[id] = true;
+        plan(i).selected[id] = true;
+        var p = saved.c && pilotNamed(saved.c[id]);
+        if (p && !crewed[p.name.toLowerCase()]) { plan(i).crew[id] = p.name; crewed[p.name.toLowerCase()] = true; }
+      });
+    }
+    variants = {};
+    if (d.r && typeof d.r === 'object') Object.keys(d.r).forEach(function (id) { if (taken[id] && typeof d.r[id] === 'string') variants[id] = d.r[id]; });
+    commander = typeof d.k === 'string' ? d.k : '';
+    step = parseInt(d.s, 10) || 0;
+  }
+
   function render() {
     if (typeof MechRow.hideTip === 'function') MechRow.hideTip(); // the pilot elements are about to be replaced, so a card open on one would point at nothing
     renderPlayers();
@@ -955,6 +1010,7 @@
       renderOperation();
       renderTray();
       renderFooter();
+      saveState(); // a battle started: the plan leaves the URL
       return;
     }
     meter.hidden = false;
@@ -985,6 +1041,7 @@
     }
     renderTray();
     renderFooter();
+    saveState();
   }
 
   // Shows a hangar (cached or live). A choice the player has already made is kept for the units that are still there; before that, the units already in the
@@ -1000,6 +1057,7 @@
     });
     var present = {};
     units.forEach(function (u) { if (!u.destroyed && !u.unknown) present[u.id] = true; });
+    if (restoring) { restorePlan(restoring, present); restoring = null; touched = true; } // a plan from the URL (see saveState): the player's own, kept like one
     if (touched) {
       plans.forEach(function (pl) {
         Object.keys(pl.selected).forEach(function (id) { if (!present[id]) { delete pl.selected[id]; delete pl.crew[id]; } });
@@ -1023,6 +1081,7 @@
       for (var i = 0; i < plans.length; i++) if (plans[i] && plans[i].selected[id]) taken = true;
       if (!swaps || !u || !taken || !VariantPicker.option(u, variants[id])) delete variants[id];
     });
+    step = Math.max(0, Math.min(step, stepCount() - 1)); // a restored step past what the plan now has
     document.getElementById('deploy-provided').hidden = !provided;
     status.hidden = units.length > 0;
     if (!units.length) status.textContent = 'Your hangar has no mechs in it yet. Purchase some under Manage force first.';
@@ -1081,7 +1140,16 @@
   });
   // A battle started from this dialog changes the whole page (View operation, the mission log, no Manage force, the campaign lock), so closing it reloads.
   var startedHere = false;
-  dialog.addEventListener('close', function () { stopPolling(); if (startedHere) location.reload(); });
+  dialog.addEventListener('close', function () { stopPolling(); restoring = null; saveState(); if (startedHere) location.reload(); });
+  // A reload (or a bookmark) with the plan in the URL opens the wizard where the player was. Not over a battle in progress (that opens on its Operation view) or
+  // a mission that can't be deployed yet.
+  (function () {
+    var saved = location.hash.indexOf('#deploy=') === 0 ? decodePlan(location.hash.slice(8)) : null;
+    if (!saved || inProgress || openBtn.disabled) { if (location.hash.indexOf('#deploy=') === 0) history.replaceState(history.state, '', location.pathname + location.search); return; }
+    restoring = saved;
+    dialog.showModal();
+    load();
+  })();
   // One Escape can be taken for both dialogs when the QR code was opened without a click in between; the one under it stays.
   dialog.addEventListener('cancel', function (e) { if ((qrDialog && qrDialog.open) || (abortDialog && abortDialog.open)) e.preventDefault(); });
   cancel.addEventListener('click', function () { dialog.close(); });
