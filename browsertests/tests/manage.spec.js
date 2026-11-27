@@ -85,6 +85,9 @@ test('rearms a mech after a confirmation', async ({ page }) => {
 
 test('sells a truly destroyed mech for a quarter of its BV', async ({ page }) => {
   const list = await managePage(page, 4500);
+  // The overview's boxes: the living pilots and the warchest.
+  await expect(page.locator('#overview-pilots')).toHaveText(/Pilots\s*2/);
+  await expect(page.locator('#overview-warchest')).toHaveText(/Warchest\s*4,500 SP/);
   await row(list, 'Mist Lynx').getByRole('button', { name: 'Sell' }).click();
   const confirm = page.getByRole('dialog', { name: 'Sell Mist Lynx?' });
   await expect(confirm).toBeVisible();

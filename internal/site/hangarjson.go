@@ -115,3 +115,14 @@ func (p Page) DeployJSON() string {
 	}
 	return pageJSON(deployData(*p.Hangar, p.Campaign, p.Scenario, p.Run))
 }
+
+// LivingPilots is how many named pilots the run has who are not Killed in action (the Manage page's Pilots box).
+func (p Page) LivingPilots() int {
+	n := 0
+	for _, v := range p.Pilots {
+		if !v.Fallen {
+			n++
+		}
+	}
+	return n
+}
