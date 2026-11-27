@@ -77,6 +77,12 @@ func (s *Server) previewOutcome(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	res.KeywordNames = c.KeywordNames(res.Keywords)
+	res.KeywordTexts = make([]string, len(res.Keywords))
+	for i, id := range res.Keywords {
+		if k, ok := c.Keyword(id); ok {
+			res.KeywordTexts[i] = k.Description
+		}
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	_ = json.NewEncoder(w).Encode(res)

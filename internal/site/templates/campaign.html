@@ -100,7 +100,9 @@
 <summary><h2>Danger zone</h2></summary>
 <div class="fold-body">
 <p class="muted">Edit keywords sets which keywords the campaign holds, to correct a mission&rsquo;s report or a misclick. Keywords decide what lies ahead, so change them only when they are wrong.</p>
-<p class="danger-action"><button type="button" class="button" id="keywords-open"{{if .OtherBattle}} disabled title="{{.Lock.Mission}} is in progress."{{end}}>Edit keywords</button></p>
+{{if .Run.Started}}<p class="muted">Rollback lists the points the campaign can go back to (its start and each completed mission) and rolls it back to one of them, forgetting everything after.</p>
+<p class="danger-action"><button type="button" class="button" id="rollback-open">Rollback</button></p>
+{{end}}<p class="danger-action"><button type="button" class="button" id="keywords-open"{{if .OtherBattle}} disabled title="{{.Lock.Mission}} is in progress."{{end}}>Edit keywords</button></p>
 <p class="muted">Deleting this campaign removes {{.Run.ForceLabel}}&rsquo;s progress in it: its named pilots, its hangar and its battles. Your account, its other campaigns and any force of yours in MekBay are not touched.</p>
 <button type="button" class="button danger" id="delete-open">Delete campaign</button>
 </div>

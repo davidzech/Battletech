@@ -184,7 +184,7 @@ Rest, then raid again.
 		t.Errorf("the keywords are in the ledger: %+v", ledger)
 	}
 	page = body(t, srv, "/refusalwar/scenario_000/", cookie)
-	for _, want := range []string{`id="outcome-summary"`, "<b>Jarek</b>", "<b>Sybille</b>", "benched", "&#43;40 SP (benched: half)", "Awarded: 600 SP", "Assigned to pilots: 200 SP", "Warchest: +400 SP", "Keywords granted:", "<b>Depot Gone</b>", "Killed in Action."} {
+	for _, want := range []string{`id="outcome-summary"`, "<b>Jarek</b>", "<b>Sybille</b>", "benched", "&#43;40 SP (benched: half)", "Awarded: 600 SP", "Assigned to pilots: 200 SP", "Warchest: +400 SP", "Keywords granted:", `<li class="keyword-chip" data-text="The depot was destroyed.">Depot Gone</li>`, "Killed in Action."} {
 		if !strings.Contains(page, want) {
 			t.Errorf("the report on the page is missing %q", want)
 		}

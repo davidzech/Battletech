@@ -33,11 +33,20 @@ test('reports a mission with a benched and a killed pilot, then rolls it back', 
   await expect(out.locator('#outcome-total')).toContainText('Awarded400 SP');
   await expect(out.locator('#outcome-total')).toContainText('Assigned to pilots120 SP');
   await expect(out.locator('#outcome-total')).toContainText('Warchest4700 → 4980 SP');
+  // The keyword the objective grants is a keyword chip, its description on hover.
+  const kw = out.locator('#outcome-total .keyword-chip');
+  await expect(kw).toHaveText('Depot Gone');
+  await kw.hover();
+  await expect(page.locator('#pill-tip')).toContainText('The depot was destroyed.');
+  await page.mouse.move(0, 0);
 
   // Only a pilot who took part and lives can be the MVP, and one has to be chosen.
-  await expect(out.locator('#outcome-mvp option:not([disabled])')).toHaveText(['Alrek']);
+  await expect(out.locator('.outcome-mvp-box:not([disabled])')).toHaveCount(1);
+  await expect(card('Alrek').getByLabel('MVP', { exact: true })).toBeEnabled();
+  await expect(card('Jarek').getByLabel('MVP', { exact: true })).toBeDisabled();
+  await expect(card('Katarina').getByLabel('MVP', { exact: true })).toBeDisabled();
   await expect(out.locator('#outcome-commit')).toBeDisabled();
-  await out.locator('#outcome-mvp').selectOption({ label: 'Alrek' });
+  await card('Alrek').getByLabel('MVP', { exact: true }).check();
   await expect(out.locator('#outcome-commit')).toBeEnabled();
 
   // Cancelling the confirmation keeps the dialog open; confirming commits.
@@ -54,7 +63,22 @@ test('reports a mission with a benched and a killed pilot, then rolls it back', 
   await expect(summary).toContainText('MVP');
   await expect(summary).toContainText('benched');
   await expect(summary).toContainText('Killed in Action.');
-  await expect(summary).toContainText('Keywords granted: Depot Gone');
+  // Each pilot line starts with the pilot's portrait, and hovering it shows the pilot's card (Katarina has fallen, so only Alrek and Jarek have one).
+  await expect(summary.locator('li', { hasText: 'Alrek' }).locator('img.outcome-face')).toBeVisible();
+  const alrekWho = summary.locator('li', { hasText: 'Alrek' }).first().locator('.outcome-who');
+  await expect(alrekWho).toHaveCSS('cursor', 'default');
+  await alrekWho.hover();
+  await expect(alrekWho.locator('b')).toHaveCSS('color', /rgb\(/);
+  await expect(page.locator('#pill-tip')).toContainText('Alrek');
+  await expect(page.locator('#pill-tip')).toContainText('SP earned');
+  await page.mouse.move(0, 0);
+  await expect(page.locator('#pill-tip')).toBeHidden();
+  // The keywords granted are keyword chips, their description on hover.
+  const granted = summary.locator('.outcome-keywords .keyword-chip');
+  await expect(granted).toHaveText('Depot Gone');
+  await granted.hover();
+  await expect(page.locator('#pill-tip')).toContainText('The depot was destroyed.');
+  await page.mouse.move(0, 0);
 
   // Alrek's pilot card counts the mission he was MVP of.
   await page.goto('/drill/manage/');
@@ -63,9 +87,21 @@ test('reports a mission with a benched and a killed pilot, then rolls it back', 
   // History: roll back to the start (the oldest line with a checkpoint), through two confirmations.
   await page.goto('/drill/');
   await expect(page.locator('.roster-pilot')).toHaveCount(2); // Katarina has fallen
-  await page.locator('#history-open').click();
   const history = page.locator('#history-dialog');
+  // The Danger zone's Rollback opens the same dialog with only the lines it can roll back to (the start and the completed mission), without the filters.
+  await page.locator('#danger-zone summary').click();
+  await page.locator('#rollback-open').click();
   await expect(history).toBeVisible();
+  await expect(history.locator('#history-title')).toHaveText('Rollback points');
+  await expect(history.locator('.history-filters')).toBeHidden();
+  await expect(history.locator('.history-entry:visible')).toHaveCount(2);
+  await expect(history.locator('.history-entry:visible .history-rollback')).toHaveCount(2);
+  await history.locator('#history-close').click();
+  // History itself still shows every line, with its filters.
+  await page.locator('#history-open').click();
+  await expect(history.locator('#history-title')).toHaveText('Campaign history');
+  await expect(history.locator('.history-filters')).toBeVisible();
+  expect(await history.locator('.history-entry:visible').count()).toBeGreaterThan(2);
   const rollbacks = history.locator('.history-rollback');
   await expect(rollbacks).toHaveCount(2); // the start and the completed mission
   await rollbacks.last().click();
@@ -95,7 +131,7 @@ test('keeps what was entered in the URL, so a reload reopens the dialog with it'
   await card('Alrek').getByLabel('Kills').fill('3');
   await card('Katarina').getByLabel('Kills').fill('1');
   await out.getByLabel('Destroy the depot').check();
-  await out.locator('#outcome-mvp').selectOption({ label: 'Alrek' });
+  await card('Alrek').getByLabel('MVP', { exact: true }).check();
   await expect(out.locator('#outcome-commit')).toBeEnabled();
   await expect(page).toHaveURL(/#outcome=/);
 
@@ -110,8 +146,8 @@ test('keeps what was entered in the URL, so a reload reopens the dialog with it'
   await expect(card('Alrek').getByLabel('Kills')).toHaveValue('3');
   await expect(card('Katarina').getByLabel('Kills')).toHaveValue('1');
   await expect(out.getByLabel('Destroy the depot')).toBeChecked();
-  await expect(out.locator('#outcome-mvp')).toHaveValue(/.+/);
-  await expect(out.locator('#outcome-mvp option:checked')).toHaveText('Alrek');
+  await expect(card('Alrek').getByLabel('MVP', { exact: true })).toBeChecked();
+  await expect(out.locator('.outcome-mvp-box:checked')).toHaveCount(1);
   await expect(out.locator('#outcome-total')).toContainText('Warchest4700 → 4980 SP');
   await expect(out.locator('#outcome-commit')).toBeEnabled();
 
@@ -132,13 +168,17 @@ test('keeps what was entered in the URL, so a reload reopens the dialog with it'
   await expect(out).toBeVisible();
   await expect(out.getByLabel('Destroy the depot')).toBeChecked();
   await expect(out.locator('.outcome-pilot').first().getByLabel('Kills')).toHaveValue('');
-  await expect(out.locator('#outcome-mvp')).toHaveValue('');
+  await expect(out.locator('.outcome-mvp-box:checked')).toHaveCount(0);
 
   // Committing leaves nothing behind: the page reloads on the completed mission, without the dialog.
   await card('Alrek').getByLabel('Kills').fill('3');
   await card('Katarina').getByLabel('Kills').fill('1');
   await card('Jarek').getByLabel('Kills').fill('0');
-  await out.locator('#outcome-mvp').selectOption({ label: 'Alrek' });
+  // The MVP boxes are one choice: ticking Alrek's takes Jarek's off.
+  await card('Jarek').getByLabel('MVP', { exact: true }).check();
+  await card('Alrek').getByLabel('MVP', { exact: true }).check();
+  await expect(card('Jarek').getByLabel('MVP', { exact: true })).not.toBeChecked();
+  await expect(out.locator('.outcome-mvp-box:checked')).toHaveCount(1);
   await out.locator('#outcome-commit').click();
   await page.getByRole('dialog', { name: 'Commit this outcome?' }).getByRole('button', { name: 'Commit' }).click();
   await expect(page.locator('#mission-log-state')).toHaveText('Completed');

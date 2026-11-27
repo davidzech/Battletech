@@ -655,7 +655,8 @@ dialog.pilot-dragging .deploy-unit input.themed-box:not(:checked):hover { border
 .mr-model { min-height: 1.1em; font-size: 0.72rem; line-height: 1.1; color: var(--muted); }
 .mr-name { font: 700 1rem/1.1 var(--display); letter-spacing: 0.03em; overflow-wrap: anywhere; }
 .mr-chips { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.15rem; }
-.mr-chip { display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.06rem 0.4rem; font: 700 0.72rem var(--display); letter-spacing: 0.04em; background: rgb(0 0 0 / 0.4); }
+/* A chip is a label, not text to select: the arrow cursor, never the text one. */
+.mr-chip { cursor: default; user-select: none; -webkit-user-select: none; display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.06rem 0.4rem; font: 700 0.72rem var(--display); letter-spacing: 0.04em; background: rgb(0 0 0 / 0.4); }
 .mr-chip .mr-ico { display: inline-flex; }
 .mr-chip svg { width: 0.8rem; height: 0.8rem; fill: currentColor; }
 .mr-chip.pilot { color: var(--accent-ink); background: var(--accent); }
@@ -1048,6 +1049,10 @@ a.unit-link.tip-open { color: var(--accent); }
 /* The values in bold, so they stand out from their small-caps labels. */
 .unit-card .tip-facts dd { font-weight: 700; }
 .mr-chip[tabindex]:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
+/* A chip with a tooltip (the condition and ammo pills) fills lightly with its own colour while hovered or focused, so it shows it has more to say. The chips
+   without one (BV, tons) stay as they are. */
+.mr-chip[aria-describedby="pill-tip"] { transition: background-color 0.12s; }
+.mr-chip[aria-describedby="pill-tip"]:hover, .mr-chip[aria-describedby="pill-tip"]:focus-visible { background: color-mix(in srgb, currentColor 32%, transparent); }
 .force-summary .icons img { transition: border-color 0.12s, background-color 0.12s; cursor: default; }
 .force-summary .icons img:hover, .force-summary .icons img:focus-visible { border-color: var(--accent); background: rgba(255, 204, 0, 0.1); outline: none; }
 
@@ -1590,8 +1595,11 @@ dialog.outcome { width: min(46rem, calc(100vw - 2rem)); }
 .outcome-pilot-name { display: grid; gap: 0.1rem; margin-right: auto; }
 .outcome-pilot-name b { font: 700 1.1rem var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
 .outcome-pilot-name .muted { font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; }
-.outcome-fields { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem 1.6rem; margin-top: 0.6rem; }
-.outcome-fields[hidden] { display: none; }
+.outcome-checks, .outcome-fields { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem 1.6rem; margin-top: 0.7rem; }
+.outcome-fields[hidden], .outcome-checks > [hidden] { display: none; }
+/* With a battle behind the mission, who took part is a status line under the pilot's name and rank. */
+.outcome-took { font: 700 0.75rem var(--display); letter-spacing: 0.08em; text-transform: uppercase; color: var(--text); }
+.outcome-took.outcome-bad { color: #e5594f; }
 .outcome-field { display: inline-flex; align-items: center; gap: 0.6rem; }
 .outcome-label { font: 700 0.75rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; }
 .outcome-field input[type=number] { width: 5rem; padding: 0.35rem 0.5rem; font: 700 1rem var(--display); color: var(--text); background: var(--panel); border: 1px solid var(--line); }
@@ -1601,7 +1609,10 @@ dialog.outcome { width: min(46rem, calc(100vw - 2rem)); }
 .outcome-good { color: #5fc47e; }
 .outcome-bad { color: #e5594f; }
 .outcome-mission { margin: 0.9rem 0 0; }
-.outcome-mvp-label { display: block; font-size: 0.85rem; text-transform: none; letter-spacing: 0; font-family: inherit; }
+.outcome-mvp-note { margin: 0.4rem 0 0; font-size: 0.85rem; }
+/* Each pilot's MVP box, beside Active: a pilot who can't be the MVP has it greyed out. */
+.outcome-mvp-pick:has(input:disabled) { opacity: 0.4; cursor: not-allowed; }
+.outcome-mvp-pick input:disabled { cursor: not-allowed; }
 .outcome-summary .outcome-mvp-badge { margin-left: 0.5rem; font: 700 0.75rem var(--display); letter-spacing: 0.1em; color: var(--accent); }
 .outcome-summary { flex-basis: 100%; margin: 0.3rem 0 0; padding: 0; list-style: none; }
 .outcome-summary li { margin: 0.25rem 0; }
@@ -1787,3 +1798,21 @@ fieldset.battle-lock-scope:disabled button:not(.button) { opacity: 0.45; cursor:
 .pilot-card > .pilot-main > .pilot-mvp { grid-column: 1; align-self: start; justify-self: center; width: 4.5rem; padding: 0 0.45rem; box-sizing: border-box; height: 2.5rem; margin-top: 0.4rem; display: flex; align-items: center; justify-content: center; gap: 0.6rem; background: var(--bg); border: 1px solid var(--line); }
 .pilot-mvp-label { font: 700 0.68rem var(--display); letter-spacing: 0.12em; text-transform: uppercase; color: var(--text); }
 .pilot-mvp-value { font: 700 1.5rem/1 var(--display); color: var(--accent); }
+
+/* The Complete mission dialog's result: "Keywords:" and then the keyword chips the mission grants, together on the left. */
+.outcome-total-row.keywords { justify-content: flex-start; align-items: center; }
+
+/* The mission log's "Keywords granted:" line: the keyword chips (keywordchips.js) after the label, in their own colours rather than the note's green. */
+.outcome-summary .outcome-keywords { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.6rem; }
+.outcome-summary .outcome-keywords .keyword-chip { color: var(--text); }
+/* Each pilot line of the mission log starts with the pilot's portrait, as tall as their name. */
+.outcome-summary .outcome-face { width: 1.25em; height: 1.25em; margin-right: 0.45em; vertical-align: -0.25em; object-fit: cover; object-position: top; border: 1px solid var(--line); }
+/* A keyword's hover card: the mission that granted it in bold, like the unit card's values. A keyword chip is a label, not text to select. */
+.pill-tip:has(.keyword-tip) .tip-facts dd { font-weight: 700; color: var(--text); }
+.keyword-chip { user-select: none; -webkit-user-select: none; }
+/* A mission log pilot with a hover card: the portrait and name are the target, with the arrow cursor (not the text one), and light up while hovered or open. */
+.outcome-who.has-card { cursor: default; user-select: none; -webkit-user-select: none; outline: none; }
+.outcome-who.has-card b { transition: color 0.12s; }
+.outcome-who.has-card .outcome-face { transition: border-color 0.12s; }
+.outcome-who.has-card:hover b, .outcome-who.has-card.tip-open b, .outcome-who.has-card:focus-visible b { color: var(--accent); }
+.outcome-who.has-card:hover .outcome-face, .outcome-who.has-card.tip-open .outcome-face, .outcome-who.has-card:focus-visible .outcome-face { border-color: var(--accent); }
