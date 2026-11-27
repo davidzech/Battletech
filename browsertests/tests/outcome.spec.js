@@ -63,6 +63,16 @@ test('reports a mission with a benched and a killed pilot, then rolls it back', 
   await expect(summary).toContainText('MVP');
   await expect(summary).toContainText('benched');
   await expect(summary).toContainText('Killed in Action.');
+  // Each pilot line starts with the pilot's portrait, and hovering it shows the pilot's card (Katarina has fallen, so only Alrek and Jarek have one).
+  await expect(summary.locator('li', { hasText: 'Alrek' }).locator('img.outcome-face')).toBeVisible();
+  const alrekWho = summary.locator('li', { hasText: 'Alrek' }).first().locator('.outcome-who');
+  await expect(alrekWho).toHaveCSS('cursor', 'default');
+  await alrekWho.hover();
+  await expect(alrekWho.locator('b')).toHaveCSS('color', /rgb\(/);
+  await expect(page.locator('#pill-tip')).toContainText('Alrek');
+  await expect(page.locator('#pill-tip')).toContainText('SP earned');
+  await page.mouse.move(0, 0);
+  await expect(page.locator('#pill-tip')).toBeHidden();
   // The keywords granted are keyword chips, their description on hover.
   const granted = summary.locator('.outcome-keywords .keyword-chip');
   await expect(granted).toHaveText('Depot Gone');
