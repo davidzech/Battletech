@@ -155,8 +155,8 @@ test('deploys two pilots, reconfigures a mech, starts the battle and completes t
   // Nothing can be committed until the MVP is chosen; only Alrek, alive, can be it.
   await expect(out.locator('.outcome-mvp-needed')).toBeVisible();
   await expect(out.locator('#outcome-commit')).toBeDisabled();
-  await expect(out.locator('#outcome-mvp option:not([disabled])')).toHaveText(['Alrek']);
-  await out.locator('#outcome-mvp').selectOption({ label: 'Alrek' });
+  await expect(katarina.getByLabel('MVP', { exact: true })).toBeDisabled();
+  await alrek.getByLabel('MVP', { exact: true }).check();
   await expect(alrek.locator('.outcome-preview')).toContainText('400');
   await expect(katarina.locator('.outcome-preview')).toContainText('Killed in Action');
   await expect(out.locator('#outcome-commit')).toBeEnabled();
@@ -168,7 +168,7 @@ test('deploys two pilots, reconfigures a mech, starts the battle and completes t
   await expect(katarina.getByLabel('Killed in action')).toBeChecked();
   await expect(alrek.getByLabel('Kills')).toHaveValue('2');
   await expect(katarina.getByLabel('Kills')).toHaveValue('1');
-  await expect(out.locator('#outcome-mvp option:checked')).toHaveText('Alrek');
+  await expect(alrek.getByLabel('MVP', { exact: true })).toBeChecked();
   await expect(out.locator('#outcome-commit')).toBeEnabled();
   await out.locator('#outcome-commit').click();
 

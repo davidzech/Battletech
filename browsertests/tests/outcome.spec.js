@@ -35,9 +35,12 @@ test('reports a mission with a benched and a killed pilot, then rolls it back', 
   await expect(out.locator('#outcome-total')).toContainText('Warchest4700 → 4980 SP');
 
   // Only a pilot who took part and lives can be the MVP, and one has to be chosen.
-  await expect(out.locator('#outcome-mvp option:not([disabled])')).toHaveText(['Alrek']);
+  await expect(out.locator('.outcome-mvp-box:not([disabled])')).toHaveCount(1);
+  await expect(card('Alrek').getByLabel('MVP', { exact: true })).toBeEnabled();
+  await expect(card('Jarek').getByLabel('MVP', { exact: true })).toBeDisabled();
+  await expect(card('Katarina').getByLabel('MVP', { exact: true })).toBeDisabled();
   await expect(out.locator('#outcome-commit')).toBeDisabled();
-  await out.locator('#outcome-mvp').selectOption({ label: 'Alrek' });
+  await card('Alrek').getByLabel('MVP', { exact: true }).check();
   await expect(out.locator('#outcome-commit')).toBeEnabled();
 
   // Cancelling the confirmation keeps the dialog open; confirming commits.
@@ -107,7 +110,7 @@ test('keeps what was entered in the URL, so a reload reopens the dialog with it'
   await card('Alrek').getByLabel('Kills').fill('3');
   await card('Katarina').getByLabel('Kills').fill('1');
   await out.getByLabel('Destroy the depot').check();
-  await out.locator('#outcome-mvp').selectOption({ label: 'Alrek' });
+  await card('Alrek').getByLabel('MVP', { exact: true }).check();
   await expect(out.locator('#outcome-commit')).toBeEnabled();
   await expect(page).toHaveURL(/#outcome=/);
 
@@ -122,8 +125,8 @@ test('keeps what was entered in the URL, so a reload reopens the dialog with it'
   await expect(card('Alrek').getByLabel('Kills')).toHaveValue('3');
   await expect(card('Katarina').getByLabel('Kills')).toHaveValue('1');
   await expect(out.getByLabel('Destroy the depot')).toBeChecked();
-  await expect(out.locator('#outcome-mvp')).toHaveValue(/.+/);
-  await expect(out.locator('#outcome-mvp option:checked')).toHaveText('Alrek');
+  await expect(card('Alrek').getByLabel('MVP', { exact: true })).toBeChecked();
+  await expect(out.locator('.outcome-mvp-box:checked')).toHaveCount(1);
   await expect(out.locator('#outcome-total')).toContainText('Warchest4700 → 4980 SP');
   await expect(out.locator('#outcome-commit')).toBeEnabled();
 
@@ -144,13 +147,17 @@ test('keeps what was entered in the URL, so a reload reopens the dialog with it'
   await expect(out).toBeVisible();
   await expect(out.getByLabel('Destroy the depot')).toBeChecked();
   await expect(out.locator('.outcome-pilot').first().getByLabel('Kills')).toHaveValue('');
-  await expect(out.locator('#outcome-mvp')).toHaveValue('');
+  await expect(out.locator('.outcome-mvp-box:checked')).toHaveCount(0);
 
   // Committing leaves nothing behind: the page reloads on the completed mission, without the dialog.
   await card('Alrek').getByLabel('Kills').fill('3');
   await card('Katarina').getByLabel('Kills').fill('1');
   await card('Jarek').getByLabel('Kills').fill('0');
-  await out.locator('#outcome-mvp').selectOption({ label: 'Alrek' });
+  // The MVP boxes are one choice: ticking Alrek's takes Jarek's off.
+  await card('Jarek').getByLabel('MVP', { exact: true }).check();
+  await card('Alrek').getByLabel('MVP', { exact: true }).check();
+  await expect(card('Jarek').getByLabel('MVP', { exact: true })).not.toBeChecked();
+  await expect(out.locator('.outcome-mvp-box:checked')).toHaveCount(1);
   await out.locator('#outcome-commit').click();
   await page.getByRole('dialog', { name: 'Commit this outcome?' }).getByRole('button', { name: 'Commit' }).click();
   await expect(page.locator('#mission-log-state')).toHaveText('Completed');

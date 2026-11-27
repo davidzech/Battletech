@@ -20,7 +20,7 @@
   var error = document.getElementById('outcome-error');
   var commit = document.getElementById('outcome-commit');
   var mvpSP = parseInt(dialog.dataset.mvpSp, 10) || 0; // the extra SP the mission's MVP earns; 0 means the mission has no MVP
-  var mvpSelect = null, mvpNote = null; // the MVP picker and its note, when the mission has an MVP
+  var hasMVP = false, mvpNote = null; // whether the mission has an MVP (an MVP box on each pilot's card), and the note above the pilots
   var candidates = null; // who can be the MVP, from the last preview (took part and stays in the campaign); null before the first
   // Whether a battle is in progress, so who took part and who is dead are read from it. Checked when the dialog opens, not when the page loads: Start battle
   // (mekbay.js) begins one without reloading the page and marks the dialog then.
@@ -64,13 +64,14 @@
 
   function build() {
     state = { pilots: {}, mission: blank(byScope('mission')), mvp: '' };
-    mvpSelect = null; mvpNote = null; candidates = null;
+    hasMVP = mvpSP > 0 && pilots.length > 0; mvpNote = null; candidates = null;
     results = {};
     ui = {};
     missionBoxes = {};
     body.textContent = '';
     var pilotInputs = byScope('pilot');
     if (!pilots.length) body.appendChild(el('p', 'muted', 'You have no living named pilots to report on.'));
+    if (hasMVP) { mvpNote = el('p', 'outcome-mvp-note muted', ''); body.appendChild(mvpNote); }
     pilots.forEach(function (p) {
       var st = state.pilots[p.id] = { tookPart: true, killed: false, values: blank(pilotInputs) };
       var card = el('div', 'outcome-pilot');
@@ -95,6 +96,22 @@
         took.appendChild(tb); took.appendChild(el('span', null, 'Active'));
         head.appendChild(took);
       }
+      // Every mission has an MVP: tick the box on one pilot's card (ticking another moves it). Only a pilot who took part and stays in the campaign can be it.
+      var mb = null;
+      if (hasMVP) {
+        var mvpLabel = el('label', 'outcome-field check themed-check outcome-mvp-pick');
+        mvpLabel.title = 'The mission\u2019s most valuable pilot earns +' + mvpSP + ' SP, free: it does not come out of the mission\u2019s SP.';
+        mb = document.createElement('input');
+        mb.type = 'checkbox'; mb.className = 'themed-box outcome-mvp-box';
+        mvpLabel.appendChild(mb); mvpLabel.appendChild(el('span', null, 'MVP'));
+        head.appendChild(mvpLabel);
+        mb.addEventListener('change', function () {
+          if (mb.checked) state.mvp = p.id;
+          else if (state.mvp === p.id) state.mvp = '';
+          mvpOptions();
+          changed();
+        });
+      }
       card.appendChild(head);
       var fields = el('div', 'outcome-fields');
       var boxes = {};
@@ -102,7 +119,7 @@
       // Every pilot can be killed in action, whatever the scenario asks: a pilot killed gets nothing and is removed from the campaign.
       fields.appendChild(field({ id: 'killed', label: 'Killed in action', type: 'bool' }, st, changed, 'killed'));
       card.appendChild(fields);
-      ui[p.id] = { took: took, tb: tb, fields: fields, killedBox: fields.lastChild.querySelector('input'), boxes: boxes };
+      ui[p.id] = { took: took, tb: tb, mvpBox: mb, fields: fields, killedBox: fields.lastChild.querySelector('input'), boxes: boxes };
       var preview = el('ul', 'outcome-preview');
       preview.id = 'outcome-preview-' + p.id;
       card.appendChild(preview);
@@ -116,21 +133,7 @@
       mission.forEach(function (i) { var f = field(i, state.mission, changed); missionBoxes[i.id] = f.querySelector('input'); box.appendChild(f); });
       body.appendChild(box);
     }
-    if (mvpSP > 0 && pilots.length) {
-      // Every mission has an MVP: one pilot who took part and stays in the campaign earns the extra SP, free (it doesn't come out of the mission's SP). It must be
-      // chosen whenever anyone can be it, so the mission can't be committed until it is.
-      var mvp = el('div', 'outcome-mission outcome-mvp');
-      mvp.appendChild(el('h3', 'alloc-head', 'Mission MVP'));
-      mvpNote = el('label', 'outcome-mvp-label muted', '');
-      mvpNote.htmlFor = 'outcome-mvp';
-      mvp.appendChild(mvpNote);
-      mvpSelect = document.createElement('select');
-      mvpSelect.id = 'outcome-mvp';
-      mvpSelect.addEventListener('change', function () { state.mvp = mvpSelect.value; changed(); });
-      mvp.appendChild(mvpSelect);
-      body.appendChild(mvp);
-      mvpOptions();
-    }
+    mvpOptions();
     render(null);
   }
 
@@ -143,25 +146,26 @@
     });
   }
 
-  // Fills the MVP picker with the pilots who can be it; a choice that no longer fits is cleared.
+  // Sets each pilot's MVP box: ticked for the MVP, and usable only by a pilot who can be it; a choice that no longer fits is cleared.
   function mvpOptions() {
-    if (!mvpSelect) return;
+    if (!hasMVP) return;
     var list = eligible();
     if (state.mvp && !list.some(function (p) { return p.id === state.mvp; })) state.mvp = '';
-    var none = !list.length;
-    mvpSelect.hidden = none;
-    mvpNote.textContent = none ? 'No named pilot took part and stays in the campaign, so this mission has no MVP.'
-      : 'The most valuable pilot earns +' + mvpSP + ' SP, free: it does not come out of the mission\u2019s SP. Choose one of the pilots who took part and stay in the campaign.';
-    mvpSelect.textContent = '';
-    var choose = new Option('Choose the MVP', '');
-    choose.disabled = true;
-    mvpSelect.appendChild(choose);
-    list.forEach(function (p) { mvpSelect.appendChild(new Option(p.name, p.id)); });
-    mvpSelect.value = state.mvp;
+    pilots.forEach(function (p) {
+      var mb = ui[p.id] && ui[p.id].mvpBox;
+      if (!mb) return;
+      var ok = list.some(function (q) { return q.id === p.id; });
+      mb.disabled = !ok;
+      mb.checked = state.mvp === p.id;
+      mb.parentNode.title = ok ? 'The mission\u2019s most valuable pilot earns +' + mvpSP + ' SP, free: it does not come out of the mission\u2019s SP.'
+        : 'Only a pilot who took part and stays in the campaign can be the MVP.';
+    });
+    mvpNote.textContent = !list.length ? 'No named pilot took part and stays in the campaign, so this mission has no MVP.'
+      : 'Tick MVP on the mission\u2019s most valuable pilot: they earn +' + mvpSP + ' SP, free (it does not come out of the mission\u2019s SP).';
   }
 
   // Whether the mission still needs its MVP chosen: someone can be it and nobody is.
-  function mvpMissing() { return !!mvpSelect && !state.mvp && eligible().length > 0; }
+  function mvpMissing() { return hasMVP && !state.mvp && eligible().length > 0; }
 
   // What is sent: booleans as true/false, numbers as numbers (a number box left empty makes the request invalid until it is filled).
   // The pilots who crew a mech in the battle's players' forces, by lowercased name, and whether their record sheet shows them dead.
