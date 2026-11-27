@@ -126,3 +126,13 @@ func (p Page) LivingPilots() int {
 	}
 	return n
 }
+
+// PortraitOf is where a named pilot's portrait is served ("" for a pilot the campaign no longer has), for the mission log's pilot lines.
+func (p Page) PortraitOf(id string) string {
+	for _, v := range p.Pilots {
+		if v.ID == id {
+			return v.PortraitURL
+		}
+	}
+	return ""
+}

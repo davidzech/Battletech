@@ -81,6 +81,12 @@ func (c *Campaign) KeywordName(id string) string {
 	return strings.Join(words, " ")
 }
 
+// KeywordText is a keyword's description from Keywords.md ("" for one the registry doesn't have), for a keyword chip's hover card.
+func (c *Campaign) KeywordText(id string) string {
+	k, _ := c.Keyword(id)
+	return k.Description
+}
+
 // KeywordNames is KeywordName for each of a list of keyword IDs.
 func (c *Campaign) KeywordNames(ids []string) []string {
 	out := make([]string, len(ids))

@@ -63,7 +63,12 @@ test('reports a mission with a benched and a killed pilot, then rolls it back', 
   await expect(summary).toContainText('MVP');
   await expect(summary).toContainText('benched');
   await expect(summary).toContainText('Killed in Action.');
-  await expect(summary).toContainText('Keywords granted: Depot Gone');
+  // The keywords granted are keyword chips, their description on hover.
+  const granted = summary.locator('.outcome-keywords .keyword-chip');
+  await expect(granted).toHaveText('Depot Gone');
+  await granted.hover();
+  await expect(page.locator('#pill-tip')).toContainText('The depot was destroyed.');
+  await page.mouse.move(0, 0);
 
   // Alrek's pilot card counts the mission he was MVP of.
   await page.goto('/drill/manage/');
