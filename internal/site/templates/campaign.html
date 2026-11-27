@@ -64,8 +64,8 @@
 <script src="/static/pilotcard.js" defer></script>
 <script src="/static/unitsearch.js" defer></script>
 <script src="/static/pilotnames.js" data-names="{{.Campaign.NamesJSON}}" defer></script>
-<script src="/static/campaign.js" defer></script>
-{{end}}<h2>Scenarios</h2>
+{{end}}<script src="/static/campaign.js" defer></script>{{/* on every campaign page: it also drops a start wizard fragment (#start=) left over */}}
+<h2>Scenarios</h2>
 <ul class="cards scenarios" id="scenario-cards" style="--graph-lanes: {{.GraphLanes}}">
 {{range .Cards}}<li class="{{.State}}{{if .Passed}} passed{{end}}"><span class="sgraph">{{.Graph}}</span><a class="card {{.State}}" href="{{.URL}}"><span class="num">{{.Num}}</span><span class="name">{{.Name}}{{if .Sub}}<span class="sub">{{.Sub}}</span>{{end}}</span><span class="go">{{if eq .State "completed"}}Completed{{else if .Passed}}Not available{{else if eq .State "locked"}}Locked{{else}}Open &rsaquo;{{end}}</span></a></li>
 {{end}}</ul>
