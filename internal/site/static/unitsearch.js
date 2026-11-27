@@ -22,13 +22,6 @@
   var ICON = '<svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>';
   var ids = 0;
 
-  // A unit view without the pilot fields: skills belong to assigning pilots, not to a unit being picked.
-  function plain(u) {
-    var row = {};
-    Object.keys(u).forEach(function (k) { if (k !== 'gunnery' && k !== 'piloting' && k !== 'pilot') row[k] = u[k]; });
-    return row;
-  }
-
   function create(opts) {
     var n = ++ids;
     var element = el('div', 'unit-search');
@@ -65,7 +58,7 @@
     var painted = null; // the reply the list on screen shows, so a repaint after a pick updates its rows in place
 
     function rowFor(u) {
-      var row = plain(u);
+      var row = MechRow.withoutPilot(u); // skills belong to assigning pilots, not to a unit being picked
       if (u.mekbayUrl) row.externalUrl = u.mekbayUrl;
       if (opts.decorate) opts.decorate(row, u);
       row.onPick = function () { opts.onPick(u); };
@@ -132,5 +125,5 @@
     return { element: element, repaint: paint, focus: function () { input.focus(); }, input: input };
   }
 
-  window.UnitSearch = { create: create, plain: plain };
+  window.UnitSearch = { create: create };
 })();

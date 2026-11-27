@@ -50,11 +50,26 @@ test('repairs a damaged mech, and refuses a repair the warchest cannot pay', asy
   await setWarchest(page, 'refusalwar', 1);
   await page.reload();
   await row(list, 'Fire Moth').getByRole('button', { name: 'Repair' }).click();
-  await expect(dlg.locator('#repair-cost')).toContainText('Not enough funds.');
+  await expect(dlg.locator('#repair-cost')).toHaveText(/^Cost [\d,]+ SP\. Warchest 1 SP\. Not enough funds\.$/);
   await expect(dlg.locator('#repair-cost')).toHaveClass(/short/);
   await expect(dlg.locator('#repair-apply')).toBeDisabled();
   await dlg.locator('#repair-cancel').click();
   await expect(dlg).toBeHidden();
+
+  // Rearming it can't be paid for either: a notice instead of the confirmation.
+  await row(list, 'Fire Moth').getByRole('button', { name: 'Rearm' }).click();
+  const notice = page.getByRole('dialog', { name: 'Not enough funds' });
+  await expect(notice).toContainText('Cost 20 SP. Warchest 1 SP. Not enough funds.');
+  await notice.getByRole('button', { name: 'Close' }).click();
+
+  // Nor a purchase.
+  await page.locator('#purchase-open').click();
+  const shop = page.locator('#purchase-dialog');
+  await shop.locator('#purchase-search').fill('Grizzly');
+  await shop.locator('.purchase-found .mech-row', { hasText: 'Grizzly' }).first().click();
+  await expect(shop.locator('#purchase-cost')).toHaveText(/^Cost [\d,]+ SP\. Warchest 1 SP\. Not enough funds\.$/);
+  await expect(shop.locator('#purchase-cost')).toHaveClass(/short/);
+  await expect(shop.locator('#purchase-buy')).toBeDisabled();
 });
 
 test('rearms a mech after a confirmation', async ({ page }) => {

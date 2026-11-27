@@ -53,13 +53,7 @@ var VariantPicker = (function () {
     var view = { name: v.name, model: v.model, role: v.role, icon: v.icon, class: v.class, tons: v.tons, bv: v.bv };
     if (v.mekbayUrl) view.externalUrl = v.mekbayUrl;
     var built = MechRow.build(view);
-    if (card && typeof UnitCard !== 'undefined') {
-      MechRow.attachTip(built, { align: 'right', build: card });
-      built.addEventListener('mouseover', function (e) {
-        var own = e.target.closest && e.target.closest('[aria-describedby]');
-        if ((!own || own === built) && !built.classList.contains('tip-open')) built.dispatchEvent(new Event('mouseenter'));
-      });
-    }
+    if (card && typeof UnitCard !== 'undefined') MechRow.attachCard(built, card);
     return built;
   }
 

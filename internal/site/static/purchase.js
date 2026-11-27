@@ -27,7 +27,6 @@
 
   var el = Dom.el;
   var commas = Dom.commas;
-  var plain = UnitSearch.plain;
   function total() { return staged.reduce(function (sum, s) { return sum + (Number(s.unit.bv) || 0); }, 0); }
   function countOf(id) { return staged.filter(function (s) { return s.unit.unit === id; }).length; }
 
@@ -37,15 +36,15 @@
     headEl.textContent = staged.length ? 'Your cart (' + staged.length + ')' : 'Your cart';
     if (!staged.length) listEl.appendChild(el('p', 'muted purchase-empty', 'Your cart is empty. Click a unit above to add it.'));
     staged.forEach(function (s) {
-      var row = plain(s.unit);
+      var row = MechRow.withoutPilot(s.unit);
       row.picked = true;
       row.actions = [{ icon: '×', label: 'Remove', title: 'Remove from your cart', onClick: function () { staged = staged.filter(function (x) { return x !== s; }); render(); paintResults(); } }];
       listEl.appendChild(MechRow.build(row));
     });
-    var cost = total(), after = warchest - cost;
-    costEl.textContent = 'Cost ' + commas(cost) + ' SP. Warchest ' + commas(warchest) + (cost ? ' → ' + commas(Math.max(after, 0)) : '') + ' SP.' + (after < 0 ? ' Not enough funds.' : '');
-    costEl.classList.toggle('short', after < 0);
-    var why = !canModify ? NO_UID : !staged.length ? 'Add at least one unit to your cart.' : after < 0 ? 'The warchest cannot cover that.' : '';
+    var cost = total(), line = Dom.costLine(cost, warchest);
+    costEl.textContent = line.text;
+    costEl.classList.toggle('short', line.short);
+    var why = !canModify ? NO_UID : !staged.length ? 'Add at least one unit to your cart.' : line.short ? 'The warchest cannot cover that.' : '';
     buyBtn.disabled = !!why;
     buyBtn.title = why;
     buyBtn.textContent = staged.length ? 'Buy for ' + commas(cost) + ' SP' : 'Buy';
