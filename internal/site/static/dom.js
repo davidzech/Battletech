@@ -11,8 +11,8 @@
 //                           fills box with the [1][2][3][4] player-count buttons, from min to max; a click calls onPick(n). Returns show(n, disabled), which marks
 //                           n as the chosen count (and disables every button while disabled is true)
 //   Dom.costLine(cost, warchest)
-//                           what something costs against the warchest: { text, short }, e.g. "Cost 1,200 SP. Warchest 5,000 → 3,800 SP.", or with short true
-//                           "Cost 1,200 SP. Warchest 800 SP. Not enough funds."; a cost of 0 is "Cost 0 SP. Warchest 5,000 SP."
+//                           what something costs against the warchest: { text, short }, two lines, e.g. "Cost 1,200 SP." then "Warchest 5,000 → 3,800 SP.",
+//                           or with short true "Warchest 800 SP. Not enough funds."; a cost of 0 is "Cost 0 SP." then "Warchest 5,000 SP."
 (function () {
   function el(tag, cls, text) {
     var e = document.createElement(tag);
@@ -83,7 +83,8 @@
 
   function costLine(cost, warchest) {
     var after = warchest - cost, short = after < 0;
-    var text = 'Cost ' + commas(cost) + ' SP. Warchest ' + commas(warchest) + (cost && !short ? ' → ' + commas(after) : '') + ' SP.' + (short ? ' Not enough funds.' : '');
+    // Two lines: the cost, then the warchest (the elements showing it keep the line break: white-space: pre-line).
+    var text = 'Cost ' + commas(cost) + ' SP.\nWarchest ' + commas(warchest) + (cost && !short ? ' → ' + commas(after) : '') + ' SP.' + (short ? ' Not enough funds.' : '');
     return { text: text, short: short };
   }
 

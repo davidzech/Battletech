@@ -76,3 +76,23 @@ func unavailableMech(t *testing.T) (catalog.Unit, string) {
 	t.Fatal("no unavailable mech found")
 	return catalog.Unit{}, ""
 }
+
+// GET /api/units?ids= gives the units with those IDs as the search shows them, in the order asked, leaving out unknown IDs and what isn't a mech (the Purchase
+// dialog puts a cart back from its URL with it).
+func TestUnitsByIDEndpoint(t *testing.T) {
+	srv, _ := newTestServer(t)
+	res, err := http.Get(srv.URL + "/api/units?ids=BMDasher_H,BMNoSuchMech,BMMadCat_A")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	var out struct {
+		Units []hangarUnitView `json:"units"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&out); err != nil || res.StatusCode != http.StatusOK {
+		t.Fatalf("%d %v", res.StatusCode, err)
+	}
+	if len(out.Units) != 2 || out.Units[0].Unit != "BMDasher_H" || out.Units[1].Unit != "BMMadCat_A" || out.Units[1].BV == 0 || out.Units[1].Name != "Timber Wolf" {
+		t.Errorf("units: %+v", out.Units)
+	}
+}

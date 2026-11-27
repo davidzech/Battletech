@@ -4,6 +4,9 @@
 // same mech rows as the hangar (mechrow.js, which must load first). BV is SP: each unit costs its base BV, shown against the warchest. Names go
 // in as text, never HTML.
 //
+// The dialog's state is kept in the page's fragment (#purchase=...), so a reload brings it back: open, with its search (the query and the faction box) and its
+// cart (the units' IDs, looked up again with GET /api/units). The fragment is replaced, not added to the history, and goes when the dialog closes or buys.
+//
 // stage(unit) adds a unit to the cart, with unit = { unit: <MekBay unit ID, e.g. BMMadCat_H>, name, model, icon, role, class, tons, bv }. The cart holds
 // one of each unit; each cart row also has a small remove button.
 (function () {
@@ -46,6 +49,31 @@
     buyBtn.disabled = !!why;
     buyBtn.title = why;
     buyBtn.textContent = staged.length ? 'Buy for ' + commas(cost) + ' SP' : 'Buy';
+    saveState();
+  }
+
+  // ---- The dialog in the URL (#purchase=...): its search and its cart.
+  var restoring = false; // while a cart from the URL is being looked up, the URL is left as it is
+  function encode(o) { return btoa(unescape(encodeURIComponent(JSON.stringify(o)))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
+  function decode(t) {
+    try {
+      var b = t.replace(/-/g, '+').replace(/_/g, '/');
+      var d = JSON.parse(decodeURIComponent(escape(atob(b + '==='.slice((b.length + 3) % 4)))));
+      return d && d.v === 1 ? d : null;
+    } catch (e) {
+      return null;
+    }
+  }
+  // The URL follows the open dialog; only closing it (clearState) takes it out, so drawing the cart while the dialog is closed (as the page loads) leaves a
+  // fragment to restore alone.
+  function saveState() {
+    if (restoring || !dialog.open || !window.history || !history.replaceState || typeof search === 'undefined') return;
+    var st = search.state();
+    var hash = '#purchase=' + encode({ v: 1, q: st.query, all: st.all ? 1 : 0, cart: staged.map(function (s) { return s.unit.unit; }) });
+    if (location.hash !== hash) history.replaceState(history.state, '', location.pathname + location.search + hash);
+  }
+  function clearState() {
+    if (location.hash.indexOf('#purchase=') === 0 && window.history && history.replaceState) history.replaceState(history.state, '', location.pathname + location.search);
   }
 
   // Adds a unit to the cart. Returns false when it is already there or the cart is full.
@@ -75,13 +103,15 @@
     idPrefix: 'purchase',
     decorate: function (row, u) { if (countOf(u.unit)) { row.picked = true; row.badge = 'In cart'; } },
     onPick: toggle,
-    onUnpick: function (u) { if (countOf(u.unit)) toggle(u); } // a right-click only ever takes a unit out of the cart
+    onUnpick: function (u) { if (countOf(u.unit)) toggle(u); }, // a right-click only ever takes a unit out of the cart
+    onChange: saveState
   });
   document.getElementById('purchase-search-box').appendChild(search.element);
   function paintResults() { search.repaint(); }
 
-  openBtn.addEventListener('click', function () { errEl.textContent = ''; render(); dialog.showModal(); search.focus(); });
+  openBtn.addEventListener('click', function () { errEl.textContent = ''; render(); dialog.showModal(); saveState(); search.focus(); });
   document.getElementById('purchase-cancel').addEventListener('click', function () { dialog.close(); });
+  dialog.addEventListener('close', function () { restoring = false; clearState(); });
   dialog.addEventListener('click', function (e) { if (e.target === dialog) dialog.close(); });
 
   document.getElementById('purchase-form').addEventListener('submit', function (e) {
@@ -94,10 +124,30 @@
     fetch('/api/hangar/purchase', {
       method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body, credentials: 'same-origin'
     }).then(function (res) {
-      if (res.ok) { staged = []; dialog.close(); location.reload(); return; }
+      if (res.ok) { staged = []; clearState(); dialog.close(); location.reload(); return; } // cleared first: the close event comes after the reload starts
       return res.text().then(function (t) { errEl.textContent = t.trim() || 'Something went wrong.'; render(); });
     }, function () { errEl.textContent = 'Could not reach the server.'; render(); });
   });
 
   render();
+
+  // A reload with the dialog in the URL opens it as it was: the search run again, and the cart's units looked up (one no longer known is left out).
+  (function () {
+    if (location.hash.indexOf('#purchase=') !== 0) return;
+    var saved = decode(location.hash.slice(10));
+    if (!saved || openBtn.disabled) { history.replaceState(history.state, '', location.pathname + location.search); return; }
+    restoring = true;
+    dialog.showModal();
+    search.set(saved.q || '', !!saved.all);
+    var ids = (Array.isArray(saved.cart) ? saved.cart : []).filter(function (id) { return typeof id === 'string'; }).slice(0, LIMIT);
+    var done = function () { restoring = false; render(); search.focus(); };
+    if (!ids.length) { done(); return; }
+    fetch('/api/units?ids=' + encodeURIComponent(ids.join(',')), { credentials: 'same-origin' }).then(function (res) {
+      return res.ok ? res.json() : { units: [] };
+    }).then(function (data) {
+      (data.units || []).forEach(function (u) { if (!countOf(u.unit)) staged.push({ unit: u }); });
+      paintResults();
+      done();
+    }, done);
+  })();
 })();

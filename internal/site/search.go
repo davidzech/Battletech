@@ -54,3 +54,26 @@ func (s *Server) searchUnitsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	_ = json.NewEncoder(w).Encode(res)
 }
+
+// unitsByIDHandler is GET /api/units?ids=A,B: the units with those MekBay unit IDs, as the search shows them, in the order asked (an unknown ID is left out). The
+// Purchase dialog uses it to put a cart back from its URL. Like the search it is public data and needs no seed.
+func (s *Server) unitsByIDHandler(w http.ResponseWriter, r *http.Request) {
+	out := struct {
+		Units []hangarUnitView `json:"units"`
+	}{Units: []hangarUnitView{}}
+	ids := strings.Split(r.URL.Query().Get("ids"), ",")
+	for i, id := range ids {
+		if i == maxUnitLookup {
+			break
+		}
+		if u, ok := catalog.ByName(strings.TrimSpace(id)); ok && u.Type == "Mek" {
+			out.Units = append(out.Units, catalogUnitView(u))
+		}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	_ = json.NewEncoder(w).Encode(out)
+}
+
+// maxUnitLookup bounds GET /api/units: a cart holds at most ten units.
+const maxUnitLookup = 20

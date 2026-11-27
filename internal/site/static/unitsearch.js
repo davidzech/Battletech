@@ -9,11 +9,14 @@
 //     idPrefix: 'purchase',                           // optional: ids for its parts (purchase-search, -clear, -available, -results)
 //     decorate: function (row, unit) { ... },        // optional: mark a result (row.picked, row.badge) from the caller's state
 //     onPick: function (unit) { ... },               // a result was clicked
-//     onUnpick: function (unit) { ... }               // optional: a result was right-clicked (take one back)
+//     onUnpick: function (unit) { ... },             // optional: a result was right-clicked (take one back)
+//     onChange: function () { ... }                   // optional: the player changed the query or the faction box
 //   });
 //   container.appendChild(search.element);
 //   search.repaint();   // after the caller's state changes, so the badges follow
 //   search.focus();
+//   search.state();                     // { query, all }: what is typed, and whether the faction box is unticked (every unit)
+//   search.set(query, all);             // puts a query and the box back (a page reloaded with them in its URL) and searches at once
 //
 // A unit is { unit: <MekBay unit ID, e.g. BMMadCat_H>, name, model, icon, role, class, tons, bv, mekbayUrl }. Replies to older text are ignored, and typing
 // waits a moment before searching. Names go in as text, never HTML.
@@ -116,13 +119,23 @@
       });
     }
     function queue() { clearTimeout(timer); timer = setTimeout(run, 250); }
-    input.addEventListener('input', function () { clear.hidden = !input.value; queue(); });
+    function changed() { if (opts.onChange) opts.onChange(); }
+    input.addEventListener('input', function () { clear.hidden = !input.value; queue(); changed(); });
     // Enter searches at once; it never submits the form around the search.
     input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); clearTimeout(timer); run(); } });
-    clear.addEventListener('click', function () { input.value = ''; clear.hidden = true; clearTimeout(timer); run(); input.focus(); });
-    if (available) available.addEventListener('change', run);
+    clear.addEventListener('click', function () { input.value = ''; clear.hidden = true; clearTimeout(timer); run(); input.focus(); changed(); });
+    if (available) available.addEventListener('change', function () { run(); changed(); });
 
-    return { element: element, repaint: paint, focus: function () { input.focus(); }, input: input };
+    function state() { return { query: input.value, all: !!(available && !available.checked) }; }
+    function set(query, all) {
+      input.value = query || '';
+      clear.hidden = !input.value;
+      if (available) available.checked = !all;
+      clearTimeout(timer);
+      run();
+    }
+
+    return { element: element, repaint: paint, focus: function () { input.focus(); }, input: input, state: state, set: set };
   }
 
   window.UnitSearch = { create: create };

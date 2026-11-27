@@ -194,6 +194,7 @@ func NewHandler(contentRoot string, store *storage.Store, opts ...Option) http.H
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /icons/{file}", s.icon)
+	mux.HandleFunc("GET /api/units", s.unitsByIDHandler)
 	mux.HandleFunc("GET /portraits/{file}", s.portrait)
 	mux.HandleFunc("GET /static/{file}", func(w http.ResponseWriter, r *http.Request) {
 		name := path.Base(r.PathValue("file"))
