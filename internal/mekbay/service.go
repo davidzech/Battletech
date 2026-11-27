@@ -2,7 +2,6 @@ package mekbay
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,22 +16,11 @@ const (
 	RepairDestroyed = "destroyed"
 )
 
-// ServiceRequest asks MekBay to clear a unit's damage (repair) or refill its ammunition (rearm) in the player's hangar force.
-type ServiceRequest struct {
-	OwnerUID string
-	Instance string
-	UnitID   string
-	Kind     string  // "repair" or "rearm"
-	Level    string  // for a repair, the level (armor, structure, crippled, destroyed)
-	Tons     float64 // the unit's tonnage, to tell which locations are destroyed
-	Crippled bool    // the unit is crippled or destroyed (see ConditionOf), which leaves its destroyed locations and engine hits to the crippled level
-}
-
-// ErrNoChange is what an edit to a unit answers when the force as it was just read leaves it nothing to do: the repair, rearm or reconfiguration asked for has
-// already been made (by a second click, or by another player at the table). Nothing is saved, and the site gives the SP back.
+// ErrNoChange is what an edit to a unit answers when the hangar leaves it nothing to do: the repair, rearm or reconfiguration asked for has already been made (by
+// a second click, or by another player at the table). The site saves nothing and charges nothing.
 var ErrNoChange = errors.New("That has already been done to the unit (it may have changed). Reload and check your hangar.")
 
-// serviceUnitState applies a repair or rearm to the unit with this ID inside a force in MekBay's save format. Each repair level fixes its own
+// ServiceUnitState applies a repair or rearm to the unit with this ID inside a force in MekBay's save format. Each repair level fixes its own
 // damage and the levels beneath it, and nothing above:
 //
 //	armor      the lost armor, everywhere
@@ -44,7 +32,7 @@ var ErrNoChange = errors.New("That has already been done to the unit (it may hav
 // crippled says whether the unit is crippled or destroyed, which the state alone can't tell (it takes the engine type).
 //
 // A rearm refills the ammunition and leaves the damage. A service that changes nothing in the unit's state is ErrNoChange.
-func serviceUnitState(force map[string]any, unitID, kind, level string, tons float64, crippled bool, now time.Time) error {
+func ServiceUnitState(force map[string]any, unitID, kind, level string, tons float64, crippled bool, now time.Time) error {
 	groups, _ := force["groups"].([]any)
 	for _, g := range groups {
 		gm, _ := g.(map[string]any)
@@ -160,11 +148,4 @@ func repairState(state map[string]any, crits []any, level string, tons float64, 
 		return fmt.Errorf("unknown repair level %q", level)
 	}
 	return nil
-}
-
-// ServiceUnit repairs or rearms a unit in the player's hangar force. It needs the owner's UID, because MekBay only accepts the owner's saves.
-func (c *Client) ServiceUnit(ctx context.Context, req ServiceRequest) (HangarForce, error) {
-	return c.editForce(ctx, req.OwnerUID, req.Instance, func(force map[string]any, now time.Time) error {
-		return serviceUnitState(force, req.UnitID, req.Kind, req.Level, req.Tons, req.Crippled, now)
-	})
 }

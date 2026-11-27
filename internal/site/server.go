@@ -13,7 +13,6 @@ import (
 	"path"
 	"path/filepath"
 	"strconv"
-	"time"
 
 	"github.com/davidzech/Battletech/internal/content"
 	"github.com/davidzech/Battletech/internal/mekbay"
@@ -78,10 +77,8 @@ type Page struct {
 	CanRecruit         bool                   // the command has room for another living named pilot, and the warchest can pay for them
 	RecruitNote        string                 // the short gray note under Recruit New Pilot: why it is unavailable, or what it costs
 	MaxPilots          int                    // most living named pilots a command may have
-	// CachedHangar is the hangar last read from MekBay for this run (nil if none yet), and CachedAt when; the campaign and scenario
-	// pages embed it so they can paint the hangar before the live read finishes (see hangarcache.go).
-	CachedHangar   *mekbay.HangarForce
-	CachedAt       time.Time
+	// Hangar is the run's hangar (nil until it is started, or if it could not be loaded), which the campaign, scenario and Manage pages embed (see hangarjson.go).
+	Hangar         *mekbay.HangarForce
 	Ranks          []string        // the campaign's pilot ranks, lowest first (empty when it has none)
 	Memorial       bool            // at least one named pilot was killed in action
 	Ladders        string          // the pilot improvement ladders as JSON, for the pilot builder's live preview
@@ -162,8 +159,6 @@ type Server struct {
 	store  *storage.Store
 	pages  map[string]*template.Template
 	mekbay mekbay.MekBay
-
-	hangarEdits keyedMutex // serializes this process's MekBay edits of each run's hangar, before the database claim (lockHangar, hangaredit.go)
 
 	// The MekBay proxy (mekbayproxy.go), served on the hosts mekbay-<link id>.<site host> (and mekbay.localhost).
 	upstream *[3]string // web, WebSocket and Origin of the MekBay to proxy; tests replace it
@@ -301,10 +296,10 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, status int, name
 					limit := p.Campaign.PilotLimit()
 					p.Ranks = p.Campaign.Ranks
 					if name == "campaign" || name == "scenario" || name == "manage" {
-						if h, at, ok, err := s.store.CachedHangar(r.Context(), id, p.Campaign.Slug, p.Run.HangarInstance); err != nil {
-							log.Printf("load cached hangar: %v", err)
-						} else if ok {
-							p.CachedHangar, p.CachedAt = &h, at
+						if h, err := s.loadHangar(r.Context(), id, p.Campaign.Slug); err != nil {
+							log.Printf("load the hangar: %v", err)
+						} else {
+							p.Hangar = &h
 						}
 					}
 					for _, v := range p.Pilots {

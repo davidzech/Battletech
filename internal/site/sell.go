@@ -1,72 +1,43 @@
 package site
 
 import (
-	"context"
+	"errors"
 	"fmt"
-	"log"
 	"net/http"
 
 	"github.com/davidzech/Battletech/internal/catalog"
 	"github.com/davidzech/Battletech/internal/format"
 	"github.com/davidzech/Battletech/internal/hangar"
 	"github.com/davidzech/Battletech/internal/mekbay"
-	"github.com/davidzech/Battletech/internal/storage"
 )
 
 // Selling units: the price is package hangar (sell.go), removing the unit from the force package mekbay.
 
-// sellUnit is POST /api/hangar/sell: sell the hangar unit named by `unit`. The server works out the price itself from the unit's state. The unit is taken out of
-// the hangar first and the warchest paid after, so a failure in MekBay never pays for a unit the player still has. Once the sale starts it is seen through even
-// if the request stops (the player closes the tab), so a unit never leaves the hangar unpaid.
+// sellUnit is POST /api/hangar/sell: sell the hangar unit named by `unit`. The server works out the price itself from the unit's state. The unit leaves the hangar
+// and the warchest is paid in one transaction, so a unit never leaves unpaid and is never paid for twice.
 func (s *Server) sellUnit(w http.ResponseWriter, r *http.Request) {
-	pt, c, run, ok := s.hangarRequest(w, r)
+	pt, c, _, ok := s.runRequest(w, r)
 	if !ok {
 		return
 	}
-	// A sale edits the hangar force too: one edit at a time, from before the unit's state (and so its price) is read.
-	unlock, ok := s.lockHangarRequest(w, r, pt, c)
-	if !ok {
-		return
-	}
-	defer unlock()
-	h, err := s.mekbay.ReadHangar(r.Context(), run.HangarInstance)
-	if err != nil {
-		log.Printf("read hangar to sell a unit: %v", err)
-		http.Error(w, err.Error(), http.StatusBadGateway)
-		return
-	}
-	var hu mekbay.HangarUnit
-	found := false
-	for _, u := range h.Units {
-		if u.ID == r.PostFormValue("unit") {
-			hu, found = u, true
+	unitID := r.PostFormValue("unit")
+	warchest, value, ok := s.changeHangar(w, r, pt, c, func(force map[string]any, h mekbay.HangarForce) (int, string, error) {
+		hu, found := hangarUnit(h, unitID)
+		if !found {
+			return 0, "", hangarError{http.StatusNotFound, "That unit is no longer in your hangar."}
 		}
+		cat, known := catalog.ByName(hu.Unit)
+		if !known || cat.Type != "Mek" {
+			return 0, "", hangarError{http.StatusBadRequest, "Only mechs in the catalog can be sold here."}
+		}
+		value := hangar.SellValue(cat.BV, hangar.Pristine(hu))
+		if !mekbay.RemoveUnitFromForce(force, hu.ID) {
+			return 0, "", refused(errors.New("That unit is no longer in your hangar."))
+		}
+		return value, fmt.Sprintf("Sold %s for %s SP.", catalog.DisplayName(cat), format.Commas(value)), nil
+	})
+	if ok {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"value":%d,"warchest":%d}`, value, warchest) // what the payment made, whatever other requests did since this one loaded the run
 	}
-	if !found {
-		http.Error(w, "That unit is no longer in your hangar.", http.StatusNotFound)
-		return
-	}
-	cat, known := catalog.ByName(hu.Unit)
-	if !known || cat.Type != "Mek" {
-		http.Error(w, "Only mechs in the catalog can be sold here.", http.StatusBadRequest)
-		return
-	}
-	value := hangar.SellValue(cat.BV, hangar.Pristine(hu))
-	ctx := context.WithoutCancel(r.Context())
-	after, err := s.mekbay.SellUnit(ctx, mekbay.SellRequest{OwnerUID: mekbay.AccountUID(currentSeed(r), mekbay.SlotHangar), Instance: run.HangarInstance, UnitID: hu.ID})
-	if err != nil {
-		log.Printf("sell a unit in MekBay: %v", err) // never log the owner UID
-		http.Error(w, err.Error(), http.StatusBadGateway)
-		return
-	}
-	s.cacheHangar(ctx, pt.ID, c.Slug, run.HangarInstance, after) // the page that reloads next shows the unit gone at once
-	warchest, err := s.store.RefundWarchest(ctx, pt.ID, c.Slug, value)
-	if err != nil {
-		log.Printf("could not pay %d SP for a sold unit: %v", value, err)
-		http.Error(w, "The unit was sold but the warchest could not be paid. Set the funds under Advanced Management.", http.StatusInternalServerError)
-		return
-	}
-	s.logHistory(r, pt.ID, c.Slug, storage.HistoryHangar, value, fmt.Sprintf("Sold %s for %s SP.", catalog.DisplayName(cat), format.Commas(value)))
-	w.Header().Set("Content-Type", "application/json")
-	fmt.Fprintf(w, `{"value":%d,"warchest":%d}`, value, warchest) // what the payment made, whatever other requests did since this one loaded the run
 }

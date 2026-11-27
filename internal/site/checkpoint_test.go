@@ -54,16 +54,13 @@ func TestCheckpointsAndRollback(t *testing.T) {
 		pilotID[p.Name] = p.ID
 	}
 
-	// Starting the campaign is the first checkpoint, with a frozen copy of the hangar.
+	// Starting the campaign is the first checkpoint, the hangar in it.
 	cps := checkpoints()
-	if len(cps) != 1 || cps[0].Label != "Campaign started" || cps[0].HangarCopy == "" {
+	if len(cps) != 1 || cps[0].Label != "Campaign started" {
 		t.Fatalf("the starting checkpoint: %+v", cps)
 	}
 	start0, sp0, _ := state()
-	live := start0.HangarInstance
-	if len(fake.copies) != 1 || fake.copies[0].Source != live || fake.copies[0].Target != cps[0].HangarCopy {
-		t.Fatalf("the hangar was copied into the checkpoint: %+v", fake.copies)
-	}
+	units := func() int { return len(runHangar(t, store, seed, "refusalwar").Units) }
 
 	// Rolling back is offered from the campaign page's History, on the line the checkpoint follows; the Manage page no longer has a Rollback of its own.
 	if p := body(t, srv, "/refusalwar/", cookie); !strings.Contains(p, `data-checkpoint="`+strconv.Itoa(cps[0].Seq)+`" data-label="Campaign started"`) {
@@ -73,7 +70,10 @@ func TestCheckpointsAndRollback(t *testing.T) {
 		t.Error("the Manage page has no Rollback of its own")
 	}
 
-	// Change things: the warchest, a pilot's SP, a pilot killed in action. None of it makes a checkpoint.
+	// Change things: the hangar (a mech sold), the warchest, a pilot's SP, a pilot killed in action. None of it makes a checkpoint.
+	if got := post(t, srv, "/api/hangar/sell", form("unit", "ua"), cookie, srv.URL).StatusCode; got != http.StatusOK || units() != 4 {
+		t.Fatalf("sell: %d, %d units", got, units())
+	}
 	post(t, srv, "/api/warchest", form("funds", "777"), cookie, srv.URL)
 	post(t, srv, "/api/pilots/allocate", form("pilot", pilotID["Alrek"], "earned", "90"), cookie, srv.URL)
 	post(t, srv, "/api/pilots/fallen", form("pilot", pilotID["Katarina"]), cookie, srv.URL)
@@ -81,16 +81,12 @@ func TestCheckpointsAndRollback(t *testing.T) {
 		t.Fatalf("the changes took: %+v %v %v", run, sp, fallen)
 	}
 
-	// Rolling back to the starting checkpoint puts the warchest, the pilots' SP and who is alive back, and the frozen hangar over the live one.
+	// Rolling back to the starting checkpoint puts the hangar, the warchest, the pilots' SP and who is alive back.
 	if got := post(t, srv, "/api/campaign/rollback", form("checkpoint", strconv.Itoa(cps[0].Seq)), cookie, srv.URL).StatusCode; got != http.StatusNoContent {
 		t.Fatalf("rollback: %d", got)
 	}
-	if run, sp, fallen := state(); run.Warchest != start0.Warchest || sp["Alrek"] != sp0["Alrek"] || fallen["Katarina"] || run.HangarInstance != live {
-		t.Errorf("rolled back: %+v %v %v", run, sp, fallen)
-	}
-	last := fake.copies[len(fake.copies)-1]
-	if last.Source != cps[0].HangarCopy || last.Target != live {
-		t.Errorf("the frozen hangar was copied back over the live one: %+v", last)
+	if run, sp, fallen := state(); run.Warchest != start0.Warchest || sp["Alrek"] != sp0["Alrek"] || fallen["Katarina"] || units() != 5 {
+		t.Errorf("rolled back: %+v %v %v, %d units", run, sp, fallen, units())
 	}
 
 	// Completing a mission is a checkpoint: the state after it, with the mission completed and its rewards in.
@@ -98,7 +94,7 @@ func TestCheckpointsAndRollback(t *testing.T) {
 		t.Fatalf("complete 000: %d", got)
 	}
 	cps = checkpoints()
-	if len(cps) != 2 || cps[0].Label != "Completed Scenario 000: Trial of Position" || cps[0].HangarCopy == "" || cps[0].HangarCopy == cps[1].HangarCopy {
+	if len(cps) != 2 || cps[0].Label != "Completed Scenario 000: Trial of Position" {
 		t.Fatalf("the mission's checkpoint: %+v", cps)
 	}
 	after000, _, _ := state()
@@ -128,13 +124,12 @@ func TestCheckpointsAndRollback(t *testing.T) {
 		t.Errorf("aborting forgets no checkpoint: %+v", checkpoints())
 	}
 
-	// Rolling back to before the mission forgets its checkpoint, deletes its frozen hangar, and reopens the mission.
-	gone := cps[0].HangarCopy
+	// Rolling back to before the mission forgets its checkpoint and reopens the mission.
 	if got := post(t, srv, "/api/campaign/rollback", form("checkpoint", strconv.Itoa(cps[1].Seq)), cookie, srv.URL).StatusCode; got != http.StatusNoContent {
 		t.Fatalf("rollback to the start: %d", got)
 	}
-	if len(checkpoints()) != 1 || !slices.Contains(fake.deletes, gone) {
-		t.Errorf("the later checkpoint is forgotten and its hangar deleted: %+v %v", checkpoints(), fake.deletes)
+	if len(checkpoints()) != 1 {
+		t.Errorf("the later checkpoint is forgotten: %+v", checkpoints())
 	}
 	if done, _ := store.Completions(ctx, id, "refusalwar"); len(done) != 0 {
 		t.Errorf("the mission is open again: %v", done)
@@ -143,20 +138,7 @@ func TestCheckpointsAndRollback(t *testing.T) {
 		t.Errorf("and the funds are the starting ones: %+v", run)
 	}
 
-	// A MekBay failure leaves everything as it was; bad requests are refused.
-	post(t, srv, "/api/warchest", form("funds", "42"), cookie, srv.URL)
-	fake.mu.Lock()
-	fake.copyErr = http.ErrAbortHandler
-	fake.mu.Unlock()
-	if got := post(t, srv, "/api/campaign/rollback", form("checkpoint", strconv.Itoa(checkpoints()[0].Seq)), cookie, srv.URL).StatusCode; got != http.StatusBadGateway {
-		t.Errorf("a hangar that can't be restored: %d", got)
-	}
-	if run, _, _ := state(); run.Warchest != 42 {
-		t.Errorf("nothing changed: %+v", run)
-	}
-	fake.mu.Lock()
-	fake.copyErr = nil
-	fake.mu.Unlock()
+	// Bad requests are refused.
 	if got := post(t, srv, "/api/campaign/rollback", form("checkpoint", "999"), cookie, srv.URL).StatusCode; got != http.StatusNotFound {
 		t.Errorf("no such checkpoint: %d", got)
 	}
@@ -167,19 +149,17 @@ func TestCheckpointsAndRollback(t *testing.T) {
 		t.Errorf("cross-origin: %d", got)
 	}
 
-	// A campaign keeps at most maxCheckpoints; the oldest go, and their hangars are deleted.
-	first := checkpoints()[0].HangarCopy
+	// A campaign keeps at most maxCheckpoints; the oldest go.
+	first := checkpoints()[0].Seq
 	for i := 0; i < storage.MaxCheckpoints+3; i++ {
-		dropped, err := store.AddCheckpoint(ctx, id, "refusalwar", "Filler "+strconv.Itoa(i), "copy-"+strconv.Itoa(i))
-		if err != nil {
+		if err := store.AddCheckpoint(ctx, id, "refusalwar", "Filler "+strconv.Itoa(i)); err != nil {
 			t.Fatal(err)
 		}
-		_ = dropped
 	}
 	if n := len(checkpoints()); n != storage.MaxCheckpoints {
 		t.Errorf("at most %d checkpoints: %d", storage.MaxCheckpoints, n)
 	}
-	if cps := checkpoints(); cps[0].Label != "Filler "+strconv.Itoa(storage.MaxCheckpoints+2) || slices.ContainsFunc(cps, func(c storage.Checkpoint) bool { return c.HangarCopy == first }) {
+	if cps := checkpoints(); cps[0].Label != "Filler "+strconv.Itoa(storage.MaxCheckpoints+2) || slices.ContainsFunc(cps, func(c storage.Checkpoint) bool { return c.Seq == first }) {
 		t.Errorf("the newest are kept and the oldest dropped: %+v", cps[0])
 	}
 
@@ -362,7 +342,7 @@ func TestRollbackRestoresKeywords(t *testing.T) {
 		return strings.Join(out, ",")
 	}
 	grant("first_blood")
-	if _, err := store.AddCheckpoint(ctx, id, "refusalwar", "After the first mission", ""); err != nil { // a checkpoint that holds first_blood
+	if err := store.AddCheckpoint(ctx, id, "refusalwar", "After the first mission"); err != nil { // a checkpoint that holds first_blood
 		t.Fatal(err)
 	}
 	cps, _ := store.Checkpoints(ctx, id, "refusalwar")
@@ -382,9 +362,9 @@ func TestRollbackRestoresKeywords(t *testing.T) {
 	}
 }
 
-// A rollback whose rows can't be restored leaves the campaign as it was: the live hangar, already overwritten by the frozen one, is put back from the copy it was
-// set aside in, and the player is told nothing of the database's error.
-func TestRollbackPutsTheHangarBackWhenTheRowsFail(t *testing.T) {
+// A rollback whose rows can't be restored leaves the campaign as it was, its hangar too (one transaction), and the player is told nothing of the database's
+// error.
+func TestRollbackFailureChangesNothing(t *testing.T) {
 	fake := &fakeMekBay{hangar: startingHangar()}
 	srv, store := newMekBayTestServer(t, fake)
 	ctx := context.Background()
@@ -396,37 +376,24 @@ func TestRollbackPutsTheHangarBackWhenTheRowsFail(t *testing.T) {
 	}
 	id := playthroughID(seed)
 	cps, _ := store.Checkpoints(ctx, id, "refusalwar")
-	run, _, _ := store.Run(ctx, id, "refusalwar")
-	live, frozen := run.HangarInstance, cps[0].HangarCopy
 	post(t, srv, "/api/warchest", url.Values{"campaign": {"refusalwar"}, "funds": {"42"}}, cookie, srv.URL)
+	setRunHangar(t, store, seed, "refusalwar", hangarOf("BMMadCat_H"))
 
 	// The checkpoint's snapshot names a column the table doesn't have (as one taken before a column was dropped would), so restoring it fails.
-	broken := `{"campaign_runs":[{"playthrough_id":"` + id + `","campaign":"refusalwar","hangar_instance":"` + live + `","no_such_column":1}]}`
+	broken := `{"campaign_runs":[{"playthrough_id":"` + id + `","campaign":"refusalwar","hangar":"{}","no_such_column":1}]}`
 	if _, err := store.DB().ExecContext(ctx, store.Rebind(`UPDATE campaign_checkpoints SET snapshot = ? WHERE playthrough_id = ? AND campaign = ?`), broken, id, "refusalwar"); err != nil {
 		t.Fatal(err)
 	}
-	fake.mu.Lock()
-	before := len(fake.copies)
-	fake.mu.Unlock()
 	res := post(t, srv, "/api/campaign/rollback", url.Values{"campaign": {"refusalwar"}, "checkpoint": {strconv.Itoa(cps[0].Seq)}}, cookie, srv.URL)
 	msg, _ := io.ReadAll(res.Body)
 	if res.StatusCode != http.StatusInternalServerError || strings.TrimSpace(string(msg)) != "Could not roll the campaign back." {
 		t.Errorf("a database failure answers a fixed message: %d %q", res.StatusCode, msg)
 	}
-	fake.mu.Lock()
-	copies, deletes := slices.Clone(fake.copies[before:]), slices.Clone(fake.deletes)
-	fake.mu.Unlock()
-	if len(copies) != 3 || copies[0].Source != live || copies[1].Source != frozen || copies[1].Target != live || copies[2].Source != copies[0].Target || copies[2].Target != live {
-		t.Fatalf("the live hangar is set aside, overwritten, and put back: %+v", copies)
-	}
-	if aside := copies[0].Target; aside == live || aside == frozen || !slices.Contains(deletes, aside) {
-		t.Errorf("the copy set aside is a force of its own, deleted once the hangar is back: %q %v", aside, deletes)
-	}
-	if slices.Contains(deletes, frozen) || slices.Contains(deletes, live) {
-		t.Errorf("neither the frozen hangar nor the live one is deleted: %v", deletes)
-	}
-	if now, _, _ := store.Run(ctx, id, "refusalwar"); now.Warchest != 42 || now.HangarInstance != live {
+	if now, _, _ := store.Run(ctx, id, "refusalwar"); now.Warchest != 42 {
 		t.Errorf("the rows are as they were: %+v", now)
+	}
+	if h := runHangar(t, store, seed, "refusalwar"); len(h.Units) != 1 || h.Units[0].Unit != "BMMadCat_H" {
+		t.Errorf("the hangar is as it was: %+v", h)
 	}
 	if left, _ := store.Checkpoints(ctx, id, "refusalwar"); len(left) != 1 {
 		t.Errorf("the checkpoint is still there to try again: %+v", left)

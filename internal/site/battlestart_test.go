@@ -46,7 +46,6 @@ func TestStartBattleEndpoint(t *testing.T) {
 		t.Fatalf("start: %d", r.StatusCode)
 	}
 	id := playthroughID(seed)
-	run, _, _ := store.Run(ctx, id, "refusalwar")
 	pilots, _ := store.Pilots(ctx, id, "refusalwar")
 	var alrek pilot.NamedPilot
 	for _, p := range pilots {
@@ -100,7 +99,7 @@ func TestStartBattleEndpoint(t *testing.T) {
 		t.Fatalf("one start: %d", len(fake.battles))
 	}
 	req := fake.battles[0]
-	if req.Account != mekbay.MekBayUID(seed, mekbay.SlotHangar) || req.Provided || req.HangarInstance != run.HangarInstance || len(req.Players) != 2 || req.OperationName != "Refusal War - Scenario 001" {
+	if req.Account != mekbay.MekBayUID(seed, mekbay.SlotHangar) || req.Provided || len(req.Hangar) == 0 || len(req.Players) != 2 || req.OperationName != "Refusal War - Scenario 001" {
 		t.Fatalf("the request: %+v", req)
 	}
 	for i, p := range req.Players {
@@ -440,7 +439,7 @@ func TestCompletingTheMissionEndsTheBattle(t *testing.T) {
 			return err
 		},
 		"completed with an outcome": func(sc string) error {
-			return store.CompleteWithOutcome(ctx, id, "refusalwar", sc, content.OutcomeResult{})
+			return store.CompleteWithOutcome(ctx, id, "refusalwar", sc, content.OutcomeResult{}, nil)
 		},
 	} {
 		sc := "scenario_" + map[string]string{"marked completed": "001", "completed with an outcome": "000"}[name]
@@ -628,7 +627,7 @@ func TestAbortBattleGuards(t *testing.T) {
 	}
 }
 
-// An abort that fails (here the rollback can't restore the hangar) leaves the battle as it was, in MekBay too: the campaign is still locked on it, so the
+// An abort that fails (here the rollback can't restore the checkpoint) leaves the battle as it was, in MekBay too: the campaign is still locked on it, so the
 // mission can still be completed, or the abort tried again.
 func TestFailedAbortKeepsTheBattleInMekBay(t *testing.T) {
 	fake := &fakeMekBay{hangar: startingHangar()}
@@ -652,10 +651,16 @@ func TestFailedAbortKeepsTheBattleInMekBay(t *testing.T) {
 		defer fake.mu.Unlock()
 		return slices.Clone(fake.battleDeletes)
 	}
-	fake.mu.Lock()
-	fake.copyErr = errors.New("mekbay is down")
-	fake.mu.Unlock()
-	if got := abort(); got != http.StatusBadGateway {
+	// The checkpoint's snapshot names a column the table doesn't have, so restoring it fails.
+	cps, _ := store.Checkpoints(ctx, id, "refusalwar")
+	cp, _, _ := store.Checkpoint(ctx, id, "refusalwar", cps[0].Seq)
+	setSnapshot := func(snap string) {
+		if _, err := store.DB().ExecContext(ctx, store.Rebind(`UPDATE campaign_checkpoints SET snapshot = ? WHERE playthrough_id = ? AND campaign = ?`), snap, id, "refusalwar"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	setSnapshot(`{"campaign_runs":[{"playthrough_id":"` + id + `","campaign":"refusalwar","no_such_column":1}]}`)
+	if got := abort(); got != http.StatusInternalServerError {
 		t.Fatalf("an abort whose rollback fails: %d", got)
 	}
 	if _, had, _ := store.MekBayOperation(ctx, id, "refusalwar", "scenario_000"); !had {
@@ -664,10 +669,8 @@ func TestFailedAbortKeepsTheBattleInMekBay(t *testing.T) {
 	if d := deleted(); len(d) != 0 {
 		t.Errorf("a failed abort deleted the battle in MekBay: %v", d)
 	}
-	// Tried again once MekBay answers, the abort goes through and cleans up.
-	fake.mu.Lock()
-	fake.copyErr = nil
-	fake.mu.Unlock()
+	// Tried again once the checkpoint can be restored, the abort goes through and cleans up.
+	setSnapshot(cp.Snapshot)
 	if got := abort(); got != http.StatusNoContent {
 		t.Fatalf("the abort tried again: %d", got)
 	}

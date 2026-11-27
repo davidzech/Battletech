@@ -7,8 +7,6 @@ import (
 	"strconv"
 	"sync"
 	"testing"
-
-	"github.com/davidzech/Battletech/internal/mekbay"
 )
 
 // checkpointRace takes checkpoints while another request keeps changing the campaign and logging each change, as every endpoint does: the change first, then
@@ -21,7 +19,7 @@ func checkpointRace(t *testing.T, s *Store) {
 	if _, err := s.EnsurePlaythrough(ctx, id); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.StartRun(ctx, id, "camp", mekbay.Hangar{URL: goodHangarURL, Instance: goodInstance}); err != nil {
+	if err := s.StartRun(ctx, id, "camp", testHangar(goodInstance)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -52,7 +50,7 @@ func checkpointRace(t *testing.T, s *Store) {
 	}()
 
 	for i := 0; i < 300; i++ {
-		if _, err := s.AddCheckpoint(ctx, id, "camp", "Checkpoint "+strconv.Itoa(i), ""); err != nil {
+		if err := s.AddCheckpoint(ctx, id, "camp", "Checkpoint "+strconv.Itoa(i)); err != nil {
 			t.Fatal(err)
 		}
 		cps, err := s.Checkpoints(ctx, id, "camp")

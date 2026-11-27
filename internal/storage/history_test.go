@@ -5,8 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-
-	"github.com/davidzech/Battletech/internal/mekbay"
 )
 
 // TestHistoryBackfillsTheStart: a campaign started before the history existed is given its start line when the store opens, once, as line 0, which a rollback
@@ -22,13 +20,13 @@ func TestHistoryBackfillsTheStart(t *testing.T) {
 	if _, err := s.EnsurePlaythrough(ctx, id); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.StartRun(ctx, id, "refusalwar", mekbay.Hangar{URL: "u", Instance: "i"}); err != nil {
+	if err := s.StartRun(ctx, id, "refusalwar", testHangar("i")); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.SetForceName(ctx, id, "refusalwar", "Iron Wolves"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.AddCheckpoint(ctx, id, "refusalwar", "Campaign started", ""); err != nil { // a checkpoint from before the history: history_seq 0
+	if err := s.AddCheckpoint(ctx, id, "refusalwar", "Campaign started"); err != nil { // a checkpoint from before the history: history_seq 0
 		t.Fatal(err)
 	}
 	if err := s.LogHistory(ctx, id, "refusalwar", HistoryHangar, "Bought Grizzly for 1,000 SP.", -1000); err != nil {
@@ -56,7 +54,7 @@ func TestHistoryBackfillsTheStart(t *testing.T) {
 	}
 	defer s.Close()
 	cps, _ := s.Checkpoints(ctx, id, "refusalwar")
-	if _, err := s.RestoreCheckpoint(ctx, id, "refusalwar", cps[0].Seq); err != nil {
+	if err := s.RestoreCheckpoint(ctx, id, "refusalwar", cps[0].Seq); err != nil {
 		t.Fatal(err)
 	}
 	if h, _ := s.History(ctx, id, "refusalwar"); len(h) != 1 || h[0].Seq != 0 {

@@ -16,24 +16,15 @@ import (
 // force each player has holds only the ones that player took). A unit the hangar no longer has (sold, or swapped for another variant, while the battle was on) is
 // skipped and reported.
 
-// CommitBattleRequest asks for the battle's units to be written back into the hangar force.
-type CommitBattleRequest struct {
-	OwnerUID       string // the account that owns the hangar copy
-	HangarInstance string
-	OperationID    string
-	// Skip are friendly forces of the operation whose units never go back into the hangar: the scenario's allies, which aren't the players' mechs.
-	Skip []string
-}
-
-// CommitBattleReport says what was written back.
+// CommitBattleReport says what CommitState wrote back.
 type CommitBattleReport struct {
 	Matched int      // units whose record sheet state went back into the hangar
 	Skipped []string // battle units with no match in the hangar: "<design> (<unit id>)"
 }
 
-// commitState copies what a battle recorded on its units (the state: damage, critical hits, ammunition, rule checks) onto the hangar's units with the same ID and
+// CommitState copies what a battle recorded on its units (the state: damage, critical hits, ammunition, rule checks) onto the hangar's units with the same ID and
 // design. The crew is not carried back and the unit's crew is cleared: pilots are assigned during an operation only, so the hangar never holds a named pilot.
-func commitState(hangar map[string]any, battle map[string]map[string]any) CommitBattleReport {
+func CommitState(hangar map[string]any, battle map[string]map[string]any) CommitBattleReport {
 	var rep CommitBattleReport
 	used := map[string]bool{}
 	groups, _ := hangar["groups"].([]any)
@@ -75,48 +66,17 @@ func commitState(hangar map[string]any, battle map[string]map[string]any) Commit
 	return rep
 }
 
-// errNothingToCommit stops editForce from saving a hangar none of the battle's units matched.
-var errNothingToCommit = errors.New("nothing to write back")
-
-// CommitBattle reads the battle's operation, takes the state of every unit in the players' forces and saves it into the matching units of the hangar force,
-// through editForce like every other hangar edit. It returns the hangar as saved, for the site's cached copy; when no unit matched nothing is saved and the
-// hangar returned is the zero HangarForce.
-//
-// A hangar MekBay no longer has is reported as such (import it again); any other failure to read it (a timeout, say) is passed on as it is, so the player tries
-// again rather than re-importing.
-func (c *Client) CommitBattle(ctx context.Context, req CommitBattleRequest) (CommitBattleReport, HangarForce, error) {
+// ReadBattleUnits reads the battle's operation and the players' forces in it (every friendly force but those skip names), and answers their units by ID, for
+// CommitState to write back into the hangar.
+func (c *Client) ReadBattleUnits(ctx context.Context, account, operationID string, skip []string) (map[string]map[string]any, error) {
 	ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
-	battle, err := c.readBattleUnits(ctx, req)
-	if err != nil {
-		return CommitBattleReport{}, HangarForce{}, err
-	}
-	var rep CommitBattleReport
-	h, err := c.editForce(ctx, req.OwnerUID, req.HangarInstance, func(hangar map[string]any, _ time.Time) error {
-		if rep = commitState(hangar, battle); rep.Matched == 0 {
-			return errNothingToCommit
-		}
-		return nil
-	})
-	switch {
-	case errors.Is(err, errNothingToCommit):
-		return rep, HangarForce{}, nil
-	case errors.Is(err, errNoHangarForce):
-		return CommitBattleReport{}, HangarForce{}, errors.New("MekBay has no force for your hangar; try importing it again")
-	case err != nil:
-		return CommitBattleReport{}, HangarForce{}, err
-	}
-	return rep, h, nil
-}
-
-// readBattleUnits reads the battle's operation and the players' forces in it (every friendly force but those req.Skip names), and answers their units by ID.
-func (c *Client) readBattleUnits(ctx context.Context, req CommitBattleRequest) (map[string]map[string]any, error) {
-	s, err := Dial(ctx, c.url(), req.OwnerUID)
+	s, err := Dial(ctx, c.url(), account)
 	if err != nil {
 		return nil, err
 	}
 	defer s.Close()
-	raw, err := s.Call(ctx, map[string]any{"action": "getOperation", "operationId": req.OperationID})
+	raw, err := s.Call(ctx, map[string]any{"action": "getOperation", "operationId": operationID})
 	if err != nil {
 		return nil, err
 	}
@@ -133,7 +93,7 @@ func (c *Client) readBattleUnits(ctx context.Context, req CommitBattleRequest) (
 	}
 	battle := map[string]map[string]any{}
 	for _, f := range op.Data.Forces {
-		if f.Alignment != "friendly" || slices.Contains(req.Skip, f.InstanceID) {
+		if f.Alignment != "friendly" || slices.Contains(skip, f.InstanceID) {
 			continue
 		}
 		force, err := s.getForce(ctx, f.InstanceID, false)

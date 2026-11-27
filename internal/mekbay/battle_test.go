@@ -131,6 +131,14 @@ func (f *fakeForceServer) saveHangar(owner string, draft ForceDraft) (instance s
 	return instance, unitIDs
 }
 
+// hangarJSON is a force the server holds as the site stores a hangar: its saved data as JSON.
+func (f *fakeForceServer) hangarJSON(instance string) []byte {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	b, _ := json.Marshal(f.forces[instance])
+	return b
+}
+
 func unitsOf(data map[string]any) (names, crews []string) {
 	for _, g := range data["groups"].([]any) {
 		for _, u := range g.(map[string]any)["units"].([]any) {
@@ -162,10 +170,10 @@ func TestStartBattleBuildsForcesAndTheOperation(t *testing.T) {
 	hangar, ids := f.saveHangar(tableAccount, ForceDraft{Name: "Hangar", Groups: []GroupDraft{{Name: "G", Units: []UnitDraft{{Unit: "BMMadCat_H"}, {Unit: "BMKoshi_E"}, {Unit: "BMGrizzly"}}}}})
 	f.mu.Unlock()
 	req := BattleRequest{
-		Account:        tableAccount,
-		HangarInstance: hangar,
-		OperationName:  "Refusal War - Scenario 001",
-		OpFor:          BattleOpFor{Draft: ForceDraft{Name: "OpFor", Groups: []GroupDraft{{Name: "OpFor 1", Units: []UnitDraft{{Unit: "BMLoki_Prime", Pilot: "Alrek", Gunnery: 3, Piloting: 4}}}}}},
+		Account:       tableAccount,
+		Hangar:        f.hangarJSON(hangar),
+		OperationName: "Refusal War - Scenario 001",
+		OpFor:         BattleOpFor{Draft: ForceDraft{Name: "OpFor", Groups: []GroupDraft{{Name: "OpFor 1", Units: []UnitDraft{{Unit: "BMLoki_Prime", Pilot: "Alrek", Gunnery: 3, Piloting: 4}}}}}},
 		Players: []BattlePlayer{
 			{Number: 1, Name: "Dragoons - Player 1", Units: []string{ids[0], ids[1]}, Crew: []CrewAssignment{{UnitID: ids[0], Name: "Katarina", Gunnery: 3, Piloting: 4}}},
 			{Number: 2, Name: "Dragoons - Player 2", Units: []string{ids[2]}},
@@ -299,8 +307,8 @@ func TestStartBattleKeepsTheOperationAndOpFor(t *testing.T) {
 	if _, err := cl.StartBattle(context.Background(), BattleRequest{Account: tableAccount, OpFor: BattleOpFor{Draft: draft}}); err == nil {
 		t.Error("a battle needs players")
 	}
-	if _, err := cl.StartBattle(context.Background(), BattleRequest{Account: tableAccount, HangarInstance: NewID(), OpFor: BattleOpFor{Draft: draft}, Players: []BattlePlayer{{Number: 1, Units: []string{"x"}}}}); err == nil || !strings.Contains(err.Error(), "hangar") {
-		t.Errorf("a hangar that is not in MekBay: %v", err)
+	if _, err := cl.StartBattle(context.Background(), BattleRequest{Account: tableAccount, Hangar: []byte("not a force"), OpFor: BattleOpFor{Draft: draft}, Players: []BattlePlayer{{Number: 1, Units: []string{"x"}}}}); err == nil || !strings.Contains(err.Error(), "hangar") {
+		t.Errorf("a hangar that is not a force: %v", err)
 	}
 	// Forces owned by another account can't be touched.
 	f.mu.Lock()
@@ -412,7 +420,7 @@ func TestStartBattleLeavesNothingBehindWhenItFails(t *testing.T) {
 		"a unit not in the hangar":    {Number: 2, Name: "P2", Units: []string{"no-such-unit"}},
 		"a crew for a mech not taken": {Number: 2, Name: "P2", Units: []string{ids[1]}, Crew: []CrewAssignment{{UnitID: ids[0], Name: "Alrek", Gunnery: 3, Piloting: 4}}},
 	} {
-		_, err := cl.StartBattle(context.Background(), BattleRequest{Account: tableAccount, HangarInstance: hangar, OperationName: "S", OpFor: opfor,
+		_, err := cl.StartBattle(context.Background(), BattleRequest{Account: tableAccount, Hangar: f.hangarJSON(hangar), OperationName: "S", OpFor: opfor,
 			Players: []BattlePlayer{{Number: 1, Name: "P1", Units: []string{ids[0]}}, p2}})
 		if err == nil {
 			t.Fatalf("%s: the start should fail", name)
@@ -426,7 +434,7 @@ func TestStartBattleLeavesNothingBehindWhenItFails(t *testing.T) {
 	f.mu.Lock()
 	f.refuse = "Allies"
 	f.mu.Unlock()
-	good := BattleRequest{Account: tableAccount, HangarInstance: hangar, OperationName: "S", OpFor: opfor, Allies: allies,
+	good := BattleRequest{Account: tableAccount, Hangar: f.hangarJSON(hangar), OperationName: "S", OpFor: opfor, Allies: allies,
 		Players: []BattlePlayer{{Number: 1, Name: "P1", Units: []string{ids[0]}}}}
 	if _, err := cl.StartBattle(context.Background(), good); err == nil || !strings.Contains(err.Error(), "refused") {
 		t.Fatalf("a refused save fails the start: %v", err)

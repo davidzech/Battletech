@@ -59,7 +59,7 @@ func (s *Store) DeleteMekBayOperation(ctx context.Context, playthroughID, campai
 }
 
 // SaveBattleStatus keeps the last status read of a battle (the players' forces, as JSON), so the Operation in progress view can show it at once on the next visit
-// while a fresh read is made (see the hangar cache, which does the same for the hangar). It does nothing if the battle is gone.
+// while a fresh read is made. It does nothing if the battle is gone.
 func (s *Store) SaveBattleStatus(ctx context.Context, playthroughID, campaign, scenarioID, forcesJSON string, at int64) error {
 	_, err := s.db.ExecContext(ctx, s.q(`UPDATE mekbay_operations SET status_json = ?, status_at = ? WHERE playthrough_id = ? AND campaign = ? AND scenario_id = ?`), forcesJSON, at, playthroughID, campaign, scenarioID)
 	return err

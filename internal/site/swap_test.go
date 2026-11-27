@@ -8,7 +8,6 @@ import (
 
 	"github.com/davidzech/Battletech/internal/catalog"
 	"github.com/davidzech/Battletech/internal/hangar"
-	"github.com/davidzech/Battletech/internal/mekbay"
 )
 
 func TestSwapUnitEndpoint(t *testing.T) {
@@ -35,7 +34,8 @@ func TestSwapUnitEndpoint(t *testing.T) {
 	// ua: a clean Fire Moth Prime, ub: a Grizzly (not an omnimech), uc: a Fire Moth with spent ammo.
 	h := hangarOf("BMDasher_Prime", "BMGrizzly", "BMDasher_Prime")
 	h.Units[2].Damaged, h.Units[2].AmmoBins, h.Units[2].AmmoUsed = true, 1, 3
-	fake.setHangar(h, nil)
+	setRunHangar(t, store, "wolfpack2026", "refusalwar", h)
+	design := func(id string) string { u, _ := runUnit(t, store, "wolfpack2026", "refusalwar", id); return u.Unit }
 	funds := func() int { r, _, _ := store.Run(ctx, id, "refusalwar"); return r.Warchest }
 	swap := func(unit, to string) int {
 		return post(t, srv, "/api/hangar/swap", url.Values{"campaign": {"refusalwar"}, "unit": {unit}, "to": {to}}, cookie, srv.URL).StatusCode
@@ -59,30 +59,25 @@ func TestSwapUnitEndpoint(t *testing.T) {
 			t.Errorf("%s: %d (want %d), funds %d", name, got, want, funds())
 		}
 	}
-	if len(fake.swaps) != 0 {
-		t.Fatalf("refused swaps reached MekBay: %+v", fake.swaps)
+	if design("ua") != "BMDasher_Prime" || design("uc") != "BMDasher_Prime" {
+		t.Fatal("refused swaps change nothing")
 	}
 	if got := swap("u-ghost", up.Unit); got != http.StatusNotFound {
 		t.Errorf("unknown unit: %d", got)
 	}
-	// A good swap charges the price and tells MekBay.
+	// A good swap charges the price and reconfigures the unit, which keeps its ID.
 	if got := swap("ua", up.Unit); got != http.StatusOK || funds() != 4500-up.Cost {
 		t.Fatalf("swap: %d, funds %d (want %d)", got, funds(), 4500-up.Cost)
 	}
-	if len(fake.swaps) != 1 || fake.swaps[0].UnitID != "ua" || fake.swaps[0].To != up.Unit || fake.swaps[0].OwnerUID != mekbay.MekBayUID("wolfpack2026", mekbay.SlotHangar) {
-		t.Errorf("MekBay was asked: %+v", fake.swaps)
+	if design("ua") != up.Unit {
+		t.Errorf("the unit is reconfigured: %s", design("ua"))
 	}
-	// A failure in MekBay refunds, and too little in the warchest refuses.
-	before := funds()
-	fake.serviceErr = context.DeadlineExceeded
-	if got := swap("ua", up.Unit); got != http.StatusBadGateway || funds() != before {
-		t.Errorf("MekBay failure: %d, funds %d (want %d)", got, funds(), before)
-	}
-	fake.serviceErr = nil
+	// Too little in the warchest refuses, and changes nothing.
+	setRunHangar(t, store, "wolfpack2026", "refusalwar", h)
 	if err := store.SetWarchest(ctx, id, "refusalwar", up.Cost-1); err != nil {
 		t.Fatal(err)
 	}
-	if got := swap("ua", up.Unit); got != http.StatusConflict || funds() != up.Cost-1 {
+	if got := swap("ua", up.Unit); got != http.StatusConflict || funds() != up.Cost-1 || design("ua") != "BMDasher_Prime" {
 		t.Errorf("too poor: %d, funds %d", got, funds())
 	}
 	// The hangar view carries the options for the page, only for omnimechs.

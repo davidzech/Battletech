@@ -1,22 +1,15 @@
 package site
 
 import (
-	"context"
 	"encoding/json"
-	"log"
-	"time"
 
 	"github.com/davidzech/Battletech/internal/content"
 	"github.com/davidzech/Battletech/internal/mekbay"
 	"github.com/davidzech/Battletech/internal/storage"
 )
 
-// A pull-through cache of each campaign run's MekBay hangar. Reading a hangar from MekBay takes a moment, and a page that has
-// to wait for it shows an empty "reading your hangar" state. So every successful live read is also saved in the database
-// (table hangar_cache, one row per playthrough and campaign), and the pages that show the hangar embed the last saved copy:
-// they paint it straight away, then read MekBay again in the background and replace it with the fresh data. A run that has
-// never been read shows the loading state, once. The copy belongs to the hangar link it was read from: change the link and the
-// old copy is ignored.
+// The hangar as the pages' scripts take it: the campaign overview, the Manage page and the Deploy popup embed it in the page (it is in the database, so the page
+// has it at once), and GET /api/campaign/force and GET /api/mekbay/hangar answer the same JSON.
 
 // forceData is the hangar as the campaign overview and the Manage page show it: every unit, and the base BV they sum to (an unknown unit adds
 // nothing; a destroyed one still counts, being still in the hangar), with each omnimech's variants marked as available to the campaign's faction
@@ -39,16 +32,15 @@ func deployData(h mekbay.HangarForce, c *content.Campaign, sc *content.Scenario,
 	units := hangarViews(h)
 	markSwapAvailability(units, c)
 	// The review offers to reconfigure omnimechs: a scenario's own mechs for free when it allows it, a hangar's at the Manage page's price (paid by Start
-	// battle, from the warchest) when the site owns the hangar.
+	// battle, from the warchest).
 	swaps, paid := sc.Provides() && sc.ProvidedSwaps, false
 	if !sc.Provides() {
-		swaps, paid = run.Owned(), true
+		swaps, paid = true, true
 	}
-	return map[string]any{"name": h.Name, "limit": sc.BVLimit, "canModify": run.Owned(), "units": units, "provided": sc.Provides(), "swaps": swaps, "paidSwaps": paid, "warchest": run.Warchest}
+	return map[string]any{"name": h.Name, "limit": sc.BVLimit, "units": units, "provided": sc.Provides(), "swaps": swaps, "paidSwaps": paid, "warchest": run.Warchest}
 }
 
-func cachedJSON(data map[string]any, at time.Time) string {
-	data["cachedAt"] = at.UTC().Format(time.RFC3339)
+func pageJSON(data map[string]any) string {
 	b, err := json.Marshal(data)
 	if err != nil {
 		return ""
@@ -56,12 +48,12 @@ func cachedJSON(data map[string]any, at time.Time) string {
 	return string(b)
 }
 
-// ForceJSON is the cached hangar for the campaign overview, as the JSON the overview script renders ("" if there is none yet).
+// ForceJSON is the hangar for the campaign overview and the Manage page, as the JSON their scripts render ("" if it could not be loaded).
 func (p Page) ForceJSON() string {
-	if p.CachedHangar == nil {
+	if p.Hangar == nil {
 		return ""
 	}
-	return cachedJSON(forceData(*p.CachedHangar, p.Campaign), p.CachedAt)
+	return pageJSON(forceData(*p.Hangar, p.Campaign))
 }
 
 // PilotsJSON is the campaign's living named pilots for the Deploy popup's pilot tray: who they are, their four numbers, and (for the hover card, which
@@ -113,21 +105,13 @@ func (p Page) PilotsJSON() string {
 	return string(b)
 }
 
-// DeployJSON is the cached hangar for the scenario's deploy popup ("" if there is none yet).
+// DeployJSON is the hangar (or the scenario's own mechs) for the scenario's deploy popup ("" if it could not be loaded).
 func (p Page) DeployJSON() string {
 	if p.Scenario != nil && p.Scenario.Provides() {
-		// The scenario's own mechs need no read from MekBay, so the popup can show them at once.
-		return cachedJSON(deployData(providedForce(p.Scenario), p.Campaign, p.Scenario, p.Run), time.Now())
+		return pageJSON(deployData(providedForce(p.Scenario), p.Campaign, p.Scenario, p.Run))
 	}
-	if p.CachedHangar == nil || p.Scenario == nil {
+	if p.Hangar == nil || p.Scenario == nil {
 		return ""
 	}
-	return cachedJSON(deployData(*p.CachedHangar, p.Campaign, p.Scenario, p.Run), p.CachedAt)
-}
-
-// cacheHangar saves a hangar that was just read live. A failure only costs the cache, so it is logged and otherwise ignored.
-func (s *Server) cacheHangar(ctx context.Context, playthroughID, campaign, instance string, h mekbay.HangarForce) {
-	if err := s.store.SaveHangarCache(ctx, playthroughID, campaign, instance, h); err != nil {
-		log.Printf("cache hangar: %v", err)
-	}
+	return pageJSON(deployData(*p.Hangar, p.Campaign, p.Scenario, p.Run))
 }

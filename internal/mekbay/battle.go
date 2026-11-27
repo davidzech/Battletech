@@ -25,9 +25,10 @@ import (
 
 // BattleRequest is everything a battle needs in MekBay.
 type BattleRequest struct {
-	Account        string // the seed's MekBay account: it owns every force and the operation
-	HangarInstance string // the site's copy of the hangar the players' mechs are taken from (not read when Provided)
-	// Provided says the mechs are not in MekBay (a scenario that provides its own): each player's force is built from its Draft instead of copied from the hangar.
+	Account string // the seed's MekBay account: it owns every force and the operation
+	// Hangar is the campaign's hangar (its saved data, as the site stores it) the players' mechs are taken from (not used when Provided).
+	Hangar []byte
+	// Provided says the mechs are not the hangar's (a scenario that provides its own): each player's force is built from its Draft instead of copied from the hangar.
 	Provided bool
 	Players  []BattlePlayer
 	OpFor    BattleOpFor
@@ -148,7 +149,8 @@ func (s *Session) saveOperation(ctx context.Context, op map[string]any, opID str
 
 // StartBattle builds the players' forces and the OpFor's and saves the operation that pits them against each other (see the notes at the top of this file).
 //
-// Every force is built and checked before the first one is saved, so a plan that can't be built (a unit that is not in the hangar, a crew for a mech that isn't
+// The players' forces are copied from the hangar the request carries (the site's database holds it), never read from MekBay. Every force is built and checked
+// before the first one is saved, so a plan that can't be built (a unit that is not in the hangar, a crew for a mech that isn't
 // there) saves nothing. If a save then fails part-way, the forces this start has already saved (and its operation, if it is a new one) are deleted again, since
 // nothing would remember them: the caller gets no result to record.
 func (c *Client) StartBattle(ctx context.Context, req BattleRequest) (BattleResult, error) {
@@ -194,11 +196,8 @@ func (c *Client) StartBattle(ctx context.Context, req BattleRequest) (BattleResu
 	// Each player's force, from the hangar or built from their draft.
 	var hangar map[string]any
 	if !req.Provided {
-		if hangar, err = get(req.HangarInstance, false); err != nil {
-			return BattleResult{}, err
-		}
-		if hangar == nil {
-			return BattleResult{}, errors.New("MekBay has no force for your hangar; check that it is saved in MekBay")
+		if err := json.Unmarshal(req.Hangar, &hangar); err != nil || hangar == nil {
+			return BattleResult{}, errors.New("your hangar could not be read")
 		}
 	}
 	forces := []map[string]any{}
@@ -345,4 +344,40 @@ func (c *Client) ReadBattle(ctx context.Context, operationID string) (BattleStat
 		return BattleStatus{}, errors.New("none of the players' forces could be read from MekBay")
 	}
 	return out, nil
+}
+
+// DeleteBattle deletes a battle's operation and every force in it (the players' forces and the OpFor) in MekBay, best effort: MekBay does not acknowledge a
+// deletion. It is how an aborted battle is cleaned up. It reads the operation first, so it works whatever the site still remembers of it.
+func (c *Client) DeleteBattle(ctx context.Context, owner, operationID string) error {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	s, err := Dial(ctx, c.url(), owner)
+	if err != nil {
+		return err
+	}
+	defer s.Close()
+	raw, err := s.Call(ctx, map[string]any{"action": "getOperation", "operationId": operationID})
+	if err != nil {
+		return err
+	}
+	var op struct {
+		Data *struct {
+			Forces []struct {
+				InstanceID string `json:"instanceId"`
+			} `json:"forces"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(raw, &op); err != nil || op.Data == nil {
+		return nil // already gone
+	}
+	for _, f := range op.Data.Forces {
+		if err := s.Send(ctx, map[string]any{"action": "delForce", "uuid": owner, "instanceId": f.InstanceID}); err != nil {
+			return err
+		}
+	}
+	if err := s.Send(ctx, map[string]any{"action": "delOperation", "operationId": operationID}); err != nil {
+		return err
+	}
+	_, _ = s.Call(ctx, map[string]any{"action": "getOperation", "operationId": operationID}) // after this the deletions have been handled
+	return nil
 }

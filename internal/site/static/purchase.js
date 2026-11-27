@@ -12,9 +12,7 @@
   var section = document.getElementById('hangar-units');
   if (!dialog || !openBtn || !section || typeof MechRow === 'undefined' || typeof UnitSearch === 'undefined') return;
 
-  var canModify = section.dataset.canModify === '1';
   var warchest = parseInt(section.dataset.warchest, 10) || 0;
-  var NO_UID = 'This hangar is from before the site kept its own copy. Delete the campaign and start it again to import your hangar.';
   var LIMIT = 10; // the server's limit on units per purchase
 
   var staged = [];  // { unit }
@@ -44,7 +42,7 @@
     var cost = total(), line = Dom.costLine(cost, warchest);
     costEl.textContent = line.text;
     costEl.classList.toggle('short', line.short);
-    var why = !canModify ? NO_UID : !staged.length ? 'Add at least one unit to your cart.' : line.short ? 'The warchest cannot cover that.' : '';
+    var why = !staged.length ? 'Add at least one unit to your cart.' : line.short ? 'The warchest cannot cover that.' : '';
     buyBtn.disabled = !!why;
     buyBtn.title = why;
     buyBtn.textContent = staged.length ? 'Buy for ' + commas(cost) + ' SP' : 'Buy';

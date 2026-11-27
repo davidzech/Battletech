@@ -2,6 +2,7 @@ package site
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -10,11 +11,10 @@ import (
 	"testing"
 
 	"github.com/davidzech/Battletech/internal/catalog"
-	"github.com/davidzech/Battletech/internal/mekbay"
 )
 
-// The pages paint the last hangar read from MekBay straight away, so a visit never starts from an empty "reading" state.
-func TestHangarCachePullThrough(t *testing.T) {
+// The pages embed the campaign's hangar, so a visit never starts from an empty "reading" state, and the endpoints the scripts call answer the same.
+func TestPagesEmbedTheHangar(t *testing.T) {
 	fake := &fakeMekBay{hangar: startingHangar()}
 	srv, store := newMekBayTestServer(t, fake)
 	ctx := context.Background()
@@ -24,7 +24,7 @@ func TestHangarCachePullThrough(t *testing.T) {
 	}
 	id := playthroughID("wolfpack2026")
 	cachedAttr := func(page string) string {
-		const key = `data-cached="`
+		const key = `data-hangar="`
 		i := strings.Index(page, key)
 		if i < 0 {
 			return "MISSING"
@@ -36,12 +36,11 @@ func TestHangarCachePullThrough(t *testing.T) {
 	if r := post(t, srv, "/api/campaign/start", startForm(goodHangar, "Alrek", "Katarina"), cookie, srv.URL); r.StatusCode != http.StatusNoContent {
 		t.Fatalf("start: %d", r.StatusCode)
 	}
-	// Starting read the hangar for its check, and that read is already the run's first cached copy: the very first visit to the
-	// overview shows the units with no loading state.
+	// The very first visit to the overview shows the units with no loading state.
 	over := body(t, srv, "/refusalwar/", cookie)
 	attr := cachedAttr(over)
-	if attr == "" || attr == "MISSING" || !strings.Contains(attr, "Mist Lynx") || !strings.Contains(attr, "&#34;bv&#34;:8299") || !strings.Contains(attr, "cachedAt") {
-		t.Fatalf("the first overview should carry the cached hangar: %.300s", attr)
+	if attr == "" || attr == "MISSING" || !strings.Contains(attr, "Mist Lynx") || !strings.Contains(attr, "&#34;bv&#34;:8299") {
+		t.Fatalf("the first overview should carry the hangar: %.300s", attr)
 	}
 	// It is valid JSON for the overview script once unescaped, with the same shape the live endpoint answers with.
 	var cached struct {
@@ -62,39 +61,38 @@ func TestHangarCachePullThrough(t *testing.T) {
 		t.Errorf("the manage page should list the cached mechs under the pilots: attr %.120s, positions %d %d %d", mattr, i, j, k)
 	}
 
-	// A live read refreshes the copy (write-through).
-	fake.setHangar(hangarOf("BMMadCat_H"), nil)
-	if r := get(t, srv, "/api/campaign/force?campaign=refusalwar", cookie); r.StatusCode != http.StatusOK {
-		t.Fatalf("live read: %d", r.StatusCode)
-	}
+	// A change to the hangar shows on the next page, and the overview's endpoint answers it too.
+	setRunHangar(t, store, "wolfpack2026", "refusalwar", hangarOf("BMMadCat_H"))
 	if attr := cachedAttr(body(t, srv, "/refusalwar/", cookie)); !strings.Contains(attr, "Timber Wolf") || strings.Contains(attr, "Mist Lynx") {
-		t.Errorf("the live read should have replaced the cached copy: %.300s", attr)
+		t.Errorf("the page shows the hangar as it is now: %.300s", attr)
 	}
-	// A failed read keeps the last copy, so the page still has something to show.
-	fake.setHangar(mekbay.HangarForce{}, errors.New("mekbay is down"))
-	if r := get(t, srv, "/api/campaign/force?campaign=refusalwar", cookie); r.StatusCode != http.StatusBadGateway {
-		t.Errorf("a failed read: %d", r.StatusCode)
+	var live struct{ Units []hangarUnitView }
+	if r := get(t, srv, "/api/campaign/force?campaign=refusalwar", cookie); r.StatusCode != http.StatusOK || json.NewDecoder(r.Body).Decode(&live) != nil || len(live.Units) != 1 || live.Units[0].Name != "Timber Wolf" {
+		t.Fatalf("the overview's endpoint: %d %+v", r.StatusCode, live)
 	}
-	if attr := cachedAttr(body(t, srv, "/refusalwar/", cookie)); !strings.Contains(attr, "Timber Wolf") {
-		t.Errorf("a failed read must not lose the cached copy: %.200s", attr)
+	if len(fake.reads) != 1 {
+		t.Errorf("nothing but the start's link is read from MekBay: %v", fake.reads)
 	}
 
-	// The scenario page's deploy popup gets the cached hangar too, in its own shape (limit, operation).
-	fake.setHangar(startingHangar(), nil)
+	// The scenario page's deploy popup gets the hangar too, in its own shape (limit, swaps), and its endpoint answers the same.
+	setRunHangar(t, store, "wolfpack2026", "refusalwar", startingHangar())
 	if r := get(t, srv, "/api/mekbay/hangar?campaign=refusalwar&scenario=scenario_001", cookie); r.StatusCode != http.StatusOK {
 		t.Fatalf("deploy popup read: %d", r.StatusCode)
 	}
 	sattr := cachedAttr(body(t, srv, "/refusalwar/scenario_001/", cookie))
-	if !strings.Contains(sattr, "Mist Lynx") || !strings.Contains(sattr, "&#34;limit&#34;:7500") || !strings.Contains(sattr, "&#34;canModify&#34;:true") {
-		t.Errorf("the scenario page should carry the cached hangar for the popup: %.300s", sattr)
+	if !strings.Contains(sattr, "Mist Lynx") || !strings.Contains(sattr, "&#34;limit&#34;:7500") || !strings.Contains(sattr, "&#34;paidSwaps&#34;:true") {
+		t.Errorf("the scenario page should carry the hangar for the popup: %.300s", sattr)
 	}
 
-	// Deleting the campaign takes its cached hangar with it.
+	// Deleting the campaign takes its hangar with it.
 	if r := post(t, srv, "/api/campaign/delete", url.Values{"campaign": {"refusalwar"}}, cookie, srv.URL); r.StatusCode != http.StatusNoContent {
 		t.Fatalf("delete: %d", r.StatusCode)
 	}
-	if _, _, ok, _ := store.CachedHangar(ctx, id, "refusalwar", "01a12f98-8a21-7d12-b43d-52bb70872376"); ok {
-		t.Error("deleting the campaign should clear its cached hangar")
+	if _, err := store.Hangar(ctx, id, "refusalwar"); !errors.Is(err, sql.ErrNoRows) {
+		t.Errorf("deleting the campaign should delete its hangar: %v", err)
+	}
+	if r := get(t, srv, "/api/campaign/force?campaign=refusalwar", cookie); r.StatusCode != http.StatusBadRequest {
+		t.Errorf("a deleted campaign has no hangar to answer: %d", r.StatusCode)
 	}
 }
 

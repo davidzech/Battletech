@@ -12,7 +12,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/davidzech/Battletech/internal/content"
 	"github.com/davidzech/Battletech/internal/mekbay"
@@ -136,7 +135,7 @@ Rest, then raid again.
 		t.Fatal(err)
 	}
 	fake.mu.Lock()
-	fake.commitErr = errors.New("MekBay is not reachable")
+	fake.unitsErr = errors.New("MekBay is not reachable")
 	fake.mu.Unlock()
 	if got := post(t, srv, "/api/campaign/scenario-outcome/commit", report(true, true, entries...), cookie, srv.URL).StatusCode; got != http.StatusBadGateway {
 		t.Fatalf("a failed write-back refuses the commit: %d", got)
@@ -144,42 +143,20 @@ Rest, then raid again.
 	if done, _ := store.Completions(ctx, id, "refusalwar"); len(done) != 0 {
 		t.Fatalf("and nothing is completed: %v", done)
 	}
-	// The write-back is a hangar edit: while another server holds the hangar's claim it waits, then refuses, and nothing is written or completed.
+	// The battle's damage goes into the hangar in the transaction that completes the mission, with the crew reset to an unnamed 4/5.
+	fought := hangarOf("BMKoshi_E")
+	fought.Units[0].Locations, fought.Units[0].Damaged, fought.Units[0].Pilot, fought.Units[0].Gunnery = map[string]mekbay.LocationLoss{"CT": {Armor: 7}}, true, "Alrek", 3
 	fake.mu.Lock()
-	fake.commitErr = nil
-	fake.mu.Unlock()
-	defer func(wait time.Duration) { hangarClaimWait = wait }(hangarClaimWait)
-	hangarClaimWait = 50 * time.Millisecond
-	token, claimed, err := store.ClaimHangarEdit(ctx, id, "refusalwar")
-	if err != nil || !claimed {
-		t.Fatalf("claim: %v %v", claimed, err)
-	}
-	if got := post(t, srv, "/api/campaign/scenario-outcome/commit", report(true, true, entries...), cookie, srv.URL).StatusCode; got != http.StatusConflict {
-		t.Fatalf("a write-back while another server edits the hangar: %d", got)
-	}
-	fake.mu.Lock()
-	writeBacks := len(fake.commits)
-	fake.mu.Unlock()
-	if done, _ := store.Completions(ctx, id, "refusalwar"); len(done) != 0 || writeBacks != 1 {
-		t.Fatalf("nothing is written back or completed: %v, %d write-backs", done, writeBacks)
-	}
-	if err := store.ReleaseHangarEdit(ctx, id, "refusalwar", token); err != nil {
-		t.Fatal(err)
-	}
-	// The hangar as the write-back saved it becomes the cached copy, so the next page shows the battle's damage at once.
-	committed := startingHangar()
-	committed.Units[0].Locations, committed.Units[0].Damaged = map[string]mekbay.LocationLoss{"CT": {Armor: 7}}, true
-	fake.mu.Lock()
-	fake.committed = committed
+	fake.unitsErr, fake.battleUnits = nil, battleUnitsOf(fought)
 	fake.mu.Unlock()
 	if got := post(t, srv, "/api/campaign/scenario-outcome/commit", report(true, true, entries...), cookie, srv.URL).StatusCode; got != http.StatusNoContent {
 		t.Fatalf("commit: %d", got)
 	}
-	if h, _, ok, err := store.CachedHangar(ctx, id, "refusalwar", run0.HangarInstance); err != nil || !ok || len(h.Units) == 0 || !h.Units[0].Damaged || h.Units[0].Locations["CT"].Armor != 7 {
-		t.Errorf("the written-back hangar is cached: ok=%v err=%v %+v", ok, err, h.Units)
+	if u, _ := runUnit(t, store, "wolfpack2026", "refusalwar", "ua"); !u.Damaged || u.Locations["CT"].Armor != 7 || u.Pilot != "" || u.Gunnery != 4 {
+		t.Errorf("the battle's damage is in the hangar, and the crew is reset: %+v", u)
 	}
-	if _, ok, _ := store.ClaimHangarEdit(ctx, id, "refusalwar"); !ok {
-		t.Error("the write-back releases its claim on the hangar")
+	if u, _ := runUnit(t, store, "wolfpack2026", "refusalwar", "ub"); u.Damaged {
+		t.Errorf("a mech that didn't fight is untouched: %+v", u)
 	}
 	// Once the mission is completed nothing refers to its battle any more, so it is deleted in MekBay, in the background.
 	eventually(t, "the completed mission's battle is deleted in MekBay", func() (bool, any) {
@@ -188,8 +165,8 @@ Rest, then raid again.
 		return slices.Contains(fake.battleDeletes, "op-1"), fake.battleDeletes
 	})
 	fake.mu.Lock()
-	if len(fake.commits) != 2 || fake.commits[1].OperationID != "op-1" || fake.commits[1].HangarInstance != run0.HangarInstance || fake.commits[1].OwnerUID != mekbay.AccountUID("wolfpack2026", mekbay.SlotHangar) {
-		t.Errorf("the hangar was written back from the battle's operation: %+v", fake.commits)
+	if len(fake.unitReads) != 2 || fake.unitReads[1] != "op-1" {
+		t.Errorf("the hangar was written back from the battle's operation: %v", fake.unitReads)
 	}
 	fake.mu.Unlock()
 	after, _ := store.Pilots(ctx, id, "refusalwar")

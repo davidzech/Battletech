@@ -1,7 +1,6 @@
 package site
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"log"
@@ -97,19 +96,8 @@ func (s *Server) commitOutcome(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Choose the mission's MVP: every mission has one when a named pilot took part and stays in the campaign.", http.StatusBadRequest)
 		return
 	}
-	if !s.writeBackBattle(w, r, pt, c, sc) {
-		return
-	}
-	// Two stages for the hangar: its frozen copy is made now, and the checkpoint that holds it is recorded once the completion is saved.
-	copyID, cerr := "", error(nil)
-	if run, ok, err := s.store.Run(r.Context(), pt.ID, c.Slug); err != nil {
-		http.Error(w, "could not load campaign", http.StatusInternalServerError)
-		return
-	} else if ok {
-		copyID, cerr = s.checkpointCopy(r.Context(), currentSeed(r), run)
-	}
-	if cerr != nil {
-		http.Error(w, "Could not save a checkpoint of your hangar in MekBay: "+cerr.Error(), http.StatusBadGateway)
+	writeBack, ok := s.battleWriteBack(w, r, pt, c, sc)
+	if !ok {
 		return
 	}
 	// The battle being completed, if there is one: once the mission is, nothing refers to it any more, so it is deleted in MekBay.
@@ -118,7 +106,7 @@ func (s *Server) commitOutcome(w http.ResponseWriter, r *http.Request) {
 		log.Printf("load the battle to delete after completing %s: %v", sc.Slug, err)
 	}
 	label := "Completed " + c.MissionName(*sc)
-	switch err := s.store.CompleteWithOutcome(r.Context(), pt.ID, c.Slug, sc.Slug, res); {
+	switch err := s.store.CompleteWithOutcome(r.Context(), pt.ID, c.Slug, sc.Slug, res, writeBack); {
 	case errors.Is(err, storage.ErrAlreadyCompleted):
 		http.Error(w, "This mission is already completed.", http.StatusConflict)
 	case errors.Is(err, storage.ErrOutcomePilot):
@@ -126,56 +114,43 @@ func (s *Server) commitOutcome(w http.ResponseWriter, r *http.Request) {
 	case errors.Is(err, storage.ErrOutcomeFunds):
 		http.Error(w, "That outcome would take the warchest below zero.", http.StatusConflict)
 	case err != nil:
+		log.Printf("complete %s: %v", sc.Slug, err)
 		http.Error(w, "could not save the outcome", http.StatusInternalServerError)
 	default:
 		s.logHistory(r, pt.ID, c.Slug, storage.HistoryMission, res.Warchest, outcomeHistory(c, sc, res)) // before the checkpoint, so rolling back to it keeps the line
-		s.recordCheckpoint(r.Context(), currentSeed(r), pt.ID, c.Slug, label, copyID)
+		s.recordCheckpoint(r.Context(), pt.ID, c.Slug, label)
 		if hadBattle {
-			s.cleanUpInBackground(currentSeed(r), nil, []string{op.OperationID})
+			s.cleanUpInBackground(currentSeed(r), []string{op.OperationID})
 		}
 		w.WriteHeader(http.StatusNoContent)
-		return
-	}
-	if copyID != "" {
-		s.deleteHangars(r.Context(), currentSeed(r), []string{copyID}) // the completion was not saved: the staged copy is not needed
 	}
 }
 
-// writeBackBattle, for a mission fought with the player's own force (not a provided one) that has a battle in progress, writes the battle's units back into the
-// hangar before the mission is completed (see internal/mekbay/commit.go), so a failure leaves the mission open to try again (writing the same state twice changes nothing). It
-// runs under the run's hangar lock (lockHangar) and caches the hangar as saved. It answers the request itself and returns false when it fails.
-func (s *Server) writeBackBattle(w http.ResponseWriter, r *http.Request, pt storage.Playthrough, c *content.Campaign, sc *content.Scenario) bool {
+// battleWriteBack, for a mission fought with the player's own force (not a provided one) that has a battle in progress, reads the battle's units from MekBay and
+// returns the edit that writes them back into the hangar (see internal/mekbay/commit.go), which completing the mission makes in the same transaction: a failure
+// leaves both as they were, and the mission open to try again. It returns a nil edit when there is no battle to write back. It answers the request itself and
+// returns false when it fails.
+func (s *Server) battleWriteBack(w http.ResponseWriter, r *http.Request, pt storage.Playthrough, c *content.Campaign, sc *content.Scenario) (storage.HangarEdit, bool) {
 	if sc.Provides() {
-		return true
+		return nil, true
 	}
 	op, had, err := s.store.MekBayOperation(r.Context(), pt.ID, c.Slug, sc.ID)
 	if err != nil {
 		http.Error(w, "could not load the battle", http.StatusInternalServerError)
-		return false
+		return nil, false
 	}
-	run, started, err := s.store.Run(r.Context(), pt.ID, c.Slug)
+	if !had {
+		return nil, true
+	}
+	battle, err := s.mekbay.ReadBattleUnits(r.Context(), mekbay.AccountUID(currentSeed(r), mekbay.SlotHangar), op.OperationID, skipAllies(op.AlliesInstance))
 	if err != nil {
-		http.Error(w, "could not load campaign", http.StatusInternalServerError)
-		return false
+		http.Error(w, "Could not read the battle's damage from MekBay to write it back into your hangar: "+err.Error(), http.StatusBadGateway)
+		return nil, false
 	}
-	if !had || !started || !run.Owned() {
-		return true // no battle to write back, or a hangar the site doesn't own
-	}
-	unlock, ok := s.lockHangarRequest(w, r, pt, c) // the write-back edits the hangar force like any other hangar edit: one at a time
-	if !ok {
-		return false
-	}
-	defer unlock()
-	rep, h, err := s.mekbay.CommitBattle(r.Context(), mekbay.CommitBattleRequest{OwnerUID: mekbay.AccountUID(currentSeed(r), mekbay.SlotHangar), HangarInstance: run.HangarInstance, OperationID: op.OperationID, Skip: skipAllies(op.AlliesInstance)})
-	if err != nil {
-		http.Error(w, "Could not write the battle's damage back into your hangar: "+err.Error(), http.StatusBadGateway)
-		return false
-	}
-	if rep.Matched > 0 {
-		s.cacheHangar(context.WithoutCancel(r.Context()), pt.ID, c.Slug, run.HangarInstance, h) // the page that reloads next shows the battle's damage at once
-	}
-	if len(rep.Skipped) > 0 {
-		log.Printf("battle write-back: %d units written, no match in the hangar for %v", rep.Matched, rep.Skipped)
-	}
-	return true
+	return func(hangar map[string]any) (int, error) {
+		if rep := mekbay.CommitState(hangar, battle); len(rep.Skipped) > 0 {
+			log.Printf("battle write-back: %d units written, no match in the hangar for %v", rep.Matched, rep.Skipped)
+		}
+		return 0, nil
+	}, true
 }

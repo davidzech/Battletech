@@ -193,8 +193,8 @@ func TestRepeatedCompletionChangesNothing(t *testing.T) {
 			t.Fatalf("mark %s done=%s: %d", scenario, done, got)
 		}
 	}
-	// counts are the history lines, the checkpoints and the hangar copies made so far.
-	counts := func() [3]int {
+	// counts are the history lines and the checkpoints made so far.
+	counts := func() [2]int {
 		t.Helper()
 		h, err := store.History(ctx, id, "refusalwar")
 		if err != nil {
@@ -204,24 +204,22 @@ func TestRepeatedCompletionChangesNothing(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		fake.mu.Lock()
-		defer fake.mu.Unlock()
-		return [3]int{len(h), len(cps), len(fake.copies)}
+		return [2]int{len(h), len(cps)}
 	}
 
 	base := counts()
 	mark("scenario_001", "1")
 	once := counts()
-	if once != [3]int{base[0] + 1, base[1] + 1, base[2] + 1} {
-		t.Fatalf("completing logs one line and takes one checkpoint with one hangar copy: %v after %v", once, base)
+	if once != [2]int{base[0] + 1, base[1] + 1} {
+		t.Fatalf("completing logs one line and takes one checkpoint: %v after %v", once, base)
 	}
 	mark("scenario_001", "1")
 	if got := counts(); got != once {
-		t.Errorf("completing again changes nothing (lines, checkpoints, copies): %v, was %v", got, once)
+		t.Errorf("completing again changes nothing (lines, checkpoints): %v, was %v", got, once)
 	}
 	mark("scenario_001", "0")
 	undone := counts()
-	if undone != [3]int{once[0] + 1, once[1], once[2]} {
+	if undone != [2]int{once[0] + 1, once[1]} {
 		t.Fatalf("un-marking logs one line and no checkpoint: %v after %v", undone, once)
 	}
 	mark("scenario_001", "0")

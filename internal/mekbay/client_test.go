@@ -108,9 +108,21 @@ func TestMekBayClientReportsRefusals(t *testing.T) {
 		}
 	}))
 	defer ts.Close()
-	cl := &Client{URL: "ws" + strings.TrimPrefix(ts.URL, "http")}
-	_, err := cl.SellUnit(context.Background(), SellRequest{OwnerUID: ownerUID, Instance: goodInstance, UnitID: "u1"})
-	if err == nil || !strings.Contains(err.Error(), "doesn't own") {
+	url := "ws" + strings.TrimPrefix(ts.URL, "http")
+	s, err := Dial(context.Background(), url, ownerUID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.saveData(context.Background(), decodeForce(t, fakeHangar)); err == nil || !strings.Contains(err.Error(), "doesn't own") {
 		t.Fatalf("expected a not-owner error, got %v", err)
+	}
+	// A force read by its ID comes back as its saved data, which reads as the hangar it is.
+	raw, err := (&Client{URL: url}).ReadForce(context.Background(), goodInstance)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h, err := ParseForce(raw); err != nil || len(h.Units) == 0 {
+		t.Errorf("read force: %+v %v", h, err)
 	}
 }

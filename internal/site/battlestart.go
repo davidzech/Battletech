@@ -19,7 +19,7 @@ type battleResponse struct {
 	Operation string `json:"operation"`
 }
 
-// playerDraft is a player's force built from scratch, for a scenario whose mechs are provided and so are not in MekBay: the units they took, with the crews
+// playerDraft is a player's force built from scratch, for a scenario whose mechs are provided and so are not in the hangar: the units they took, with the crews
 // they were given.
 func playerDraft(name string, h mekbay.HangarForce, units []string, crews []mekbay.CrewAssignment, views map[string]hangarUnitView, commander string) mekbay.ForceDraft {
 	byID := map[string]mekbay.HangarUnit{}
@@ -60,7 +60,7 @@ func (s *Server) startBattle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// One battle at a time, and a battle in progress is finished (completed or aborted) before it can be started again. This is checked first, so a refused
-	// start never reads the hangar from MekBay.
+	// start never reads the hangar.
 	if pt, c, _, ok := s.openRunRequest(w, r); !ok || !s.battleLock(w, r, pt, c, "") {
 		return
 	}
@@ -98,11 +98,21 @@ func (s *Server) startBattle(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, battleLockMessage(bp.c, sc), http.StatusConflict)
 		return
 	}
-	// The omnimechs the plan reconfigures are paid for and changed in the hangar first, so the battle is built from them. Ones made stay made if the battle
-	// then fails to build: they are paid for and in the History, and Start battle can just be tried again.
+	// The omnimechs the plan reconfigures are paid for and changed in the hangar first, so the battle is built from them. They stay made if the battle then
+	// fails to build: they are paid for and in the History, and Start battle can just be tried again.
 	if len(bp.swaps) > 0 {
 		if msg, status := s.reconfigureForBattle(ctx, r, bp); msg != "" {
 			http.Error(w, msg, status)
+			return
+		}
+	}
+	// The players' forces are copied from the hangar as it is now (reconfigured), straight from the database.
+	var hangarData []byte
+	if !bp.sc.Provides() {
+		var err error
+		if hangarData, err = s.store.Hangar(ctx, bp.pt.ID, bp.c.Slug); err != nil {
+			log.Printf("load the hangar for battle %s: %v", bp.sc.ID, err)
+			http.Error(w, "could not load your hangar", http.StatusInternalServerError)
 			return
 		}
 	}
@@ -121,12 +131,12 @@ func (s *Server) startBattle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req := mekbay.BattleRequest{
-		Allies:         allies,
-		Account:        account,
-		HangarInstance: bp.run.HangarInstance,
-		Provided:       bp.sc.Provides(),
-		OpFor:          mekbay.BattleOpFor{Draft: draft},
-		OperationName:  operationName(bp.c, bp.sc),
+		Allies:        allies,
+		Account:       account,
+		Hangar:        hangarData,
+		Provided:      bp.sc.Provides(),
+		OpFor:         mekbay.BattleOpFor{Draft: draft},
+		OperationName: operationName(bp.c, bp.sc),
 	}
 	for i := range bp.units {
 		num := i + 1
@@ -253,11 +263,10 @@ func (s *Server) abortBattle(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not load the campaign's checkpoints", http.StatusInternalServerError) // not a silent "keep": the player asked for a rollback
 		return
 	} else if len(cps) > 0 && mode == "rollback" {
-		label, err := s.rollbackTo(r.Context(), currentSeed(r), pt.ID, c.Slug, cps[0].Seq)
+		label, err := s.rollbackTo(r.Context(), pt.ID, c.Slug, cps[0].Seq)
 		if err != nil {
 			log.Printf("roll back on abort: %v", err)
-			msg, code := rollbackFailure(err)
-			http.Error(w, msg, code)
+			http.Error(w, "Could not roll the campaign back.", http.StatusInternalServerError)
 			return
 		}
 		// The history goes back with the campaign (the deployment's line too); one line, once the battle is forgotten, says it was aborted and rolled back.

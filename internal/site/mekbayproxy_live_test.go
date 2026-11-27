@@ -134,7 +134,7 @@ func TestMekBayProxyLive(t *testing.T) {
 	if _, err := ob.Call(ctx, map[string]any{"action": "saveForce", "uuid": browserID, "data": got.Data, "savedForceCount": 1}); err != nil {
 		t.Fatalf("the owner's browser could not save its force: %v", err)
 	}
-	read, err := (&mekbay.Client{}).ReadHangar(ctx, instance)
+	read, err := readForceLive(ctx, instance)
 	if err != nil || read.Name != "Proxy live test (edited through the relay)" {
 		t.Fatalf("the edit reached MekBay: %q %v", read.Name, err)
 	}
@@ -154,7 +154,16 @@ func TestMekBayProxyLive(t *testing.T) {
 	if _, err := sb.Call(ctx, map[string]any{"action": "saveForce", "uuid": browserID, "data": got.Data, "savedForceCount": 1}); err == nil || !strings.Contains(err.Error(), "doesn't own") {
 		t.Errorf("a stranger's save is refused as not_owner: %v", err)
 	}
-	if read, _ := (&mekbay.Client{}).ReadHangar(ctx, instance); read.Name == "hijacked" {
+	if read, _ := readForceLive(ctx, instance); read.Name == "hijacked" {
 		t.Error("the stranger's edit must not have landed")
 	}
+}
+
+// readForceLive reads a force from mekbay.com as the site reads one.
+func readForceLive(ctx context.Context, instance string) (mekbay.HangarForce, error) {
+	raw, err := (&mekbay.Client{}).ReadForce(ctx, instance)
+	if err != nil {
+		return mekbay.HangarForce{}, err
+	}
+	return mekbay.ParseForce(raw)
 }

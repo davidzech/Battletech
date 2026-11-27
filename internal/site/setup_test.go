@@ -13,8 +13,14 @@ import (
 	"github.com/davidzech/Battletech/internal/pilot"
 )
 
-func TestStartClonesTheHangar(t *testing.T) {
-	fake := &fakeMekBay{hangar: startingHangar()}
+// Starting from a link reads the player's force once and stores a clean copy of it as the campaign's hangar: the same units and IDs, every one undamaged with
+// an unnamed 4/5 crew. Nothing is written to MekBay.
+func TestStartImportsTheHangar(t *testing.T) {
+	linked := startingHangar()
+	linked.Units[0].Pilot, linked.Units[0].Gunnery, linked.Units[0].Piloting = "Anya", 3, 4
+	linked.Units[1].Locations, linked.Units[1].Damaged = map[string]mekbay.LocationLoss{"LA": {Armor: 3, Internal: 1}}, true
+	linked.Units[2].AmmoBins, linked.Units[2].AmmoUsed = 1, 4
+	fake := &fakeMekBay{hangar: linked}
 	srv, store := newMekBayTestServer(t, fake)
 	ctx := context.Background()
 	cookie := post(t, srv, "/api/seed", url.Values{"seed": {"wolfpack2026"}}, nil, "").Cookies()[0]
@@ -22,61 +28,43 @@ func TestStartClonesTheHangar(t *testing.T) {
 	if r := post(t, srv, "/api/campaign/start", startForm(goodHangar+"&sel=abc", "Alrek", "Katarina"), cookie, srv.URL); r.StatusCode != http.StatusNoContent {
 		t.Fatalf("start: %d", r.StatusCode)
 	}
-	run, _, _ := store.Run(ctx, playthroughID("wolfpack2026"), "refusalwar")
-	if len(fake.clones) != 1 {
-		t.Fatalf("expected one clone, got %d", len(fake.clones))
+	if !slices.Equal(fake.reads, []string{goodInstance}) {
+		t.Errorf("the link's force is read once: %v", fake.reads)
 	}
-	c := fake.clones[0]
-	if c.Source != goodInstance || c.Target != run.HangarInstance || c.Target == goodInstance || c.OwnerUID != mekbay.MekBayUID("wolfpack2026", mekbay.SlotHangar) {
-		t.Errorf("clone request: %+v (run %+v)", c, run)
+	h := runHangar(t, store, "wolfpack2026", "refusalwar")
+	if len(h.Units) != 5 || h.Units[0].ID != "ua" || h.Units[0].Unit != "BMKoshi_E" || h.Name != "Test Hangar" {
+		t.Fatalf("the hangar keeps the linked force's units and IDs: %+v", h)
 	}
-	if !run.Owned() || run.SourceURL != goodHangarURL {
-		t.Errorf("the run should remember the player's link as its source: %+v", run)
+	for _, u := range h.Units {
+		if u.Pilot != "" || u.Gunnery != 4 || u.Piloting != 5 || u.Damaged || u.AmmoBins != 0 {
+			t.Errorf("every unit starts clean, with an unnamed 4/5 crew: %+v", u)
+		}
 	}
-	// The player never sees the site's copy: neither its link nor the account that owns it.
+	// The player never sees the account that owns the site's MekBay forces.
 	for _, path := range []string{"/refusalwar/", "/refusalwar/manage/", "/refusalwar/scenario_001/"} {
-		p := body(t, srv, path, cookie)
-		if strings.Contains(p, run.HangarInstance) || strings.Contains(p, mekbay.MekBayUID("wolfpack2026", mekbay.SlotHangar)) {
-			t.Errorf("%s leaks the site's MekBay copy or account", path)
+		if p := body(t, srv, path, cookie); strings.Contains(p, mekbay.MekBayUID("wolfpack2026", mekbay.SlotHangar)) {
+			t.Errorf("%s leaks the site's MekBay account", path)
 		}
 	}
 	if p := body(t, srv, "/refusalwar/manage/", cookie); strings.Contains(p, `id="run-dialog"`) {
 		t.Error("there is no Re-import hangar dialog any more")
 	}
-	// A failing clone starts nothing.
-	fake2 := &fakeMekBay{hangar: startingHangar()}
+	// A link MekBay can't read starts nothing.
+	fake2 := &fakeMekBay{hangar: startingHangar(), err: context.DeadlineExceeded}
 	srv2, store2 := newMekBayTestServer(t, fake2)
 	cookie2 := post(t, srv2, "/api/seed", url.Values{"seed": {"wolfpack2027"}}, nil, "").Cookies()[0]
 	post(t, srv2, "/api/account", url.Values{"account": {"Wolf Pack"}}, cookie2, srv2.URL)
-	fake2.setHangar(startingHangar(), nil)
-	fake2.mu.Lock()
-	fake2.cloneErr = context.DeadlineExceeded
-	fake2.mu.Unlock()
 	if r := post(t, srv2, "/api/campaign/start", startForm(goodHangar, "Alrek", "Katarina"), cookie2, srv2.URL); r.StatusCode != http.StatusBadGateway {
-		t.Errorf("a failed clone: %d", r.StatusCode)
+		t.Errorf("a link that can't be read: %d", r.StatusCode)
 	}
 	if _, ok, _ := store2.Run(ctx, playthroughID("wolfpack2027"), "refusalwar"); ok {
-		t.Error("a failed clone must not start the campaign")
+		t.Error("a link that can't be read must not start the campaign")
 	}
 }
 
-// twoClones is a MekBay whose hangar clones wait for each other: neither returns until both have been asked for, so two starts sent together both get past the
-// "already started" check and both make a hangar.
-type twoClones struct {
-	*fakeMekBay
-	both sync.WaitGroup
-}
-
-func (m *twoClones) CloneHangar(ctx context.Context, req mekbay.CloneRequest) (mekbay.HangarForce, error) {
-	m.both.Done()
-	m.both.Wait()
-	return m.fakeMekBay.CloneHangar(ctx, req)
-}
-
-// Two starts at once (a double submit) make two hangars in MekBay, and only one campaign: the hangar of the start that lost is deleted again.
-func TestALostStartDeletesItsHangar(t *testing.T) {
-	fake := &twoClones{fakeMekBay: &fakeMekBay{hangar: startingHangar()}}
-	fake.both.Add(2)
+// Two starts at once (a double submit) make one campaign: the other is told it has been started.
+func TestTwoStartsAtOnceStartOnce(t *testing.T) {
+	fake := &fakeMekBay{hangar: startingHangar()}
 	srv, store := newMekBayTestServer(t, fake)
 	cookie := post(t, srv, "/api/seed", url.Values{"seed": {"wolfpack2026"}}, nil, "").Cookies()[0]
 	post(t, srv, "/api/account", url.Values{"account": {"Wolf Pack"}}, cookie, srv.URL)
@@ -104,16 +92,8 @@ func TestALostStartDeletesItsHangar(t *testing.T) {
 	if !slices.Equal(codes, []int{http.StatusNoContent, http.StatusConflict}) {
 		t.Fatalf("one start goes through and the other is told the campaign is started: %v", codes)
 	}
-	run, _, _ := store.Run(context.Background(), playthroughID("wolfpack2026"), "refusalwar")
-	fake.mu.Lock()
-	defer fake.mu.Unlock()
-	if len(fake.clones) != 2 {
-		t.Fatalf("both starts cloned the hangar: %+v", fake.clones)
-	}
-	for _, c := range fake.clones {
-		if kept, deleted := c.Target == run.HangarInstance, slices.Contains(fake.deletes, c.Target); kept == deleted {
-			t.Errorf("the campaign's hangar is kept and the other is deleted: %s kept=%v deleted=%v", c.Target, kept, deleted)
-		}
+	if ps, _ := store.Pilots(context.Background(), playthroughID("wolfpack2026"), "refusalwar"); len(ps) != 2 {
+		t.Errorf("one start's pilots: %+v", ps)
 	}
 }
 

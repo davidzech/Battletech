@@ -262,7 +262,7 @@ test('reconfigures an omnimech on the review to fit the BV limit', async ({ page
   // Two Timber Wolf Primes (2,737 BV) and two Fire Moth Primes (1,251): 7,976 BV. The Timber Wolf B (2,224 BV, 38 SP) brings it to 7,463. The fifth mech,
   // a Timber Wolf with spent ammunition, can't be reconfigured.
   await setHangar(page, [unit('ua', 'BMMadCat_Prime'), unit('ub', 'BMMadCat_Prime'), unit('uc', 'BMDasher_Prime'), unit('ud', 'BMDasher_Prime'),
-    unit('ue', 'BMMadCat_Prime', { Damaged: true, AmmoBins: 1, AmmoUsed: 3 })]);
+    unit('ue', 'BMMadCat_Prime', { Damaged: true, AmmoBins: 1, AmmoUsed: 3 })], 'muster');
   await setWarchest(page, 'muster', 1000);
   await page.goto('/muster/scenario_000/');
   await page.locator('#deploy-open').click();
@@ -325,7 +325,7 @@ test('reconfigures an omnimech on the review to fit the BV limit', async ({ page
 test('a damaged omnimech cannot be reconfigured on the review', async ({ page }) => {
   await newAccount(page);
   await startCampaign(page, 'muster', ['Alrek', 'Katarina']);
-  await setHangar(page, [unit('ua', 'BMMadCat_Prime', { Damaged: true, AmmoBins: 1, AmmoUsed: 3 }), unit('ub', 'BMGrizzly')]);
+  await setHangar(page, [unit('ua', 'BMMadCat_Prime', { Damaged: true, AmmoBins: 1, AmmoUsed: 3 }), unit('ub', 'BMGrizzly')], 'muster');
   await page.goto('/muster/scenario_000/');
   await page.locator('#deploy-open').click();
   const dlg = page.locator('#deploy-dialog');
@@ -343,7 +343,7 @@ test('a damaged omnimech cannot be reconfigured on the review', async ({ page })
 test('reconfigures an omnimech on the mech step', async ({ page }) => {
   await newAccount(page);
   await startCampaign(page, 'muster', ['Alrek', 'Katarina']);
-  await setHangar(page, [unit('ua', 'BMMadCat_Prime'), unit('ub', 'BMMadCat_Prime'), unit('uc', 'BMDasher_Prime'), unit('ud', 'BMDasher_Prime')]);
+  await setHangar(page, [unit('ua', 'BMMadCat_Prime'), unit('ub', 'BMMadCat_Prime'), unit('uc', 'BMDasher_Prime'), unit('ud', 'BMDasher_Prime')], 'muster');
   await setWarchest(page, 'muster', 1000);
   await page.goto('/muster/scenario_000/');
   await page.locator('#deploy-open').click();
@@ -382,7 +382,7 @@ test('reconfigures an omnimech on the mech step', async ({ page }) => {
 test('a player must leave a mech for each player after them', async ({ page }) => {
   await newAccount(page);
   await startCampaign(page, 'muster', ['Alrek', 'Katarina']);
-  await setHangar(page, [unit('ua', 'BMMadCat_Prime'), unit('ub', 'BMDasher_Prime'), unit('uc', 'BMGrizzly', { Destroyed: true })]);
+  await setHangar(page, [unit('ua', 'BMMadCat_Prime'), unit('ub', 'BMDasher_Prime'), unit('uc', 'BMGrizzly', { Destroyed: true })], 'muster');
   await page.goto('/muster/scenario_000/');
   await page.locator('#deploy-open').click();
   const dlg = page.locator('#deploy-dialog');
@@ -404,7 +404,7 @@ test('a player must leave a mech for each player after them', async ({ page }) =
 test('the Reconfigure button looks the same in the wizard as on the Manage page', async ({ page }) => {
   await newAccount(page);
   await startCampaign(page, 'muster', ['Alrek', 'Katarina']);
-  await setHangar(page, [unit('ua', 'BMMadCat_Prime')]);
+  await setHangar(page, [unit('ua', 'BMMadCat_Prime')], 'muster');
   const look = (b) => b.evaluate((e) => {
     const c = getComputedStyle(e);
     return ['font-size', 'font-weight', 'letter-spacing', 'color', 'background-color', 'border', 'padding'].map((p) => c.getPropertyValue(p)).join(' | ');
@@ -423,7 +423,7 @@ test('the Reconfigure button looks the same in the wizard as on the Manage page'
 test('the meter stays red over the limit after dragging a pilot', async ({ page }) => {
   await newAccount(page);
   await startCampaign(page, 'muster', ['Alrek', 'Katarina']);
-  await setHangar(page, [unit('ua', 'BMMadCat_Prime'), unit('ub', 'BMMadCat_Prime'), unit('uc', 'BMMadCat_Prime')]);
+  await setHangar(page, [unit('ua', 'BMMadCat_Prime'), unit('ub', 'BMMadCat_Prime'), unit('uc', 'BMMadCat_Prime')], 'muster');
   await page.goto('/muster/scenario_000/');
   await page.locator('#deploy-open').click();
   const dlg = page.locator('#deploy-dialog');

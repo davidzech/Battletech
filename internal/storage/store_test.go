@@ -8,8 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/davidzech/Battletech/internal/mekbay"
 )
 
 func TestQRebindsPlaceholders(t *testing.T) {
@@ -58,23 +56,23 @@ func storeContract(t *testing.T, s *Store) {
 	if r, ok, err := s.Run(ctx, id, "refusalwar"); err != nil || ok || r.Started() {
 		t.Fatalf("nothing started yet: %+v ok=%v err=%v", r, ok, err)
 	}
-	hangar := mekbay.Hangar{URL: goodHangarURL, Instance: goodInstance}
+	hangar := testHangar(goodInstance)
 	if err := s.StartRun(ctx, id, "refusalwar", hangar); err != nil {
 		t.Fatal(err)
 	}
-	if r, ok, _ := s.Run(ctx, id, "refusalwar"); !ok || !r.Started() || r.Campaign != "refusalwar" || r.HangarInstance != goodInstance || r.HangarURL != goodHangarURL {
+	if r, ok, _ := s.Run(ctx, id, "refusalwar"); !ok || !r.Started() || r.Campaign != "refusalwar" || !sameHangar(s, ctx, id, "refusalwar", goodInstance) {
 		t.Fatalf("run not stored: %+v", r)
 	}
-	if err := s.StartRun(ctx, id, "another", mekbay.Hangar{URL: "u2", Instance: "i2"}); err != nil {
+	if err := s.StartRun(ctx, id, "another", testHangar("i2")); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.StartRun(ctx, id, "refusalwar", mekbay.Hangar{URL: "u3", Instance: "i3"}); !errors.Is(err, ErrAlreadyStarted) {
+	if err := s.StartRun(ctx, id, "refusalwar", testHangar("i3")); !errors.Is(err, ErrAlreadyStarted) {
 		t.Fatalf("starting again should be refused: %v", err)
 	}
-	if r, _, _ := s.Run(ctx, id, "refusalwar"); r.HangarInstance != goodInstance || r.HangarURL != goodHangarURL {
+	if r, _, _ := s.Run(ctx, id, "refusalwar"); !sameHangar(s, ctx, id, "refusalwar", goodInstance) {
 		t.Fatalf("starting again must not change the hangar: %+v", r)
 	}
-	if r, _, _ := s.Run(ctx, id, "another"); r.HangarInstance != "i2" {
+	if r, _, _ := s.Run(ctx, id, "another"); !sameHangar(s, ctx, id, "another", "i2") {
 		t.Fatalf("campaigns must not share a hangar: %+v", r)
 	}
 	if err := s.StartRun(ctx, "no-such-playthrough", "refusalwar", hangar); err == nil {
@@ -106,9 +104,7 @@ func storeContract(t *testing.T, s *Store) {
 	spStore(t, s, id)
 	repairStore(t, s, id)
 	rankStore(t, s, id)
-	hangarCacheStore(t, s, id)
 	abilityStore(t, s, id)
-	hangarClaimStore(t, s, id)
 	warchestStore(t, s, id)
 }
 
@@ -249,7 +245,7 @@ func migrationContract(t *testing.T, s *Store, withOwner bool) {
 	if err := s.SetAccountName(ctx, "seed-a", "Wolf's Dragoons"); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.StartRun(ctx, "seed-a", "refusalwar", mekbay.Hangar{URL: goodHangarURL, Instance: goodInstance}); err != nil {
+	if err := s.StartRun(ctx, "seed-a", "refusalwar", testHangar(goodInstance)); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.SaveMekBayOperation(ctx, "seed-a", "refusalwar", "scenario_000", MekBayOperation{OpForInstance: "f", OperationID: "o"}); err != nil {

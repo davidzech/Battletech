@@ -254,8 +254,11 @@ func TestSeedAndCampaignFlow(t *testing.T) {
 		t.Fatalf("good start: got %d", r.StatusCode)
 	}
 	run, ok, _ := store.Run(ctx, id, "refusalwar")
-	if !ok || !run.Started() || run.SourceURL != goodHangarURL || run.HangarInstance == goodInstance || run.HangarURL != "https://mekbay.com/?instance="+run.HangarInstance || run.Campaign != "refusalwar" {
+	if !ok || !run.Started() || run.Campaign != "refusalwar" {
 		t.Fatalf("campaign not started correctly: %+v (started=%v)", run, ok)
+	}
+	if h := runHangar(t, store, "wolfpack2026", "refusalwar"); len(h.Units) != 5 {
+		t.Fatalf("the campaign's own hangar: %+v", h)
 	}
 	if _, ok, _ := store.Run(ctx, id, "another-campaign"); ok {
 		t.Fatal("starting one campaign must not start another")
@@ -276,14 +279,14 @@ func TestSeedAndCampaignFlow(t *testing.T) {
 
 	// Starting again is refused: a started campaign's hangar is never replaced from the start endpoint.
 	other := "https://mekbay.com/?instance=01a12f98-8a21-7d12-b43d-52bb70872376"
-	before, _, _ := store.Run(ctx, id, "refusalwar")
+	before, _ := store.Hangar(ctx, id, "refusalwar")
 	if r := post(t, srv, "/api/campaign/start", url.Values{"campaign": {"refusalwar"}, "hangar": {other}}, cookie, srv.URL); r.StatusCode != http.StatusConflict {
 		t.Fatalf("starting again: got %d", r.StatusCode)
 	}
 	var runs int
 	_ = store.DB().QueryRow(`SELECT COUNT(*) FROM campaign_runs`).Scan(&runs)
-	if run, _, _ := store.Run(ctx, id, "refusalwar"); runs != 1 || run.HangarInstance != before.HangarInstance || run.SourceURL != before.SourceURL {
-		t.Fatalf("the one run keeps its hangar: %d runs, %+v", runs, run)
+	if now, _ := store.Hangar(ctx, id, "refusalwar"); runs != 1 || string(now) != string(before) {
+		t.Fatalf("the one run keeps its hangar: %d runs", runs)
 	}
 }
 

@@ -55,7 +55,7 @@ type AmmoUse struct {
 	Used int // shots used
 }
 
-// HangarUnit is one unit of a player's hangar force as MekBay stores it.
+// HangarUnit is one unit of a force, read from MekBay's save format.
 type HangarUnit struct {
 	ID       string // the unit's own ID inside the force
 	Unit     string // MekBay unit ID, e.g. BMMadCat_H
@@ -83,41 +83,26 @@ type HangarUnit struct {
 	TorsoCheckFailed bool
 }
 
-// HangarForce is a player's campaign force, read from MekBay.
+// HangarForce is a force as the site reads it: a campaign's hangar, or a battle's force read from MekBay.
 type HangarForce struct {
 	Name      string
 	Timestamp string
 	Units     []HangarUnit
 }
 
-// MekBay reads and creates things on mekbay.com. It is an interface so tests can run without the network.
+// MekBay is what the site asks of mekbay.com: battles, and reading a force by its ID (a hangar link when a campaign starts, and the one-time import of the
+// hangars MekBay used to hold, see internal/site/hangarimport.go). Campaign hangars themselves live in the site's database. It is an interface so tests can run
+// without the network.
 type MekBay interface {
-	// ReadHangar reads a saved force (anyone can read one by its instance ID).
-	ReadHangar(ctx context.Context, instance string) (HangarForce, error)
-	// CloneHangar copies the player's force into a clean force the site owns (see clone.go).
-	CloneHangar(ctx context.Context, req CloneRequest) (HangarForce, error)
-	// CreateForce saves a new force built from a draft under the owner's account (a starting hangar built on the site, see buildforce.go).
-	CreateForce(ctx context.Context, owner, instance string, d ForceDraft) (HangarForce, error)
-	// ServiceUnit repairs or rearms one unit of the player's hangar force (modify mode only).
-	// These four edits each return the hangar force as it was saved, for the site's cached copy (see editForce).
-	ServiceUnit(ctx context.Context, req ServiceRequest) (HangarForce, error)
-	// PurchaseUnits adds bought units to the player's hangar force (modify mode only).
-	PurchaseUnits(ctx context.Context, req PurchaseRequest) (HangarForce, error)
-	// SellUnit removes a sold unit from the player's hangar force.
-	SellUnit(ctx context.Context, req SellRequest) (HangarForce, error)
-	// SwapUnit reconfigures an omnimech of the player's hangar force to another variant.
-	SwapUnit(ctx context.Context, req SwapRequest) (HangarForce, error)
+	// ReadForce reads a saved force anonymously (anyone can read one by its instance ID) and returns its saved data as JSON, the format the site stores a
+	// hangar in.
+	ReadForce(ctx context.Context, instance string) (json.RawMessage, error)
 	// StartBattle builds the players' forces and the OpFor's and one operation that pairs them (see battle.go).
 	StartBattle(ctx context.Context, req BattleRequest) (BattleResult, error)
 	// ReadBattle reads an operation and every force in it, anonymously, for the battle's live status.
 	ReadBattle(ctx context.Context, operationID string) (BattleStatus, error)
-	// CommitBattle writes the units' state from a finished battle back into the matching hangar units (see commit.go).
-	// It returns the hangar as saved (the zero HangarForce when nothing matched and nothing was saved).
-	CommitBattle(ctx context.Context, req CommitBattleRequest) (CommitBattleReport, HangarForce, error)
-	// CopyForce saves a copy of one of the owner's forces under another instance ID (checkpoints, see checkpoint.go).
-	CopyForce(ctx context.Context, req CopyRequest) error
-	// DeleteForce deletes forces of the owner's (best effort).
-	DeleteForce(ctx context.Context, owner string, instances ...string) error
+	// ReadBattleUnits reads the units of a finished battle's players' forces, by their IDs, to write them back into the hangar (see commit.go).
+	ReadBattleUnits(ctx context.Context, account, operationID string, skip []string) (map[string]map[string]any, error)
 	// DeleteBattle deletes a battle's operation and all its forces (best effort).
 	DeleteBattle(ctx context.Context, owner, operationID string) error
 }
@@ -134,19 +119,32 @@ func (c *Client) url() string {
 	return c.URL
 }
 
-// ReadHangar reads a force anonymously, with a throwaway identity.
-func (c *Client) ReadHangar(ctx context.Context, instance string) (HangarForce, error) {
+// ReadForce reads a force anonymously, with a throwaway identity, and returns its saved data.
+func (c *Client) ReadForce(ctx context.Context, instance string) (json.RawMessage, error) {
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 	s, err := Dial(ctx, c.url(), NewID())
 	if err != nil {
-		return HangarForce{}, err
+		return nil, err
 	}
 	defer s.Close()
-	raw, err := s.Call(ctx, map[string]any{"action": "getForce", "uuid": s.uuid, "instanceId": instance, "ownedOnly": false})
+	data, err := s.getForce(ctx, instance, false)
 	if err != nil {
-		return HangarForce{}, err
+		return nil, err
 	}
+	if data == nil {
+		return nil, errors.New("MekBay has no force for that hangar link; check that the link is saved in MekBay")
+	}
+	return json.Marshal(data)
+}
+
+// ParseForce reads a force's saved data (the JSON the site stores a hangar as) into a HangarForce.
+func ParseForce(data []byte) (HangarForce, error) {
+	if len(data) == 0 {
+		return HangarForce{}, errors.New("there is no hangar force")
+	}
+	raw := make([]byte, 0, len(data)+9)
+	raw = append(append(append(raw, `{"data":`...), data...), '}')
 	return ParseHangarForce(raw)
 }
 
@@ -257,7 +255,7 @@ func (u HangarUnit) PilotKilled() bool { return u.CrewDead || u.CockpitGone }
 
 // IsDestroyed says whether the unit counts as destroyed: MekBay's destroyed flag, or its cockpit gone. MekBay's record sheet sets the flag itself when every
 // cockpit is lost (evaluateDestroyed in mek-rules.ts), so the second is a defensive check for damage written without MekBay's app. A repair that restores
-// the head and the cockpit (see ServiceUnit) clears both. Only the crew's cockpit counts, never CrewDead: a hangar's crew is reset after every battle.
+// the head and the cockpit (see ServiceUnitState) clears both. Only the crew's cockpit counts, never CrewDead: a hangar's crew is reset after every battle.
 func (u HangarUnit) IsDestroyed() bool { return u.Destroyed || u.CockpitGone }
 
 // isEngineSlot reports whether a critical slot with this name belongs to the engine.
@@ -343,9 +341,6 @@ func (s *Session) Call(ctx context.Context, msg map[string]any) (json.RawMessage
 	}
 }
 
-// errNoHangarForce is what the hangar edits answer when MekBay no longer has the site's copy of the hangar.
-var errNoHangarForce = errors.New("MekBay no longer has the force for your hangar")
-
 // getForce reads one force's saved data (the decoded JSON of its `data`) as the session's account. It returns nil, nil when MekBay has no such force (or, with
 // ownedOnly, when the account doesn't own it).
 func (s *Session) getForce(ctx context.Context, instance string, ownedOnly bool) (map[string]any, error) {
@@ -366,47 +361,6 @@ func (s *Session) getForce(ctx context.Context, instance string, ownedOnly bool)
 func (s *Session) saveData(ctx context.Context, force any) error {
 	_, err := s.Call(ctx, map[string]any{"action": "saveForce", "uuid": s.uuid, "data": force, "savedForceCount": 1})
 	return err
-}
-
-// saveForce saves a force read with getForce after changing it: the "owned" flag MekBay sets for readers is dropped (the app never sends it back) and the
-// timestamp is set to now, so every device that has the force loaded takes the new version.
-func (s *Session) saveForce(ctx context.Context, force map[string]any, now time.Time) error {
-	delete(force, "owned")
-	force["timestamp"] = FormatTime(now)
-	return s.saveData(ctx, force)
-}
-
-// editForce reads one of the owner's forces, changes it with edit and saves it, on one connection. It is how every change to the site's copy of a hangar is
-// made (repairs, rearms, purchases, sales, swaps, battle write-backs).
-//
-// It returns the force as it was saved, read the way a live read reads it, so the site can keep its cached copy current without reading MekBay again.
-func (c *Client) editForce(ctx context.Context, owner, instance string, edit func(force map[string]any, now time.Time) error) (HangarForce, error) {
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-	s, err := Dial(ctx, c.url(), owner)
-	if err != nil {
-		return HangarForce{}, err
-	}
-	defer s.Close()
-	force, err := s.getForce(ctx, instance, false)
-	if err != nil {
-		return HangarForce{}, err
-	}
-	if force == nil {
-		return HangarForce{}, errNoHangarForce
-	}
-	now := time.Now()
-	if err := edit(force, now); err != nil {
-		return HangarForce{}, err
-	}
-	if err := s.saveForce(ctx, force, now); err != nil {
-		return HangarForce{}, err
-	}
-	raw, err := json.Marshal(map[string]any{"data": force})
-	if err != nil {
-		return HangarForce{}, err
-	}
-	return ParseHangarForce(raw)
 }
 
 // NewID returns a new version 7 UUID, the kind MekBay uses for force and operation IDs.

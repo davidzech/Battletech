@@ -3,7 +3,6 @@ package storage
 import (
 	"context"
 
-	"github.com/davidzech/Battletech/internal/mekbay"
 	"github.com/davidzech/Battletech/internal/pilot"
 )
 
@@ -14,25 +13,21 @@ const (
 
 const (
 	goodInstance = "01a12f9e-188f-7158-ad67-3fc9700ec733"
-	goodSel      = "01a12f9d-a79b-717d-8c84-d5da73d2f9a5"
-	// goodHangar is a link as a player pastes it, with a unit selection; the site keeps only goodHangarURL.
-	goodHangar    = "https://mekbay.com/?instance=" + goodInstance + "&sel=" + goodSel
-	goodHangarURL = "https://mekbay.com/?instance=" + goodInstance
 )
 
-// hangarOf builds a hangar of standard 4/5 units from MekBay unit IDs.
-func hangarOf(names ...string) mekbay.HangarForce {
-	h := mekbay.HangarForce{Name: "Test Hangar", Timestamp: "t"}
-	for i, n := range names {
-		h.Units = append(h.Units, mekbay.HangarUnit{ID: "u" + string(rune('a'+i)), Unit: n, Group: "Hangar", Gunnery: 4, Piloting: 5})
-	}
-	return h
+// testHangar is a stored hangar: an empty force with this name.
+func testHangar(name string) []byte { return []byte(`{"name":"` + name + `","groups":[]}`) }
+
+// sameHangar reports whether a run's stored hangar is testHangar(name).
+func sameHangar(s *Store, ctx context.Context, playthroughID, campaign, name string) bool {
+	h, err := s.Hangar(ctx, playthroughID, campaign)
+	return err == nil && string(h) == string(testHangar(name))
 }
 
 // Shorthands the tests use, built on the methods the site calls.
 
 // StartRun starts a campaign with its hangar and nothing else: no pilots, an empty warchest, no player count or force name.
-func (s *Store) StartRun(ctx context.Context, playthroughID, campaign string, h mekbay.Hangar) error {
+func (s *Store) StartRun(ctx context.Context, playthroughID, campaign string, h []byte) error {
 	return s.StartRunWithPilots(ctx, playthroughID, campaign, h, nil, 0, 0, "")
 }
 

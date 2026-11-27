@@ -114,7 +114,7 @@ func TestDeployPlanEndpoint(t *testing.T) {
 		t.Errorf("no named pilot, no commander: %q", none.Commander)
 	}
 	// Nothing is saved or sent to MekBay.
-	if len(fake.battles) != 0 || len(fake.services) != 0 || len(fake.purchases) != 0 {
+	if len(fake.battles) != 0 {
 		t.Errorf("a plan must not touch MekBay: %+v", fake.battles)
 	}
 	bad := map[string][]string{

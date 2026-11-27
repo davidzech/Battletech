@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/davidzech/Battletech/internal/catalog"
 	"github.com/davidzech/Battletech/internal/format"
@@ -13,12 +14,12 @@ import (
 
 // Buying new units for the hangar. The price is the unit's base BV in SP (this campaign counts BV as SP, Hot Spots: Draconis Reach, SP Activity
 // Cost Table: Purchase Unit = Battle Value). A purchase adds each unit, undamaged and with a standard 4/5 pilot, to the "Hangar" group of the
-// player's force in MekBay, and is paid from the warchest.
+// campaign's hangar, and is paid from the warchest.
 
 // purchaseUnits is POST /api/hangar/purchase: buy the units named by repeated `unit` fields, paid from the warchest at their base BV, and add
-// them to the hangar in MekBay. It needs modify mode. The warchest is charged first and refunded if MekBay fails.
+// them to the hangar, both in one transaction.
 func (s *Server) purchaseUnits(w http.ResponseWriter, r *http.Request) {
-	pt, c, run, ok := s.hangarRequest(w, r)
+	pt, c, _, ok := s.runRequest(w, r)
 	if !ok {
 		return
 	}
@@ -35,7 +36,11 @@ func (s *Server) purchaseUnits(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	history := fmt.Sprintf("Bought %s for %s SP.", strings.Join(names, ", "), format.Commas(cost))
-	s.payForHangarChange(w, r, pt, c, run, cost, "buy units", history, func() (mekbay.HangarForce, error) {
-		return s.mekbay.PurchaseUnits(r.Context(), mekbay.PurchaseRequest{OwnerUID: mekbay.AccountUID(currentSeed(r), mekbay.SlotHangar), Instance: run.HangarInstance, Units: ids})
+	warchest, _, ok := s.changeHangar(w, r, pt, c, func(force map[string]any, _ mekbay.HangarForce) (int, string, error) {
+		mekbay.AddUnitsToForce(force, ids, time.Now())
+		return -cost, history, nil
 	})
+	if ok {
+		writeCharge(w, cost, warchest)
+	}
 }

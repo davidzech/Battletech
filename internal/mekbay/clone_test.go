@@ -12,7 +12,7 @@ func TestCloneForceIsPristine(t *testing.T) {
 		t.Fatal(err)
 	}
 	now := time.Now()
-	got, err := cloneForce(src, "new-instance", now)
+	got, err := CleanForce(src, "new-instance", now)
 	if err != nil {
 		t.Fatal(err)
 	}

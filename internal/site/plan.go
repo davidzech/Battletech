@@ -130,10 +130,10 @@ func (s *Server) checkPlan(w http.ResponseWriter, r *http.Request) (*builtPlan, 
 		http.Error(w, msg, http.StatusBadRequest)
 		return nil, false
 	}
-	h, err := s.scenarioHangar(r.Context(), run, sc)
+	h, err := s.scenarioHangar(r.Context(), pt.ID, c, sc)
 	if err != nil {
-		log.Printf("read hangar for the plan: %v", err)
-		http.Error(w, err.Error(), http.StatusBadGateway)
+		log.Printf("load the hangar for the plan: %v", err)
+		http.Error(w, "could not load your hangar", http.StatusInternalServerError)
 		return nil, false
 	}
 	var swaps []plannedSwap
@@ -141,7 +141,7 @@ func (s *Server) checkPlan(w http.ResponseWriter, r *http.Request) (*builtPlan, 
 	if sc.Provides() {
 		h, msg = reconfigureProvided(h, c, sc, r.PostForm["variant_unit"], r.PostForm["variant_to"])
 	} else {
-		h, swaps, msg = reconfigureHangar(h, run.Owned(), r.PostForm["variant_unit"], r.PostForm["variant_to"])
+		h, swaps, msg = reconfigureHangar(h, r.PostForm["variant_unit"], r.PostForm["variant_to"])
 	}
 	if msg != "" {
 		http.Error(w, msg, http.StatusBadRequest)

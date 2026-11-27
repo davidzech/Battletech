@@ -89,9 +89,9 @@
   var touched = false;    // the player has changed something, so a fresh read of the hangar must not undo it
   var busy = false;
   var held = '';          // a pilot picked up by clicking, waiting to be put in a mech
-  // The hangar as the server last read it from MekBay, embedded in the page: shown at once when the popup opens, then replaced by the live read.
+  // The hangar as the page loaded it, embedded in it: shown at once when the popup opens, then replaced by the server's current one (it may have changed since).
   var cachedData = null;
-  try { cachedData = JSON.parse(dialog.dataset.cached || 'null'); } catch (e) { cachedData = null; }
+  try { cachedData = JSON.parse(dialog.dataset.hangar || 'null'); } catch (e) { cachedData = null; }
 
   // The campaign's living named pilots, as Page.PilotsJSON sends them.
   var pilots = [];

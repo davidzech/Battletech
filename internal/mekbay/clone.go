@@ -1,26 +1,16 @@
 package mekbay
 
 import (
-	"context"
 	"encoding/json"
-	"errors"
 	"time"
 )
 
-// Cloning a hangar. The player does not hand the site their MekBay force: they hand it a link, and the site makes its own copy of that force and owns the copy,
-// under the MekBay identity derived from their seed (accounts.go). Everything the site does to the force's hangar (repairs, rearms, purchases, the crews it
-// assigns) is done to its own copy, so it never needs, or touches, the player's MekBay account, and the player never sees the copy. They can keep arranging
-// their own force in their own MekBay tab.
+// Importing a hangar from a link. The player does not hand the site their MekBay force: they hand it a link, and the site reads that force once and keeps a copy
+// of its own in its database as the campaign's hangar. Everything the site does to the hangar (repairs, rearms, purchases, battles) is done to its copy, so it
+// never touches the player's MekBay force, which they can keep arranging in their own MekBay tab.
 //
 // The copy starts clean: every unit fully repaired and rearmed, heat and pilot wounds cleared, and every crew set to an unnamed 4/5 pilot, so the campaign begins
 // from the units alone, whatever state the source force was left in.
-
-// CloneRequest asks MekBay to copy a force into a new force owned by the site's account for the seed.
-type CloneRequest struct {
-	OwnerUID string // the MekBay account that will own the copy (the one account derived from the seed)
-	Source   string // the instance ID of the force to copy: anyone can read a force by its ID
-	Target   string // the instance ID the copy is saved under
-}
 
 // unnamedCrew is the crew of a unit nobody in particular drives, in MekBay's save format: one unnamed pilot with the default skills and no wounds.
 func unnamedCrew() []any {
@@ -54,10 +44,10 @@ func pristineUnit(um map[string]any, now time.Time) {
 	um["updatedTs"] = now.UnixMilli()
 }
 
-// cloneForce copies a saved force (the decoded JSON of its `data`) as a new force with this instance ID, with every unit made pristine (pristineUnit). The groups,
+// CleanForce copies a saved force (the decoded JSON of its `data`) as a new force with this instance ID, with every unit made pristine (pristineUnit). The groups,
 // the units and their IDs are kept as they are, so the arrangement the player made in MekBay survives; only what the server fills in for readers ("owned") is
 // dropped.
-func cloneForce(data map[string]any, instance string, now time.Time) (map[string]any, error) {
+func CleanForce(data map[string]any, instance string, now time.Time) (map[string]any, error) {
 	raw, err := json.Marshal(data)
 	if err != nil {
 		return nil, err
@@ -80,34 +70,4 @@ func cloneForce(data map[string]any, instance string, now time.Time) (map[string
 	force["timestamp"] = FormatTime(now)
 	delete(force, "owned")
 	return force, nil
-}
-
-// CloneHangar reads a force by its ID and saves a clean copy of it under the owner's account, returning the copy as the site will read it.
-func (c *Client) CloneHangar(ctx context.Context, req CloneRequest) (HangarForce, error) {
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-	s, err := Dial(ctx, c.url(), req.OwnerUID)
-	if err != nil {
-		return HangarForce{}, err
-	}
-	defer s.Close()
-	data, err := s.getForce(ctx, req.Source, false)
-	if err != nil {
-		return HangarForce{}, err
-	}
-	if data == nil {
-		return HangarForce{}, errors.New("MekBay has no force for that hangar link; check that the link is saved in MekBay")
-	}
-	force, err := cloneForce(data, req.Target, time.Now())
-	if err != nil {
-		return HangarForce{}, err
-	}
-	if err := s.saveData(ctx, force); err != nil {
-		return HangarForce{}, err
-	}
-	b, err := json.Marshal(map[string]any{"data": force})
-	if err != nil {
-		return HangarForce{}, err
-	}
-	return ParseHangarForce(b)
 }

@@ -1,7 +1,6 @@
 package site
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -18,9 +17,10 @@ import (
 // BROWSER_TESTS is set, and needs Node with the suite's packages and Chromium installed (cd browsertests && npm ci && npx playwright install chromium).
 // BROWSER_TESTS_ARGS passes more arguments to "playwright test", e.g. a file name or --headed.
 //
-// Besides the site, the server answers two test-only endpoints the suite uses to set the scene: POST /__test/hangar (a mekbay.HangarForce as JSON) sets
-// the hangar the fake MekBay answers, and POST /__test/battle (a mekbay.BattleStatus as JSON) the battle it reports. The fake is shared by every account,
-// so the suite runs one test at a time.
+// Besides the site, the server answers two test-only endpoints the suite uses to set the scene: POST /__test/hangar (a mekbay.HangarForce as JSON, plus an
+// optional Campaign) sets a hangar: with a Campaign, the requesting account's hangar of that started campaign (in the database); without one, the force the fake
+// MekBay answers for every hangar link (what starting a campaign from a link imports). POST /__test/battle (a mekbay.BattleStatus as JSON) sets the battle the
+// fake reports. The fake is shared by every account, so the suite runs one test at a time.
 func TestBrowser(t *testing.T) {
 	if os.Getenv("BROWSER_TESTS") == "" {
 		t.Skip("set BROWSER_TESTS=1 to run the Playwright suite in browsertests/")
@@ -37,14 +37,30 @@ func TestBrowser(t *testing.T) {
 	fake := &fakeMekBay{hangar: startingHangar()}
 
 	mux := http.NewServeMux()
-	mux.Handle("/", NewHandler(browserCampaigns(t), store, WithMekBay(browserMekBay{fake})))
+	mux.Handle("/", NewHandler(browserCampaigns(t), store, WithMekBay(fake)))
 	mux.HandleFunc("POST /__test/hangar", func(w http.ResponseWriter, r *http.Request) {
-		var h mekbay.HangarForce
+		var h struct {
+			mekbay.HangarForce
+			Campaign string // the started campaign whose hangar to set; "" sets the hangar link's force
+		}
 		if err := strictJSON(r, &h); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		fake.setHangar(h, nil)
+		if h.Campaign == "" {
+			fake.setHangar(h.HangarForce, nil)
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		seed := currentSeed(r)
+		if seed == "" {
+			http.Error(w, "no seed", http.StatusBadRequest)
+			return
+		}
+		if err := store.SetHangar(r.Context(), playthroughID(seed), h.Campaign, forceOf(h.HangarForce)); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 		w.WriteHeader(http.StatusNoContent)
 	})
 	mux.HandleFunc("POST /__test/battle", func(w http.ResponseWriter, r *http.Request) {
@@ -77,18 +93,6 @@ func strictJSON(r *http.Request, v any) error {
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
 	return dec.Decode(v)
-}
-
-// browserMekBay is the fake MekBay as the browser tests use it: a hangar built on the site (the start wizard's Build your force) becomes the hangar it
-// answers, as MekBay would save it.
-type browserMekBay struct{ *fakeMekBay }
-
-func (b browserMekBay) CreateForce(ctx context.Context, owner, instance string, d mekbay.ForceDraft) (mekbay.HangarForce, error) {
-	h, err := b.fakeMekBay.CreateForce(ctx, owner, instance, d)
-	if err == nil {
-		b.setHangar(h, nil)
-	}
-	return h, err
 }
 
 // browserCampaigns is the real campaigns plus two small ones. Drill's Scenario 000 has no forces and an Aces-style outcome (an objective, pilot SP and an

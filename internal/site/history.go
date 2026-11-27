@@ -146,7 +146,7 @@ func (s *Server) historyViews(r *http.Request, playthroughID string, c *content.
 	}
 	// The lines a checkpoint was taken right after (the start, each completed mission) can be rolled back to. A checkpoint older than the history (history_seq 0)
 	// belongs to the backfilled start line only if it is the start's own. A checkpoint's own last line may be one the dialog hides (a portrait changed while the
-	// hangar was being frozen), so it is offered on the newest line shown at or before it.
+	// checkpoint was being taken), so it is offered on the newest line shown at or before it.
 	atLine := map[int]storage.Checkpoint{}
 	if cps, err := s.store.Checkpoints(r.Context(), playthroughID, c.Slug); err != nil {
 		log.Printf("read the checkpoints for the history: %v", err)

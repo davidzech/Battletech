@@ -17,7 +17,7 @@ func TestServiceUnitState(t *testing.T) {
 	}
 	repaired := func(level string) HangarUnit {
 		f := load()
-		if err := serviceUnitState(f, "c", "repair", level, 20, true, time.Now()); err != nil {
+		if err := ServiceUnitState(f, "c", "repair", level, 20, true, time.Now()); err != nil {
 			t.Fatal(err)
 		}
 		return readBack(t, f)
@@ -43,7 +43,7 @@ func TestServiceUnitState(t *testing.T) {
 	}
 	// A rearm refills the ammunition and leaves the damage.
 	f := load()
-	if err := serviceUnitState(f, "c", "rearm", "", 20, true, time.Now()); err != nil {
+	if err := ServiceUnitState(f, "c", "rearm", "", 20, true, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	ra := readBack(t, f)
@@ -53,31 +53,31 @@ func TestServiceUnitState(t *testing.T) {
 	// The same service asked for twice (a double click, or two players at the table) changes nothing the second time, which is an error, so it isn't paid for twice.
 	for _, again := range [][2]string{{"repair", RepairArmor}, {"repair", RepairStructure}, {"repair", RepairCrippled}, {"rearm", ""}} {
 		f := load()
-		if err := serviceUnitState(f, "c", again[0], again[1], 20, true, time.Now()); err != nil {
+		if err := ServiceUnitState(f, "c", again[0], again[1], 20, true, time.Now()); err != nil {
 			t.Fatal(err)
 		}
-		if err := serviceUnitState(f, "c", again[0], again[1], 20, true, time.Now()); !errors.Is(err, ErrNoChange) {
+		if err := ServiceUnitState(f, "c", again[0], again[1], 20, true, time.Now()); !errors.Is(err, ErrNoChange) {
 			t.Errorf("%s %s a second time: %v", again[0], again[1], err)
 		}
 	}
 	// A lower repair after a higher one has nothing left to fix either; a rearm after a repair still has.
 	f = load()
-	if err := serviceUnitState(f, "c", "repair", RepairCrippled, 20, true, time.Now()); err != nil {
+	if err := ServiceUnitState(f, "c", "repair", RepairCrippled, 20, true, time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	if err := serviceUnitState(f, "c", "repair", RepairArmor, 20, true, time.Now()); !errors.Is(err, ErrNoChange) {
+	if err := ServiceUnitState(f, "c", "repair", RepairArmor, 20, true, time.Now()); !errors.Is(err, ErrNoChange) {
 		t.Errorf("an armor repair after a full one: %v", err)
 	}
-	if err := serviceUnitState(f, "c", "rearm", "", 20, true, time.Now()); err != nil {
+	if err := ServiceUnitState(f, "c", "rearm", "", 20, true, time.Now()); err != nil {
 		t.Errorf("a rearm after a full repair: %v", err)
 	}
-	if err := serviceUnitState(load(), "nope", "repair", RepairArmor, 20, true, time.Now()); err == nil {
+	if err := ServiceUnitState(load(), "nope", "repair", RepairArmor, 20, true, time.Now()); err == nil {
 		t.Error("an unknown unit should be refused")
 	}
-	if err := serviceUnitState(load(), "c", "paint", "", 20, true, time.Now()); err == nil {
+	if err := ServiceUnitState(load(), "c", "paint", "", 20, true, time.Now()); err == nil {
 		t.Error("an unknown service should be refused")
 	}
-	if err := serviceUnitState(load(), "c", "repair", "polish", 20, true, time.Now()); err == nil {
+	if err := ServiceUnitState(load(), "c", "repair", "polish", 20, true, time.Now()); err == nil {
 		t.Error("an unknown repair level should be refused")
 	}
 
@@ -86,7 +86,7 @@ func TestServiceUnitState(t *testing.T) {
 	_ = json.Unmarshal([]byte(`{"groups":[{"units":[{"id":"x","unit":"BMBaboon","state":{"destroyed":false,
 	 "locations":{"CT":{"armor":3,"internal":2}},
 	 "crits":[{"name":"Gyro","loc":"CT","destroyed":1,"hits":0},{"name":"Clan XL Engine","loc":"CT","destroyed":1,"hits":0}],"crew":[]}}]}]}`), &g)
-	if err := serviceUnitState(g, "x", "repair", RepairStructure, 20, true, time.Now()); err != nil {
+	if err := ServiceUnitState(g, "x", "repair", RepairStructure, 20, true, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	x := readBack(t, g)
@@ -113,7 +113,7 @@ func TestCockpitGoneIsDestroyedUntilRepaired(t *testing.T) {
 			if c, _ := ConditionOf(before, 20, "Fusion"); !before.IsDestroyed() || before.Destroyed || c != CondDestroyed {
 				t.Fatalf("%s before: destroyed=%v flag=%v %s", name, before.IsDestroyed(), before.Destroyed, c)
 			}
-			if err := serviceUnitState(f, "c", "repair", level, 20, true, time.Now()); err != nil {
+			if err := ServiceUnitState(f, "c", "repair", level, 20, true, time.Now()); err != nil {
 				t.Fatal(err)
 			}
 			after := readBack(t, f)
@@ -137,7 +137,7 @@ func TestStructureRepairRestoresALostLimbOrEngineHit(t *testing.T) {
 		if c, _ := ConditionOf(readBack(t, f), 20, "Fusion"); c != CondStructure {
 			t.Fatalf("%s before: %s", name, c)
 		}
-		if err := serviceUnitState(f, "c", "repair", RepairStructure, 20, false, time.Now()); err != nil {
+		if err := ServiceUnitState(f, "c", "repair", RepairStructure, 20, false, time.Now()); err != nil {
 			t.Fatal(err)
 		}
 		st := readBack(t, f)

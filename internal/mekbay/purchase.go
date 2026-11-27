@@ -1,7 +1,6 @@
 package mekbay
 
 import (
-	"context"
 	"strings"
 	"time"
 )
@@ -14,16 +13,9 @@ func SameGroupName(name, want string) bool {
 	return strings.EqualFold(strings.TrimSpace(name), want)
 }
 
-// PurchaseRequest asks MekBay to add units to the player's hangar force.
-type PurchaseRequest struct {
-	OwnerUID string
-	Instance string
-	Units    []string // MekBay unit IDs (e.g. BMMadCat_H), one entry per unit bought
-}
-
-// addUnitsToForce adds a fresh, undamaged unit for each ID to the "Hangar" group of a saved force (the decoded JSON of its `data`), creating the
+// AddUnitsToForce adds a fresh, undamaged unit for each ID to the "Hangar" group of a saved force (the decoded JSON of its `data`), creating the
 // group if it doesn't exist. Everything else in the force is left as it was.
-func addUnitsToForce(force map[string]any, unitIDs []string, now time.Time) {
+func AddUnitsToForce(force map[string]any, unitIDs []string, now time.Time) {
 	groups, _ := force["groups"].([]any)
 	var hangar map[string]any
 	for _, g := range groups {
@@ -54,12 +46,4 @@ func addUnitsToForce(force map[string]any, unitIDs []string, now time.Time) {
 		})
 	}
 	hangar["units"] = units
-}
-
-// PurchaseUnits adds units to the player's hangar force. It needs the owner's UID, because MekBay only accepts the owner's saves.
-func (c *Client) PurchaseUnits(ctx context.Context, req PurchaseRequest) (HangarForce, error) {
-	return c.editForce(ctx, req.OwnerUID, req.Instance, func(force map[string]any, now time.Time) error {
-		addUnitsToForce(force, req.Units, now)
-		return nil
-	})
 }

@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -33,16 +34,13 @@ type Playthrough struct {
 func (p Playthrough) Configured() bool { return p.AccountName != "" }
 
 // CampaignRun is a playthrough's run through one campaign. It exists once the campaign has been started, and has
-// its own MekBay hangar.
+// its own hangar (see hangar.go; loaded on its own, by Store.Hangar).
 type CampaignRun struct {
-	Campaign       string // the campaign's slug, e.g. "refusalwar"
-	HangarURL      string // the link to the site's own copy of the hangar, https://mekbay.com/?instance=<id>; never shown to the player
-	HangarInstance string // that copy's instance ID: the hangar the site reads and manages (see clone.go)
-	SourceURL      string // the MekBay link the player gave, which the copy was made from
-	Warchest       int    // the force's finances in SP; starts at the campaign's starting_warchest
-	ForceName      string // the campaign's force name, e.g. "Wolf's Dragoons", chosen when the campaign is started and editable on the Manage page ("" on a run from before it was asked)
-	FreeRecruits   int    // recruits that cost no SP (a mission outcome can grant them, e.g. a replacement for a pilot who died)
-	Players        int    // how many players this campaign is played with: the Deploy wizard's default count (0 on a run from before it was asked)
+	Campaign     string // the campaign's slug, e.g. "refusalwar"
+	Warchest     int    // the force's finances in SP; starts at the campaign's starting_warchest
+	ForceName    string // the campaign's force name, e.g. "Wolf's Dragoons", chosen when the campaign is started and editable on the Manage page ("" on a run from before it was asked)
+	FreeRecruits int    // recruits that cost no SP (a mission outcome can grant them, e.g. a replacement for a pilot who died)
+	Players      int    // how many players this campaign is played with: the Deploy wizard's default count (0 on a run from before it was asked)
 }
 
 // ForceLabel is the force's name, or a plain "Your force" for a run from before forces were named.
@@ -57,11 +55,7 @@ func (r CampaignRun) ForceLabel() string {
 func (r CampaignRun) WarchestText() string { return format.Commas(r.Warchest) }
 
 // Started reports whether the campaign has been started (a zero CampaignRun means it hasn't).
-func (r CampaignRun) Started() bool { return r.HangarInstance != "" }
-
-// Owned reports whether the run's hangar is the site's own copy. A run started before the site made copies points at the player's own force, which the site
-// cannot change, so nothing can be repaired, rearmed, bought or assigned in it.
-func (r CampaignRun) Owned() bool { return r.SourceURL != "" }
+func (r CampaignRun) Started() bool { return r.Campaign != "" }
 
 // timestampColumn is the created_at / started_at column type, which differs between the two databases.
 func (s *Store) timestampColumn() string {
@@ -114,14 +108,8 @@ func (s *Store) schemaStatements() []string {
 	granted_at     %s,
 	PRIMARY KEY (playthrough_id, campaign, keyword)
 )`, s.timestampColumn()),
-		`CREATE TABLE IF NOT EXISTS hangar_cache (
-	playthrough_id TEXT NOT NULL REFERENCES playthroughs(id) ON DELETE CASCADE,
-	campaign       TEXT NOT NULL,
-	instance       TEXT NOT NULL,
-	data           TEXT NOT NULL,
-	fetched_at     BIGINT NOT NULL,
-	PRIMARY KEY (playthrough_id, campaign)
-)`,
+		// Hangars were once read from MekBay and cached here; they live in campaign_runs.hangar now.
+		`DROP TABLE IF EXISTS hangar_cache`,
 		`CREATE TABLE IF NOT EXISTS mekbay_operations (
 	playthrough_id TEXT NOT NULL REFERENCES playthroughs(id) ON DELETE CASCADE,
 	campaign       TEXT NOT NULL,
@@ -287,10 +275,9 @@ func (s *Store) init() error {
 	if err := s.ensureColumn("campaign_runs", "battle_claim_scenario", "TEXT NOT NULL DEFAULT ''"); err != nil {
 		return err
 	}
-	if err := s.ensureColumn("campaign_runs", "hangar_claim", "BIGINT NOT NULL DEFAULT 0"); err != nil { // see ClaimHangarEdit
-		return err
-	}
-	if err := s.ensureColumn("campaign_runs", "hangar_claim_token", "TEXT NOT NULL DEFAULT ''"); err != nil {
+	// The run's hangar, as MekBay saves a force (hangar.go). Before it, the hangar was a force in MekBay (hangar_url, hangar_instance and source_url, which only
+	// the one-time import still reads).
+	if err := s.ensureColumn("campaign_runs", "hangar", "TEXT NOT NULL DEFAULT ''"); err != nil {
 		return err
 	}
 	if err := s.ensureColumn("scenario_completions", "outcome", "TEXT NOT NULL DEFAULT ''"); err != nil {
@@ -321,7 +308,7 @@ func (s *Store) init() error {
 		SELECT r.playthrough_id, r.campaign, 0, ` + epoch + `, '` + HistoryCampaign + `',
 			'Started the campaign as ' || CASE WHEN r.force_name = '' THEN 'your force' ELSE r.force_name END || '.', 0
 		FROM campaign_runs r
-		WHERE r.hangar_instance <> '' AND NOT EXISTS (SELECT 1 FROM campaign_history h WHERE h.playthrough_id = r.playthrough_id AND h.campaign = r.campaign
+		WHERE NOT EXISTS (SELECT 1 FROM campaign_history h WHERE h.playthrough_id = r.playthrough_id AND h.campaign = r.campaign
 			AND (h.seq = 0 OR h.text LIKE 'Started the campaign%'))`); err != nil {
 		return fmt.Errorf("backfill the campaign history: %w", err)
 	}
@@ -503,9 +490,9 @@ func (s *Store) RefundWarchest(ctx context.Context, playthroughID, campaign stri
 // Run loads a playthrough's run through a campaign; ok is false if the campaign hasn't been started.
 func (s *Store) Run(ctx context.Context, playthroughID, campaign string) (r CampaignRun, ok bool, err error) {
 	err = s.db.QueryRowContext(ctx,
-		s.q(`SELECT campaign, hangar_url, hangar_instance, source_url, warchest, players, force_name, free_recruits FROM campaign_runs WHERE playthrough_id = ? AND campaign = ?`),
+		s.q(`SELECT campaign, warchest, players, force_name, free_recruits FROM campaign_runs WHERE playthrough_id = ? AND campaign = ?`),
 		playthroughID, campaign,
-	).Scan(&r.Campaign, &r.HangarURL, &r.HangarInstance, &r.SourceURL, &r.Warchest, &r.Players, &r.ForceName, &r.FreeRecruits)
+	).Scan(&r.Campaign, &r.Warchest, &r.Players, &r.ForceName, &r.FreeRecruits)
 	if errors.Is(err, sql.ErrNoRows) {
 		return CampaignRun{}, false, nil
 	}
@@ -540,9 +527,12 @@ func (s *Store) SetRunPlayers(ctx context.Context, playthroughID, campaign strin
 // ErrAlreadyStarted is returned when pilots are given to start a campaign that has already been started.
 var ErrAlreadyStarted = errors.New("this campaign has already been started")
 
-// StartRunWithPilots starts a campaign and creates its starting named pilots, all or nothing. It refuses
+// StartRunWithPilots starts a campaign with its hangar (a force's saved data, see hangar.go) and creates its starting named pilots, all or nothing. It refuses
 // (ErrAlreadyStarted) if the campaign was already started, so submitting the wizard twice can't make duplicate pilots.
-func (s *Store) StartRunWithPilots(ctx context.Context, playthroughID, campaign string, h mekbay.Hangar, pilots []pilot.NewPilot, warchest, players int, forceName string) error {
+func (s *Store) StartRunWithPilots(ctx context.Context, playthroughID, campaign string, hangar []byte, pilots []pilot.NewPilot, warchest, players int, forceName string) error {
+	if !json.Valid(hangar) {
+		return errors.New("the hangar is not valid JSON")
+	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -550,9 +540,9 @@ func (s *Store) StartRunWithPilots(ctx context.Context, playthroughID, campaign 
 	defer tx.Rollback()
 	// The run is inserted unless it is there: of two starts at once the second waits for the first, then finds its row and inserts nothing.
 	res, err := tx.ExecContext(ctx,
-		s.q(`INSERT INTO campaign_runs (playthrough_id, campaign, hangar_url, hangar_instance, source_url, warchest, players, force_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		s.q(`INSERT INTO campaign_runs (playthrough_id, campaign, hangar, warchest, players, force_name) VALUES (?, ?, ?, ?, ?, ?)
 		     ON CONFLICT (playthrough_id, campaign) DO NOTHING`),
-		playthroughID, campaign, h.URL, h.Instance, h.Source, warchest, players, forceName)
+		playthroughID, campaign, string(hangar), warchest, players, forceName)
 	if err != nil {
 		return err
 	}
@@ -577,8 +567,8 @@ func (s *Store) StartRunWithPilots(ctx context.Context, playthroughID, campaign 
 	return tx.Commit()
 }
 
-// DeleteRun removes a started campaign from a playthrough: its named pilots, its saved MekBay operation IDs and the run
-// itself, in one transaction. The account and its other campaigns are left alone, and so is MekBay: the caller deletes what
+// DeleteRun removes a started campaign from a playthrough: its named pilots, its hangar, its saved MekBay operation IDs and the run
+// itself, in one transaction. The account and its other campaigns are left alone, and so is MekBay: the caller deletes the battles
 // the campaign saved there (the site's deleteCampaign does, once this has succeeded). It reports whether there was a run to delete.
 func (s *Store) DeleteRun(ctx context.Context, playthroughID, campaign string) (bool, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -594,7 +584,7 @@ func (s *Store) DeleteRun(ctx context.Context, playthroughID, campaign string) (
 		playthroughID, campaign); err != nil {
 		return false, err
 	}
-	for _, table := range []string{"named_pilots", "mekbay_operations", "mekbay_links", "hangar_cache", "scenario_completions", "campaign_keywords", "campaign_checkpoints", "campaign_history"} {
+	for _, table := range []string{"named_pilots", "mekbay_operations", "mekbay_links", "scenario_completions", "campaign_keywords", "campaign_checkpoints", "campaign_history"} {
 		if _, err := tx.ExecContext(ctx, s.q("DELETE FROM "+table+" WHERE playthrough_id = ? AND campaign = ?"), playthroughID, campaign); err != nil {
 			return false, err
 		}

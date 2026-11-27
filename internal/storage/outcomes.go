@@ -22,8 +22,9 @@ var ErrOutcomeFunds = errors.New("the outcome would take the warchest below zero
 
 // CompleteWithOutcome applies a mission's outcome and records the mission as completed, all in one transaction: SP to the pilots who earned it, pilots killed in
 // action, promotions (a pilot's Rank, as ResolvePromotions settled it), the warchest and the free recruits, the keywords granted (into the campaign ledger), and the completion row holding the report. It fails with ErrAlreadyCompleted if the mission was already completed, so
-// the rewards can never be given twice.
-func (s *Store) CompleteWithOutcome(ctx context.Context, playthroughID, campaign, scenario string, res content.OutcomeResult) error {
+// the rewards can never be given twice. writeBack, when not nil, changes the hangar in the same transaction (the battle's damage written back into it); the SP it
+// returns go into the warchest with the outcome's.
+func (s *Store) CompleteWithOutcome(ctx context.Context, playthroughID, campaign, scenario string, res content.OutcomeResult, writeBack HangarEdit) error {
 	record, err := json.Marshal(res)
 	if err != nil {
 		return err
@@ -71,6 +72,24 @@ func (s *Store) CompleteWithOutcome(ctx context.Context, playthroughID, campaign
 				return ErrOutcomePilot
 			}
 		}
+	}
+	if writeBack != nil {
+		var data string
+		if err := tx.QueryRowContext(ctx, s.q(`SELECT hangar FROM campaign_runs WHERE playthrough_id = ? AND campaign = ?`), playthroughID, campaign).Scan(&data); err != nil {
+			return err
+		}
+		hangar, err := decodeHangar(data)
+		if err != nil {
+			return err
+		}
+		sp, err := writeBack(hangar)
+		if err != nil {
+			return err
+		}
+		if err := s.saveHangar(ctx, tx, playthroughID, campaign, hangar, 0); err != nil {
+			return err
+		}
+		res.Warchest += sp
 	}
 	if res.Warchest != 0 || res.FreeRecruits != 0 {
 		r, err := tx.ExecContext(ctx, s.q(`UPDATE campaign_runs SET warchest = warchest + ?, free_recruits = free_recruits + ? WHERE playthrough_id = ? AND campaign = ? AND warchest + ? >= 0`), res.Warchest, res.FreeRecruits, playthroughID, campaign, res.Warchest)

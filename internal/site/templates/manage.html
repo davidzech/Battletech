@@ -85,7 +85,7 @@
     </div>
   </form>
 </dialog>
-<section class="hangar-units" id="hangar-units" data-campaign="{{.Campaign.Slug}}" data-can-modify="{{if .Run.Owned}}1{{end}}" data-warchest="{{.Run.Warchest}}"{{if and .Campaign.AvailabilityFaction .Campaign.AvailabilityEra}} data-swap-availability="Only variants {{.Campaign.AvailabilityFaction}} fields in the {{.Campaign.AvailabilityEra}} era"{{end}} data-cached="{{.ForceJSON}}">
+<section class="hangar-units" id="hangar-units" data-campaign="{{.Campaign.Slug}}" data-warchest="{{.Run.Warchest}}"{{if and .Campaign.AvailabilityFaction .Campaign.AvailabilityEra}} data-swap-availability="Only variants {{.Campaign.AvailabilityFaction}} fields in the {{.Campaign.AvailabilityEra}} era"{{end}} data-hangar="{{.ForceJSON}}">
 <h2 class="section-title">Hangar</h2>
 <div class="hangar-units-summary" id="hangar-units-summary"></div>
 <p class="muted">{{.Run.ForceLabel}}&rsquo;s hangar holds your mechs, and scenarios deploy from it.</p>

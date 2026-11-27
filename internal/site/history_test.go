@@ -155,7 +155,7 @@ func TestCampaignHistory(t *testing.T) {
 	if _, err := store.SetScenarioCompleted(ctx, id, "refusalwar", "scenario_001", false); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.RestoreCheckpoint(ctx, id, "refusalwar", cps[len(cps)-1].Seq); err != nil { // back to the start: only its line is left
+	if err := store.RestoreCheckpoint(ctx, id, "refusalwar", cps[len(cps)-1].Seq); err != nil { // back to the start: only its line is left
 		t.Fatal(err)
 	}
 	if h := history(); len(h) != 1 {
@@ -192,7 +192,7 @@ func TestCheckpointAfterAHiddenLineIsOffered(t *testing.T) {
 	if err := store.LogHistory(ctx, id, "refusalwar", storage.HistoryPilot, "Alrek"+portraitHistorySuffix, 0); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.AddCheckpoint(ctx, id, "refusalwar", "After the repair", ""); err != nil {
+	if err := store.AddCheckpoint(ctx, id, "refusalwar", "After the repair"); err != nil {
 		t.Fatal(err)
 	}
 	cps, _ := store.Checkpoints(ctx, id, "refusalwar")

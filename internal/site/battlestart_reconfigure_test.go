@@ -40,7 +40,8 @@ func TestStartBattleReconfiguresHangarMechs(t *testing.T) {
 	// 38 SP (half of 75 tons, rounded up; no BV gained), which brings the force to 7,463. ud is a Timber Wolf with spent ammunition.
 	h := hangarOf("BMMadCat_Prime", "BMMadCat_Prime", "BMDasher_Prime", "BMDasher_Prime", "BMMadCat_Prime")
 	h.Units[4].Damaged, h.Units[4].AmmoBins, h.Units[4].AmmoUsed = true, 1, 3
-	fake.setHangar(h, nil)
+	setRunHangar(t, store, seed, "refusalwar", h)
+	design := func(id string) string { u, _ := runUnit(t, store, seed, "refusalwar", id); return u.Unit }
 	form := func(kv ...string) url.Values {
 		v := url.Values{"campaign": {"refusalwar"}, "scenario": {"scenario_001"}, "players": {"1"}}
 		for _, u := range []string{"ua", "ub", "uc", "ud"} {
@@ -97,28 +98,33 @@ func TestStartBattleReconfiguresHangarMechs(t *testing.T) {
 		t.Errorf("too little in the warchest: %d %q", code, msg)
 	}
 	setFunds(1000)
-	if len(fake.swaps) != 0 || len(fake.battles) != 0 {
-		t.Fatalf("checking a plan reached MekBay: %+v %d", fake.swaps, len(fake.battles))
+	if design("ua") != "BMMadCat_Prime" || len(fake.battles) != 0 {
+		t.Fatalf("checking a plan changed the hangar or reached MekBay: %s %d", design("ua"), len(fake.battles))
 	}
 
-	// A swap MekBay fails is refunded, and the battle isn't built.
-	fake.serviceErr = context.DeadlineExceeded
-	if got := post(t, srv, "/api/battle/start", form(swapB...), cookie, srv.URL).StatusCode; got != http.StatusBadGateway || funds() != 1000 || len(fake.battles) != 0 {
-		t.Errorf("MekBay failure: %d, funds %d, battles %d", got, funds(), len(fake.battles))
+	// A swap that is no longer possible when Start battle makes it (the mech has fired since the plan was checked) changes nothing, and the battle isn't built.
+	worn := h
+	worn.Units = append([]mekbay.HangarUnit(nil), h.Units...)
+	worn.Units[0].AmmoBins, worn.Units[0].AmmoUsed = 1, 2
+	setRunHangar(t, store, seed, "refusalwar", worn)
+	if got := post(t, srv, "/api/battle/start", form(swapB...), cookie, srv.URL).StatusCode; got != http.StatusBadRequest || funds() != 1000 || len(fake.battles) != 0 || design("ua") != "BMMadCat_Prime" {
+		t.Errorf("a swap no longer possible: %d, funds %d, battles %d", got, funds(), len(fake.battles))
 	}
 	if _, ok, _ := store.MekBayOperation(ctx, id, "refusalwar", "scenario_001"); ok {
 		t.Fatal("a failed swap started the scenario")
 	}
-	fake.serviceErr = nil
+	setRunHangar(t, store, seed, "refusalwar", h)
 
-	// Start battle pays for the swap, makes it in the hangar under the player's account, logs it, and then builds the battle.
-	fake.swaps = nil
+	// Start battle pays for the swap and makes it in the hangar in one transaction, logs it, and then builds the battle from the hangar as it is now.
 	readBattle(t, post(t, srv, "/api/battle/start", form(swapB...), cookie, srv.URL))
-	if len(fake.swaps) != 1 || fake.swaps[0].UnitID != "ua" || fake.swaps[0].To != "BMMadCat_B" || fake.swaps[0].OwnerUID != mekbay.MekBayUID(seed, mekbay.SlotHangar) {
-		t.Errorf("MekBay was asked: %+v", fake.swaps)
+	if design("ua") != "BMMadCat_B" {
+		t.Errorf("the swap is made in the hangar: %s", design("ua"))
 	}
 	if funds() != 1000-38 || len(fake.battles) != 1 {
 		t.Errorf("funds %d (want %d), battles %d", funds(), 1000-38, len(fake.battles))
+	}
+	if built, err := mekbay.ParseForce(fake.battles[0].Hangar); err != nil || built.Units[0].Unit != "BMMadCat_B" {
+		t.Errorf("the battle is built from the reconfigured hangar: %+v %v", built.Units, err)
 	}
 	entries, err := store.History(ctx, id, "refusalwar")
 	if err != nil {

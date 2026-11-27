@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/davidzech/Battletech/internal/content"
 	"github.com/davidzech/Battletech/internal/format"
@@ -53,7 +54,7 @@ func (s *Server) setAccount(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// startCampaign starts one of the campaigns for the visitor's playthrough, with that campaign's own MekBay hangar and
+// startCampaign starts one of the campaigns for the visitor's playthrough, with that campaign's own hangar (kept in the database) and
 // its starting named pilots (see parseStartingPilots), all together. Posting again for a campaign that is already
 // started is refused with 409.
 func (s *Server) startCampaign(w http.ResponseWriter, r *http.Request) {
@@ -126,20 +127,19 @@ func (s *Server) startCampaign(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// The hangar must meet the campaign's starting conditions (enough mechs, within the starting BV).
-	var hangar mekbay.Hangar
-	var made mekbay.HangarForce
+	var hangar []byte
 	if units != nil {
 		if check := checkStartingHangar(mekbay.DraftHangar(units), c); !check.OK {
 			http.Error(w, strings.Join(check.Problems, " "), http.StatusBadRequest)
 			return
 		}
-		if hangar, made, err = s.buildHangar(r.Context(), seed, forceName, units); err != nil {
+		if hangar, err = buildHangar(forceName, units); err != nil {
 			log.Printf("build the starting hangar for %s: %v", c.Slug, err)
-			http.Error(w, err.Error(), http.StatusBadGateway)
+			http.Error(w, "could not build the starting hangar", http.StatusInternalServerError)
 			return
 		}
-	} else if c.StartingBV > 0 || c.StartingMinMechs > 0 {
-		h, err := s.mekbay.ReadHangar(r.Context(), source.Instance)
+	} else {
+		data, h, err := s.readLinkData(r.Context(), source)
 		if err != nil {
 			log.Printf("read hangar to start %s: %v", c.Slug, err)
 			http.Error(w, err.Error(), http.StatusBadGateway)
@@ -149,17 +149,13 @@ func (s *Server) startCampaign(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, strings.Join(check.Problems, " "), http.StatusBadRequest)
 			return
 		}
-	}
-	if units == nil {
-		if hangar, made, err = s.cloneHangar(r.Context(), seed, source); err != nil {
-			log.Printf("clone hangar for %s: %v", c.Slug, err)
-			http.Error(w, err.Error(), http.StatusBadGateway)
+		if hangar, err = importHangar(data); err != nil {
+			log.Printf("import the hangar to start %s: %v", c.Slug, err)
+			http.Error(w, "could not read the hangar from that link", http.StatusBadGateway)
 			return
 		}
 	}
 	if err := s.store.StartRunWithPilots(r.Context(), id, c.Slug, hangar, pilots, c.StartingWarchest, players, forceName); err != nil {
-		// The hangar just built or cloned belongs to no campaign (another start got there first, or the run could not be saved), so it is deleted again.
-		s.deleteHangars(r.Context(), seed, []string{hangar.Instance})
 		if errors.Is(err, storage.ErrAlreadyStarted) {
 			http.Error(w, "This campaign has already been started.", http.StatusConflict)
 			return
@@ -167,7 +163,6 @@ func (s *Server) startCampaign(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not start the campaign", http.StatusInternalServerError)
 		return
 	}
-	s.cacheHangar(r.Context(), id, c.Slug, hangar.Instance, made) // the new hangar is the run's first cached one
 	// Logged before the starting checkpoint is recorded, so rolling back to it keeps this line.
 	names := make([]string, 0, len(pilots))
 	for _, p := range pilots {
@@ -175,14 +170,7 @@ func (s *Server) startCampaign(w http.ResponseWriter, r *http.Request) {
 	}
 	s.logHistory(r, id, c.Slug, storage.HistoryCampaign, c.StartingWarchest, fmt.Sprintf("Started the campaign as %s, with the named pilots %s and a warchest of %s SP.", forceName, strings.Join(names, " and "), format.Commas(c.StartingWarchest)))
 	// The first checkpoint: the campaign as it starts, which aborting the first mission rolls back to.
-	if run, ok, err := s.store.Run(r.Context(), id, c.Slug); err == nil && ok {
-		copyID, err := s.checkpointCopy(r.Context(), currentSeed(r), run)
-		if err != nil {
-			log.Printf("the starting checkpoint's hangar copy: %v", err)
-		} else {
-			s.recordCheckpoint(r.Context(), currentSeed(r), id, c.Slug, startCheckpointLabel, copyID)
-		}
-	}
+	s.recordCheckpoint(r.Context(), id, c.Slug, startCheckpointLabel)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -200,15 +188,34 @@ func parseStartingPlayers(raw string, c *content.Campaign) (int, error) {
 	return n, nil
 }
 
-// cloneHangar copies the force the player linked into a new, clean force owned by the seed's own MekBay account, and returns the run's hangar: the copy's
-// link and instance, with the player's link kept as its source.
-func (s *Server) cloneHangar(ctx context.Context, seed string, source mekbay.Hangar) (mekbay.Hangar, mekbay.HangarForce, error) {
-	target := mekbay.NewID()
-	got, err := s.mekbay.CloneHangar(ctx, mekbay.CloneRequest{OwnerUID: mekbay.AccountUID(seed, mekbay.SlotHangar), Source: source.Instance, Target: target})
+// readLinkData reads the force a MekBay hangar link points at, once: its saved data, and the hangar it reads as.
+func (s *Server) readLinkData(ctx context.Context, link mekbay.Hangar) (json.RawMessage, mekbay.HangarForce, error) {
+	data, err := s.mekbay.ReadForce(ctx, link.Instance)
 	if err != nil {
-		return mekbay.Hangar{}, mekbay.HangarForce{}, err
+		return nil, mekbay.HangarForce{}, err
 	}
-	return mekbay.Hangar{URL: "https://mekbay.com/?instance=" + target, Instance: target, Source: source.URL}, got, nil
+	h, err := mekbay.ParseForce(data)
+	return data, h, err
+}
+
+// readLink reads the force a MekBay hangar link points at as a hangar, for the start wizard's check.
+func (s *Server) readLink(ctx context.Context, link mekbay.Hangar) (mekbay.HangarForce, error) {
+	_, h, err := s.readLinkData(ctx, link)
+	return h, err
+}
+
+// importHangar makes the campaign's hangar from a force read from a link: a clean copy of it (mekbay.CleanForce), every unit pristine with an unnamed 4/5 crew,
+// under an ID of its own. The player's force in MekBay is never written to.
+func importHangar(data []byte) ([]byte, error) {
+	var force map[string]any
+	if err := json.Unmarshal(data, &force); err != nil {
+		return nil, err
+	}
+	clean, err := mekbay.CleanForce(force, mekbay.NewID(), time.Now())
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(clean)
 }
 
 // setSeed validates a chosen seed and stores it in a cookie. The reply says whether that seed's
