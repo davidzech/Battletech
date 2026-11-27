@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/davidzech/Battletech/internal/content"
 	"github.com/davidzech/Battletech/internal/mekbay"
@@ -143,11 +144,42 @@ Rest, then raid again.
 	if done, _ := store.Completions(ctx, id, "refusalwar"); len(done) != 0 {
 		t.Fatalf("and nothing is completed: %v", done)
 	}
+	// The write-back is a hangar edit: while another server holds the hangar's claim it waits, then refuses, and nothing is written or completed.
 	fake.mu.Lock()
 	fake.commitErr = nil
 	fake.mu.Unlock()
+	defer func(wait time.Duration) { hangarClaimWait = wait }(hangarClaimWait)
+	hangarClaimWait = 50 * time.Millisecond
+	token, claimed, err := store.ClaimHangarEdit(ctx, id, "refusalwar")
+	if err != nil || !claimed {
+		t.Fatalf("claim: %v %v", claimed, err)
+	}
+	if got := post(t, srv, "/api/campaign/scenario-outcome/commit", report(true, true, entries...), cookie, srv.URL).StatusCode; got != http.StatusConflict {
+		t.Fatalf("a write-back while another server edits the hangar: %d", got)
+	}
+	fake.mu.Lock()
+	writeBacks := len(fake.commits)
+	fake.mu.Unlock()
+	if done, _ := store.Completions(ctx, id, "refusalwar"); len(done) != 0 || writeBacks != 1 {
+		t.Fatalf("nothing is written back or completed: %v, %d write-backs", done, writeBacks)
+	}
+	if err := store.ReleaseHangarEdit(ctx, id, "refusalwar", token); err != nil {
+		t.Fatal(err)
+	}
+	// The hangar as the write-back saved it becomes the cached copy, so the next page shows the battle's damage at once.
+	committed := startingHangar()
+	committed.Units[0].Locations, committed.Units[0].Damaged = map[string]mekbay.LocationLoss{"CT": {Armor: 7}}, true
+	fake.mu.Lock()
+	fake.committed = committed
+	fake.mu.Unlock()
 	if got := post(t, srv, "/api/campaign/scenario-outcome/commit", report(true, true, entries...), cookie, srv.URL).StatusCode; got != http.StatusNoContent {
 		t.Fatalf("commit: %d", got)
+	}
+	if h, _, ok, err := store.CachedHangar(ctx, id, "refusalwar", run0.HangarInstance); err != nil || !ok || len(h.Units) == 0 || !h.Units[0].Damaged || h.Units[0].Locations["CT"].Armor != 7 {
+		t.Errorf("the written-back hangar is cached: ok=%v err=%v %+v", ok, err, h.Units)
+	}
+	if _, ok, _ := store.ClaimHangarEdit(ctx, id, "refusalwar"); !ok {
+		t.Error("the write-back releases its claim on the hangar")
 	}
 	// Once the mission is completed nothing refers to its battle any more, so it is deleted in MekBay, in the background.
 	eventually(t, "the completed mission's battle is deleted in MekBay", func() (bool, any) {

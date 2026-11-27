@@ -25,6 +25,8 @@ type fakeForceServer struct {
 	// refuse is the name of a force the server refuses to save (none when ""); saves counts the forces it did save.
 	refuse string
 	saves  int
+	// failRead is the instance of a force the server fails to read, as on a transient error (none when "").
+	failRead string
 }
 
 func newFakeForceServer(t *testing.T) *fakeForceServer {
@@ -90,6 +92,10 @@ func (f *fakeForceServer) serve(w http.ResponseWriter, r *http.Request) {
 		case "getForce":
 			inst, _ := m["instanceId"].(string)
 			owned, _ := m["ownedOnly"].(bool)
+			if f.failRead != "" && inst == f.failRead {
+				reply(map[string]any{"action": "error", "message": "timed out"})
+				break
+			}
 			var data any
 			if d, ok := f.forces[inst]; ok && (!owned || f.owners[inst] == account) {
 				data = d

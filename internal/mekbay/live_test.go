@@ -130,8 +130,8 @@ func TestCommitBattleLive(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rep, err := cl.CommitBattle(ctx, CommitBattleRequest{OwnerUID: account, HangarInstance: hangarID, OperationID: res.OperationID})
-	if err != nil || rep.Matched != 1 {
+	rep, saved, err := cl.CommitBattle(ctx, CommitBattleRequest{OwnerUID: account, HangarInstance: hangarID, OperationID: res.OperationID})
+	if err != nil || rep.Matched != 1 || len(saved.Units) != 2 {
 		t.Fatalf("commit: %+v %v", rep, err)
 	}
 	h, err := cl.ReadHangar(ctx, hangarID)

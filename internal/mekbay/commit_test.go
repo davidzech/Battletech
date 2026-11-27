@@ -115,7 +115,7 @@ func TestCommitBattleWritesTheHangar(t *testing.T) {
 	f.ops["op1"] = map[string]any{"name": "S", "forces": []any{map[string]any{"instanceId": "P1", "alignment": "friendly"}, map[string]any{"instanceId": "OPFOR", "alignment": "enemy"}}}
 	f.mu.Unlock()
 
-	rep, err := cl.CommitBattle(context.Background(), CommitBattleRequest{OwnerUID: tableAccount, HangarInstance: hangar, OperationID: "op1"})
+	rep, saved, err := cl.CommitBattle(context.Background(), CommitBattleRequest{OwnerUID: tableAccount, HangarInstance: hangar, OperationID: "op1"})
 	if err != nil || rep.Matched != 1 || len(rep.Skipped) != 0 {
 		t.Fatalf("commit: %+v %v", rep, err)
 	}
@@ -130,7 +130,11 @@ func TestCommitBattleWritesTheHangar(t *testing.T) {
 	if s := other; s != nil && len(s["locations"].(map[string]any)) != 0 {
 		t.Errorf("the other Orion, which stayed home, is untouched: %+v", s)
 	}
-	if _, err := cl.CommitBattle(context.Background(), CommitBattleRequest{OwnerUID: tableAccount, HangarInstance: hangar, OperationID: "nope"}); err == nil || !strings.Contains(err.Error(), "no such operation") {
+	// The hangar comes back as saved, read the way a live read reads it, for the site's cache.
+	if len(saved.Units) != 3 || saved.Units[1].ID != ids[1] || saved.Units[1].Locations["CT"].Armor != 12 || saved.Units[0].Damaged {
+		t.Errorf("the saved hangar: %+v", saved.Units)
+	}
+	if _, _, err := cl.CommitBattle(context.Background(), CommitBattleRequest{OwnerUID: tableAccount, HangarInstance: hangar, OperationID: "nope"}); err == nil || !strings.Contains(err.Error(), "no such operation") {
 		t.Errorf("an operation that is not there: %v", err)
 	}
 }
@@ -156,12 +160,55 @@ func TestCommitBattleSkipsTheAllies(t *testing.T) {
 		map[string]any{"instanceId": "P1", "alignment": "friendly"}, map[string]any{"instanceId": "ALLIES", "alignment": "friendly"}, map[string]any{"instanceId": "OPFOR", "alignment": "enemy"}}}
 	f.mu.Unlock()
 
-	rep, err := cl.CommitBattle(context.Background(), CommitBattleRequest{OwnerUID: tableAccount, HangarInstance: hangar, OperationID: "op1"})
+	rep, _, err := cl.CommitBattle(context.Background(), CommitBattleRequest{OwnerUID: tableAccount, HangarInstance: hangar, OperationID: "op1"})
 	if err != nil || rep.Matched != 1 || len(rep.Skipped) != 2 {
 		t.Fatalf("without Skip the allies' units are read and find no hangar unit: %+v %v", rep, err)
 	}
-	rep, err = cl.CommitBattle(context.Background(), CommitBattleRequest{OwnerUID: tableAccount, HangarInstance: hangar, OperationID: "op1", Skip: []string{"ALLIES"}})
+	rep, _, err = cl.CommitBattle(context.Background(), CommitBattleRequest{OwnerUID: tableAccount, HangarInstance: hangar, OperationID: "op1", Skip: []string{"ALLIES"}})
 	if err != nil || rep.Matched != 1 || len(rep.Skipped) != 0 {
 		t.Fatalf("with Skip the allies' force is left out: %+v %v", rep, err)
 	}
+}
+
+// A hangar MekBay doesn't have is told apart from one MekBay failed to read: only the first asks the player to import it again. A battle none of whose units
+// are in the hangar saves nothing and answers no hangar.
+func TestCommitBattleHangarErrors(t *testing.T) {
+	f := newFakeForceServer(t)
+	cl := &Client{URL: f.wsURL()}
+	hangar, ids := f.saveHangar(tableAccount, ForceDraft{Name: "Hangar", Groups: []GroupDraft{{Name: "G", Units: []UnitDraft{{Unit: "BMGrizzly"}}}}})
+	f.mu.Lock()
+	p1, err := subsetForce(f.forces[hangar], []string{ids[0]}, "P1", "Player 1", time.Now())
+	if err != nil {
+		f.mu.Unlock()
+		t.Fatal(err)
+	}
+	f.forces["P1"], f.owners["P1"] = p1, tableAccount
+	f.ops["op1"] = map[string]any{"name": "S", "forces": []any{map[string]any{"instanceId": "P1", "alignment": "friendly"}}}
+	f.failRead = hangar
+	f.mu.Unlock()
+	commit := func(instance string) (CommitBattleReport, HangarForce, error) {
+		return cl.CommitBattle(context.Background(), CommitBattleRequest{OwnerUID: tableAccount, HangarInstance: instance, OperationID: "op1"})
+	}
+
+	if _, _, err := commit(hangar); err == nil || strings.Contains(err.Error(), "import") {
+		t.Errorf("a hangar MekBay failed to read must not ask for a re-import: %v", err)
+	}
+	if _, _, err := commit("no-such-hangar"); err == nil || !strings.Contains(err.Error(), "try importing it again") {
+		t.Errorf("a hangar MekBay doesn't have: %v", err)
+	}
+
+	f.mu.Lock()
+	f.failRead = ""
+	f.forces["P1"]["groups"].([]any)[0].(map[string]any)["units"].([]any)[0].(map[string]any)["id"] = "elsewhere"
+	saves := f.saves
+	f.mu.Unlock()
+	rep, saved, err := commit(hangar)
+	if err != nil || rep.Matched != 0 || len(rep.Skipped) != 1 || len(saved.Units) != 0 {
+		t.Errorf("a battle with no unit from the hangar: %+v %+v %v", rep, saved, err)
+	}
+	f.mu.Lock()
+	if f.saves != saves {
+		t.Error("nothing to write back saves nothing")
+	}
+	f.mu.Unlock()
 }
