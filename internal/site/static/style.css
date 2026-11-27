@@ -1783,3 +1783,9 @@ fieldset.battle-lock-scope:disabled button:not(.button) { opacity: 0.45; cursor:
 .purchase-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0.3rem 1.5rem; }
 .purchase-head h2 { margin-bottom: 0; }
 .purchase-warchest { font: 700 1rem var(--display); letter-spacing: 0.06em; text-transform: uppercase; color: var(--text); white-space: nowrap; }
+
+/* A pilot card's MVP count: a plate in the portrait's column (under the rank), on the row of Manage SP and More and as tall as they are. It comes just before
+   the actions in the markup, so the grid puts it in column 1 of the actions' row. */
+.pilot-card > .pilot-main > .pilot-mvp { grid-column: 1; align-self: start; box-sizing: border-box; height: 2.5rem; margin-top: 0.4rem; display: flex; align-items: center; justify-content: center; gap: 0.6rem; background: var(--bg); border: 1px solid var(--line); }
+.pilot-mvp-label { font: 700 0.68rem var(--display); letter-spacing: 0.12em; text-transform: uppercase; color: var(--text); }
+.pilot-mvp-value { font: 700 1.5rem/1 var(--display); color: var(--accent); }

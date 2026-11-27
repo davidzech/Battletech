@@ -261,6 +261,9 @@ func (s *Store) init() error {
 	if err := s.ensureColumn("campaign_runs", "free_recruits", "INTEGER NOT NULL DEFAULT 0"); err != nil {
 		return err
 	}
+	if err := s.ensureColumn("named_pilots", "mvps", "INTEGER NOT NULL DEFAULT 0"); err != nil { // missions the pilot was MVP of; from 0 when added
+		return err
+	}
 	if err := s.ensureColumn("campaign_runs", "battle_claim", "BIGINT NOT NULL DEFAULT 0"); err != nil { // see ClaimBattle
 		return err
 	}

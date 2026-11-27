@@ -56,6 +56,10 @@ test('reports a mission with a benched and a killed pilot, then rolls it back', 
   await expect(summary).toContainText('Killed in Action.');
   await expect(summary).toContainText('Keywords granted: Depot Gone');
 
+  // Alrek's pilot card counts the mission he was MVP of.
+  await page.goto('/drill/manage/');
+  await expect(page.locator('.pilot', { hasText: 'Alrek' }).locator('.pilot-mvp')).toHaveText(/MVP\s*1/);
+
   // History: roll back to the start (the oldest line with a checkpoint), through two confirmations.
   await page.goto('/drill/');
   await expect(page.locator('.roster-pilot')).toHaveCount(2); // Katarina has fallen

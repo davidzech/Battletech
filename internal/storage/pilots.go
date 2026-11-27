@@ -11,11 +11,11 @@ import (
 
 // The named pilots' queries: their SP, ranks, portraits, Edge abilities and the Advanced Management corrections (see pilot.go for the rules).
 
-const pilotColumns = `id, name, portrait, rank, fallen, sp_gunnery, sp_piloting, sp_edge_tokens, sp_edge_abilities, sp_total`
+const pilotColumns = `id, name, portrait, rank, fallen, sp_gunnery, sp_piloting, sp_edge_tokens, sp_edge_abilities, sp_total, mvps`
 
 func scanPilot(row interface{ Scan(...any) error }) (p pilot.NamedPilot, err error) {
 	var fallen int
-	err = row.Scan(&p.ID, &p.Name, &p.Portrait, &p.Rank, &fallen, &p.SP.Gunnery, &p.SP.Piloting, &p.SP.EdgeTokens, &p.SP.EdgeAbilities, &p.TotalSP)
+	err = row.Scan(&p.ID, &p.Name, &p.Portrait, &p.Rank, &fallen, &p.SP.Gunnery, &p.SP.Piloting, &p.SP.EdgeTokens, &p.SP.EdgeAbilities, &p.TotalSP, &p.MVPs)
 	p.Fallen = fallen != 0
 	return p, err
 }

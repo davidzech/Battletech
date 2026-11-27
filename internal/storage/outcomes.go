@@ -55,6 +55,15 @@ func (s *Store) CompleteWithOutcome(ctx context.Context, playthroughID, campaign
 				return ErrOutcomePilot
 			}
 		}
+		if p.MVP && !p.KIA {
+			r, err := tx.ExecContext(ctx, s.q(`UPDATE named_pilots SET mvps = mvps + 1 WHERE id = ? AND playthrough_id = ? AND campaign = ? AND fallen = 0`), p.PilotID, playthroughID, campaign)
+			if err != nil {
+				return err
+			}
+			if c, _ := r.RowsAffected(); c == 0 {
+				return ErrOutcomePilot
+			}
+		}
 		if p.Rank != "" && !p.KIA {
 			r, err := tx.ExecContext(ctx, s.q(`UPDATE named_pilots SET rank = ? WHERE id = ? AND playthrough_id = ? AND campaign = ? AND fallen = 0`), p.Rank, p.PilotID, playthroughID, campaign)
 			if err != nil {
