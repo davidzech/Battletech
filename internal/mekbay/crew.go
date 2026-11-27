@@ -1,8 +1,6 @@
 package mekbay
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
 	"strings"
 )
@@ -112,27 +110,4 @@ func setCommander(force map[string]any, unitID string) {
 			}
 		}
 	}
-}
-
-// ResetCrews turns every crew of a saved force (its JSON, the format the site stores a hangar in) into the default unnamed 4/5 crew, keeping everything else
-// (damage and all). It is for a hangar imported from a player's own MekBay force, whose crews may be named pilots: the hangar never holds one.
-func ResetCrews(data []byte) ([]byte, error) {
-	dec := json.NewDecoder(bytes.NewReader(data))
-	dec.UseNumber() // the rest of the force is written back as it came
-	var force map[string]any
-	if err := dec.Decode(&force); err != nil || force == nil {
-		return nil, fmt.Errorf("the force could not be read: %v", err)
-	}
-	groups, _ := force["groups"].([]any)
-	for _, g := range groups {
-		gm, _ := g.(map[string]any)
-		units, _ := gm["units"].([]any)
-		for _, u := range units {
-			um, _ := u.(map[string]any)
-			if state, _ := um["state"].(map[string]any); state != nil {
-				resetCrew(state)
-			}
-		}
-	}
-	return json.Marshal(force)
 }

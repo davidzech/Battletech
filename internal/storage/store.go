@@ -86,8 +86,6 @@ func (s *Store) schemaStatements() []string {
 	playthrough_id  TEXT NOT NULL REFERENCES playthroughs(id) ON DELETE CASCADE,
 	campaign        TEXT NOT NULL,
 	started_at      %s,
-	hangar_url      TEXT NOT NULL DEFAULT '',
-	hangar_instance TEXT NOT NULL DEFAULT '',
 	PRIMARY KEY (playthrough_id, campaign)
 )`, s.timestampColumn()),
 		// The players' own MekBay user IDs are no longer asked for (every player's account is derived from the seed); forget any that were saved.
@@ -108,8 +106,6 @@ func (s *Store) schemaStatements() []string {
 	granted_at     %s,
 	PRIMARY KEY (playthrough_id, campaign, keyword)
 )`, s.timestampColumn()),
-		// Hangars were once read from MekBay and cached in hangar_cache; they live in campaign_runs.hangar now. The table is left alone (unused) so an older version
-		// still serving during a deploy keeps its cache; the follow-up that drops the import drops it too.
 		`CREATE TABLE IF NOT EXISTS mekbay_operations (
 	playthrough_id TEXT NOT NULL REFERENCES playthroughs(id) ON DELETE CASCADE,
 	campaign       TEXT NOT NULL,
@@ -126,7 +122,6 @@ func (s *Store) schemaStatements() []string {
 	seq            INTEGER NOT NULL,
 	label          TEXT NOT NULL,
 	created_at     INTEGER NOT NULL,
-	hangar_copy    TEXT NOT NULL DEFAULT '',
 	snapshot       TEXT NOT NULL,
 	PRIMARY KEY (playthrough_id, campaign, seq)
 )`,
@@ -257,9 +252,6 @@ func (s *Store) init() error {
 	if err := s.ensureColumn("campaign_runs", "warchest", "INTEGER NOT NULL DEFAULT 0"); err != nil {
 		return err
 	}
-	if err := s.ensureColumn("campaign_runs", "source_url", "TEXT NOT NULL DEFAULT ''"); err != nil {
-		return err
-	}
 	if err := s.ensureColumn("campaign_runs", "players", "INTEGER NOT NULL DEFAULT 0"); err != nil {
 		return err
 	}
@@ -275,10 +267,19 @@ func (s *Store) init() error {
 	if err := s.ensureColumn("campaign_runs", "battle_claim_scenario", "TEXT NOT NULL DEFAULT ''"); err != nil {
 		return err
 	}
-	// The run's hangar, as MekBay saves a force (hangar.go). Before it, the hangar was a force in MekBay (hangar_url, hangar_instance and source_url, which only
-	// the one-time import still reads).
+	// The run's hangar, as MekBay saves a force (hangar.go).
 	if err := s.ensureColumn("campaign_runs", "hangar", "TEXT NOT NULL DEFAULT ''"); err != nil {
 		return err
+	}
+	// Before hangars lived in the database, a run's hangar was a force in MekBay (hangar_url, hangar_instance, source_url), each checkpoint held a frozen copy
+	// of it there (hangar_copy), and pages read a cached copy (hangar_cache). A one-time import brought them all in; what it read is dropped.
+	for _, c := range [][2]string{{"campaign_runs", "hangar_url"}, {"campaign_runs", "hangar_instance"}, {"campaign_runs", "source_url"}, {"campaign_checkpoints", "hangar_copy"}} {
+		if err := s.dropColumn(c[0], c[1]); err != nil {
+			return err
+		}
+	}
+	if _, err := s.db.Exec(`DROP TABLE IF EXISTS hangar_cache`); err != nil {
+		return fmt.Errorf("drop the hangar cache: %w", err)
 	}
 	if err := s.ensureColumn("scenario_completions", "outcome", "TEXT NOT NULL DEFAULT ''"); err != nil {
 		return err
@@ -328,6 +329,18 @@ func (s *Store) ensureColumn(table, column, definition string) error {
 	}
 	_, err = s.db.Exec("ALTER TABLE " + table + " ADD COLUMN " + column + " " + definition)
 	return err
+}
+
+// dropColumn drops a column a table no longer has a use for, if it is there.
+func (s *Store) dropColumn(table, column string) error {
+	has, err := s.columnExists(table, column)
+	if err != nil || !has {
+		return err
+	}
+	if _, err := s.db.Exec("ALTER TABLE " + table + " DROP COLUMN " + column); err != nil {
+		return fmt.Errorf("drop %s.%s: %w", table, column, err)
+	}
+	return nil
 }
 
 // OpenSQLite opens (creating if needed) the SQLite database at path and applies the schema.

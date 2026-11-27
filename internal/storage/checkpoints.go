@@ -176,6 +176,10 @@ func (s *Store) AddCheckpoint(ctx context.Context, playthroughID, campaign, labe
 	return tx.Commit()
 }
 
+// snapshotWithHangar matches (LIKE) a checkpoint snapshot whose run row holds a hangar: snapshots are JSON with sorted keys, the hangar a JSON object kept as a
+// string, so its first characters are always `"hangar":"{`. (A snapshot from before hangars were stored here has "hangar":"" or no hangar at all.)
+const snapshotWithHangar = `%"hangar":"{%`
+
 // Checkpoints lists a campaign's rollback points, newest first (without their snapshots).
 func (s *Store) Checkpoints(ctx context.Context, playthroughID, campaign string) ([]Checkpoint, error) {
 	rows, err := s.db.QueryContext(ctx, s.q(`SELECT seq, label, created_at, history_seq, CASE WHEN snapshot LIKE ? THEN 1 ELSE 0 END FROM campaign_checkpoints
@@ -243,10 +247,18 @@ func (s *Store) RestoreCheckpoint(ctx context.Context, playthroughID, campaign s
 		}
 	}
 	for _, t := range snapshotTables {
+		// A snapshot holds the columns its table had when it was taken: one a later version dropped is left out (a checkpoint from before hangars lived in
+		// the database still names hangar_instance, say).
+		have, err := tableColumns(ctx, tx, t.table)
+		if err != nil {
+			return err
+		}
 		for _, row := range snap[t.table] {
 			cols := make([]string, 0, len(row))
 			for k := range row {
-				cols = append(cols, k)
+				if have[k] {
+					cols = append(cols, k)
+				}
 			}
 			sort.Strings(cols)
 			args := make([]any, len(cols))
@@ -268,4 +280,22 @@ func (s *Store) RestoreCheckpoint(ctx context.Context, playthroughID, campaign s
 		return err
 	}
 	return tx.Commit()
+}
+
+// tableColumns is the set of a table's columns as it is now (works the same on SQLite and Postgres: an empty query's column names).
+func tableColumns(ctx context.Context, tx *sql.Tx, table string) (map[string]bool, error) {
+	rows, err := tx.QueryContext(ctx, "SELECT * FROM "+table+" WHERE 1 = 0")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	names, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]bool, len(names))
+	for _, n := range names {
+		out[n] = true
+	}
+	return out, nil
 }
