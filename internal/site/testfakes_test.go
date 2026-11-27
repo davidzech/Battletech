@@ -57,6 +57,7 @@ type fakeMekBay struct {
 	battleDeletes []string
 	copyErr       error
 	commitErr     error
+	committed     mekbay.HangarForce // what CommitBattle answers as the hangar it saved (f.hangar when it has no units)
 }
 
 func (f *fakeMekBay) ReadHangar(context.Context, string) (mekbay.HangarForce, error) {
@@ -121,15 +122,18 @@ func (f *fakeMekBay) StartBattle(_ context.Context, req mekbay.BattleRequest) (m
 	return res, nil
 }
 
-// CommitBattle records what it was asked to write back.
-func (f *fakeMekBay) CommitBattle(_ context.Context, req mekbay.CommitBattleRequest) (mekbay.CommitBattleReport, error) {
+// CommitBattle records what it was asked to write back, and answers committed (or the hangar) as the hangar it saved.
+func (f *fakeMekBay) CommitBattle(_ context.Context, req mekbay.CommitBattleRequest) (mekbay.CommitBattleReport, mekbay.HangarForce, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.commits = append(f.commits, req)
 	if f.commitErr != nil {
-		return mekbay.CommitBattleReport{}, f.commitErr
+		return mekbay.CommitBattleReport{}, mekbay.HangarForce{}, f.commitErr
 	}
-	return mekbay.CommitBattleReport{Matched: 1}, nil
+	if len(f.committed.Units) > 0 {
+		return mekbay.CommitBattleReport{Matched: 1}, f.committed, nil
+	}
+	return mekbay.CommitBattleReport{Matched: 1}, f.hangar, nil
 }
 
 // CopyForce and DeleteForce record what they were asked.

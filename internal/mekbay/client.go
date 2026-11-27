@@ -106,7 +106,8 @@ type MekBay interface {
 	// ReadBattle reads an operation and every force in it, anonymously, for the battle's live status.
 	ReadBattle(ctx context.Context, operationID string) (BattleStatus, error)
 	// CommitBattle writes the units' state from a finished battle back into the matching hangar units (see commit.go).
-	CommitBattle(ctx context.Context, req CommitBattleRequest) (CommitBattleReport, error)
+	// It returns the hangar as saved (the zero HangarForce when nothing matched and nothing was saved).
+	CommitBattle(ctx context.Context, req CommitBattleRequest) (CommitBattleReport, HangarForce, error)
 	// CopyForce saves a copy of one of the owner's forces under another instance ID (checkpoints, see checkpoint.go).
 	CopyForce(ctx context.Context, req CopyRequest) error
 	// DeleteForce deletes forces of the owner's (best effort).
@@ -360,7 +361,7 @@ func (s *Session) saveForce(ctx context.Context, force map[string]any, now time.
 }
 
 // editForce reads one of the owner's forces, changes it with edit and saves it, on one connection. It is how every change to the site's copy of a hangar is
-// made (repairs, rearms, purchases, sales, swaps).
+// made (repairs, rearms, purchases, sales, swaps, battle write-backs).
 //
 // It returns the force as it was saved, read the way a live read reads it, so the site can keep its cached copy current without reading MekBay again.
 func (c *Client) editForce(ctx context.Context, owner, instance string, edit func(force map[string]any, now time.Time) error) (HangarForce, error) {
