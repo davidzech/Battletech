@@ -10,6 +10,8 @@
 // externalUrl (a https://mekbay.com/ link) adds an "opens in a new tab" button at the right of the row. It is opt-in: the deploy popup's rows are
 // checkbox labels and have none.
 (function () {
+  // The icon URLs this page has loaded, so a redrawn row shows its icon at once (see build).
+  var shownIcons = {};
   // Small icons for the tonnage and pilot chips, drawn for this site.
   var WEIGHT = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.2 9h9.6l2.4 11H4.8z"/><circle cx="12" cy="5.8" r="2.6"/></svg>';
   var HELMET = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 13.5a8.5 8.5 0 0 1 17 0V20h-5v-3.5h-7V20h-5z"/></svg>';
@@ -177,8 +179,13 @@
     var img = document.createElement('img');
     img.className = 'mr-icon';
     img.alt = '';
-    img.loading = 'lazy';
-    img.decoding = 'async';
+    // A long list loads its icons lazily, but an icon this page has already shown is drawn at once: a lazy, async-decoded image is blank for a frame
+    // or two even from the cache, so every list that redraws its rows (the Deploy wizard, the unit search) made its icons flash.
+    if (!u.icon || !shownIcons[u.icon]) {
+      img.loading = 'lazy';
+      img.decoding = 'async';
+      if (u.icon) img.addEventListener('load', function () { shownIcons[u.icon] = true; }, { once: true });
+    }
     if (u.icon) img.src = u.icon;
     row.appendChild(img);
 

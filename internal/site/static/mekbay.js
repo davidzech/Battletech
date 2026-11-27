@@ -367,19 +367,57 @@
     box.disabled = unavailable || (!cur().selected[u.id] && countOf(step) >= roomFor(step));
     box.addEventListener('change', function () {
       touched = true;
+      var reconfigured = !!variants[u.id];
       if (box.checked) cur().selected[u.id] = true; else { delete cur().selected[u.id]; delete cur().crew[u.id]; delete variants[u.id]; } // a mech not being taken has no pilot, and is back on its own variant
       error.textContent = '';
-      render();
+      ticked(u.id, reconfigured);
     });
     label.appendChild(box);
     var shown = labelled(effective(u));
-    label.appendChild(MechRow.build(pilots.length ? viewOf(shown) : shown)); // the pilot's skills are shown in the slot
+    var mech = MechRow.build(pilots.length ? viewOf(shown) : shown); // the pilot's skills are shown in the slot
+    label.appendChild(mech);
     li.appendChild(label);
+    var place = null;
     if (pilots.length) {
       li.classList.add('has-slot');
-      li.appendChild(slot(u, unavailable));
+      place = slot(u, unavailable);
+      li.appendChild(place);
     }
+    rows[u.id] = { u: u, li: li, box: box, mech: mech, slot: place, unavailable: unavailable };
     return li;
+  }
+
+  // The list's rows by unit ID, so ticking a mech can update the list in place: rebuilding every row on each tick made the icons and portraits flash.
+  var rows = {};
+
+  // ticked updates the list after a mech is taken or put back, keeping every row that hasn't changed. The ticked row takes its new state (and, if it
+  // was reconfigured, its own variant back); for the others only the tickbox and an empty slot can change, when the unit limit is reached or freed (a
+  // filled slot belongs to a taken mech, which a tick elsewhere leaves alone).
+  function ticked(id, reconfigured) {
+    if (typeof MechRow.hideTip === 'function') MechRow.hideTip(); // the ticked row's slot is about to be replaced, so a card open on it would point at nothing
+    var full = countOf(step) >= roomFor(step);
+    Object.keys(rows).forEach(function (k) {
+      var r = rows[k];
+      if (!r.li.isConnected) { delete rows[k]; return; }
+      var taken = !!cur().selected[k];
+      r.li.classList.toggle('picked', taken);
+      r.box.checked = taken;
+      r.box.disabled = r.unavailable || (!taken && full);
+      if (k === id && reconfigured) {
+        var shown = labelled(effective(r.u));
+        var mech = MechRow.build(pilots.length ? viewOf(shown) : shown);
+        r.mech.replaceWith(mech);
+        r.mech = mech;
+      }
+      if (r.slot && (k === id || !taken)) {
+        var place = slot(r.u, r.unavailable);
+        r.slot.replaceWith(place);
+        r.slot = place;
+      }
+    });
+    setMeter();
+    renderTray();
+    renderFooter();
   }
 
   // ---- Showing a step
@@ -771,6 +809,7 @@
     if (typeof MechRow.hideTip === 'function') MechRow.hideTip(); // the pilot elements are about to be replaced, so a card open on one would point at nothing
     renderPlayers();
     list.textContent = '';
+    rows = {};
     review.hidden = true;
     stepTitle.hidden = true;
     opActions.hidden = !finished;
