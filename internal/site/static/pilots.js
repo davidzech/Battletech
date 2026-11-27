@@ -154,13 +154,20 @@
       if (e.target !== e.currentTarget) return; // only the dialog's own submit (Apply), never a form nested in it
       if (!current || apply.disabled) return;
       var parts = ['pilot=' + encodeURIComponent(current.id)];
-      ladders.forEach(function (l) { parts.push(l.key + '=' + current.sp[l.key]); });
-      apply.disabled = true;
-      post('/api/pilots/allocate', parts.join('&')).then(function (res) {
-        if (res.ok) { dirty = true; dialog.close(); return; }
-        apply.disabled = false;
-        return res.text().then(function (t) { spError.textContent = t.trim() || 'Could not save the SP.'; });
-      }, function () { apply.disabled = false; spError.textContent = 'Could not reach the server.'; });
+      var spent = 0;
+      ladders.forEach(function (l) { parts.push(l.key + '=' + current.sp[l.key]); spent += current.sp[l.key]; });
+      // Spending SP is permanent, so it is confirmed first; the confirmation saves it and closes on success.
+      Confirm.ask({
+        title: 'Spend ' + Dom.commas(spent) + ' SP on ' + current.name + '?',
+        message: 'Allocating SP is permanent and can\u2019t be undone.',
+        confirmLabel: 'Apply', busyLabel: 'Applying',
+        action: function () {
+          return post('/api/pilots/allocate', parts.join('&')).then(function (res) {
+            if (res.ok) return '';
+            return res.text().then(function (t) { return t.trim() || 'Could not save the SP.'; });
+          }, function () { return 'Could not reach the server.'; });
+        }
+      }).then(function (ok) { if (ok) { dirty = true; dialog.close(); } });
     });
   }
 
@@ -354,6 +361,15 @@
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitRanks); // the display font changes the widths when it arrives
   window.addEventListener('resize', fitRanks);
 
+  // An open More menu closes on a click anywhere else or on Escape.
+  document.addEventListener('click', function (e) {
+    box.querySelectorAll('details.more[open]').forEach(function (d) { if (!d.contains(e.target)) d.open = false; });
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    box.querySelectorAll('details.more[open]').forEach(function (d) { d.open = false; d.querySelector('summary').focus(); });
+  });
+
   box.querySelectorAll('li.pilot').forEach(function (li) {
     var id = li.dataset.pilot;
     var skillBtn = li.querySelector('.skill-pick');
@@ -371,6 +387,26 @@
     }
     var manage = li.querySelector('.pilot-sp');
     if (manage && dialog) manage.addEventListener('click', function () { openSP(li); });
+
+    // More: Dismiss. The pilot leaves the force for good (not to the memorial): their record and all their SP are deleted, after a confirmation.
+    var more = li.querySelector('details.more');
+    var dismiss = li.querySelector('.pilot-dismiss');
+    if (more && dismiss) {
+      dismiss.addEventListener('click', function () {
+        more.open = false;
+        Confirm.ask({
+          title: 'Dismiss ' + li.dataset.name + '?',
+          message: li.dataset.name + ' leaves the force for good. They don\u2019t go to the memorial: their record and all of their SP are deleted, and their slot is freed. This cannot be undone.',
+          confirmLabel: 'Dismiss pilot', danger: true, busyLabel: 'Dismissing',
+          action: function () {
+            return post('/api/pilots/dismiss', 'pilot=' + encodeURIComponent(li.dataset.pilot)).then(function (res) {
+              if (res.ok) return '';
+              return res.text().then(function (t) { return t.trim() || 'Could not dismiss the pilot.'; });
+            }, function () { return 'Could not reach the server.'; });
+          }
+        }).then(function (ok) { if (ok) location.reload(); });
+      });
+    }
 
     var portraitBtn = li.querySelector('button.portrait-btn');
     if (portraitBtn) {

@@ -198,3 +198,43 @@ test('recruits a pilot for SP from the warchest', async ({ page }) => {
   await expect(page.locator('li.pilot', { hasText: 'Jarek' })).toBeVisible();
   await expect.poll(() => warchest(page)).toBe('4200');
 });
+
+// Applying SP asks first, since an allocation is permanent: Cancel saves nothing, Apply saves it.
+test('applying SP asks for a confirmation', async ({ page }) => {
+  await newAccount(page);
+  await startCampaign(page, 'refusalwar', ['Alrek', 'Katarina'], STARTING);
+  await page.goto('/refusalwar/manage/');
+  const card = page.locator('li.pilot', { hasText: 'Alrek' });
+  const id = await card.getAttribute('data-pilot');
+  // 250 SP earned, 150 allocated at the start: 100 to spend.
+  const res = await page.request.post('/api/pilots/total', { form: { campaign: 'refusalwar', pilot: id, total: '250' } });
+  expect(res.ok()).toBeTruthy();
+  await page.reload();
+  await card.locator('.pilot-sp').click();
+  const sp = page.locator('#sp-dialog');
+  await sp.locator('.alloc-row input[type=number]').first().fill('150'); // Gunnery from 90 to 150
+  await sp.locator('#sp-apply').click();
+  const ask = page.getByRole('dialog', { name: 'Spend 60 SP on Alrek?' });
+  await expect(ask).toContainText('permanent');
+  await ask.getByRole('button', { name: 'Cancel' }).click();
+  await expect(sp).toBeVisible();
+  await sp.locator('#sp-apply').click();
+  await ask.getByRole('button', { name: 'Apply' }).click();
+  await expect(card.locator('.pilot-stat.unalloc')).toContainText('40');
+});
+
+// More, Dismiss: after a confirmation the pilot leaves the force for good (no memorial).
+test('dismisses a pilot from the More menu', async ({ page }) => {
+  await newAccount(page);
+  await startCampaign(page, 'refusalwar', ['Alrek', 'Katarina'], STARTING);
+  await page.goto('/refusalwar/manage/');
+  const card = page.locator('li.pilot', { hasText: 'Katarina' });
+  await card.locator('details.more > summary').click();
+  await card.getByRole('button', { name: 'Dismiss' }).click();
+  const ask = page.getByRole('dialog', { name: 'Dismiss Katarina?' });
+  await expect(ask).toContainText('don’t go to the memorial');
+  await ask.getByRole('button', { name: 'Dismiss pilot' }).click();
+  await expect(page.locator('li.pilot', { hasText: 'Katarina' })).toHaveCount(0);
+  await expect(page.locator('li.pilot', { hasText: 'Alrek' })).toHaveCount(1);
+  await expect(page.getByText('Memorial')).toHaveCount(0);
+});

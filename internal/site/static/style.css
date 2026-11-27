@@ -453,8 +453,21 @@ button.portrait-btn:hover, button.portrait-btn:focus-visible { border-color: var
 .portrait-edit { position: absolute; left: 0; right: 0; bottom: 0; padding: 0.15rem 0; text-align: center; background: rgba(0, 0, 0, 0.7); color: var(--accent); font: 700 0.65rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; opacity: 0; transition: opacity 0.15s; }
 button.portrait-btn:hover .portrait-edit, button.portrait-btn:focus-visible .portrait-edit { opacity: 1; }
 @media (hover: none) { .portrait-edit { opacity: 1; } }
-.pilot-card { display: flex; gap: 1rem; align-items: flex-start; }
-.pilot-main { flex: 1; min-width: 0; }
+/* A pilot card is a grid: the portrait and rank in the first column, spanning the rows of the name and the stat boxes, so the rank plate (pushed to the bottom
+   of that span) ends exactly where the stat boxes do. The card's other parts (Edge abilities, the actions) run under them in the second column. */
+.pilot-card { display: grid; grid-template-columns: 8rem minmax(0, 1fr); column-gap: 1rem; align-items: start; }
+.pilot-card > .pilot-main { display: contents; }
+.pilot-card > .pilot-main > * { grid-column: 2; min-width: 0; } /* min-width: grid items would not shrink below their content (the stat boxes on a phone) */
+.pilot-card > .pilot-side { grid-column: 1; grid-row: 1 / span 2; align-self: stretch; margin-bottom: 0.5rem; } /* the stat boxes' bottom margin, so the bottoms meet */
+.pilot-card > .pilot-side .rank-label { margin-top: auto; }
+/* The stat boxes fill their row: when the portrait and rank are the taller of the two, the row grows and the boxes grow with it, so the bottoms still meet. */
+.pilot-card > .pilot-main > .stat-boxes { align-self: stretch; }
+/* On a phone: a narrower portrait column, and the four stat boxes two by two, so the card fits the screen. */
+@media (max-width: 40rem) {
+  .pilot-card { grid-template-columns: 6rem minmax(0, 1fr); column-gap: 0.75rem; }
+  .pilot-card > .pilot-side { width: auto; }
+  .pilot-card .stat-boxes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 .pilot.fallen .portrait-btn img { filter: grayscale(1); opacity: 0.6; }
 dialog.portrait-dialog { width: min(46rem, calc(100vw - 2rem)); }
 .portrait-scroll { max-height: min(60vh, 34rem); overflow-y: auto; margin: 0.5rem 0 0.75rem; padding-right: 0.25rem; }
@@ -1114,6 +1127,27 @@ dialog.confirm-dialog.danger h2 { color: #ff8d83; }
 .pilot-side { display: flex; flex-direction: column; gap: 0.35rem; width: 8rem; flex: none; }
 .rank-label { display: block; width: 100%; padding: 0.3rem 0.2rem; text-align: center; font: 700 0.62rem/1.2 var(--display); letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap; overflow: hidden; } /* never wraps; pilots.js shrinks a rank that is still too long */
 .rank-label { color: var(--muted); }
+/* On a pilot card the rank sits on a small plate, as it did when it was a button (no longer one: ranks change in Advanced Management or by promotion). */
+.pilot-side .rank-label { color: var(--text); background: var(--bg); border: 1px solid var(--line); }
+
+/* Manage SP and More sit together as one split button: Manage SP solid yellow, More hollow yellow. Both have the same fixed height and a centred label so
+   they line up to the pixel. The hollow outline is a yellow clipped shape with a clipped inner fill (::before), so the cut corner keeps its border. */
+.pilot-actions .pilot-sp, details.more > summary { box-sizing: border-box; height: 2.5rem; display: inline-flex; align-items: center; margin: 0; line-height: 1; }
+.pilot-actions .pilot-sp { clip-path: none; }
+details.more { position: relative; display: flex; }
+details.more > summary { list-style: none; cursor: pointer; padding: 0 1rem; position: relative; font: 700 0.9rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); background: var(--accent); clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%); user-select: none; }
+details.more > summary::before { content: ""; position: absolute; inset: 2px; z-index: -1; background: var(--panel); clip-path: polygon(0 0, calc(100% - 8.83px) 0, 100% 8.83px, 100% 100%, 0 100%); transition: background-color 0.12s; }
+details.more > summary::-webkit-details-marker { display: none; }
+details.more > summary::after { content: ""; display: inline-block; margin-left: 0.5rem; vertical-align: 0.12em; border: 0.3rem solid transparent; border-top-color: currentColor; border-bottom-width: 0; transition: transform 0.15s; }
+details.more[open] > summary::after { transform: rotate(180deg); }
+details.more > summary:hover::before, details.more[open] > summary::before, details.more > summary:focus-visible::before { background: color-mix(in srgb, var(--accent) 16%, var(--panel)); }
+details.more > summary:focus-visible { outline: none; }
+.more-menu { position: absolute; z-index: 5; top: calc(100% + 0.25rem); left: 0; min-width: 14rem; padding: 0.25rem; background: var(--panel-2); border: 1px solid var(--line); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.6); }
+/* Dismiss deletes the pilot for good, so it looks like a dire action: red, with a warning icon and a red edge. */
+.more-menu button.pilot-dismiss { display: flex; align-items: center; gap: 0.6rem; width: 100%; padding: 0.65rem 0.8rem; text-align: left; font: 700 0.85rem var(--display); letter-spacing: 0.08em; text-transform: uppercase; color: #ff8d83; background: rgba(229, 89, 79, 0.08); border: 0; border-left: 3px solid #e5594f; cursor: pointer; }
+.more-menu button.pilot-dismiss svg { flex: none; }
+.more-menu button.pilot-dismiss:hover, .more-menu button.pilot-dismiss:focus-visible { color: #fff; background: #c0392b; outline: none; }
+@media (prefers-reduced-motion: reduce) { details.more > summary::before, details.more > summary::after { transition: none; } }
 dialog select { display: block; width: 100%; margin-top: 0.4rem; padding: 0.55rem 0.7rem; font: 700 1rem var(--display); letter-spacing: 0.05em; color: var(--text); background: var(--bg); border: 1px solid var(--line); }
 dialog select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 
@@ -1482,7 +1516,7 @@ dialog button.deploy-count[aria-pressed="true"] { color: var(--accent-ink); back
 .overview-players-pick { display: inline-flex; margin-top: 0.3rem; }
 .overview-players button.deploy-count { min-width: 2.6rem; padding: 0.35rem 0.8rem; font: 700 0.95rem var(--display); letter-spacing: 0.05em; color: var(--text); background: var(--bg); border: 1px solid var(--line); cursor: pointer; }
 .overview-players button.deploy-count + button.deploy-count { border-left: 0; }
-.overview-players button.deploy-count:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
+.overview-players button.deploy-count:hover:not(:disabled):not([aria-pressed="true"]) { color: var(--accent); border-color: var(--accent); } /* not the chosen one: yellow on its yellow would hide the number */
 .overview-players button.deploy-count[aria-pressed="true"] { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
 dialog button.deploy-count:disabled, .overview-players button.deploy-count:disabled { opacity: 0.4; cursor: not-allowed; }
 .overview .form-error:empty { display: none; }

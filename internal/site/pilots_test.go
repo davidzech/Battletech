@@ -142,7 +142,7 @@ func TestNamedPilotsFlow(t *testing.T) {
 	if got := post(t, srv, "/api/pilots/allocate", pilots("pilot", ps[1].ID, "earned", "100"), cookie, srv.URL).StatusCode; got != http.StatusNotFound {
 		t.Errorf("SP earned by the fallen: %d", got)
 	}
-	if c := body(t, srv, "/refusalwar/manage/", cookie); !strings.Contains(c, "Killed in Action") || !strings.Contains(c, `class="rec-revive"`) || !strings.Contains(c, `class="rec-kia"`) || strings.Contains(c, `details class="more"`) || strings.Contains(c, `id="pilot-add"`) {
+	if c := body(t, srv, "/refusalwar/manage/", cookie); !strings.Contains(c, "Killed in Action") || !strings.Contains(c, `class="rec-revive"`) || !strings.Contains(c, `class="rec-kia"`) || strings.Contains(c, `id="pilot-add"`) {
 		t.Fatalf("a fallen pilot should show, and free a place: %.3000s", c)
 	}
 	if r := post(t, srv, "/api/pilots", pilots("name", "Replacement"), cookie, srv.URL); r.StatusCode != http.StatusNoContent {
@@ -559,6 +559,50 @@ func TestReviveAndDeletePilots(t *testing.T) {
 		if p.ID == a.ID || p.ID == b.ID {
 			t.Errorf("deleted pilot is still there: %+v", p)
 		}
+	}
+}
+
+// Dismissing a living pilot (the card's More menu) removes them for good: not to the memorial, their slot freed, and a pilot line in the History. A pilot in
+// the memorial can't be dismissed.
+func TestDismissPilot(t *testing.T) {
+	srv, store, cookie := startedCompany(t)
+	ctx := context.Background()
+	id := playthroughID("wolfpack2026")
+	ps, _ := store.Pilots(ctx, id, "refusalwar")
+	a, b := ps[0], ps[1]
+	form := func(pl string) url.Values { return url.Values{"campaign": {"refusalwar"}, "pilot": {pl}} }
+	do := func(pl string) int { return post(t, srv, "/api/pilots/dismiss", form(pl), cookie, srv.URL).StatusCode }
+
+	if got := post(t, srv, "/api/pilots/dismiss", form(a.ID), cookie, "https://evil.example").StatusCode; got != http.StatusForbidden {
+		t.Errorf("cross-origin: %d", got)
+	}
+	if got := do("no-such-pilot"); got != http.StatusNotFound {
+		t.Errorf("an unknown pilot: %d", got)
+	}
+	if got := do(a.ID); got != http.StatusNoContent {
+		t.Fatalf("dismiss: %d", got)
+	}
+	ps, _ = store.Pilots(ctx, id, "refusalwar")
+	if len(ps) != 1 || ps[0].ID != b.ID {
+		t.Errorf("the dismissed pilot is gone, the other stays: %+v", ps)
+	}
+	page := body(t, srv, "/refusalwar/manage/", cookie)
+	if strings.Contains(page, "Memorial") || strings.Contains(page, `data-pilot="`+a.ID) {
+		t.Error("a dismissed pilot is not in the memorial or the records")
+	}
+	entries, _ := store.History(ctx, id, "refusalwar")
+	if last := entries[len(entries)-1]; last.Kind != storage.HistoryPilot || last.Text != a.Name+" was dismissed from the force." {
+		t.Errorf("the history line: %+v", last)
+	}
+	if got := do(a.ID); got != http.StatusNotFound {
+		t.Errorf("dismissing twice: %d", got)
+	}
+	// A pilot Killed in Action stays in the memorial.
+	if got := post(t, srv, "/api/pilots/fallen", form(b.ID), cookie, srv.URL).StatusCode; got != http.StatusNoContent {
+		t.Fatal(got)
+	}
+	if got := do(b.ID); got != http.StatusConflict {
+		t.Errorf("dismissing a pilot in the memorial: %d", got)
 	}
 }
 

@@ -379,6 +379,33 @@ func (s *Server) deletePilot(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// dismissPilot is the pilot card's Dismiss: a living pilot leaves the force for good. Unlike a pilot Killed in Action they don't go to the memorial: their
+// record and all their SP are deleted (as Advanced Management's delete does), which frees their slot and portrait. A pilot in the memorial can't be dismissed.
+func (s *Server) dismissPilot(w http.ResponseWriter, r *http.Request) {
+	pt, c, ok := s.pilotRequest(w, r)
+	if !ok {
+		return
+	}
+	p, found := s.pilotByID(r, pt.ID, c.Slug, r.PostFormValue("pilot"))
+	if !found {
+		http.Error(w, "No such pilot.", http.StatusNotFound)
+		return
+	}
+	if p.Fallen {
+		http.Error(w, p.Name+" was Killed in Action: they stay in the memorial.", http.StatusConflict)
+		return
+	}
+	if err := s.store.DeletePilot(r.Context(), pt.ID, c.Slug, p.ID); errors.Is(err, sql.ErrNoRows) {
+		http.Error(w, "No such pilot.", http.StatusNotFound)
+		return
+	} else if err != nil {
+		http.Error(w, "could not dismiss the pilot", http.StatusInternalServerError)
+		return
+	}
+	s.logHistory(r, pt.ID, c.Slug, storage.HistoryPilot, 0, p.Name+" was dismissed from the force.")
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // maxTotalSP keeps a typo from setting an absurd total.
 const maxTotalSP = 1000000
 
