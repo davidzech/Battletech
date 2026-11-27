@@ -1405,10 +1405,16 @@ dialog input.themed-box:focus, dialog .themed-check input:focus { outline: none;
 .deploy-head h2 { margin: 0; }
 .deploy-head .deploy-meter { margin: 0 0 0 auto; }
 /* The BV bar under the force total (mekbay.js bvBar): the force's BV against the limit, this player's share bright and the other players' dimmer; red when over. */
-.bv-total { display: inline-flex; flex-direction: column; }
-.bv-bar { display: flex; height: 0.4rem; margin-top: 0.3rem; overflow: hidden; background: var(--bg); border: 1px solid var(--line); }
-.bv-bar-others { background: color-mix(in srgb, var(--accent) 40%, var(--bg)); }
-.bv-bar-fill { background: var(--accent); }
+/* A force total and its bar (mekbay.js withBar): the box is as wide as the text at its longest (the invisible sizer line), the bar fills it, and the text sits at
+   its right in the head (under the meter's right edge) and at its left on the review. Tabular digits keep the figures' width steady. */
+.bv-total { display: inline-grid; font-variant-numeric: tabular-nums; }
+.bv-sizer { height: 0; overflow: hidden; visibility: hidden; white-space: nowrap; }
+.bv-text { justify-self: start; white-space: nowrap; }
+.deploy-head .bv-text { justify-self: end; }
+.bv-bar { display: flex; width: 100%; height: 0.4rem; margin-top: 0.3rem; overflow: hidden; background: var(--bg); border: 1px solid var(--line); }
+.bv-bar-others { background: color-mix(in srgb, var(--accent) 40%, var(--bg)); transition: width 0.3s ease; }
+.bv-bar-fill { background: var(--accent); transition: width 0.3s ease, background-color 0.3s ease; }
+@media (prefers-reduced-motion: reduce) { .bv-bar-others, .bv-bar-fill { transition: none; } }
 .bv-bar.over .bv-bar-fill { background: #ff7a59; }
 .deploy-players { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; margin: 0.6rem 0 0.2rem; }
 .deploy-head .deploy-players { margin: 0; }

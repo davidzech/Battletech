@@ -461,29 +461,48 @@
   // The meter: on a player step, what this player has taken and the force total against the limit (two figures, set apart); with one player, one figure.
   // The BV bar under a force total: how much of the scenario's BV limit the force takes. With several players, others is what the other players have taken,
   // drawn dimmer before this player's share; over the limit the bar is full and red.
-  function bvBar(total, others) {
-    var bar = el('span', 'bv-bar' + (total > limit ? ' over' : ''));
+  // The meter and the review are drawn afresh on every change, and a new element has nothing to animate from: so each bar (by key) starts at the widths it was
+  // last drawn with and moves to its new ones a frame later, which the stylesheet's transition animates.
+  var barWidths = {};
+  function bvBar(key, total, others) {
+    var over = total > limit;
+    var bar = el('span', 'bv-bar' + (over ? ' over' : ''));
     bar.setAttribute('role', 'meter');
     bar.setAttribute('aria-label', 'Force BV against the limit');
     bar.setAttribute('aria-valuemin', '0');
     bar.setAttribute('aria-valuemax', String(limit));
     bar.setAttribute('aria-valuenow', String(total));
     var pct = function (n) { return Math.max(0, Math.min(100, (n / limit) * 100)) + '%'; };
-    if (others > 0 && total <= limit) {
-      var o = el('span', 'bv-bar-others');
-      o.style.width = pct(others);
-      bar.appendChild(o);
-    }
-    var mine = el('span', 'bv-bar-fill');
-    mine.style.width = total > limit ? '100%' : pct(total - (others > 0 ? others : 0));
+    var to = over ? ['0%', '100%'] : [pct(others > 0 ? others : 0), pct(total - (others > 0 ? others : 0))];
+    var from = barWidths[key] || to;
+    barWidths[key] = to;
+    var o = el('span', 'bv-bar-others'), mine = el('span', 'bv-bar-fill');
+    o.style.width = from[0];
+    mine.style.width = from[1];
+    bar.appendChild(o);
     bar.appendChild(mine);
+    if (from[0] !== to[0] || from[1] !== to[1]) {
+      requestAnimationFrame(function () {
+        void bar.offsetWidth; // the starting widths are laid out first, so the change is a transition
+        o.style.width = to[0];
+        mine.style.width = to[1];
+      });
+    }
     return bar;
   }
 
-  // A force total's text with its BV bar under it, as wide as the text (no bar without a BV limit).
-  function withBar(text, total, others) {
-    var box = el('span', 'bv-total', text);
-    if (limit > 0) box.appendChild(bvBar(total, others));
+  // A force total's text with its BV bar under it (no bar without a BV limit). The text's length changes with its numbers, so the box is sized to the text at
+  // its longest, widest (made by the caller with every BV at 99,999 and every count at 99: no mission's BV goes past five figures), kept as an invisible line.
+  // The bar fills that width, so its scale and its edges stay put as mechs are taken. key names the bar, so it animates from where it was (see bvBar).
+  function withBar(key, text, widest, total, others) {
+    var box = el('span', 'bv-total');
+    if (limit > 0) {
+      var sizer = el('span', 'bv-sizer', widest);
+      sizer.setAttribute('aria-hidden', 'true');
+      box.appendChild(sizer);
+    }
+    box.appendChild(el('span', 'bv-text', text));
+    if (limit > 0) box.appendChild(bvBar(key, total, others));
     return box;
   }
 
@@ -495,9 +514,11 @@
     meter.textContent = '';
     if (playerCount > 1) {
       meter.appendChild(el('span', null, 'This player: ' + countOf(step) + ' selected · ' + fmt(bvOf(step)) + ' BV'));
-      meter.appendChild(withBar('Force total: ' + (unitLimit ? mechs(totalCount()) + ' · ' : '') + fmt(total) + limitText, total, total - bvOf(step)));
+      meter.appendChild(withBar('meter', 'Force total: ' + (unitLimit ? mechs(totalCount()) + ' · ' : '') + fmt(total) + limitText,
+        'Force total: ' + (unitLimit ? mechs(99) + ' · ' : '') + '99,999' + limitText, total, total - bvOf(step)));
     } else {
-      meter.appendChild(withBar((unitLimit ? mechs(countOf(0)) : countOf(0) + ' selected') + ' · ' + fmt(total) + limitText, total, 0));
+      meter.appendChild(withBar('meter', (unitLimit ? mechs(countOf(0)) : countOf(0) + ' selected') + ' · ' + fmt(total) + limitText,
+        (unitLimit ? mechs(99) : '99 selected') + ' · 99,999' + limitText, total, 0));
     }
     meter.classList.toggle('over', over());
     // The scenario's own rules, in words, and what is still missing.
@@ -579,7 +600,8 @@
     var count = 0;
     data.forEach(function (pl) { count += pl.units.length; });
     var total = el('p', 'deploy-review-total' + ((limit > 0 && tot > limit) || (unitLimit > 0 && count > unitLimit) ? ' over' : ''));
-    total.appendChild(withBar('Force total: ' + (unitLimit ? count + ' / ' + unitLimit + ' mechs · ' : '') + fmt(tot) + (limit ? ' / ' + fmt(limit) : '') + ' BV', tot, 0));
+    total.appendChild(withBar('review', 'Force total: ' + (unitLimit ? count + ' / ' + unitLimit + ' mechs · ' : '') + fmt(tot) + (limit ? ' / ' + fmt(limit) : '') + ' BV',
+      'Force total: ' + (unitLimit ? '99 / ' + unitLimit + ' mechs · ' : '') + '99,999' + (limit ? ' / ' + fmt(limit) : '') + ' BV', tot, 0));
     review.appendChild(total);
     // The drop cost: what reconfiguring the hangar's omnimechs costs, paid by Start battle.
     var cost = dropCost();
@@ -1002,6 +1024,7 @@
     plans = [];
     variants = {};
     commander = '';
+    barWidths = {}; // a fresh deploy's bars start where they are, not where the last one left them
     if (cachedData && cachedData.units) {
       apply(cachedData); // instant
     } else {
