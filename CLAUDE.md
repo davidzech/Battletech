@@ -41,7 +41,7 @@ Conventions:
 - Every endpoint that changes a campaign logs a history line once the change is made (`Server.logHistory`, `site/history.go`).
 - Pages render into a buffer first, so a template error is a clean 500.
 - Schema changes go through `Store.init` (`CREATE TABLE IF NOT EXISTS`, one statement at a time, after `migrateLegacy`); add columns with `Store.ensureColumn`. Write SQL once with `?` placeholders (rebound for Postgres by `Store.q`) and keep to what both SQLite and Postgres accept. Add a migration test with any migration.
-- Browser scripts share `static/dom.js` (`Dom.el`, `Dom.commas`), loaded by the layout first. Load order matters for shared components: `mechrow.js` → `unitcard.js` → `forcesummary.js` → page script; `abilitycard.js` before `pilots.js`/`mekbay.js`; `confirm.js` before its users.
+- Browser scripts share `static/dom.js` (`Dom.el`, `Dom.commas`, `Dom.statBox`, `Dom.players` (the player-count picker), `Dom.costLine` ("Cost X SP. Warchest A → B SP."), the arrow and refresh icons), loaded by the layout first. Load order matters for shared components: `mechrow.js` → `unitcard.js` → `forcesummary.js` → page script; `abilitycard.js` before `pilots.js`/`mekbay.js`; `confirm.js` before its users.
 - Insert names, roles and user text as text, never HTML.
 
 ## Campaign folder structure
@@ -99,7 +99,7 @@ MegaMek's XML force format, one `<entity>` per unit with `<pilot>` skills. Prefe
 - **Checkpoints and rollback** (`checkpoint.go`): taken at campaign start and after each mission completion (row snapshot plus a frozen MekBay copy of the hangar); History lines with a checkpoint get Roll back; Abort mission rolls back to the latest. Lines a checkpoint should keep are logged **before** the checkpoint is recorded; a rollback deletes later history lines.
 - **Hangar cache** (`hangarcache.go`): every live read and every site edit is cached; pages paint the cache then refresh (stale-while-revalidate).
 - **MekBay proxy** (`internal/mekbayproxy/proxy.go`, `storage/links.go`): serves MekBay's own web app from `mekbay-<link id>.<host>` and relays `/ws`, swapping the top-level `uuid` for the link's account, so a link acts as the seed's account. The link id is the credential (160-bit, sliding 14-day expiry); responses carry `Referrer-Policy: no-referrer`. Only the bare `mekbay.localhost` from loopback is a shared sandbox. Production needs the wildcard domain `*.battletech.zech.io`.
-- **Shared UI components** (`static/`): `mechrow.js` (`MechRow`: the one mech row, also `attachTip` floating cards as popovers inside open dialogs), `unitcard.js` (the one unit card), `pilotcard.js`, `abilitycard.js`, `unitsearch.js`, `variantpicker.js`, `allocator.js`, `portraitpicker.js`, `confirm.js`, `wizardkeys.js` (Enter/Backspace for `data-wizard-next`/`data-wizard-back`). Reuse them; every list of mechs must use `MechRow`, every unit card `UnitCard`.
+- **Shared UI components** (`static/`): `mechrow.js` (`MechRow`: the one mech row, also `attachTip` floating cards as popovers inside open dialogs, `attachCard` for a row's unit card, `withoutPilot`), `unitcard.js` (the one unit card), `pilotcard.js`, `abilitycard.js`, `unitsearch.js`, `variantpicker.js`, `allocator.js`, `portraitpicker.js`, `confirm.js`, `wizardkeys.js` (Enter/Backspace for `data-wizard-next`/`data-wizard-back`). Reuse them; every list of mechs must use `MechRow`, every unit card `UnitCard`.
 
 ## UI rules
 

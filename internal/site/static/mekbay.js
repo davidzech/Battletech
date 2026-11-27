@@ -81,7 +81,6 @@
   var statusData = null;  // the battle's live status as the server last read it from MekBay: { url, operation, forces: [{ name, alignment, units }], updatedAt }
   var statusBusy = false;
   var statusTimer = null;
-  var REFRESH_ICON = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>';
   var QR_ICON = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3h-3zM20 14v.01M14 20h.01M17 20h4v-3"/></svg>';
   var POLL_MS = 10000;    // how often an open Operation in progress view asks again
   var touched = false;    // the player has changed something, so a fresh read of the hangar must not undo it
@@ -349,24 +348,12 @@
     var v = {};
     Object.keys(view).forEach(function (k) { v[k] = view[k]; });
     if (u && u.mekbayUrl) v.externalUrl = u.mekbayUrl;
-    return withUnitCard(MechRow.build(v), u);
-  }
-
-  function withUnitCard(row, u) {
-    if (!u || typeof UnitCard === 'undefined') return row;
-    MechRow.attachTip(row, { align: 'right', build: function () { return UnitCard.forUnit(u); } });
-    row.addEventListener('mouseover', function (e) {
-      var own = e.target.closest && e.target.closest('[aria-describedby]');
-      if ((!own || own === row) && !row.classList.contains('tip-open')) row.dispatchEvent(new Event('mouseenter'));
-    });
+    var row = MechRow.build(v);
+    if (u && typeof UnitCard !== 'undefined') MechRow.attachCard(row, function () { return UnitCard.forUnit(u); });
     return row;
   }
 
-  function viewOf(u) {
-    var view = {};
-    Object.keys(u).forEach(function (k) { if (k !== 'gunnery' && k !== 'piloting' && k !== 'pilot') view[k] = u[k]; });
-    return view;
-  }
+  var viewOf = MechRow.withoutPilot;
 
   function row(u) {
     var unavailable = u.destroyed || u.unknown;
@@ -424,26 +411,17 @@
     }
   }
 
+  var showPlayers = Dom.players(playersPick, minPlayers, maxPlayers, function (n) {
+    if (n === playerCount) return;
+    playerCount = n;
+    plans.length = Math.min(plans.length, n); // players who are no longer playing give their choices back
+    touched = true;
+    held = '';
+    render();
+  });
   function renderPlayers() {
     playersBox.hidden = !(step === 0 && !finished && minPlayers < maxPlayers);
-    playersPick.textContent = '';
-    for (var n = minPlayers; n <= maxPlayers; n++) {
-      (function (n) {
-        var b = el('button', 'deploy-count', String(n));
-        b.type = 'button';
-        b.setAttribute('aria-pressed', n === playerCount ? 'true' : 'false');
-        b.setAttribute('aria-label', n + (n === 1 ? ' player' : ' players'));
-        b.addEventListener('click', function () {
-          if (n === playerCount) return;
-          playerCount = n;
-          plans.length = Math.min(plans.length, n); // players who are no longer playing give their choices back
-          touched = true;
-          held = '';
-          render();
-        });
-        playersPick.appendChild(b);
-      })(n);
-    }
+    showPlayers(playerCount);
   }
 
   // A pilot in a review row: the same compact card as a filled slot, not draggable.
@@ -685,7 +663,7 @@
     refresh.type = 'button';
     refresh.title = 'Refresh the status';
     refresh.setAttribute('aria-label', 'Refresh the status');
-    refresh.innerHTML = REFRESH_ICON; // the circle arrow, the same icon as the hangar link check
+    refresh.innerHTML = Dom.REFRESH_ICON; // the circle arrow, the same icon as the hangar link check
     refresh.disabled = statusBusy;
     refresh.addEventListener('click', function () { refreshStatus(); });
     bar.appendChild(refresh);

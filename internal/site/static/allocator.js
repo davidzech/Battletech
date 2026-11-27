@@ -10,9 +10,6 @@
 // p.sp[ladder.key] is the SP in a column. With `base` ({key: SP already in the column}) p.sp holds only the SP being
 // added, and the controls show the column's whole total, with what it holds now as their minimum.
 (function () {
-  // The arrow between the SP so far and the next level, drawn rather than typed so it reads clearly in any font.
-  var ARROW = '<svg viewBox="0 0 16 10" width="16" height="10" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 5h13M10 1l4 4-4 4"/></svg>';
-
   var el = Dom.el;
 
   // The row of the ladder reached with this much SP (its level and the SP it takes).
@@ -70,44 +67,15 @@
     return r;
   }
 
-  // The box for one column: a big, centred level; a tiny "-> next level" at its lower right; the SP so far over the SP the next
-  // level takes; and a yellow progress bar for how far along that is. At the top of the ladder it says "max" with a full bar.
+  // The box for one column (Dom.statBox): a big, centred level; a tiny "-> next level" at its lower right; the SP so far over the SP the next level takes; and a
+  // yellow progress bar for how far along that is. At the top of the ladder it says "max" with a full bar.
   function statBox(l) {
-    var box = el('div', 'stat-box');
-    var value = el('span', 'stat-value');
-    var to = el('span', 'stat-to');
-    var arrow = el('span', 'stat-arrow');
-    arrow.setAttribute('aria-hidden', 'true');
-    arrow.innerHTML = ARROW; // a constant defined above, never data
-    var nextLevel = el('b');
-    to.appendChild(arrow);
-    to.appendChild(nextLevel);
-    var wrap = el('span', 'stat-valwrap'); // only the value sits in the flow, so it stays centred whatever the "to" says
-    wrap.appendChild(value);
-    wrap.appendChild(to);
-    var main = el('span', 'stat-main');
-    main.appendChild(wrap);
-    var next = el('span', 'stat-next');
-    var bar = el('span', 'stat-bar');
-    var fill = el('span');
-    bar.appendChild(fill);
-    box.appendChild(el('span', 'stat-label', l.short || l.name)); // the stat box's own, shorter label when there is one
-    box.appendChild(main);
-    box.appendChild(next);
-    box.appendChild(bar);
+    var box = Dom.statBox(l.short || l.name); // the stat box's own, shorter label when there is one
+    var show = box.show;
     box.show = function (spent) {
       var r = reach(l, spent), n = upcoming(l, spent);
-      value.textContent = r.level;
-      to.hidden = !n;
-      if (n) {
-        nextLevel.textContent = String(n.level);
-        next.textContent = spent + '/' + n.sp + ' SP';
-        // How far from the breakpoint reached to the next one (pilot.go's stepPercent): Edge abilities at 180 SP is 0% of the way to 360.
-        fill.style.width = Math.max(0, Math.min(100, Math.round((spent - r.sp) / (n.sp - r.sp) * 100))) + '%';
-      } else {
-        next.textContent = 'max';
-        fill.style.width = '100%';
-      }
+      // How far from the breakpoint reached to the next one (pilot.go's stepPercent): Edge abilities at 180 SP is 0% of the way to 360.
+      show(r.level, n ? { level: n.level, text: spent + '/' + n.sp + ' SP', percent: Math.round((spent - r.sp) / (n.sp - r.sp) * 100) } : null);
       box.classList.toggle('up', r.level !== l.base);
     };
     return box;

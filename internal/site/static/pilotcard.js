@@ -11,30 +11,12 @@
 //
 // p is { name, rank, portraitUrl, earned, columns: [{ label, level, sp, hasNext, nextAt, nextLvl, percent }], learned: [{ id, name }] }, as Page.PilotsJSON sends it.
 (function () {
-  var ARROW = '<svg viewBox="0 0 16 10" width="16" height="10" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 5h13M10 1l4 4-4 4"/></svg>';
-
   var el = Dom.el;
 
-  // One of the Manage page's stat boxes: the level, the next level, SP progress and its bar (same classes, so the same look).
+  // One of the Manage page's stat boxes (Dom.statBox, the same as the SP allocator's): the level, the next level, SP progress and its bar.
   function statBox(c) {
-    var box = el('div', 'stat-box');
-    box.appendChild(el('span', 'stat-label', c.label));
-    var main = el('span', 'stat-main'), wrap = el('span', 'stat-valwrap');
-    wrap.appendChild(el('span', 'stat-value', String(c.level)));
-    if (c.hasNext) {
-      var to = el('span', 'stat-to'), arrow = el('span', 'stat-arrow');
-      arrow.innerHTML = ARROW; // a constant above, never data
-      to.appendChild(arrow);
-      to.appendChild(el('b', null, String(c.nextLvl)));
-      wrap.appendChild(to);
-    }
-    main.appendChild(wrap);
-    box.appendChild(main);
-    box.appendChild(el('span', 'stat-next', c.hasNext ? c.sp + '/' + c.nextAt + ' SP' : 'max'));
-    var bar = el('span', 'stat-bar'), fill = el('span');
-    fill.style.width = (c.percent || 0) + '%';
-    bar.appendChild(fill);
-    box.appendChild(bar);
+    var box = Dom.statBox(c.label);
+    box.show(c.level, c.hasNext ? { level: c.nextLvl, text: c.sp + '/' + c.nextAt + ' SP', percent: c.percent || 0 } : null, c.percent || 0);
     return box;
   }
 

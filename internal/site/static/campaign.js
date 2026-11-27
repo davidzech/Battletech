@@ -153,19 +153,8 @@
     body.textContent = '';
     body.appendChild(el('p', 'muted', 'This campaign can be played by ' + minPlayers + ' to ' + maxPlayers + ' players sharing one force. The number you choose is what every Deploy starts with; you can still change it for a single deploy.'));
     var pick = el('div', 'deploy-players-pick');
-    for (var n = minPlayers; n <= maxPlayers; n++) {
-      (function (n) {
-        var b = el('button', 'deploy-count', String(n));
-        b.type = 'button';
-        b.setAttribute('aria-pressed', n === players ? 'true' : 'false');
-        b.setAttribute('aria-label', n + (n === 1 ? ' player' : ' players'));
-        b.addEventListener('click', function () {
-          players = n;
-          [].forEach.call(pick.children, function (c, i) { c.setAttribute('aria-pressed', minPlayers + i === players ? 'true' : 'false'); });
-        });
-        pick.appendChild(b);
-      })(n);
-    }
+    var show = Dom.players(pick, minPlayers, maxPlayers, function (n) { players = n; show(players); });
+    show(players);
     body.appendChild(pick);
   }
 
@@ -362,7 +351,6 @@
 
   // The refresh icon inside the link box: enabled once the link has the right shape, spinning while it is read.
   var refreshBtn = null;
-  var REFRESH_ICON = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>';
   function syncRefresh() {
     if (!refreshBtn) return;
     var reading = check.state === 'checking' || !!check.refreshing;
@@ -487,7 +475,7 @@
     refreshBtn.type = 'button';
     refreshBtn.title = 'Check the hangar again';
     refreshBtn.setAttribute('aria-label', 'Check the hangar again');
-    refreshBtn.innerHTML = REFRESH_ICON;
+    refreshBtn.innerHTML = Dom.REFRESH_ICON; // a constant, never data
     refreshBtn.addEventListener('click', forceCheck);
     field.appendChild(input);
     field.appendChild(refreshBtn);
@@ -524,7 +512,7 @@
     pickSummary.appendChild(bv);
     if (!picks.length) picksBox.appendChild(el('p', 'muted purchase-empty', 'No mechs yet. Search above and click a mech to add it to your force.'));
     picks.forEach(function (u, i) {
-      var row = UnitSearch.plain(u);
+      var row = MechRow.withoutPilot(u);
       row.picked = true;
       row.actions = [{ icon: '\u00d7', label: 'Remove', title: 'Remove from your force', onClick: function () { picks.splice(i, 1); renderPicks(); unitSearch.repaint(); updateNext(); } }];
       picksBox.appendChild(MechRow.build(row));

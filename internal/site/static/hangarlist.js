@@ -31,9 +31,9 @@
 
   // Rearm: one confirmation.
   function rearm(u) {
-    var after = warchest - u.rearmCost;
-    if (after < 0) {
-      Confirm.ask({ title: 'Not enough funds', message: 'The warchest cannot cover rearming ' + fullName(u) + '.', detail: 'Cost ' + u.rearmCost + ' SP. Warchest ' + commas(warchest) + ' SP. Not enough funds.', detailShort: true, confirmLabel: 'OK', cancelLabel: 'Close' });
+    var cost = Dom.costLine(u.rearmCost, warchest);
+    if (cost.short) {
+      Confirm.ask({ title: 'Not enough funds', message: 'The warchest cannot cover rearming ' + fullName(u) + '.', detail: cost.text, detailShort: true, confirmLabel: 'OK', cancelLabel: 'Close' });
       return;
     }
     Confirm.ask({
@@ -42,7 +42,7 @@
       items: (u.ammoBreakdown || []).map(function (a) {
         return { label: a.name, value: a.tons + (a.tons === 1 ? ' ton' : ' tons') + ' \u00b7 ' + a.used + (a.capacity ? ' of ' + a.capacity : '') + ' shots used' };
       }),
-      detail: 'Cost ' + u.rearmCost + ' SP. Warchest ' + commas(warchest) + ' \u2192 ' + commas(after) + ' SP.',
+      detail: cost.text,
       confirmLabel: 'Rearm for ' + u.rearmCost + ' SP',
       busyLabel: 'Rearming',
       // The dialog stays open until the rearm is saved, then closes and the page shows the updated hangar; a refusal is shown in it.
@@ -98,11 +98,11 @@
   var repairUnit = null;
   function repairCostText() {
     var level = document.getElementById('repair-select').value;
-    var cost = repairUnit.repairCosts[level] || 0, after = warchest - cost;
+    var cost = Dom.costLine(repairUnit.repairCosts[level] || 0, warchest);
     var text = document.getElementById('repair-cost');
-    text.textContent = 'Cost ' + cost + ' SP. Warchest ' + commas(warchest) + ' \u2192 ' + commas(Math.max(after, 0)) + ' SP.' + (after < 0 ? ' Not enough funds.' : '');
-    text.classList.toggle('short', after < 0);
-    document.getElementById('repair-apply').disabled = after < 0;
+    text.textContent = cost.text;
+    text.classList.toggle('short', cost.short);
+    document.getElementById('repair-apply').disabled = cost.short;
   }
   function repair(u) {
     if (!repairDlg || typeof repairDlg.showModal !== 'function') return;
@@ -140,16 +140,6 @@
     });
   }
 
-  // Gives a mech row its unit card (build() makes it): shown on hover or focus under the row, right-aligned with it, the row lit while it is open. The row's
-  // status pills have cards of their own, so coming back off a pill onto the row brings the unit's card back.
-  function withCard(r, build) {
-    MechRow.attachTip(r, { align: 'right', build: build });
-    r.addEventListener('mouseover', function (e) {
-      var own = e.target.closest && e.target.closest('[aria-describedby]');
-      if ((!own || own === r) && !r.classList.contains('tip-open')) r.dispatchEvent(new Event('mouseenter'));
-    });
-  }
-
   // Reconfigure (omnimechs only): a dialog listing the unit's other variants with their prices, like the repair dialog.
   var swapDlg = document.getElementById('swap-dialog');
   var swapUnitRow = null;
@@ -157,7 +147,7 @@
   // The dialog shows the unit as its full row, then, once another variant is chosen, an arrow with what changes and the variant's own row: a flow from one to the
   // other, each row with its unit card (the shared VariantPicker, which the Deploy wizard's Configure step uses too).
   function swapCostText() {
-    var o = swapOption(), u = swapUnitRow, cost = o ? o.cost : 0, after = warchest - cost;
+    var o = swapOption(), u = swapUnitRow, cost = Dom.costLine(o ? o.cost : 0, warchest);
     VariantPicker.mark(document.getElementById('swap-select'));
     VariantPicker.flow(document.getElementById('swap-sub'), u, o, { price: function (o) { return o.cost + ' SP'; } });
     // The price as a short breakdown: half the tonnage, plus half the BV gained (nothing for a variant worth less).
@@ -174,9 +164,9 @@
       rows.forEach(function (r) { bd.appendChild(el('dt', null, r[0])); bd.appendChild(el('dd', null, r[1])); });
     }
     var text = document.getElementById('swap-cost');
-    text.textContent = o ? 'Cost ' + cost + ' SP. Warchest ' + commas(warchest) + ' → ' + commas(Math.max(after, 0)) + ' SP.' + (after < 0 ? ' Not enough funds.' : '') : 'Choose another variant to reconfigure to.';
-    text.classList.toggle('short', !!o && after < 0);
-    document.getElementById('swap-apply').disabled = !o || after < 0;
+    text.textContent = o ? cost.text : 'Choose another variant to reconfigure to.';
+    text.classList.toggle('short', !!o && cost.short);
+    document.getElementById('swap-apply').disabled = !o || cost.short;
   }
   function swap(u, keep) {
     if (!swapDlg || typeof swapDlg.showModal !== 'function') return;
@@ -259,15 +249,14 @@
     }
     // The hangar's pilot skills are a matter of assigning pilots, not something the mech itself has, so the rows leave them out.
     units.forEach(function (u) {
-      var row = {};
-      Object.keys(u).forEach(function (k) { if (k !== 'gunnery' && k !== 'piloting' && k !== 'pilot') row[k] = u[k]; });
+      var row = MechRow.withoutPilot(u);
       if (u.mekbayUrl) row.externalUrl = u.mekbayUrl; // the unit's own page on MekBay, opened in a new tab
       row.actions = actionsFor(u);
       var built = MechRow.build(row);
       // Hovering the row (or focusing it) shows the unit's card, the same card as the overview's and a scenario's unit links, under the row and
       // right-aligned with it, so the mechs listed on the left stay in view; the row keeps its yellow border while the card is open
       // (.mech-row.tip-open). Its status pills have cards of their own, so coming back off a pill onto the row brings the row's card back.
-      if (typeof UnitCard !== 'undefined') withCard(built, function () { return UnitCard.forUnit(u); });
+      if (typeof UnitCard !== 'undefined') MechRow.attachCard(built, function () { return UnitCard.forUnit(u); });
       list.appendChild(built);
     });
   }

@@ -308,12 +308,12 @@
       rRefresh();
       rGo.disabled = false;
       if (rCost > 0) {
-        var after = rWarchest - rCost;
+        var cost = Dom.costLine(rCost, rWarchest);
         rCostText.hidden = false;
-        rCostText.textContent = 'Cost ' + commas(rCost) + ' SP. Warchest ' + commas(rWarchest) + ' \u2192 ' + commas(Math.max(after, 0)) + ' SP.' + (after < 0 ? ' Not enough funds.' : '');
-        rCostText.classList.toggle('short', after < 0);
+        rCostText.textContent = cost.text;
+        rCostText.classList.toggle('short', cost.short);
         rGo.textContent = 'Recruit for ' + commas(rCost) + ' SP';
-        if (after < 0) rGo.disabled = true;
+        if (cost.short) rGo.disabled = true;
       }
       recruit.showModal();
       rName.focus();

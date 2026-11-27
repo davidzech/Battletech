@@ -4,6 +4,8 @@
 //
 //   MechRow.build({ name, model, role, icon, tons, bv, gunnery, piloting, pilot,
 //                   unknown, destroyed, damaged, notMech, externalUrl }) -> HTMLElement
+//   MechRow.attachCard(row, build)  the row's unit card (build() makes it) on hover or focus, right-aligned under it
+//   MechRow.withoutPilot(unit)      a copy of a unit view without gunnery, piloting and pilot, for a row that leaves the pilot out
 //
 // externalUrl (a https://mekbay.com/ link) adds an "opens in a new tab" button at the right of the row. It is opt-in: the deploy popup's rows are
 // checkbox labels and have none.
@@ -263,5 +265,23 @@
     return row;
   }
 
-  window.MechRow = { build: build, attachTip: attachTip, hideTip: function () { hideNow(); }, CONDITIONS: CONDITIONS };
+  // Gives a mech row its unit card (build() makes it): shown on hover or focus under the row, right-aligned with it, so the mechs listed on the left stay in view,
+  // and the row lit while it is open. The row's status pills have cards of their own, so coming back off a pill onto the row brings the unit's card back.
+  function attachCard(row, buildCard) {
+    attachTip(row, { align: 'right', build: buildCard });
+    row.addEventListener('mouseover', function (e) {
+      var own = e.target.closest && e.target.closest('[aria-describedby]');
+      if ((!own || own === row) && !row.classList.contains('tip-open')) row.dispatchEvent(new Event('mouseenter'));
+    });
+    return row;
+  }
+
+  // A unit view without the pilot fields, for a row whose pilot is shown elsewhere or not at all: skills belong to assigning pilots, not to the mech.
+  function withoutPilot(u) {
+    var v = {};
+    Object.keys(u).forEach(function (k) { if (k !== 'gunnery' && k !== 'piloting' && k !== 'pilot') v[k] = u[k]; });
+    return v;
+  }
+
+  window.MechRow = { build: build, attachTip: attachTip, attachCard: attachCard, withoutPilot: withoutPilot, hideTip: function () { hideNow(); }, CONDITIONS: CONDITIONS };
 })();

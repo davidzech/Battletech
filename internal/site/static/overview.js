@@ -11,20 +11,8 @@
   var busy = false;
 
   var el = Dom.el;
-  function render() {
-    pick.textContent = '';
-    for (var n = min; n <= max; n++) {
-      (function (n) {
-        var b = el('button', 'deploy-count', String(n));
-        b.type = 'button';
-        b.setAttribute('aria-pressed', n === players ? 'true' : 'false');
-        b.setAttribute('aria-label', n + (n === 1 ? ' player' : ' players'));
-        b.disabled = busy;
-        b.addEventListener('click', function () { choose(n); });
-        pick.appendChild(b);
-      })(n);
-    }
-  }
+  var show = null; // the picker's buttons, made only when there is a choice (see the end)
+  function render() { show(players, busy); }
 
   function choose(n) {
     if (n === players || busy) return;
@@ -86,5 +74,6 @@
     pick.appendChild(el('b', 'hangar-stat-value', String(min)));
     return;
   }
+  show = Dom.players(pick, min, max, choose);
   render();
 })();
