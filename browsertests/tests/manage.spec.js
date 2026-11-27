@@ -173,9 +173,12 @@ test('buys units from the Purchase dialog', async ({ page }) => {
   await expect(found).toContainText('In cart');
   await expect(dlg.locator('#purchase-staged .mech-row')).toHaveCount(1);
   const cost = dlg.locator('#purchase-cost');
-  await expect(cost).toHaveText(/^Total cost: [\d,]+ SP$/);
+  // The total counts up to the unit's BV (and the Buy button with it).
+  const bv = /BV: ([\d,]+)/.exec(await found.textContent())[1];
+  await expect(cost).toHaveText('Total cost: ' + bv + ' SP');
+  await expect(dlg.locator('#purchase-buy')).toHaveText('Buy for ' + bv + ' SP');
   await expect(cost).not.toHaveClass(/short/);
-  const price = Number(/Total cost: ([\d,]+) SP/.exec(await cost.textContent())[1].replace(/,/g, ''));
+  const price = Number(bv.replace(/,/g, ''));
   // A second click takes it back out of the cart.
   await found.click();
   await expect(dlg.locator('#purchase-staged .mech-row')).toHaveCount(0);

@@ -44,12 +44,11 @@
     });
     // The warchest is in the dialog's head; down here is only what the cart costs, red when the warchest can't cover it.
     var cost = total(), short = cost > warchest;
-    costEl.textContent = 'Total cost: ' + commas(cost) + ' SP';
     costEl.classList.toggle('short', short);
     var why = !staged.length ? 'Add at least one unit to your cart.' : short ? 'The warchest cannot cover that.' : '';
     buyBtn.disabled = !!why;
     buyBtn.title = why;
-    buyBtn.textContent = staged.length ? 'Buy for ' + commas(cost) + ' SP' : 'Buy';
+    countCost(cost);
     saveState();
   }
 
@@ -75,6 +74,28 @@
   }
   function clearState() {
     if (location.hash.indexOf('#purchase=') === 0 && window.history && history.replaceState) history.replaceState(history.state, '', location.pathname + location.search);
+  }
+
+  // The total and the Buy button count from the cost they show to the new one (with reduced motion they just change). An empty cart's button says Buy.
+  var shownCost = 0, costRun = 0;
+  var calm = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function showCost(v) {
+    shownCost = v;
+    costEl.textContent = 'Total cost: ' + commas(v) + ' SP';
+    buyBtn.textContent = staged.length ? 'Buy for ' + commas(v) + ' SP' : 'Buy';
+  }
+  function countCost(to) {
+    var from = shownCost, run = ++costRun;
+    if (from === to || calm || !dialog.open) { showCost(to); return; }
+    var start = null;
+    function frame(t) {
+      if (run !== costRun) return; // a newer change took over, counting on from what this one showed
+      if (start === null) start = t;
+      var k = Math.min(1, (t - start) / 300);
+      showCost(Math.round(from + (to - from) * (1 - Math.pow(1 - k, 3)))); // eases out, like the Deploy meter
+      if (k < 1) requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
   }
 
   // Adds a unit to the cart. Returns false when it is already there or the cart is full.
