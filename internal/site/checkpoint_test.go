@@ -235,7 +235,7 @@ func TestRollbackUndoesAdvancedManagement(t *testing.T) {
 			t.Errorf("%s is as at the checkpoint: %+v (was %+v)", want.Name, got, want)
 		}
 	}
-	if run, _, _ := store.Run(ctx, id, "refusalwar"); run.Warchest != 2500 {
+	if run, _, _ := store.Run(ctx, id, "refusalwar"); run.Warchest != 5000 {
 		t.Errorf("the funds are back: %d", run.Warchest)
 	}
 }
@@ -292,7 +292,7 @@ func TestAbortModes(t *testing.T) {
 
 	// "rollback": back to the starting checkpoint, and cleaned up as well.
 	battle("op-roll")
-	if got := post(t, srv, "/api/battle/abort", form("mode", "rollback"), cookie, srv.URL).StatusCode; got != http.StatusNoContent || warchest() != 2500 {
+	if got := post(t, srv, "/api/battle/abort", form("mode", "rollback"), cookie, srv.URL).StatusCode; got != http.StatusNoContent || warchest() != 5000 {
 		t.Errorf("rollback: %d, funds %d", got, warchest())
 	}
 	if h, _ := store.History(ctx, id, "refusalwar"); len(h) == 0 || h[len(h)-1].Kind != storage.HistoryMission || !strings.HasPrefix(h[len(h)-1].Text, "Aborted Scenario 000") || !strings.Contains(h[len(h)-1].Text, "and rolled back to \u201c") {

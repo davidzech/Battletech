@@ -56,7 +56,7 @@ func TestCampaignHistory(t *testing.T) {
 		}
 	}
 
-	if e := find("Started the campaign as"); e.Kind != storage.HistoryCampaign || e.SP != 2500 || !strings.Contains(e.Text, "Alrek and Katarina") {
+	if e := find("Started the campaign as"); e.Kind != storage.HistoryCampaign || e.SP != 5000 || !strings.Contains(e.Text, "Alrek and Katarina") {
 		t.Errorf("the start: %+v", e)
 	}
 	post(t, srv, "/api/pilots/allocate", form("pilot", alrek, "earned", "90"), cookie, srv.URL)
@@ -141,7 +141,7 @@ func TestCampaignHistory(t *testing.T) {
 	if i := strings.Index(page, "The force was renamed Iron Wolves."); i < 0 || strings.Contains(page[i:i+300], "history-rollback") {
 		t.Error("a line with no checkpoint after it has no Roll back button")
 	}
-	if !strings.Contains(page, `<span class="history-sp gain">&#43;2,500 SP</span>`) {
+	if !strings.Contains(page, `<span class="history-sp gain">&#43;5,000 SP</span>`) {
 		t.Error("the start's warchest shows as a gain")
 	}
 	if !strings.Contains(page, `<span class="history-sp"></span>`) || strings.Contains(page, `<span class="history-sp loss"></span>`) {

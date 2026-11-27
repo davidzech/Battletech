@@ -48,8 +48,8 @@ func entry(id string, took bool, kills int, killed bool) OutcomeEntry {
 func refusalWar(t *testing.T) *Campaign {
 	t.Helper()
 	c, ok := (Library{Root: "../../campaigns"}).Campaign("refusalwar")
-	if !ok || c.StartingBV != 7500 || c.StartingMinMechs != 5 {
-		t.Fatalf("Refusal War should start with at least 5 mechs and up to 7500 BV: %+v", c)
+	if !ok || c.StartingBV != 10000 || c.StartingMinMechs != 5 {
+		t.Fatalf("Refusal War should start with at least 5 mechs and up to 10000 BV: %+v", c)
 	}
 	return c
 }

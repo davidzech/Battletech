@@ -52,7 +52,7 @@ async function setBattle(page, status) {
 }
 
 // Five mechs under 10,000 BV: meets Refusal War's starting conditions.
-const STARTING = [unit('ua', 'BMKoshi_E'), unit('ub', 'BMUller_J'), unit('uc', 'BMDasher_Prime'), unit('ud', 'BMHankyu_Prime'), unit('ue', 'BMLoki_Prime')];
+const STARTING = [unit('ua', 'BMKoshi_E'), unit('ub', 'BMUller_J'), unit('uc', 'BMDasher_Prime'), unit('ud', 'BMGrizzly'), unit('ue', 'BMLoki_Prime')];
 
 // Starts a campaign through the endpoint the start wizard posts to, from the fake hangar, with a named pilot per name (90 SP to Gunnery, 60 to Edge
 // tokens).

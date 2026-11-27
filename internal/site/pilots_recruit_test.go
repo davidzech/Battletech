@@ -22,12 +22,12 @@ func TestRecruitingCostsSP(t *testing.T) {
 		return post(t, srv, "/api/pilots", url.Values{"campaign": {"refusalwar"}, "name": {name}}, cookie, srv.URL).StatusCode
 	}
 	start := funds()
-	if start != 2500 {
+	if start != 5000 {
 		t.Fatalf("the starting pilots cost nothing: warchest %d", start)
 	}
 	// The page says what it costs, and the dialog carries the figures.
 	page := body(t, srv, "/refusalwar/manage/", cookie)
-	if !strings.Contains(page, `<p class="muted recruit-note" id="recruit-note">Recruiting costs 300 SP.</p>`) || !strings.Contains(page, `data-cost="300" data-warchest="2500"`) || strings.Contains(page, `id="recruit-open" disabled`) {
+	if !strings.Contains(page, `<p class="muted recruit-note" id="recruit-note">Recruiting costs 300 SP.</p>`) || !strings.Contains(page, `data-cost="300" data-warchest="5000"`) || strings.Contains(page, `id="recruit-open" disabled`) {
 		t.Errorf("an affordable recruit shows its cost: %.200s", page)
 	}
 	if got := recruit("Jarek"); got != http.StatusNoContent || funds() != start-300 {

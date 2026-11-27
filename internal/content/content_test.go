@@ -109,8 +109,8 @@ func TestScenarioPlanetFromFrontMatter(t *testing.T) {
 
 func TestRefusalWarStartsWithTwoNamedPilots(t *testing.T) {
 	c, ok := (Library{Root: "../../campaigns"}).Campaign("refusalwar")
-	if !ok || c.StartingNamedPilots != 2 || c.StartingPilotSP != 150 || c.StartingBV != 7500 || c.StartingMinMechs != 5 {
-		t.Fatalf("Refusal War starts with two named pilots (150 SP each) and a 7500 BV force: %+v", c)
+	if !ok || c.StartingNamedPilots != 2 || c.StartingPilotSP != 150 || c.StartingBV != 10000 || c.StartingMinMechs != 5 {
+		t.Fatalf("Refusal War starts with two named pilots (150 SP each) and a 10000 BV force: %+v", c)
 	}
 }
 

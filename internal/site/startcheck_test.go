@@ -23,9 +23,9 @@ func hangarOf(names ...string) mekbay.HangarForce {
 	return h
 }
 
-// startingHangar is a hangar that meets Refusal War's starting conditions: five mechs, under 7,500 BV.
+// startingHangar is a hangar that meets Refusal War's starting conditions: five mechs, under 10,000 BV.
 func startingHangar() mekbay.HangarForce {
-	return hangarOf("BMKoshi_E", "BMUller_J", "BMDasher_Prime", "BMHankyu_Prime", "BMLoki_Prime")
+	return hangarOf("BMKoshi_E", "BMUller_J", "BMDasher_Prime", "BMGrizzly", "BMLoki_Prime")
 }
 
 func (f *fakeMekBay) setHangar(h mekbay.HangarForce, err error) {
@@ -37,8 +37,8 @@ func (f *fakeMekBay) setHangar(h mekbay.HangarForce, err error) {
 func refusalWar(t *testing.T) *content.Campaign {
 	t.Helper()
 	c, ok := (content.Library{Root: "../../campaigns"}).Campaign("refusalwar")
-	if !ok || c.StartingBV != 7500 || c.StartingMinMechs != 5 {
-		t.Fatalf("Refusal War should start with at least 5 mechs and up to 7500 BV: %+v", c)
+	if !ok || c.StartingBV != 10000 || c.StartingMinMechs != 5 {
+		t.Fatalf("Refusal War should start with at least 5 mechs and up to 10000 BV: %+v", c)
 	}
 	return c
 }
@@ -47,7 +47,7 @@ func TestCheckStartingHangar(t *testing.T) {
 	c := refusalWar(t)
 
 	ok := checkStartingHangar(startingHangar(), c)
-	if !ok.OK || ok.Mechs != 5 || ok.BV != 997+1178+1251+1334+2654 || len(ok.Problems) != 0 || ok.MaxBV != 7500 || ok.MinMechs != 5 || len(ok.Units) != 5 {
+	if !ok.OK || ok.Mechs != 5 || ok.BV != 997+1178+1251+2219+2654 || len(ok.Problems) != 0 || ok.MaxBV != 10000 || ok.MinMechs != 5 || len(ok.Units) != 5 {
 		t.Fatalf("a valid hangar: %+v", ok)
 	}
 	if ok.Units[0].Name != "Mist Lynx" || ok.Units[0].Model != "E" || ok.Units[0].Role != "Striker" || ok.Units[0].Icon != "/icons/koshi_e.png" || ok.Units[0].Tons != 25 || !ok.Units[0].Mech || ok.Units[0].BV != 997 {
@@ -59,15 +59,15 @@ func TestCheckStartingHangar(t *testing.T) {
 	for i := range atLimit.Units {
 		atLimit.Units[i].Gunnery, atLimit.Units[i].Piloting = 0, 0 // an ace: still base BV
 	}
-	if r := checkStartingHangar(atLimit, c); !r.OK || r.BV != 7414 {
+	if r := checkStartingHangar(atLimit, c); !r.OK || r.BV != 8299 {
 		t.Errorf("pilot skill must not change BV: %+v", r)
 	}
 	boundary := *c
-	boundary.StartingBV = 7414
+	boundary.StartingBV = 8299
 	if r := checkStartingHangar(startingHangar(), &boundary); !r.OK {
 		t.Errorf("a hangar exactly at the BV limit is allowed: %+v", r)
 	}
-	boundary.StartingBV = 7413
+	boundary.StartingBV = 8298
 	if r := checkStartingHangar(startingHangar(), &boundary); r.OK {
 		t.Errorf("one BV over is not: %+v", r)
 	}
@@ -79,7 +79,7 @@ func TestCheckStartingHangar(t *testing.T) {
 	}
 	// Too much BV.
 	over := checkStartingHangar(hangarOf("BMKoshi_E", "BMUller_J", "BMDasher_Prime", "BMGrizzly", "BMLoki_Prime", "BMMadCat_H"), c)
-	if over.OK || over.BV != 8299+2627 || len(over.Problems) != 1 || !strings.Contains(over.Problems[0], "10,926 BV, over the 7,500 BV") {
+	if over.OK || over.BV != 8299+2627 || len(over.Problems) != 1 || !strings.Contains(over.Problems[0], "10,926 BV, over the 10,000 BV") {
 		t.Errorf("too much BV: %+v", over)
 	}
 	// Both at once, and an empty hangar.
@@ -144,7 +144,7 @@ func TestHangarCheckEndpoint(t *testing.T) {
 
 	var res startCheck
 	r := check(cookie, goodHangar)
-	if r.StatusCode != http.StatusOK || json.NewDecoder(r.Body).Decode(&res) != nil || !res.OK || res.Mechs != 5 || res.BV != 7414 || res.MaxBV != 7500 {
+	if r.StatusCode != http.StatusOK || json.NewDecoder(r.Body).Decode(&res) != nil || !res.OK || res.Mechs != 5 || res.BV != 8299 || res.MaxBV != 10000 {
 		t.Fatalf("valid hangar: %d %+v", r.StatusCode, res)
 	}
 	if ct := r.Header.Get("Content-Type"); ct != "application/json" || r.Header.Get("Cache-Control") != "no-store" {
@@ -183,7 +183,7 @@ func TestStartingEnforcesTheHangarConditions(t *testing.T) {
 		says   string
 	}{
 		"too few mechs": {hangarOf("BMKoshi_E", "BMUller_J", "BMDasher_Prime"), nil, http.StatusBadRequest, "at least 5 mechs"},
-		"too much BV":   {hangarOf("BMKoshi_E", "BMUller_J", "BMDasher_Prime", "BMGrizzly", "BMLoki_Prime", "BMMadCat_H"), nil, http.StatusBadRequest, "7,500 BV starting limit"},
+		"too much BV":   {hangarOf("BMKoshi_E", "BMUller_J", "BMDasher_Prime", "BMGrizzly", "BMLoki_Prime", "BMMadCat_H"), nil, http.StatusBadRequest, "10,000 BV starting limit"},
 		"mekbay down":   {mekbay.HangarForce{}, errors.New("could not reach MekBay: boom"), http.StatusBadGateway, "could not reach MekBay"},
 	} {
 		fake.setHangar(c.hangar, c.err)

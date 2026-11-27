@@ -37,7 +37,7 @@ var battleURL = regexp.MustCompile(`^http://mekbay-([a-z2-7]{32})\.([^/]+)/\?ope
 
 func TestStartBattleEndpoint(t *testing.T) {
 	const seed = "wolfpack2026"
-	fake := &fakeMekBay{hangar: startingHangar()} // ua Koshi, ub Uller, uc Dasher, ud Arctic Cheetah
+	fake := &fakeMekBay{hangar: startingHangar()} // ua Koshi, ub Uller, uc Dasher, ud Grizzly
 	srv, store := newMekBayTestServer(t, fake)
 	ctx := context.Background()
 	cookie := post(t, srv, "/api/seed", url.Values{"seed": {seed}}, nil, "").Cookies()[0]

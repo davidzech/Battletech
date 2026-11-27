@@ -190,7 +190,7 @@ func TestFreeRecruitIsRestoredOnFailure(t *testing.T) {
 	if got := post(t, srv, "/api/pilots", url.Values{"campaign": {"refusalwar"}, "name": {"alrek"}}, cookie, srv.URL).StatusCode; got != http.StatusBadRequest {
 		t.Fatalf("a taken name: %d", got)
 	}
-	if run, _, _ := store.Run(ctx, id, "refusalwar"); run.FreeRecruits != 1 || run.Warchest != 2500 {
+	if run, _, _ := store.Run(ctx, id, "refusalwar"); run.FreeRecruits != 1 || run.Warchest != 5000 {
 		t.Errorf("the free recruit and the warchest are untouched: %+v", run)
 	}
 	if ok, _ := store.ConsumeFreeRecruit(ctx, id, "refusalwar"); !ok {

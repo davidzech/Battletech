@@ -64,10 +64,10 @@ func TestHangarChangesAreStored(t *testing.T) {
 			grizzlies++
 		}
 	}
-	if len(u) != 5 || grizzlies != 1 {
+	if len(u) != 5 || grizzlies != 2 {
 		t.Errorf("after the purchase the hangar holds the unit bought: %v", u)
 	}
-	if p := body(t, srv, "/refusalwar/manage/", cookie); !strings.Contains(p, "Grizzly") {
+	if p := body(t, srv, "/refusalwar/manage/", cookie); strings.Count(p, "Grizzly") < 2 {
 		t.Error("the Manage page shows the hangar as it is now")
 	}
 	// A purchase the warchest can't cover changes nothing.

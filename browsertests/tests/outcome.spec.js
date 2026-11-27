@@ -32,7 +32,7 @@ test('reports a mission with a benched and a killed pilot, then rolls it back', 
   await expect(card('Katarina').locator('.outcome-preview')).toContainText('Killed in Action');
   await expect(out.locator('#outcome-total')).toContainText('Awarded400 SP');
   await expect(out.locator('#outcome-total')).toContainText('Assigned to pilots120 SP');
-  await expect(out.locator('#outcome-total')).toContainText('Warchest2200 → 2480 SP');
+  await expect(out.locator('#outcome-total')).toContainText('Warchest4700 → 4980 SP');
   // The keyword the objective grants is a keyword chip, its description on hover.
   const kw = out.locator('#outcome-total .keyword-chip');
   await expect(kw).toHaveText('Depot Gone');
@@ -148,7 +148,7 @@ test('keeps what was entered in the URL, so a reload reopens the dialog with it'
   await expect(out.getByLabel('Destroy the depot')).toBeChecked();
   await expect(card('Alrek').getByLabel('MVP', { exact: true })).toBeChecked();
   await expect(out.locator('.outcome-mvp-box:checked')).toHaveCount(1);
-  await expect(out.locator('#outcome-total')).toContainText('Warchest2200 → 2480 SP');
+  await expect(out.locator('#outcome-total')).toContainText('Warchest4700 → 4980 SP');
   await expect(out.locator('#outcome-commit')).toBeEnabled();
 
   // Closing takes it out of the URL, so a reload leaves the dialog closed; opening it again starts afresh.
