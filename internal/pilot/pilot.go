@@ -119,9 +119,9 @@ type NamedPilot struct {
 	// still unallocated is TotalSP minus their sum (see Unallocated).
 	TotalSP int
 	// MVPs is how many missions the pilot has been chosen MVP of.
-	MVPs int
-	Fallen  bool // died, and is permanently removed from the campaign (kept so the record isn't lost)
-	SP      SPAllocation
+	MVPs   int
+	Fallen bool // died, and is permanently removed from the campaign (kept so the record isn't lost)
+	SP     SPAllocation
 	// Learned are the IDs of the Edge abilities the pilot has chosen (see abilities.go), in the order they were chosen. A pilot may hold as
 	// many as their Edge abilities level (EdgeAbilities); what they haven't chosen yet is PendingAbilities.
 	Learned []string

@@ -315,12 +315,13 @@
       rRefresh();
       rGo.disabled = false;
       if (rCost > 0) {
-        var cost = Dom.costLine(rCost, rWarchest);
+        // Only the cost: the warchest isn't needed here, unless it can't pay.
+        var short = rCost > rWarchest;
         rCostText.hidden = false;
-        rCostText.textContent = cost.text;
-        rCostText.classList.toggle('short', cost.short);
+        rCostText.textContent = 'Cost ' + commas(rCost) + ' SP.' + (short ? ' Not enough funds in the warchest.' : '');
+        rCostText.classList.toggle('short', short);
         rGo.textContent = 'Recruit for ' + commas(rCost) + ' SP';
-        if (cost.short) rGo.disabled = true;
+        if (short) rGo.disabled = true;
       }
       recruit.showModal();
       rName.focus();

@@ -197,7 +197,7 @@ test('recruits a pilot for SP from the warchest', async ({ page }) => {
   await page.locator('#recruit-open').click();
   const dlg = page.locator('#recruit-dialog');
   await expect(dlg).toBeVisible();
-  await expect(dlg.locator('#recruit-cost')).toHaveText('Cost 300 SP. Warchest 4,500 → 4,200 SP.');
+  await expect(dlg.locator('#recruit-cost')).toHaveText('Cost 300 SP.');
   await expect(dlg.locator('#recruit-go')).toHaveText('Recruit for 300 SP');
   await dlg.locator('#recruit-name').fill('Jarek');
   await dlg.getByRole('spinbutton', { name: 'Gunnery' }).fill('150');
