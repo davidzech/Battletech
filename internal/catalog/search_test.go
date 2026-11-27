@@ -110,3 +110,31 @@ func TestAvailabilityFilter(t *testing.T) {
 		}
 	}
 }
+
+// A typed word of a letter or two has to start a word of the chassis or model: "Timber Wolf A" finds the A, not every Timber Wolf for the "a" inside
+// "Mad Cat" or "Timber". A longer word may still be found inside one ("madcat", "as7d").
+func TestSearchShortWordsStartAWord(t *testing.T) {
+	units, _ := Search("Timber Wolf A", nil)
+	got := map[string]bool{}
+	for _, u := range units {
+		got[u.Name] = true
+		if !strings.HasPrefix(strings.ToLower(u.Model), "a") {
+			t.Errorf("%s (%s) has no word starting with a", u.Name, u.Model)
+		}
+	}
+	if !got["BMMadCat_A"] || got["BMMadCat_B"] || got["BMMadCat_C"] {
+		t.Errorf("Timber Wolf A: %v", got)
+	}
+	for q, want := range map[string]string{"madcat prime": "BMMadCat_Prime", "timberwolf prime": "BMMadCat_Prime", "AS7-D": "BMAtlas_AS7D"} {
+		units, _ := Search(q, nil)
+		found := false
+		for _, u := range units {
+			if u.Name == want {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("%q should still find %s", q, want)
+		}
+	}
+}
