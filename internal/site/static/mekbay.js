@@ -459,6 +459,34 @@
 
   // ---- Showing a step
   // The meter: on a player step, what this player has taken and the force total against the limit (two figures, set apart); with one player, one figure.
+  // The BV bar under a force total: how much of the scenario's BV limit the force takes. With several players, others is what the other players have taken,
+  // drawn dimmer before this player's share; over the limit the bar is full and red.
+  function bvBar(total, others) {
+    var bar = el('span', 'bv-bar' + (total > limit ? ' over' : ''));
+    bar.setAttribute('role', 'meter');
+    bar.setAttribute('aria-label', 'Force BV against the limit');
+    bar.setAttribute('aria-valuemin', '0');
+    bar.setAttribute('aria-valuemax', String(limit));
+    bar.setAttribute('aria-valuenow', String(total));
+    var pct = function (n) { return Math.max(0, Math.min(100, (n / limit) * 100)) + '%'; };
+    if (others > 0 && total <= limit) {
+      var o = el('span', 'bv-bar-others');
+      o.style.width = pct(others);
+      bar.appendChild(o);
+    }
+    var mine = el('span', 'bv-bar-fill');
+    mine.style.width = total > limit ? '100%' : pct(total - (others > 0 ? others : 0));
+    bar.appendChild(mine);
+    return bar;
+  }
+
+  // A force total's text with its BV bar under it, as wide as the text (no bar without a BV limit).
+  function withBar(text, total, others) {
+    var box = el('span', 'bv-total', text);
+    if (limit > 0) box.appendChild(bvBar(total, others));
+    return box;
+  }
+
   function setMeter() {
     var total = totalBV();
     // The BV part says "(no limit)" only when nothing else limits the force; a scenario with a unit limit counts mechs against it instead.
@@ -467,9 +495,9 @@
     meter.textContent = '';
     if (playerCount > 1) {
       meter.appendChild(el('span', null, 'This player: ' + countOf(step) + ' selected · ' + fmt(bvOf(step)) + ' BV'));
-      meter.appendChild(el('span', null, 'Force total: ' + (unitLimit ? mechs(totalCount()) + ' · ' : '') + fmt(total) + limitText));
+      meter.appendChild(withBar('Force total: ' + (unitLimit ? mechs(totalCount()) + ' · ' : '') + fmt(total) + limitText, total, total - bvOf(step)));
     } else {
-      meter.appendChild(el('span', null, (unitLimit ? mechs(countOf(0)) : countOf(0) + ' selected') + ' · ' + fmt(total) + limitText));
+      meter.appendChild(withBar((unitLimit ? mechs(countOf(0)) : countOf(0) + ' selected') + ' · ' + fmt(total) + limitText, total, 0));
     }
     meter.classList.toggle('over', over());
     // The scenario's own rules, in words, and what is still missing.
@@ -551,7 +579,7 @@
     var count = 0;
     data.forEach(function (pl) { count += pl.units.length; });
     var total = el('p', 'deploy-review-total' + ((limit > 0 && tot > limit) || (unitLimit > 0 && count > unitLimit) ? ' over' : ''));
-    total.appendChild(el('span', null, 'Force total: ' + (unitLimit ? count + ' / ' + unitLimit + ' mechs · ' : '') + fmt(tot) + (limit ? ' / ' + fmt(limit) : '') + ' BV'));
+    total.appendChild(withBar('Force total: ' + (unitLimit ? count + ' / ' + unitLimit + ' mechs · ' : '') + fmt(tot) + (limit ? ' / ' + fmt(limit) : '') + ' BV', tot, 0));
     review.appendChild(total);
     // The drop cost: what reconfiguring the hangar's omnimechs costs, paid by Start battle.
     var cost = dropCost();

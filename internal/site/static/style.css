@@ -1404,6 +1404,12 @@ dialog input.themed-box:focus, dialog .themed-check input:focus { outline: none;
 .deploy-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1.5rem; }
 .deploy-head h2 { margin: 0; }
 .deploy-head .deploy-meter { margin: 0 0 0 auto; }
+/* The BV bar under the force total (mekbay.js bvBar): the force's BV against the limit, this player's share bright and the other players' dimmer; red when over. */
+.bv-total { display: inline-flex; flex-direction: column; }
+.bv-bar { display: flex; height: 0.4rem; margin-top: 0.3rem; overflow: hidden; background: var(--bg); border: 1px solid var(--line); }
+.bv-bar-others { background: color-mix(in srgb, var(--accent) 40%, var(--bg)); }
+.bv-bar-fill { background: var(--accent); }
+.bv-bar.over .bv-bar-fill { background: #ff7a59; }
 .deploy-players { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; margin: 0.6rem 0 0.2rem; }
 .deploy-head .deploy-players { margin: 0; }
 .deploy-players[hidden], .deploy-step[hidden], .deploy-review[hidden], .deploy-progress[hidden] { display: none; }
