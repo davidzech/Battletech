@@ -71,7 +71,7 @@ type HangarUnit struct {
 	// nothing about a pilot: see PilotKilled.
 	CockpitGone bool
 	Damaged     bool // has recorded armor/structure damage or critical hits (spent ammo is not damage: see AmmoBins)
-	Destroyed   bool
+	Destroyed   bool // MekBay's own destroyed flag; whether the unit counts as destroyed is IsDestroyed
 	// The raw damage MekBay records, from which conditionOf works out the unit's state (see condition.go).
 	Locations  map[string]LocationLoss // armor and internal structure points lost, by location (HD, CT, LT, RT, LA, RA, LL, RL ...)
 	AmmoUsed   int                     // ammo consumed, summed over its ammo bins
@@ -253,6 +253,11 @@ func ParseHangarForce(raw json.RawMessage) (HangarForce, error) {
 // they sit in is gone. It is only for a battle's forces, whose crews are the ones that fought: a hangar unit's crew is reset to an unnamed 4/5 after every
 // battle, so there only CrewDead speaks for its crew, and a cockpit left unrepaired is the unit's damage, not a dead pilot.
 func (u HangarUnit) PilotKilled() bool { return u.CrewDead || u.CockpitGone }
+
+// IsDestroyed says whether the unit counts as destroyed: MekBay's destroyed flag, or its cockpit gone. MekBay's record sheet sets the flag itself when every
+// cockpit is lost (evaluateDestroyed in mek-rules.ts), so the second is a defensive check for damage written without MekBay's app. A repair that restores
+// the head and the cockpit (see ServiceUnit) clears both. Only the crew's cockpit counts, never CrewDead: a hangar's crew is reset after every battle.
+func (u HangarUnit) IsDestroyed() bool { return u.Destroyed || u.CockpitGone }
 
 // isEngineSlot reports whether a critical slot with this name belongs to the engine.
 func isEngineSlot(name string) bool { return strings.Contains(strings.ToLower(name), "engine") }

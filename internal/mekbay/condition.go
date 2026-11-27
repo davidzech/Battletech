@@ -79,7 +79,7 @@ func ConditionOf(hu HangarUnit, tons float64, engine string) (Condition, string)
 	if InternalGone(hu, "CT", tons) {
 		return CondTruly, "Truly destroyed: center torso structure eliminated, so it cannot be repaired"
 	}
-	if hu.Destroyed {
+	if hu.IsDestroyed() {
 		return CondDestroyed, "Destroyed"
 	}
 	if why := crippledBecause(hu, tons, engine); why != "" {

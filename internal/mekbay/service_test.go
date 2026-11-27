@@ -97,6 +97,33 @@ func TestServiceUnitState(t *testing.T) {
 
 // A unit that is neither crippled nor destroyed has no damage above the structure level: one destroyed limb, one engine hit, or a side torso lost on a
 // fusion engine that passed its check are all restored by the structure repair, which leaves the unit undamaged.
+// A unit whose cockpit is gone counts as destroyed even without MekBay's destroyed flag (damage written outside MekBay's app), and a destroyed or crippled
+// repair, which restores the head and the cockpit, brings it back.
+func TestCockpitGoneIsDestroyedUntilRepaired(t *testing.T) {
+	for name, state := range map[string]string{
+		"head gone":    `{"destroyed":false,"locations":{"HD":{"armor":9,"internal":3}},"crits":[],"crew":[{"name":"","gunnerySkill":4,"pilotingSkill":5,"hits":0,"state":0}]}`,
+		"cockpit crit": `{"destroyed":false,"locations":{"HD":{"armor":9,"internal":1}},"crits":[{"name":"Cockpit","loc":"HD","destroyed":1,"hits":0}],"crew":[]}`,
+	} {
+		for _, level := range []string{RepairDestroyed, RepairCrippled} {
+			var f map[string]any
+			if err := json.Unmarshal([]byte(`{"name":"t","groups":[{"name":"","units":[{"id":"c","unit":"BMBaboon","updatedTs":1,"state":`+state+`}]}]}`), &f); err != nil {
+				t.Fatal(err)
+			}
+			before := readBack(t, f)
+			if c, _ := ConditionOf(before, 20, "Fusion"); !before.IsDestroyed() || before.Destroyed || c != CondDestroyed {
+				t.Fatalf("%s before: destroyed=%v flag=%v %s", name, before.IsDestroyed(), before.Destroyed, c)
+			}
+			if err := serviceUnitState(f, "c", "repair", level, 20, true, time.Now()); err != nil {
+				t.Fatal(err)
+			}
+			after := readBack(t, f)
+			if c, _ := ConditionOf(after, 20, "Fusion"); after.IsDestroyed() || after.CockpitGone || c != CondOK {
+				t.Errorf("%s after a %s repair: destroyed=%v %s", name, level, after.IsDestroyed(), c)
+			}
+		}
+	}
+}
+
 func TestStructureRepairRestoresALostLimbOrEngineHit(t *testing.T) {
 	for name, state := range map[string]string{
 		"one destroyed arm":   `{"destroyed":false,"locations":{"LA":{"armor":2,"internal":3},"CT":{"armor":1,"internal":1}},"crits":[{"name":"Hand Actuator","loc":"LA","destroyed":1,"hits":0}],"crew":[]}`,

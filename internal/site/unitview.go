@@ -60,7 +60,7 @@ const deployedGroup = "Deployed"
 func hangarViews(h mekbay.HangarForce) []hangarUnitView {
 	views := make([]hangarUnitView, 0, len(h.Units))
 	for _, hu := range h.Units {
-		v := hangarUnitView{MekBayURL: catalog.PageURL(hu.Unit), ID: hu.ID, Pilot: hu.Pilot, PilotDead: hu.CrewDead, Gunnery: hu.Gunnery, Piloting: hu.Piloting, Damaged: hu.Damaged, Destroyed: hu.Destroyed, InDeployed: mekbay.SameGroupName(hu.Group, deployedGroup)}
+		v := hangarUnitView{MekBayURL: catalog.PageURL(hu.Unit), ID: hu.ID, Pilot: hu.Pilot, PilotDead: hu.CrewDead, Gunnery: hu.Gunnery, Piloting: hu.Piloting, Damaged: hu.Damaged, Destroyed: hu.IsDestroyed(), InDeployed: mekbay.SameGroupName(hu.Group, deployedGroup)}
 		u, known := catalog.ByName(hu.Unit)
 		if known {
 			v.Name, v.Model = catalog.Names(u)
