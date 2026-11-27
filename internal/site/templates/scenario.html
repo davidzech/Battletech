@@ -39,7 +39,17 @@
 <div class="briefing-text">{{.Scenario.BriefingHTML}}</div>
 </section>
 {{end}}<section class="panel">{{.Scenario.SetupHTML}}</section>
-{{if and .Run.Started .Scenario.Forces}}<section class="mekbay" id="mekbay-op">
+{{if .Scenario.Waypoints}}<details class="fold waypoints">
+<summary><h2>Objectives</h2></summary>
+<div class="fold-body"><p class="muted">Reveal an objective only when the game calls for it. Each stays redacted until you reveal it.</p>
+<ul class="waypoint-list">
+{{range .Scenario.Waypoints}}<li class="waypoint" id="{{.ID}}">
+<div class="wp-head"><h3>{{.Name}}</h3><span class="wp-stamp">Redacted</span><button type="button" class="button wp-toggle" aria-expanded="false" aria-controls="{{.ID}}-text">Reveal</button></div>
+<div class="wp-text" id="{{.ID}}-text">{{.HTML}}</div>
+</li>
+{{end}}</ul></div>
+</details>
+{{end}}{{if and .Run.Started .Scenario.Forces}}<section class="mekbay" id="mekbay-op">
 <h2>{{if .InProgress}}Operation in progress{{else}}Deploy your force{{end}}</h2>
 {{if .InProgress}}<p class="muted">A battle is in progress. View the operation to open it in MekBay, see how it stands, and complete or abort the mission.</p>{{else if .Scenario.ProvidedUnits}}<p class="muted">This mission provides its own mechs. They are only used for this mission, and will be lost upon completion.</p>{{else}}<p class="muted">Choose which mechs from your hangar fly this mission{{if .Scenario.BVLimit}}, up to {{.Scenario.BVLimit}} BV{{end}}. The site builds each player&rsquo;s force from them in MekBay and sets up the OpFor against them.</p>{{end}}
 {{if .Scenario.AlliedUnits}}<p class="deploy-note deploy-allies">Allies: this mission adds {{range $i, $u := .Scenario.AlliedUnits}}{{if $i}}, {{end}}<b>{{$u.Name}}</b> ({{$u.Gunnery}}/{{$u.Piloting}}){{end}} to the battle on your side, for free, as a force of their own after yours.</p>{{end}}
@@ -86,25 +96,15 @@
 <h2>Deploy your force</h2>
 <p class="muted"><a href="/{{.Campaign.Slug}}/">Start this campaign</a> to deploy a force from your hangar.</p>
 </section>
-{{end}}{{if .Scenario.Waypoints}}<details class="fold waypoints">
-<summary>Objectives</summary>
-<div class="fold-body"><p class="muted">Reveal an objective only when the game calls for it. Each stays redacted until you reveal it.</p>
-<ul class="waypoint-list">
-{{range .Scenario.Waypoints}}<li class="waypoint" id="{{.ID}}">
-<div class="wp-head"><h3>{{.Name}}</h3><span class="wp-stamp">Redacted</span><button type="button" class="button wp-toggle" aria-expanded="false" aria-controls="{{.ID}}-text">Reveal</button></div>
-<div class="wp-text" id="{{.ID}}-text">{{.HTML}}</div>
-</li>
-{{end}}</ul></div>
-</details>
 {{end}}{{/* Hidden for now (the .mul downloads and their route still work):
 {{if .Scenario.Forces}}<details class="fold">
-<summary>Force files</summary>
+<summary><h2>Force files</h2></summary>
 <div class="fold-body"><p class="muted">MegaMek unit lists (.mul) for the opposing forces. Load them in <a href="https://mekbay.com" target="_blank" rel="noopener noreferrer">MekBay</a> or MegaMek.</p>
 <p class="downloads">{{range .Scenario.Forces}}<a class="button" href="/{{$.Campaign.Slug}}/{{$.Scenario.Slug}}/forces/{{.File}}" download>Download {{.Label}} (.mul)</a>{{end}}</p></div>
 </details>
 {{end}}
 */}}{{if not (and .Run.Started .Scenario.HasOutcome (ne .ScenarioState "locked") (ne .ScenarioState "completed"))}}<details class="fold">
-<summary>Outcome</summary>
+<summary><h2>Outcome</h2></summary>
 <div class="fold-body"><section class="panel">{{.Scenario.OutcomeHTML}}</section></div>
 </details>
 {{end}}{{if or .Aftermath .NextSteps}}<section class="briefing aftermath" id="aftermath" aria-label="Aftermath">
