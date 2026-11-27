@@ -174,7 +174,7 @@ test('buys units from the Purchase dialog', async ({ page }) => {
   await expect(dlg.locator('#purchase-staged .mech-row')).toHaveCount(1);
   const cost = dlg.locator('#purchase-cost');
   // The total counts up to the unit's BV (and the Buy button with it).
-  const bv = /BV: ([\d,]+)/.exec(await found.textContent())[1];
+  const bv = /BV: (\d{1,3}(?:,\d{3})*)/.exec(await found.textContent())[1]; // the tons chip follows straight after in the text
   await expect(cost).toHaveText('Total cost: ' + bv + ' SP');
   await expect(dlg.locator('#purchase-buy')).toHaveText('Buy for ' + bv + ' SP');
   await expect(cost).not.toHaveClass(/short/);
