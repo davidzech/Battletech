@@ -352,3 +352,29 @@ func TestShortCommit(t *testing.T) {
 		}
 	}
 }
+
+func TestSeedCookieSecure(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		proto string
+		want  bool
+	}{
+		{"plain HTTP", "", false},
+		{"proxy https", "https", true},
+		{"proxy HTTPS upper case", "HTTPS", true},
+		{"proxy http", "http", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodGet, "/", nil)
+			if tc.proto != "" {
+				r.Header.Set("X-Forwarded-Proto", tc.proto)
+			}
+			w := httptest.NewRecorder()
+			setSeedCookie(w, r, "abcd1234")
+			cookies := w.Result().Cookies()
+			if len(cookies) != 1 || cookies[0].Secure != tc.want {
+				t.Fatalf("cookies %+v, want one with Secure=%v", cookies, tc.want)
+			}
+		})
+	}
+}

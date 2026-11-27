@@ -140,6 +140,8 @@ func SiteHost(host string) string {
 	return rest
 }
 
+// IsHTTPS reports whether the request reached the site over HTTPS, directly or behind a proxy that
+// sets X-Forwarded-Proto (compared case-insensitively). The seed cookie's Secure flag uses it too.
 func IsHTTPS(r *http.Request) bool {
 	return r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
 }

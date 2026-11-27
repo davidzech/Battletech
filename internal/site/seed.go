@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+
+	"github.com/davidzech/Battletech/internal/mekbayproxy"
 )
 
 // A seed is the player's only credential: whoever knows it can read and change that playthrough.
@@ -45,7 +47,7 @@ func setSeedCookie(w http.ResponseWriter, r *http.Request, seed string) {
 		MaxAge:   365 * 24 * 60 * 60,
 		HttpOnly: true, // the server renders the seed into the page; scripts never read the cookie
 		SameSite: http.SameSiteLaxMode,
-		Secure:   r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https",
+		Secure:   mekbayproxy.IsHTTPS(r), // the same check the MekBay proxy uses for wss://
 	})
 }
 
