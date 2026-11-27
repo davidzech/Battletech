@@ -32,7 +32,13 @@ type Checkpoint struct {
 	At         int64  // Unix time
 	Snapshot   string // the campaign's rows as JSON, the hangar with the run's row (only loaded by Store.Checkpoint)
 	HistorySeq int    // the last history line when it was taken, so the history can offer it on that line, or the newest one it shows before it (0 for a checkpoint older than the history; only loaded by Store.Checkpoints)
+	// HasHangar is whether the snapshot holds the hangar. One that doesn't (taken before hangars were stored here, whose hangar couldn't be imported) can't be
+	// rolled back to: see RestoreCheckpoint. Only loaded by Store.Checkpoints.
+	HasHangar bool
 }
+
+// ErrCheckpointNoHangar is RestoreCheckpoint refusing a checkpoint whose snapshot has no hangar.
+var ErrCheckpointNoHangar = errors.New("the checkpoint has no hangar")
 
 type snapshotQuerier interface {
 	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
@@ -172,7 +178,8 @@ func (s *Store) AddCheckpoint(ctx context.Context, playthroughID, campaign, labe
 
 // Checkpoints lists a campaign's rollback points, newest first (without their snapshots).
 func (s *Store) Checkpoints(ctx context.Context, playthroughID, campaign string) ([]Checkpoint, error) {
-	rows, err := s.db.QueryContext(ctx, s.q(`SELECT seq, label, created_at, history_seq FROM campaign_checkpoints WHERE playthrough_id = ? AND campaign = ? ORDER BY seq DESC`), playthroughID, campaign)
+	rows, err := s.db.QueryContext(ctx, s.q(`SELECT seq, label, created_at, history_seq, CASE WHEN snapshot LIKE ? THEN 1 ELSE 0 END FROM campaign_checkpoints
+		WHERE playthrough_id = ? AND campaign = ? ORDER BY seq DESC`), snapshotWithHangar, playthroughID, campaign)
 	if err != nil {
 		return nil, err
 	}
@@ -180,9 +187,11 @@ func (s *Store) Checkpoints(ctx context.Context, playthroughID, campaign string)
 	var out []Checkpoint
 	for rows.Next() {
 		var c Checkpoint
-		if err := rows.Scan(&c.Seq, &c.Label, &c.At, &c.HistorySeq); err != nil {
+		var has int
+		if err := rows.Scan(&c.Seq, &c.Label, &c.At, &c.HistorySeq, &has); err != nil {
 			return nil, err
 		}
+		c.HasHangar = has == 1
 		out = append(out, c)
 	}
 	return out, rows.Err()
@@ -199,8 +208,8 @@ func (s *Store) Checkpoint(ctx context.Context, playthroughID, campaign string, 
 }
 
 // RestoreCheckpoint puts the campaign's rows back as they were in the checkpoint (the hangar with the run's row) and forgets every later checkpoint, all in one
-// transaction. A checkpoint with no hangar of its own (one of a run whose hangar the site never kept, from before hangars were stored here) leaves the hangar as
-// it is.
+// transaction. A checkpoint with no hangar of its own (taken before hangars were stored here, and whose hangar couldn't be imported) is refused with
+// ErrCheckpointNoHangar: restoring the rest (the warchest, the pilots) around today's units would undo payments without undoing what they bought.
 func (s *Store) RestoreCheckpoint(ctx context.Context, playthroughID, campaign string, seq int) error {
 	cp, ok, err := s.Checkpoint(ctx, playthroughID, campaign, seq)
 	if err != nil {
@@ -213,16 +222,18 @@ func (s *Store) RestoreCheckpoint(ctx context.Context, playthroughID, campaign s
 	if err != nil {
 		return fmt.Errorf("the checkpoint could not be read: %w", err)
 	}
+	if len(snap["campaign_runs"]) == 0 {
+		return ErrCheckpointNoHangar
+	}
+	if h, _ := snap["campaign_runs"][0]["hangar"].(string); h == "" {
+		return ErrCheckpointNoHangar
+	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
 	if err := s.lockRun(ctx, tx, playthroughID, campaign); err != nil { // before the pilots' rows, as everywhere
-		return err
-	}
-	var hangar string
-	if err := tx.QueryRowContext(ctx, s.q(`SELECT hangar FROM campaign_runs WHERE playthrough_id = ? AND campaign = ?`), playthroughID, campaign).Scan(&hangar); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return err
 	}
 	for i := len(snapshotTables) - 1; i >= 0; i-- {
@@ -246,11 +257,6 @@ func (s *Store) RestoreCheckpoint(ctx context.Context, playthroughID, campaign s
 			if _, err := tx.ExecContext(ctx, s.q("INSERT INTO "+t.table+" ("+strings.Join(cols, ", ")+") VALUES ("+strings.Join(marks, ", ")+")"), args...); err != nil {
 				return fmt.Errorf("restoring %s: %w", t.table, err)
 			}
-		}
-	}
-	if snapshotHangar(cp.Snapshot) == "" && hangar != "" {
-		if _, err := tx.ExecContext(ctx, s.q(`UPDATE campaign_runs SET hangar = ? WHERE playthrough_id = ? AND campaign = ?`), hangar, playthroughID, campaign); err != nil {
-			return err
 		}
 	}
 	// The history goes back with the rest: what happened after the checkpoint never happened.

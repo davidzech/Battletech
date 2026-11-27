@@ -2,7 +2,6 @@ package site
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 
 	"github.com/davidzech/Battletech/internal/content"
@@ -42,8 +41,7 @@ func (s *Server) hangarJSON(w http.ResponseWriter, r *http.Request) {
 	}
 	h, err := s.scenarioHangar(r.Context(), pt.ID, c, sc)
 	if err != nil {
-		log.Printf("load the hangar for %s: %v", sc.ID, err)
-		http.Error(w, "could not load your hangar", http.StatusInternalServerError)
+		hangarLoadFailed(w, err, "for "+sc.ID)
 		return
 	}
 	out := deployData(h, c, sc, run)

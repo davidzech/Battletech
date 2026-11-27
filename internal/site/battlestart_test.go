@@ -659,7 +659,7 @@ func TestFailedAbortKeepsTheBattleInMekBay(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	setSnapshot(`{"campaign_runs":[{"playthrough_id":"` + id + `","campaign":"refusalwar","no_such_column":1}]}`)
+	setSnapshot(`{"campaign_runs":[{"playthrough_id":"` + id + `","campaign":"refusalwar","hangar":"{}","no_such_column":1}]}`)
 	if got := abort(); got != http.StatusInternalServerError {
 		t.Fatalf("an abort whose rollback fails: %d", got)
 	}

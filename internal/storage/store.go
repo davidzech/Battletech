@@ -108,8 +108,8 @@ func (s *Store) schemaStatements() []string {
 	granted_at     %s,
 	PRIMARY KEY (playthrough_id, campaign, keyword)
 )`, s.timestampColumn()),
-		// Hangars were once read from MekBay and cached here; they live in campaign_runs.hangar now.
-		`DROP TABLE IF EXISTS hangar_cache`,
+		// Hangars were once read from MekBay and cached in hangar_cache; they live in campaign_runs.hangar now. The table is left alone (unused) so an older version
+		// still serving during a deploy keeps its cache; the follow-up that drops the import drops it too.
 		`CREATE TABLE IF NOT EXISTS mekbay_operations (
 	playthrough_id TEXT NOT NULL REFERENCES playthroughs(id) ON DELETE CASCADE,
 	campaign       TEXT NOT NULL,

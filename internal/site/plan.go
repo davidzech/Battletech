@@ -3,7 +3,6 @@ package site
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -132,8 +131,7 @@ func (s *Server) checkPlan(w http.ResponseWriter, r *http.Request) (*builtPlan, 
 	}
 	h, err := s.scenarioHangar(r.Context(), pt.ID, c, sc)
 	if err != nil {
-		log.Printf("load the hangar for the plan: %v", err)
-		http.Error(w, "could not load your hangar", http.StatusInternalServerError)
+		hangarLoadFailed(w, err, "for the plan")
 		return nil, false
 	}
 	var swaps []plannedSwap

@@ -402,3 +402,60 @@ func TestRollbackFailureChangesNothing(t *testing.T) {
 		t.Errorf("a failed rollback is not in the history: %+v", h)
 	}
 }
+
+// A checkpoint whose hangar couldn't be imported from MekBay can't be rolled back to: the History doesn't offer it, a rollback asked for anyway is refused and
+// changes nothing, and Abort mission's rollback is refused too (aborting keeping the changes still ends the battle).
+func TestRollbackRefusedWithoutAHangar(t *testing.T) {
+	srv, store, _, cookie := startedWith4500(t)
+	ctx := context.Background()
+	id := playthroughID("wolfpack2026")
+	live, err := store.Hangar(ctx, id, "refusalwar")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A checkpoint taken while the run had no hangar stored (as one from before hangars were kept here, whose copy MekBay no longer had).
+	if _, err := store.DB().Exec(`UPDATE campaign_runs SET hangar = ''`); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.LogHistory(ctx, id, "refusalwar", storage.HistoryMission, "Completed Scenario 000: Trial of Position.", 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.AddCheckpoint(ctx, id, "refusalwar", "Completed Scenario 000: Trial of Position"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SetHangar(ctx, id, "refusalwar", live); err != nil {
+		t.Fatal(err)
+	}
+	cps, _ := store.Checkpoints(ctx, id, "refusalwar")
+	if len(cps) != 2 || cps[0].HasHangar || !cps[1].HasHangar {
+		t.Fatalf("checkpoints: %+v", cps)
+	}
+	if p := body(t, srv, "/refusalwar/", cookie); strings.Contains(p, `data-checkpoint="`+strconv.Itoa(cps[0].Seq)+`"`) || !strings.Contains(p, `data-checkpoint="`+strconv.Itoa(cps[1].Seq)+`"`) {
+		t.Error("the History offers only the checkpoint with a hangar")
+	}
+	text := func(res *http.Response) string { b, _ := io.ReadAll(res.Body); return strings.TrimSpace(string(b)) }
+	res := post(t, srv, "/api/campaign/rollback", url.Values{"campaign": {"refusalwar"}, "checkpoint": {strconv.Itoa(cps[0].Seq)}}, cookie, srv.URL)
+	if res.StatusCode != http.StatusConflict || text(res) != noHangarRollbackMessage {
+		t.Errorf("a rollback to it: %d", res.StatusCode)
+	}
+	if run, _, _ := store.Run(ctx, id, "refusalwar"); run.Warchest != 4500 {
+		t.Errorf("the refused rollback changes nothing: %d", run.Warchest)
+	}
+	if left, _ := store.Checkpoints(ctx, id, "refusalwar"); len(left) != 2 {
+		t.Errorf("no checkpoint is forgotten: %+v", left)
+	}
+
+	if err := store.SaveMekBayOperation(ctx, id, "refusalwar", "scenario_000", storage.MekBayOperation{OpForInstance: "opfor", OperationID: "op-1"}); err != nil {
+		t.Fatal(err)
+	}
+	res = post(t, srv, "/api/battle/abort", url.Values{"campaign": {"refusalwar"}, "scenario": {"scenario_000"}, "mode": {"rollback"}}, cookie, srv.URL)
+	if res.StatusCode != http.StatusConflict || !strings.HasPrefix(text(res), noHangarRollbackMessage) {
+		t.Errorf("an abort that rolls back to it: %d", res.StatusCode)
+	}
+	if _, had, _ := store.MekBayOperation(ctx, id, "refusalwar", "scenario_000"); !had {
+		t.Error("the refused abort leaves the battle")
+	}
+	if got := post(t, srv, "/api/battle/abort", url.Values{"campaign": {"refusalwar"}, "scenario": {"scenario_000"}, "mode": {"keep"}}, cookie, srv.URL).StatusCode; got != http.StatusNoContent {
+		t.Errorf("an abort keeping the changes: %d", got)
+	}
+}

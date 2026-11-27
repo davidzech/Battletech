@@ -44,6 +44,10 @@ func (s *Server) recordCheckpoint(ctx context.Context, playthroughID, campaign, 
 	}
 }
 
+// noHangarRollbackMessage refuses a rollback to a checkpoint without a hangar (storage.ErrCheckpointNoHangar): one taken before hangars were kept on the site,
+// whose copy in MekBay couldn't be imported.
+const noHangarRollbackMessage = "That checkpoint's hangar couldn't be brought over from MekBay, so the campaign can't be rolled back to it."
+
 // rollbackTo puts the campaign back as it was at a checkpoint, its hangar too, and forgets the later checkpoints, all in one transaction. It returns the
 // checkpoint's label.
 func (s *Server) rollbackTo(ctx context.Context, playthroughID, campaign string, seq int) (string, error) {
@@ -75,6 +79,8 @@ func (s *Server) rollbackCampaign(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
 		http.Error(w, "That checkpoint no longer exists.", http.StatusNotFound)
+	case errors.Is(err, storage.ErrCheckpointNoHangar):
+		http.Error(w, noHangarRollbackMessage, http.StatusConflict)
 	case err != nil:
 		log.Printf("roll back: %v", err)
 		http.Error(w, "Could not roll the campaign back.", http.StatusInternalServerError)

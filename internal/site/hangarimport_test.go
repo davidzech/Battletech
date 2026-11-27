@@ -7,11 +7,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/davidzech/Battletech/internal/mekbay"
 	"github.com/davidzech/Battletech/internal/storage"
 )
 
-// oldStore is a database as the site left it before hangars lived in it: a run whose hangar is the MekBay force "live-1", with a checkpoint whose frozen copy is
-// the force "frozen-1", and a run whose import is done already.
+// oldStore is a database as the site left it before hangars lived in it: a run whose hangar is the MekBay force "live-1" (a copy the site kept, so it has a
+// source link), with a checkpoint whose frozen copy is the force "frozen-1", and a run imported already by an earlier import, which left its force set.
 func oldStore(t *testing.T) *storage.Store {
 	t.Helper()
 	ctx := context.Background()
@@ -38,8 +39,28 @@ func oldStore(t *testing.T) *storage.Store {
 	return store
 }
 
-// The import reads every hangar still only in MekBay, runs' and checkpoints' alike, stores it as it is, and skips what is imported already; run again it
-// reads nothing.
+// importSources are the MekBay forces the database still names for the import: runs' hangar_instance and checkpoints' hangar_copy.
+func importSources(t *testing.T, store *storage.Store) []string {
+	t.Helper()
+	rows, err := store.DB().Query(`SELECT hangar_instance FROM campaign_runs WHERE hangar_instance <> '' UNION ALL SELECT hangar_copy FROM campaign_checkpoints WHERE hangar_copy <> ''`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var s string
+		if err := rows.Scan(&s); err != nil {
+			t.Fatal(err)
+		}
+		out = append(out, s)
+	}
+	slices.Sort(out)
+	return out
+}
+
+// The import reads every hangar still only in MekBay, runs' and checkpoints' alike, stores it as it is, and forgets each one's MekBay force (an imported run's
+// too); run again it reads nothing.
 func TestImportHangars(t *testing.T) {
 	ctx := context.Background()
 	store := oldStore(t)
@@ -53,6 +74,9 @@ func TestImportHangars(t *testing.T) {
 	if !slices.Equal(fake.reads, []string{"frozen-1", "live-1"}) {
 		t.Errorf("each hangar still in MekBay is read once, and only those: %v", fake.reads)
 	}
+	if left := importSources(t, store); len(left) != 0 {
+		t.Errorf("every MekBay force is forgotten once handled: %v", left)
+	}
 	raw, err := store.Hangar(ctx, "pt", "refusalwar")
 	if err != nil || string(raw) != string(forceOf(live)) {
 		t.Errorf("the run's hangar is stored as MekBay had it: %s %v", raw, err)
@@ -62,6 +86,9 @@ func TestImportHangars(t *testing.T) {
 	}
 	// The checkpoint holds its frozen hangar now: rolling back to it restores that.
 	cps, _ := store.Checkpoints(ctx, "pt", "refusalwar")
+	if !cps[0].HasHangar {
+		t.Error("the checkpoint has a hangar now")
+	}
 	if err := store.RestoreCheckpoint(ctx, "pt", "refusalwar", cps[0].Seq); err != nil {
 		t.Fatal(err)
 	}
@@ -75,58 +102,98 @@ func TestImportHangars(t *testing.T) {
 	}
 }
 
-// A hangar that can't be read stops the import with an error naming it, so the server doesn't start; what could be read stays imported.
-func TestImportHangarsFailsOnARead(t *testing.T) {
+// What trying again can't fix is skipped and marked handled, so the server starts and later starts don't ask MekBay again: a force MekBay no longer has, data
+// that isn't a force, and a checkpoint whose snapshot can't take a hangar. The rest is imported.
+func TestImportHangarsSkipsWhatCantBeImported(t *testing.T) {
 	ctx := context.Background()
-	store := oldStore(t)
-	fake := &fakeMekBay{forces: map[string][]byte{"live-1": forceOf(startingHangar())}}
-	fake.forces["frozen-1"] = []byte(`{"name":`) // not a force
-	err := ImportHangars(ctx, store, fake)
-	if err == nil || !strings.Contains(err.Error(), "checkpoint 1 of campaign refusalwar") || !strings.Contains(err.Error(), "frozen-1") {
-		t.Fatalf("a hangar that can't be read: %v", err)
+	cases := map[string]struct {
+		fake  *fakeMekBay
+		setup string // SQL run on the old database first
+		run   bool   // whether the run's hangar is imported
+		cp    bool   // whether the checkpoint's is
+	}{
+		"a checkpoint's copy MekBay no longer has": {fake: &fakeMekBay{forces: map[string][]byte{"live-1": forceOf(startingHangar())}, gone: map[string]bool{"frozen-1": true}}, run: true},
+		"a run's hangar MekBay no longer has":      {fake: &fakeMekBay{forces: map[string][]byte{"frozen-1": forceOf(startingHangar())}, gone: map[string]bool{"live-1": true}}, cp: true},
+		"data that isn't a force":                  {fake: &fakeMekBay{forces: map[string][]byte{"live-1": []byte(`null`), "frozen-1": []byte(`{"name":`)}}},
+		"a snapshot that can't be read": {fake: &fakeMekBay{forces: map[string][]byte{"live-1": forceOf(startingHangar()), "frozen-1": forceOf(startingHangar())}},
+			setup: `UPDATE campaign_checkpoints SET snapshot = '{"campaign_runs":[]}'`, run: true},
 	}
-	if _, err := store.Hangar(ctx, "pt", "refusalwar"); err != nil {
-		t.Errorf("the run's hangar, read before the failure, stays imported: %v", err)
-	}
-	if left, _ := store.CheckpointHangarImports(ctx); len(left) != 1 {
-		t.Errorf("the checkpoint is still to import: %+v", left)
-	}
-
-	down := &fakeMekBay{err: errors.New("mekbay is down")}
-	store2 := oldStore(t)
-	if err := ImportHangars(ctx, store2, down); err == nil || !strings.Contains(err.Error(), "mekbay is down") || !strings.Contains(err.Error(), "live-1") {
-		t.Errorf("MekBay down: %v", err)
-	}
-	if _, err := store2.Hangar(ctx, "pt", "refusalwar"); !errors.Is(err, storage.ErrNoHangar) {
-		t.Errorf("nothing is stored: %v", err)
+	for name, c := range cases {
+		store := oldStore(t)
+		if c.setup != "" {
+			if _, err := store.DB().Exec(c.setup); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := ImportHangars(ctx, store, c.fake); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if left := importSources(t, store); len(left) != 0 {
+			t.Errorf("%s: skipped hangars are marked handled: %v", name, left)
+		}
+		if _, err := store.Hangar(ctx, "pt", "refusalwar"); (err == nil) != c.run || (!c.run && !errors.Is(err, storage.ErrNoHangar)) {
+			t.Errorf("%s: the run's hangar imported %v: %v", name, c.run, err)
+		}
+		if cps, _ := store.Checkpoints(ctx, "pt", "refusalwar"); cps[0].HasHangar != c.cp {
+			t.Errorf("%s: the checkpoint's hangar imported %v", name, c.cp)
+		}
+		again := &fakeMekBay{err: errors.New("must not be read")}
+		if err := ImportHangars(ctx, store, again); err != nil || len(again.reads) != 0 {
+			t.Errorf("%s: a second import reads nothing: %v %v", name, again.reads, err)
+		}
 	}
 }
 
-// A force MekBay no longer has can't be imported by trying again, so it is skipped rather than keeping the server down: the rest is imported, and the skipped
-// hangars stay listed, to be tried again at the next start.
-func TestImportHangarsSkipsForcesMekBayNoLongerHas(t *testing.T) {
+// A failure to reach MekBay (or a timeout) may pass, so it stops the import with an error naming the hangar, and the server doesn't start; what could be read
+// stays imported and the rest stays listed for the next start.
+func TestImportHangarsStopsWhenMekBayFails(t *testing.T) {
 	ctx := context.Background()
 	store := oldStore(t)
-	fake := &fakeMekBay{forces: map[string][]byte{"live-1": forceOf(startingHangar())}, gone: map[string]bool{"frozen-1": true}}
-	if err := ImportHangars(ctx, store, fake); err != nil {
-		t.Fatalf("a checkpoint's frozen copy MekBay no longer has: %v", err)
+	err := ImportHangars(ctx, store, &fakeMekBay{err: errors.New("mekbay is down")})
+	if err == nil || !strings.Contains(err.Error(), "mekbay is down") || !strings.Contains(err.Error(), "live-1") {
+		t.Fatalf("MekBay down: %v", err)
 	}
-	if _, err := store.Hangar(ctx, "pt", "refusalwar"); err != nil {
-		t.Errorf("the run's hangar is imported: %v", err)
+	if _, err := store.Hangar(ctx, "pt", "refusalwar"); !errors.Is(err, storage.ErrNoHangar) {
+		t.Errorf("nothing is stored: %v", err)
 	}
-	if left, _ := store.CheckpointHangarImports(ctx); len(left) != 1 {
-		t.Errorf("the skipped checkpoint stays to try again: %+v", left)
+	if left := importSources(t, store); !slices.Equal(left, []string{"frozen-1", "live-1"}) {
+		t.Errorf("both stay to import: %v", left)
 	}
+}
 
-	store2 := oldStore(t)
-	gone := &fakeMekBay{forces: map[string][]byte{"frozen-1": forceOf(startingHangar())}, gone: map[string]bool{"live-1": true}}
-	if err := ImportHangars(ctx, store2, gone); err != nil {
-		t.Fatalf("a run's hangar MekBay no longer has: %v", err)
+// A run from before the site kept its own copy of a hangar (no source link) has the player's own force as its hangar, crews and all: the import resets every
+// crew to the unnamed 4/5 one, and keeps the damage.
+func TestImportHangarsResetsLegacyCrews(t *testing.T) {
+	ctx := context.Background()
+	store := oldStore(t)
+	if _, err := store.DB().Exec(`UPDATE campaign_runs SET source_url = '' WHERE campaign = 'refusalwar'`); err != nil {
+		t.Fatal(err)
 	}
-	if _, err := store2.Hangar(ctx, "pt", "refusalwar"); !errors.Is(err, storage.ErrNoHangar) {
-		t.Errorf("the run is left without a hangar: %v", err)
+	live := startingHangar()
+	live.Units[0].Pilot, live.Units[0].Gunnery, live.Units[0].Piloting = "Natasha Kerensky", 2, 3
+	live.Units[1].Locations, live.Units[1].Damaged = map[string]mekbay.LocationLoss{"CT": {Armor: 4}}, true
+	if err := ImportHangars(ctx, store, &fakeMekBay{forces: map[string][]byte{"live-1": forceOf(live), "frozen-1": forceOf(live)}}); err != nil {
+		t.Fatal(err)
 	}
-	if left, _ := store2.CheckpointHangarImports(ctx); len(left) != 0 {
-		t.Errorf("the checkpoint is still imported: %+v", left)
+	h := runHangarOf(t, store, "pt", "refusalwar")
+	if u := h.Units[0]; u.Pilot != "" || u.Gunnery != mekbay.DefaultGunnery || u.Piloting != mekbay.DefaultPiloting {
+		t.Errorf("the crew is reset: %+v", u)
 	}
+	if u := h.Units[1]; u.Locations["CT"].Armor != 4 {
+		t.Errorf("the damage is kept: %+v", u)
+	}
+}
+
+// runHangarOf is a run's stored hangar as the site reads it.
+func runHangarOf(t *testing.T, store *storage.Store, playthroughID, campaign string) mekbay.HangarForce {
+	t.Helper()
+	raw, err := store.Hangar(context.Background(), playthroughID, campaign)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h, err := mekbay.ParseForce(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return h
 }

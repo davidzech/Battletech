@@ -159,7 +159,8 @@ func (s *Server) reconfigureForBattle(ctx context.Context, r *http.Request, bp *
 	}
 	var made []plannedSwap
 	cost := 0
-	left, err := s.store.EditHangar(ctx, bp.pt.ID, bp.c.Slug, func(force map[string]any) (int, error) {
+	// The start holds its claim for this scenario while it reconfigures (Store.ClaimBattle), which the guard allows; any other battle refuses it.
+	left, err := s.store.EditHangarGuarded(ctx, bp.pt.ID, bp.c.Slug, hangarGuard(bp.c, bp.sc.ID), func(force map[string]any) (int, error) {
 		h, err := parseHangarMap(force)
 		if err != nil {
 			return 0, err
@@ -178,11 +179,16 @@ func (s *Server) reconfigureForBattle(ctx context.Context, r *http.Request, bp *
 		return -cost, nil
 	})
 	var refusal hangarError
+	var battle storage.BattleInProgressError
 	switch {
 	case errors.As(err, &refusal):
 		return refusal.msg, refusal.status
+	case errors.As(err, &battle):
+		return battleRefusal(bp.c, battle), http.StatusConflict
 	case errors.Is(err, storage.ErrInsufficientFunds):
 		return fmt.Sprintf("Not enough in the warchest: reconfiguring costs %d SP and you have %d.", cost, left), http.StatusConflict
+	case errors.Is(err, storage.ErrNoHangar):
+		return noHangarMessage, http.StatusConflict
 	case err != nil:
 		log.Printf("reconfigure for the battle: %v", err)
 		return "could not reconfigure your mechs", http.StatusInternalServerError

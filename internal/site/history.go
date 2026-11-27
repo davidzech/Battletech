@@ -155,6 +155,9 @@ func (s *Server) historyViews(r *http.Request, playthroughID string, c *content.
 			if cp.HistorySeq == 0 && cp.Label != startCheckpointLabel {
 				continue
 			}
+			if !cp.HasHangar { // its hangar couldn't be imported from MekBay: it can't be rolled back to
+				continue
+			}
 			n := sort.Search(len(entries), func(i int) bool { return entries[i].Seq > cp.HistorySeq }) // entries are oldest first
 			if n == 0 {
 				continue

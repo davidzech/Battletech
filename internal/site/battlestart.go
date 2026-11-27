@@ -3,6 +3,7 @@ package site
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -111,8 +112,7 @@ func (s *Server) startBattle(w http.ResponseWriter, r *http.Request) {
 	if !bp.sc.Provides() {
 		var err error
 		if hangarData, err = s.store.Hangar(ctx, bp.pt.ID, bp.c.Slug); err != nil {
-			log.Printf("load the hangar for battle %s: %v", bp.sc.ID, err)
-			http.Error(w, "could not load your hangar", http.StatusInternalServerError)
+			hangarLoadFailed(w, err, "for battle "+bp.sc.ID)
 			return
 		}
 	}
@@ -264,6 +264,10 @@ func (s *Server) abortBattle(w http.ResponseWriter, r *http.Request) {
 		return
 	} else if len(cps) > 0 && mode == "rollback" {
 		label, err := s.rollbackTo(r.Context(), pt.ID, c.Slug, cps[0].Seq)
+		if errors.Is(err, storage.ErrCheckpointNoHangar) {
+			http.Error(w, noHangarRollbackMessage+" Abort keeping your changes instead.", http.StatusConflict) // nothing is aborted yet
+			return
+		}
 		if err != nil {
 			log.Printf("roll back on abort: %v", err)
 			http.Error(w, "Could not roll the campaign back.", http.StatusInternalServerError)

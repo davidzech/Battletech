@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 
 	"github.com/davidzech/Battletech/internal/content"
@@ -64,12 +63,8 @@ func (s *Server) forceJSON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h, err := s.loadHangar(r.Context(), playthroughID(seed), c.Slug)
-	if errors.Is(err, sql.ErrNoRows) {
-		http.Error(w, "Start this campaign first.", http.StatusBadRequest)
-		return
-	} else if err != nil {
-		log.Printf("load the hangar for the overview: %v", err)
-		http.Error(w, "could not load your hangar", http.StatusInternalServerError)
+	if err != nil {
+		hangarLoadFailed(w, err, "for the overview")
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")

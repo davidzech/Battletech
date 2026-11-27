@@ -128,8 +128,9 @@ func (s *Server) commitOutcome(w http.ResponseWriter, r *http.Request) {
 
 // battleWriteBack, for a mission fought with the player's own force (not a provided one) that has a battle in progress, reads the battle's units from MekBay and
 // returns the edit that writes them back into the hangar (see internal/mekbay/commit.go), which completing the mission makes in the same transaction: a failure
-// leaves both as they were, and the mission open to try again. It returns a nil edit when there is no battle to write back. It answers the request itself and
-// returns false when it fails.
+// leaves both as they were, and the mission open to try again. It returns a nil edit when there is no battle to write back, or no hangar to write it into (a
+// campaign whose hangar couldn't be imported from MekBay: the mission still completes, and that is logged). It answers the request itself and returns false
+// when it fails.
 func (s *Server) battleWriteBack(w http.ResponseWriter, r *http.Request, pt storage.Playthrough, c *content.Campaign, sc *content.Scenario) (storage.HangarEdit, bool) {
 	if sc.Provides() {
 		return nil, true
@@ -141,6 +142,13 @@ func (s *Server) battleWriteBack(w http.ResponseWriter, r *http.Request, pt stor
 	}
 	if !had {
 		return nil, true
+	}
+	if _, err := s.store.Hangar(r.Context(), pt.ID, c.Slug); errors.Is(err, storage.ErrNoHangar) {
+		log.Printf("complete %s: the campaign has no hangar, so the battle's damage is not written back", sc.ID)
+		return nil, true
+	} else if err != nil {
+		http.Error(w, "could not load your hangar", http.StatusInternalServerError)
+		return nil, false
 	}
 	battle, err := s.mekbay.ReadBattleUnits(r.Context(), mekbay.AccountUID(currentSeed(r), mekbay.SlotHangar), op.OperationID, skipAllies(op.AlliesInstance))
 	if err != nil {

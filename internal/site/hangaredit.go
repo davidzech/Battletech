@@ -164,6 +164,37 @@ func parseHangarMap(force map[string]any) (mekbay.HangarForce, error) {
 	return mekbay.ParseForce(b)
 }
 
+// noHangarMessage is the answer for a campaign whose hangar the import couldn't bring over from MekBay (storage.ErrNoHangar): it can't be used.
+const noHangarMessage = "This campaign's hangar couldn't be brought over from MekBay, so it can't be used. Delete the campaign (Danger zone) and start it again."
+
+// hangarLoadFailed answers a request whose campaign hangar couldn't be loaded (what says for what, for the log): a campaign without a hangar says so (409), one
+// not started is asked to start (400), anything else is a 500.
+func hangarLoadFailed(w http.ResponseWriter, err error, what string) {
+	switch {
+	case errors.Is(err, storage.ErrNoHangar):
+		http.Error(w, noHangarMessage, http.StatusConflict)
+	case errors.Is(err, sql.ErrNoRows):
+		http.Error(w, "Start this campaign first.", http.StatusBadRequest)
+	default:
+		log.Printf("load the hangar %s: %v", what, err)
+		http.Error(w, "could not load your hangar", http.StatusInternalServerError)
+	}
+}
+
+// hangarGuard is the battle guard of an edit to a campaign's hangar (see storage.BattleGuard): every battle locks it, but one of a scenario the campaign no
+// longer has (as battleInProgress), and the claim of the scenario allowed ("" allows none).
+func hangarGuard(c *content.Campaign, allowed string) storage.BattleGuard {
+	return storage.BattleGuard{AllowClaim: allowed, Counts: func(id string) bool { _, ok := c.ScenarioByID(id); return ok }}
+}
+
+// battleRefusal is the battle lock's message for an edit refused inside its transaction because a battle started after the request checked the lock.
+func battleRefusal(c *content.Campaign, e storage.BattleInProgressError) string {
+	if sc, ok := c.ScenarioByID(e.Scenario); ok {
+		return battleLockMessage(c, sc)
+	}
+	return "A battle is in progress. Complete or abort it before changing the campaign."
+}
+
 // loadHangar reads a campaign run's hangar from the database.
 func (s *Server) loadHangar(ctx context.Context, playthroughID, campaign string) (mekbay.HangarForce, error) {
 	raw, err := s.store.Hangar(ctx, playthroughID, campaign)
@@ -178,13 +209,14 @@ func (s *Server) loadHangar(ctx context.Context, playthroughID, campaign string)
 // refuses it with that status and message.
 type hangarChange func(force map[string]any, h mekbay.HangarForce) (sp int, history string, err error)
 
-// changeHangar makes a change to a run's hangar and its warchest together, in one transaction (Store.EditHangar), so a change that is refused, or that the
-// warchest can't cover, changes nothing and charges nothing. Changes made at once, by this server or another sharing the database, take turns, each starting from
-// the hangar the last one saved. The change's line is logged once it is made. It answers the request itself on a problem and reports ok=false; on success it
+// changeHangar makes a change to a run's hangar and its warchest together, in one transaction (Store.EditHangarGuarded), so a change that is refused, or that
+// the warchest can't cover, changes nothing and charges nothing. Changes made at once, by this server or another sharing the database, take turns, each starting
+// from the hangar the last one saved. A battle started after the request passed the battle lock refuses it inside the transaction, with the lock's message. The
+// change's line is logged once it is made. It answers the request itself on a problem and reports ok=false; on success it
 // returns the warchest the change left (not the run loaded at the start of the request, which another request may have changed since) and the SP it moved.
 func (s *Server) changeHangar(w http.ResponseWriter, r *http.Request, pt storage.Playthrough, c *content.Campaign, change hangarChange) (warchest, sp int, ok bool) {
 	var history string
-	warchest, err := s.store.EditHangar(r.Context(), pt.ID, c.Slug, func(force map[string]any) (int, error) {
+	warchest, err := s.store.EditHangarGuarded(r.Context(), pt.ID, c.Slug, hangarGuard(c, ""), func(force map[string]any) (int, error) {
 		h, err := parseHangarMap(force)
 		if err != nil {
 			return 0, err
@@ -193,11 +225,16 @@ func (s *Server) changeHangar(w http.ResponseWriter, r *http.Request, pt storage
 		return sp, err
 	})
 	var refusal hangarError
+	var battle storage.BattleInProgressError
 	switch {
 	case errors.As(err, &refusal):
 		http.Error(w, refusal.msg, refusal.status)
+	case errors.As(err, &battle):
+		http.Error(w, battleRefusal(c, battle), http.StatusConflict)
 	case errors.Is(err, storage.ErrInsufficientFunds):
 		http.Error(w, fmt.Sprintf("Not enough in the warchest: that costs %d SP and you have %d.", -sp, warchest), http.StatusConflict)
+	case errors.Is(err, storage.ErrNoHangar):
+		http.Error(w, noHangarMessage, http.StatusConflict)
 	case errors.Is(err, sql.ErrNoRows):
 		http.Error(w, "Start this campaign first.", http.StatusBadRequest)
 	case err != nil:
