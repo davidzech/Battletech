@@ -1418,8 +1418,7 @@ dialog button.deploy-count[aria-pressed="true"] { color: var(--accent-ink); back
 .deploy-review-list { list-style: none; margin: 0; padding: 0; }
 .deploy-review-total { display: flex; flex-wrap: wrap; gap: 0.3rem 1.2rem; font: 700 1rem var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
 .deploy-review-total.over { color: #ff7a59; }
-/* Under the total: how far over the BV limit the force is, and the drop cost (reconfiguring the hangar's omnimechs, paid by Start battle). */
-.deploy-review-note { margin: 0.3rem 0 0; color: #ff7a59; }
+/* Under the total: the drop cost (reconfiguring the hangar's omnimechs, paid by Start battle). */
 .deploy-drop-cost { margin-top: 0.35rem; color: var(--accent); }
 .deploy-drop-cost.over { color: #ff7a59; }
 .deploy-note { margin: 0; padding: 0.7rem 0.9rem; font-size: 0.9rem; background: var(--bg); border: 1px solid var(--line); border-left: 3px solid var(--accent); }

@@ -380,8 +380,7 @@
       ticked(u.id, reconfigured);
     });
     label.appendChild(box);
-    var shown = labelled(effective(u));
-    var mech = MechRow.build(pilots.length ? viewOf(shown) : shown); // the pilot's skills are shown in the slot
+    var mech = mechRowOf(u);
     label.appendChild(mech);
     li.appendChild(label);
     var place = null;
@@ -392,6 +391,17 @@
     }
     rows[u.id] = { u: u, li: li, box: box, mech: mech, slot: place, unavailable: unavailable };
     return li;
+  }
+
+  // A mech step's row for a mech, as it will be flown (the pilot's skills are shown in the slot), with its Reconfigure button when it is an omnimech. The button
+  // sits in the row's label, but a click on it doesn't tick the box (a label ignores clicks on buttons inside it).
+  function mechRowOf(u) {
+    var shown = labelled(effective(u));
+    var view = {};
+    var base = pilots.length ? viewOf(shown) : shown;
+    Object.keys(base).forEach(function (k) { view[k] = base[k]; });
+    if (configurable(u)) view.actions = [reconfigureAction(u)];
+    return MechRow.build(view);
   }
 
   // The list's rows by unit ID, so ticking a mech can update the list in place: rebuilding every row on each tick made the icons and portraits flash.
@@ -411,10 +421,16 @@
       r.box.checked = taken;
       r.box.disabled = r.unavailable || (!taken && full);
       if (k === id && reconfigured) {
-        var shown = labelled(effective(r.u));
-        var mech = MechRow.build(pilots.length ? viewOf(shown) : shown);
+        var mech = mechRowOf(r.u);
         r.mech.replaceWith(mech);
         r.mech = mech;
+      }
+      // The Reconfigure button follows the tickbox: a mech that can't be taken can't be reconfigured into the force either.
+      var btn = r.mech.querySelector('.mr-action');
+      if (btn) {
+        var state = reconfigureState(r.u);
+        btn.disabled = state.disabled;
+        btn.title = state.title;
       }
       if (r.slot && (k === id || !taken)) {
         var place = slot(r.u, r.unavailable);
@@ -489,6 +505,7 @@
   function renderSummary(data, notes) {
     review.textContent = '';
     notes.forEach(function (n) { review.appendChild(n); });
+    reviewTotals(data);
     data.forEach(function (pl) {
       var sec = el('section', 'deploy-review-player');
       var h = el('h3', null, playerCount > 1 ? 'Player ' + pl.player : 'Your force');
@@ -507,6 +524,10 @@
       sec.appendChild(ul);
       review.appendChild(sec);
     });
+  }
+
+  // The review's totals, at its top so what holds Start battle back is in sight: the force against the limits (red when over), and the drop cost (reconfiguring the hangar's omnimechs, paid by Start battle).
+  function reviewTotals(data) {
     var tot = 0;
     data.forEach(function (pl) { tot += pl.bv; });
     var count = 0;
@@ -514,7 +535,6 @@
     var total = el('p', 'deploy-review-total' + ((limit > 0 && tot > limit) || (unitLimit > 0 && count > unitLimit) ? ' over' : ''));
     total.appendChild(el('span', null, 'Force total: ' + (unitLimit ? count + ' / ' + unitLimit + ' mechs · ' : '') + fmt(tot) + (limit ? ' / ' + fmt(limit) : '') + ' BV'));
     review.appendChild(total);
-    if (limit > 0 && tot > limit) review.appendChild(el('p', 'deploy-review-note', 'Over the BV limit by ' + fmt(tot - limit) + ' BV: reconfigure an omnimech, or go back and take fewer mechs.'));
     // The drop cost: what reconfiguring the hangar's omnimechs costs, paid by Start battle.
     var cost = dropCost();
     if (cost > 0) {
@@ -525,14 +545,20 @@
     }
   }
 
-  // The review's Reconfigure button for an omnimech: the shared Reconfigure dialog, which here only proposes the variant (Start battle pays for it). A hangar's
-  // mech has to be fully repaired and rearmed, as on the Manage page; what the other proposals already cost is set aside from the warchest.
+  // An omnimech's Reconfigure button, on the mech steps and the review: the shared Reconfigure dialog, which here only proposes the variant (Start battle pays
+  // for it). A hangar's mech has to be fully repaired and rearmed, as on the Manage page; what the other proposals already cost is set aside from the warchest.
+  // On a mech step, choosing a variant for a mech not taken yet takes it, so the button is offered where its tickbox is.
+  function reconfigureState(u) {
+    if (paidSwaps && !u.sellFull) return { disabled: true, title: 'An omnimech has to be fully repaired and rearmed before it can be reconfigured.' };
+    if (isPlayerStep() && !cur().selected[u.id] && (u.destroyed || u.unknown || countOf(step) >= roomFor(step))) return { disabled: true, title: 'This mech can\u2019t be taken.' };
+    return { disabled: false, title: 'Choose another variant for this mission' + (paidSwaps ? ', paid when the battle starts' : '') };
+  }
   function reconfigureAction(u) {
-    var pristine = !paidSwaps || u.sellFull;
+    var state = reconfigureState(u);
     return {
       label: variants[u.id] ? 'Reconfigured' : 'Reconfigure',
-      disabled: !pristine,
-      title: pristine ? 'Choose another variant for this mission' + (paidSwaps ? ', paid when the battle starts' : '') : 'An omnimech has to be fully repaired and rearmed before it can be reconfigured.',
+      disabled: state.disabled,
+      title: state.title,
       onClick: function () {
         if (typeof SwapDialog === 'undefined') return;
         var o = {
@@ -540,6 +566,7 @@
           value: variants[u.id] || '',
           apply: 'Choose',
           submit: function (opt) {
+            if (opt && isPlayerStep() && !cur().selected[u.id]) cur().selected[u.id] = true; // a variant chosen for a mech takes it
             if (opt) variants[u.id] = opt.unit; else delete variants[u.id];
             touched = true;
             error.textContent = '';

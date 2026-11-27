@@ -277,8 +277,10 @@ test('reconfigures an omnimech on the review to fit the BV limit', async ({ page
   await expect(dlg.locator('#deploy-next')).toBeEnabled();
   await dlg.locator('#deploy-next').click();
   await expect(dlg.locator('#deploy-step')).toHaveText('Review your plan');
+  // The totals come first, so what holds Start battle back is in sight without scrolling.
+  await expect(dlg.locator('#deploy-review > *').first()).toHaveClass(/deploy-review-total/);
   await expect(dlg.locator('.deploy-review-total').first()).toHaveClass(/over/);
-  await expect(dlg.locator('.deploy-review-note')).toContainText('Over the BV limit by 476 BV');
+  await expect(dlg.locator('.deploy-review-total').first()).toContainText('7,976 / 7,500 BV');
   await expect(dlg.locator('#deploy-go')).toBeDisabled();
 
   // Reconfigure the first Timber Wolf to the B: the Manage page's dialog, with its price, breakdown and the box for the faction's variants.
@@ -297,7 +299,6 @@ test('reconfigures an omnimech on the review to fit the BV limit', async ({ page
   // The force fits now; the drop cost is what Start battle will pay.
   await expect(reviewed.first()).toContainText('from Prime');
   await expect(dlg.locator('.deploy-review-total').first()).toContainText('7,463 / 7,500 BV');
-  await expect(dlg.locator('.deploy-review-note')).toHaveCount(0);
   await expect(dlg.locator('.deploy-drop-cost')).toHaveText('Drop cost: Cost 38 SP. Warchest 1,000 → 962 SP.');
   await expect(dlg.locator('#deploy-go')).toBeEnabled();
 
@@ -335,4 +336,44 @@ test('a damaged omnimech cannot be reconfigured on the review', async ({ page })
   await expect(reviewed.first().getByRole('button', { name: 'Reconfigure' })).toBeDisabled();
   await expect(reviewed.first().getByRole('button', { name: 'Reconfigure' })).toHaveAttribute('title', /fully repaired and rearmed/);
   await expect(reviewed.nth(1).getByRole('button', { name: 'Reconfigure' })).toHaveCount(0); // the Grizzly isn't an omnimech
+});
+
+// The mech steps offer Reconfigure too: a click on it doesn't tick or untick the mech, and choosing a variant for a mech not taken yet takes it, with the
+// meter following.
+test('reconfigures an omnimech on the mech step', async ({ page }) => {
+  await newAccount(page);
+  await startCampaign(page, 'muster', ['Alrek', 'Katarina']);
+  await setHangar(page, [unit('ua', 'BMMadCat_Prime'), unit('ub', 'BMMadCat_Prime'), unit('uc', 'BMDasher_Prime'), unit('ud', 'BMDasher_Prime')]);
+  await setWarchest(page, 'muster', 1000);
+  await page.goto('/muster/scenario_000/');
+  await page.locator('#deploy-open').click();
+  const dlg = page.locator('#deploy-dialog');
+  const rows = dlg.locator('#deploy-list .deploy-unit');
+  const box = (i) => rows.nth(i).locator('input[type=checkbox]');
+  for (let i = 1; i < 4; i++) await box(i).check();
+  await expect(dlg.locator('#deploy-meter')).toContainText('3 selected · 5,239 / 7,500 BV');
+
+  // Opening the dialog from a taken mech and cancelling leaves it taken.
+  const swap = page.locator('#swap-dialog');
+  await rows.nth(1).getByRole('button', { name: 'Reconfigure' }).click();
+  await expect(swap).toBeVisible();
+  await swap.locator('#swap-cancel').click();
+  await expect(box(1)).toBeChecked();
+
+  // Choosing the B for the first Timber Wolf, not taken yet, takes it as the B.
+  await expect(box(0)).not.toBeChecked();
+  await rows.nth(0).getByRole('button', { name: 'Reconfigure' }).click();
+  await swap.locator('#swap-available').uncheck();
+  await swap.locator('#swap-select').selectOption('BMMadCat_B');
+  await swap.locator('#swap-apply').click();
+  await expect(box(0)).toBeChecked();
+  await expect(rows.nth(0)).toContainText('B · from Prime');
+  await expect(rows.nth(0).getByRole('button', { name: 'Reconfigured' })).toBeVisible();
+  await expect(dlg.locator('#deploy-meter')).toContainText('4 selected · 7,463 / 7,500 BV');
+  await expect(dlg.locator('#deploy-meter')).not.toHaveClass(/over/);
+
+  // The review carries it, with its drop cost, and Start battle can go.
+  await dlg.locator('#deploy-next').click();
+  await expect(dlg.locator('.deploy-drop-cost')).toHaveText('Drop cost: Cost 38 SP. Warchest 1,000 → 962 SP.');
+  await expect(dlg.locator('#deploy-go')).toBeEnabled();
 });
