@@ -276,27 +276,52 @@ test('a reload brings the Purchase dialog back as it was', async ({ page }) => {
   await expect(dlg).toBeHidden();
 });
 
-// Advanced Management's Set MVPs: the count is saved, the row shows it, and closing the dialog reloads the page with the pilot card's MVP plate showing it.
-test('sets a pilot\'s MVP count in Advanced Management', async ({ page }) => {
+// Advanced Management's Set MVPs and Set total SP open the number dialog over it: an out-of-range number is refused there, a good one is saved and shown in the
+// row, and closing Advanced Management reloads the page with the pilot card showing it.
+test('sets a pilot\'s MVP count and total SP in Advanced Management', async ({ page }) => {
   await newAccount(page);
   await startCampaign(page, 'refusalwar', ['Alrek', 'Katarina'], STARTING);
   await page.goto('/refusalwar/manage/');
   await expect(page.locator('.pilot', { hasText: 'Alrek' }).locator('.pilot-mvp')).toHaveText(/MVP\s*0/);
-  await page.locator('.danger-zone summary, details:has(#records-open) > summary').first().click();
+  await page.locator('details:has(#records-open) > summary').first().click();
   await page.locator('#records-open').click();
   const rec = page.locator('#records-dialog');
   const row = rec.locator('#records-list > li', { hasText: 'Alrek' });
+  const num = page.locator('#number-dialog');
+
   await row.getByRole('button', { name: 'Set MVPs' }).click();
-  await row.locator('.rec-mvps-form input').fill('100');
-  await row.locator('.rec-mvps-form').getByRole('button', { name: 'Save' }).click();
-  // The box allows 0 to 99, so the browser stops 100 before it is sent.
-  expect(await row.locator('.rec-mvps-form input').evaluate((i) => i.validity.rangeOverflow)).toBe(true);
-  await expect(row.locator('.rec-n-mvps')).toHaveText('0');
-  await row.locator('.rec-mvps-form input').fill('7');
-  await row.locator('.rec-mvps-form').getByRole('button', { name: 'Save' }).click();
+  await expect(num).toBeVisible();
+  await expect(num.locator('#number-title')).toHaveText('Set Alrek’s MVPs');
+  await expect(num.locator('#number-input')).toHaveValue('0');
+  await num.locator('#number-input').fill('100');
+  await num.getByRole('button', { name: 'Save' }).click();
+  expect(await num.locator('#number-input').evaluate((i) => i.validity.rangeOverflow)).toBe(true); // the browser stops it before it is sent
+  await expect(num).toBeVisible();
+  await num.locator('#number-input').fill('7');
+  await num.getByRole('button', { name: 'Save' }).click();
+  await expect(num).toBeHidden();
+  await expect(rec).toBeVisible();
   await expect(row.locator('.rec-n-mvps')).toHaveText('7');
-  await expect(row.locator('.rec-mvps-form')).toBeHidden();
+
+  // Cancel changes nothing.
+  await row.getByRole('button', { name: 'Set total SP' }).click();
+  await expect(num.locator('#number-input')).toHaveValue('150');
+  await num.locator('#number-input').fill('900');
+  await num.getByRole('button', { name: 'Cancel' }).click();
+  await expect(num).toBeHidden();
+  await expect(row.locator('.rec-n-total')).toHaveText('150');
+  // A total below what is allocated asks first, and resets the allocation.
+  await row.getByRole('button', { name: 'Set total SP' }).click();
+  await num.locator('#number-input').fill('100');
+  await num.getByRole('button', { name: 'Save' }).click();
+  const confirm = page.getByRole('dialog', { name: 'Reset the allocation?' });
+  await confirm.getByRole('button', { name: 'Set total and reset' }).click();
+  await expect(num).toBeHidden();
+  await expect(row.locator('.rec-n-total')).toHaveText('100');
+  await expect(row.locator('.rec-n-alloc')).toHaveText('0');
+
   await rec.locator('#records-close').click();
   await expect(page.locator('.pilot', { hasText: 'Alrek' }).locator('.pilot-mvp')).toHaveText(/MVP\s*7/);
+  await expect(page.locator('.pilot', { hasText: 'Alrek' })).toContainText('Unallocated 100');
   await expect(page.locator('.pilot', { hasText: 'Katarina' }).locator('.pilot-mvp')).toHaveText(/MVP\s*0/);
 });

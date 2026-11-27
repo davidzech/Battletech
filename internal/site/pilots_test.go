@@ -626,7 +626,7 @@ func TestRepairEndpoints(t *testing.T) {
 	}
 	// The records dialog offers both repairs for every pilot.
 	page := body(t, srv, "/refusalwar/manage/", cookie)
-	for _, want := range []string{`class="rec-reset"`, `class="rec-total"`, `class="rec-total-form"`, `data-allocated="150"`, `data-total="150"`} {
+	for _, want := range []string{`class="rec-reset"`, `class="rec-total"`, `id="number-dialog"`, `data-allocated="150"`, `data-total="150"`} {
 		if !strings.Contains(page, want) {
 			t.Errorf("the records dialog is missing %q", want)
 		}
@@ -682,8 +682,8 @@ func TestSetPilotMVPs(t *testing.T) {
 	set := func(pilot, mvps, origin string) int {
 		return post(t, srv, "/api/pilots/mvps", url.Values{"campaign": {"refusalwar"}, "pilot": {pilot}, "mvps": {mvps}}, cookie, origin).StatusCode
 	}
-	if !strings.Contains(body(t, srv, "/refusalwar/manage/", cookie), `class="rec-mvps-form"`) {
-		t.Error("the records dialog has no Set MVPs form")
+	if !strings.Contains(body(t, srv, "/refusalwar/manage/", cookie), `class="rec-mvps-set"`) {
+		t.Error("the records dialog has no Set MVPs button")
 	}
 	if got := set(pl, "3", "https://evil.example"); got != http.StatusForbidden {
 		t.Errorf("cross-origin: %d", got)

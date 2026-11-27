@@ -133,6 +133,19 @@
     </div>
   </form>
 </dialog>
+<dialog id="number-dialog" class="wizard" aria-labelledby="number-title">
+  <form id="number-form" autocomplete="off">
+    <h2 id="number-title"></h2>
+    <p class="muted" id="number-note"></p>
+    <label for="number-input" id="number-label"></label>
+    <input type="number" id="number-input" inputmode="numeric" required>
+    <p id="number-error" class="form-error" role="alert"></p>
+    <div class="form-actions">
+      <button type="submit" class="button" id="number-save">Save</button>
+      <button type="button" id="number-cancel">Cancel</button>
+    </div>
+  </form>
+</dialog>
 {{if .Ranks}}<dialog id="rank-dialog" class="wizard" aria-labelledby="rank-title">
   <form id="rank-form" autocomplete="off">
     <h2 id="rank-title">Change rank</h2>
@@ -157,11 +170,9 @@
 {{range .Pilots}}<li data-pilot="{{.ID}}" data-name="{{.Name}}" data-rank="{{.Rank}}" data-learned-count="{{len .EdgeLearned}}" data-total="{{.Earned}}" data-allocated="{{.Allocated}}" data-mvps="{{.MVPs}}">
 <div class="rec-top"><img src="{{.PortraitURL}}" alt="" width="40" height="40"><span class="rec-name"><span class="name-text">{{.Name}}</span><button type="button" class="name-edit" title="Edit name" aria-label="Edit {{.Name}}&rsquo;s name"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button></span><span class="rec-state{{if .Fallen}} kia{{end}}">{{if .Fallen}}Killed in Action{{else}}Active{{end}}</span>{{if .Fallen}}<button type="button" class="rec-revive">Revive</button>{{else}}<button type="button" class="rec-kia">Mark KIA</button>{{end}}<button type="button" class="rec-delete" title="Delete {{.Name}}" aria-label="Delete {{.Name}}"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button></div>
 <div class="rec-sp"><span class="rec-sp-text">Total <b class="rec-n-total">{{.Earned}}</b> SP &middot; allocated <b class="rec-n-alloc">{{.Allocated}}</b> &middot; unallocated <b class="rec-n-unalloc">{{.Unallocated}}</b></span><button type="button" class="rec-total">Set total SP</button><button type="button" class="rec-reset">Reset SP allocation</button></div>
-<form class="rec-total-form" hidden><label>New total SP <input type="number" min="0" max="1000000" step="10" inputmode="numeric"></label><button type="submit" class="button">Save</button><button type="button" class="rec-total-cancel">Cancel</button></form>
 <div class="rec-skills"><span class="rec-skills-text">Edge abilities: <b class="rec-n-skills">{{if .EdgeLearned}}{{range $i, $a := .EdgeLearned}}{{if $i}}, {{end}}{{$a.Name}}{{end}}{{else}}none{{end}}</b></span><button type="button" class="rec-skills-reset"{{if not .EdgeLearned}} disabled{{end}}>Reset Edge abilities</button></div>
 {{if $.Ranks}}<div class="rec-rank"><span class="rec-rank-text">Rank</span><button type="button" class="rank-btn rec-rank-btn" title="Change rank" aria-label="Change {{.Name}}&rsquo;s rank">{{.Rank}}</button></div>{{end}}
 <div class="rec-mvps"><span class="rec-mvps-text">MVPs: <b class="rec-n-mvps">{{.MVPs}}</b></span><button type="button" class="rec-mvps-set">Set MVPs</button></div>
-<form class="rec-mvps-form" hidden><label>MVP count <input type="number" min="0" max="99" step="1" inputmode="numeric"></label><button type="submit" class="button">Save</button><button type="button" class="rec-mvps-cancel">Cancel</button></form>
 </li>
 {{else}}<li class="muted">No pilots.</li>
 {{end}}  </ul>

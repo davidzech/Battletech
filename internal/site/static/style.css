@@ -1086,11 +1086,7 @@ a.unit-link.tip-open { color: var(--accent); }
 .rec-warchest { display: flex; flex-wrap: wrap; align-items: end; gap: 0.6rem; margin: 0.8rem 0; padding: 0.6rem 0.5rem; background: var(--bg); border: 1px solid var(--line); }
 .rec-warchest label { display: grid; gap: 0.3rem; font: 700 0.75rem var(--display); letter-spacing: 0.08em; text-transform: uppercase; }
 .rec-warchest input { width: 10rem; }
-.rec-total-form, .rec-mvps-form { display: flex; flex-wrap: wrap; align-items: end; gap: 0.6rem; }
-.rec-total-form[hidden], .rec-mvps-form[hidden] { display: none; }
-.rec-total-form label, .rec-mvps-form label { display: grid; gap: 0.3rem; font: 700 0.75rem var(--display); letter-spacing: 0.08em; text-transform: uppercase; }
-.rec-total-form input { width: 8rem; }
-.rec-mvps-form input { width: 5rem; }
+#number-input { width: 10rem; }
 .records-list img { flex: none; width: 2.5rem; height: 2.5rem; object-fit: cover; object-position: top; }
 .rec-name { flex: 1; min-width: 0; font: 700 1rem var(--display); letter-spacing: 0.05em; text-transform: uppercase; overflow-wrap: anywhere; }
 .rec-state { font: 700 0.7rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
