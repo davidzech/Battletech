@@ -126,7 +126,7 @@ test('deploys two pilots, reconfigures a mech, starts the battle and completes t
   await expect(swap.locator('#swap-breakdown')).toBeHidden();
   await swap.locator('#swap-apply').click();
   await expect(swap).toBeHidden();
-  await expect(reviewed.first()).toContainText('from Prime');
+  await expect(reviewed.first()).toContainText('Prime → ');
   await expect(reviewed.first().getByRole('button', { name: 'Reconfigured' })).toBeVisible();
   await expect(dlg.locator('.deploy-drop-cost')).toHaveCount(0);
 
@@ -297,7 +297,7 @@ test('reconfigures an omnimech on the review to fit the BV limit', async ({ page
   await expect(swap).toBeHidden();
 
   // The force fits now; the drop cost is what Start battle will pay.
-  await expect(reviewed.first()).toContainText('from Prime');
+  await expect(reviewed.first()).toContainText('Prime → B');
   await expect(dlg.locator('.deploy-review-total').first()).toContainText('7,463 / 7,500 BV');
   await expect(dlg.locator('.deploy-drop-cost')).toHaveText('Drop cost: Cost 38 SP. Warchest 1,000 → 962 SP.');
   await expect(dlg.locator('#deploy-go')).toBeEnabled();
@@ -367,7 +367,7 @@ test('reconfigures an omnimech on the mech step', async ({ page }) => {
   await swap.locator('#swap-select').selectOption('BMMadCat_B');
   await swap.locator('#swap-apply').click();
   await expect(box(0)).toBeChecked();
-  await expect(rows.nth(0)).toContainText('B · from Prime');
+  await expect(rows.nth(0)).toContainText('Prime → B');
   await expect(rows.nth(0).getByRole('button', { name: 'Reconfigured' })).toBeVisible();
   await expect(dlg.locator('#deploy-meter')).toContainText('4 selected · 7,463 / 7,500 BV');
   await expect(dlg.locator('#deploy-meter')).not.toHaveClass(/over/);

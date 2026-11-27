@@ -131,12 +131,12 @@
     v.from = u.model;
     return v;
   }
-  // A row's view of a mech: a reconfigured one says which variant it was ("A · from Prime").
+  // A row's view of a mech: a reconfigured one says which variant it was and is ("Prime → A").
   function labelled(v) {
     if (!v || !v.from) return v;
     var out = {};
     Object.keys(v).forEach(function (k) { out[k] = v[k]; });
-    out.model = (v.model || '') + ' · from ' + (v.from || 'standard');
+    out.model = (v.from || 'Standard') + ' \u2192 ' + (v.model || '');
     return out;
   }
   function isReview() { return step === stepCount() - 1; }
