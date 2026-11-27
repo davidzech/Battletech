@@ -1785,8 +1785,8 @@ fieldset.battle-lock-scope:disabled button:not(.button) { opacity: 0.45; cursor:
 .purchase-head h2 { margin-bottom: 0; }
 .purchase-warchest { font: 700 1rem var(--display); letter-spacing: 0.06em; text-transform: uppercase; color: var(--text); white-space: nowrap; }
 
-/* A pilot card's MVP count: a small plate (two digits at most), centred in the portrait's column (under the rank), on the row of Manage SP and More and as tall as they are. It comes just before
+/* A pilot card's MVP count: a small plate, always as wide as two digits need (the most there will be), centred in the portrait's column (under the rank), on the row of Manage SP and More and as tall as they are. It comes just before
    the actions in the markup, so the grid puts it in column 1 of the actions' row. */
-.pilot-card > .pilot-main > .pilot-mvp { grid-column: 1; align-self: start; justify-self: center; min-width: 4rem; padding: 0 0.45rem; box-sizing: border-box; height: 2.5rem; margin-top: 0.4rem; display: flex; align-items: center; justify-content: center; gap: 0.6rem; background: var(--bg); border: 1px solid var(--line); }
+.pilot-card > .pilot-main > .pilot-mvp { grid-column: 1; align-self: start; justify-self: center; width: 4.5rem; padding: 0 0.45rem; box-sizing: border-box; height: 2.5rem; margin-top: 0.4rem; display: flex; align-items: center; justify-content: center; gap: 0.6rem; background: var(--bg); border: 1px solid var(--line); }
 .pilot-mvp-label { font: 700 0.68rem var(--display); letter-spacing: 0.12em; text-transform: uppercase; color: var(--text); }
 .pilot-mvp-value { font: 700 1.5rem/1 var(--display); color: var(--accent); }
