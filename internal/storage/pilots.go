@@ -485,6 +485,9 @@ func (s *Store) LearnAbilities(ctx context.Context, playthroughID, campaign, pil
 		have[a] = true
 	}
 	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
 	for _, id := range ids {
 		if _, ok := pilot.AbilityByID(id); !ok {
 			return ErrUnknownAbility
