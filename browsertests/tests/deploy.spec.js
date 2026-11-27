@@ -29,6 +29,51 @@ async function openDeploy(page) {
   return dlg;
 }
 
+// Ticking a mech updates the list in place: the other rows (their icons and pilot portraits) are the same elements, so nothing flashes, while the limit
+// and the slots still follow the ticks.
+test('ticking a mech keeps the other rows', async ({ page }) => {
+  await newAccount(page);
+  await startCampaign(page, 'refusalwar', ['Alrek', 'Katarina']);
+  const dlg = await openDeploy(page);
+  const rows = dlg.locator('#deploy-list .deploy-unit');
+  const tray = dlg.locator('#deploy-pilots-list .deploy-pilot');
+  const box = (i) => rows.nth(i).locator('input[type=checkbox]');
+  // Crew the first mech, then mark every icon and portrait in the list.
+  await tray.filter({ hasText: 'Alrek' }).click();
+  await rows.nth(0).locator('.deploy-slot').click();
+  await expect(rows.nth(0).locator('.deploy-slot')).toContainText('Alrek');
+  await dlg.locator('#deploy-list').evaluate((list) => list.querySelectorAll('img').forEach((img) => { img.dataset.kept = '1'; }));
+  const kept = () => dlg.locator('#deploy-list').evaluate((list) => [...list.querySelectorAll('img')].map((img) => img.dataset.kept === '1'));
+  const marked = await kept();
+  expect(marked.length).toBeGreaterThan(5);
+
+  // Taking a second mech reaches the limit of two: the others can't be taken and say so, and no image was rebuilt.
+  await box(1).check();
+  await expect(rows.nth(1)).toHaveClass(/picked/);
+  await expect(box(2)).toBeDisabled();
+  await expect(rows.nth(3).locator('.deploy-slot')).toContainText('Mech limit reached');
+  await expect(dlg.locator('#deploy-meter')).toContainText('2 / 2 mechs');
+  expect(await kept()).toEqual(marked);
+
+  // Putting the crewed mech back frees its pilot and the limit; only its own slot (with Alrek's portrait) is rebuilt.
+  await box(0).uncheck();
+  await expect(rows.nth(0)).not.toHaveClass(/picked/);
+  await expect(rows.nth(0).locator('.deploy-slot')).not.toContainText('Alrek');
+  await expect(tray.filter({ hasText: 'Alrek' })).not.toContainText('in ');
+  await expect(box(2)).toBeEnabled();
+  await expect(rows.nth(3).locator('.deploy-slot')).not.toContainText('Mech limit reached');
+  await expect(dlg.locator('#deploy-meter')).toContainText('1 / 2 mechs');
+  const icons = await dlg.locator('#deploy-list img.mr-icon').evaluateAll((imgs) => imgs.map((img) => img.dataset.kept === '1'));
+  expect(icons).toEqual(icons.map(() => true));
+
+  // Placing a pilot still redraws the list: an icon the page has already loaded comes back drawn at once, not lazily (which showed it blank for a frame).
+  await tray.filter({ hasText: 'Katarina' }).click();
+  await rows.nth(1).locator('.deploy-slot').click();
+  await expect(rows.nth(1).locator('.deploy-slot')).toContainText('Katarina');
+  await expect(rows.nth(1).locator('img.mr-icon')).not.toHaveAttribute('data-kept', '1');
+  await expect(rows.nth(1).locator('img.mr-icon')).not.toHaveAttribute('loading', 'lazy');
+});
+
 test('deploys two pilots, reconfigures a mech, starts the battle and completes the mission', async ({ page }) => {
   await newAccount(page);
   await startCampaign(page, 'refusalwar', ['Alrek', 'Katarina']);
