@@ -1276,8 +1276,12 @@ input.themed-box:disabled { opacity: 0.4; cursor: not-allowed; }
 .purchase-empty { margin: 0; padding: 0.7rem 0.9rem; font-size: 0.9rem; border: 1px dashed var(--line); }
 
 /* A row you can click to choose, tinted like a chosen unit in the deploy popup. */
-.mech-row.has-pick { cursor: pointer; }
-.mech-row.has-pick:hover, .mech-row.has-pick:focus-visible { border-color: rgb(242 184 0 / 0.6); outline: none; }
+.mech-row.has-pick { position: relative; cursor: pointer; }
+.mech-row.has-pick:hover, .mech-row.has-pick:has(> .mr-pick:focus-visible) { border-color: rgb(242 184 0 / 0.6); outline: none; }
+/* Its button (mechrow.js onPick) is stretched over the whole row, invisible; the link, the action buttons and the status pills sit above it. */
+.mech-row > button.mr-pick { position: absolute; inset: 0; z-index: 0; margin: 0; padding: 0; background: transparent; border: 0; box-shadow: none; cursor: pointer; }
+.mech-row > button.mr-pick:hover, .mech-row > button.mr-pick:focus-visible { background: transparent; border: 0; outline: none; }
+.mech-row.has-pick .mr-ext, .mech-row.has-pick .mr-action, .mech-row.has-pick .mr-chip[tabindex] { position: relative; z-index: 1; }
 .mech-row.picked { background: color-mix(in srgb, var(--accent) 22%, var(--bg)); border-color: var(--accent); }
 .mr-badge { align-self: center; padding: 0.2rem 0.55rem; font: 700 0.68rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent-ink); background: var(--accent); }
 .mr-action.mr-action-icon { width: 2.1rem; height: 2.1rem; padding: 0; font: 1.4rem/1 var(--body); letter-spacing: 0; }
@@ -1300,18 +1304,21 @@ dialog button.deploy-pilot:hover:not(:disabled), .deploy-pilot:focus-visible { b
 .deploy-pilot-text b { font: 700 0.9rem var(--display); letter-spacing: 0.05em; text-transform: uppercase; white-space: nowrap; }
 .deploy-pilot-text small { font: 0.68rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); white-space: nowrap; } /* explicit, so the tray (a button) and the slot (a div) match */
 .deploy-unit.has-slot { display: grid; grid-template-columns: minmax(0, 1fr) 14.5rem; gap: 0.5rem; align-items: stretch; }
-.deploy-slot { display: flex; align-items: center; gap: 0.55rem; min-width: 0; border: 1px dashed var(--line); padding: 0.3rem; }
-.deploy-slot.filled { border-style: solid; padding: 0.35rem 0.4rem 0.35rem 0.4rem; cursor: grab; position: relative; }
+.deploy-slot { position: relative; display: flex; align-items: center; gap: 0.55rem; min-width: 0; border: 1px dashed var(--line); padding: 0.3rem; }
+.deploy-slot.filled { border-style: solid; padding: 0.35rem 0.4rem 0.35rem 0.4rem; cursor: grab; }
+/* The slot's button (mekbay.js) is stretched over the whole slot, invisible, with the slot's own cursor; the × sits above it. */
+dialog button.deploy-slot-put { position: absolute; inset: 0; z-index: 0; margin: 0; padding: 0; background: transparent; border: 0; box-shadow: none; cursor: inherit; }
+dialog button.deploy-slot-put:hover, dialog button.deploy-slot-put:focus-visible { background: transparent; border: 0; outline: none; }
 .deploy-slot.unavailable { visibility: hidden; }
 .deploy-slot-empty { margin: 0 auto; font: 700 0.72rem var(--display); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); text-align: center; }
 /* A slot shows it will take the pilot only when the pilot is over it: dragged onto it (.over, set by mekbay.js), or, while a pilot picked up from the tray is
    held, under the pointer or keyboard focus. An empty slot keeps its dashed border, just yellow; the rest stay as they are. */
 .deploy-slot.over,
 .holding-pilot .deploy-slot:not(.unavailable):not(.disabled):hover,
-.holding-pilot .deploy-slot:not(.unavailable):not(.disabled):focus-visible { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, var(--bg)); }
+.holding-pilot .deploy-slot:not(.unavailable):not(.disabled):has(> .deploy-slot-put:focus-visible) { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, var(--bg)); }
 .holding-pilot .deploy-slot:not(.unavailable):not(.disabled) { cursor: pointer; }
-.deploy-slot:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-dialog button.deploy-slot-x { margin-left: auto; width: 1.6rem; height: 1.6rem; padding: 0; font: 1.2rem/1 var(--body); letter-spacing: 0; text-transform: none; color: var(--muted); background: none; border: 0; box-shadow: none; cursor: pointer; }
+.deploy-slot:has(> .deploy-slot-put:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+dialog button.deploy-slot-x { position: relative; z-index: 1; margin-left: auto; width: 1.6rem; height: 1.6rem; padding: 0; font: 1.2rem/1 var(--body); letter-spacing: 0; text-transform: none; color: var(--muted); background: none; border: 0; box-shadow: none; cursor: pointer; }
 dialog button.deploy-slot-x:hover:not(:disabled), dialog button.deploy-slot-x:focus-visible { color: var(--accent); background: none; border: 0; outline: none; }
 @media (max-width: 640px) { .deploy-unit.has-slot { grid-template-columns: 1fr; } }
 
@@ -1385,7 +1392,7 @@ dialog input.themed-box:focus, dialog .themed-check input:focus { outline: none;
 /* An element whose hover card is open is highlighted with a yellow border, so the card has an obvious owner. */
 .roster-pilot { transition: border-color 0.12s; }
 .roster-pilot[tabindex]:hover, .roster-pilot.tip-open, .roster-pilot[tabindex]:focus-visible { border-color: var(--accent); outline: none; }
-.deploy-pilot.tip-open, .deploy-slot.filled.tip-open { border-color: var(--accent); }
+.deploy-pilot.tip-open, .deploy-slot.filled.tip-open, .deploy-slot.filled:has(> .deploy-slot-put.tip-open) { border-color: var(--accent); }
 /* A named pilot shown in the review and the Operation in progress view lights its border as soon as the pointer is on it; the hover card follows after its delay. */
 .deploy-slot.static.filled:hover { border-color: var(--accent); }
 

@@ -2,6 +2,7 @@ package site
 
 import (
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 
@@ -31,6 +32,49 @@ func TestConditionsOfTheLiveHangar(t *testing.T) {
 		if views[i].Condition != string(w.cond) || views[i].AmmoExpended != w.ammo {
 			t.Errorf("%s: got %s ammo=%v (%s), want %s ammo=%v", h.Units[i].Unit, views[i].Condition, views[i].AmmoExpended, views[i].ConditionNote, w.cond, w.ammo)
 		}
+	}
+}
+
+// A hangar mech whose head was shot off keeps that damage until it is repaired, but its crew was reset to an unnamed 4/5 when the battle was written back: the
+// hangar shows no dead pilot. The same unit in a battle's force (its crew the one that fought) shows its pilot dead, as MekBay's record sheet does.
+func TestHangarShowsNoDeadPilotForAResetCrew(t *testing.T) {
+	const reply = `{"data":{"name":"t","groups":[{"name":"","units":[
+{"id":"a","unit":"BMKoshi_E","state":{"locations":{"HD":{"armor":9,"internal":3}},"crits":[{"name":"Cockpit","loc":"HD","slot":2,"destroyed":1}],
+ "crew":[{"name":"","gunnerySkill":4,"pilotingSkill":5,"hits":0,"state":0}]}}]}]}}`
+	h, err := mekbay.ParseHangarForce(json.RawMessage(reply))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v := hangarViews(h)[0]; v.PilotDead {
+		t.Errorf("the hangar shows a dead pilot for a reset crew: %+v", v)
+	}
+	if v := battleViews(h)[0]; !v.PilotDead {
+		t.Errorf("a battle's force shows the pilot of a gone cockpit dead: %+v", v)
+	}
+}
+
+// A hangar mech whose cockpit is gone is destroyed even when MekBay's destroyed flag isn't set (damage written outside MekBay's app): it shows as destroyed,
+// offers the destroyed repair, and can't be deployed until it is repaired.
+func TestCockpitGoneMechIsDestroyed(t *testing.T) {
+	h := hangarOf("BMKoshi_E", "BMGrizzly")
+	h.Units[0].CockpitGone, h.Units[0].Damaged, h.Units[0].Locations = true, true, map[string]mekbay.LocationLoss{"HD": {Armor: 9, Internal: 3}}
+	v := hangarViews(h)[0]
+	if !v.Destroyed || v.Condition != string(mekbay.CondDestroyed) || v.SellFull || !slices.Contains(v.RepairLevels, mekbay.RepairDestroyed) {
+		t.Errorf("a mech with its cockpit gone: %+v", v)
+	}
+	if got := deployProblem(h, []string{"ua", "ub"}, 0); got != v.Name+" is destroyed and can't be deployed." {
+		t.Errorf("deploying it: %q", got)
+	}
+	if got := planProblem(h, [][]string{{"ub"}, {"ua"}}, 0); !strings.Contains(got, "is destroyed") {
+		t.Errorf("deploying it for a second player: %q", got)
+	}
+	// Repaired (the head and its cockpit restored), it can go again.
+	h.Units[0].CockpitGone, h.Units[0].Damaged, h.Units[0].Locations = false, false, nil
+	if v := hangarViews(h)[0]; v.Destroyed || v.Condition != string(mekbay.CondOK) {
+		t.Errorf("repaired: %+v", v)
+	}
+	if got := deployProblem(h, []string{"ua", "ub"}, 0); got != "" {
+		t.Errorf("deploying it repaired: %q", got)
 	}
 }
 

@@ -354,6 +354,7 @@ func TestBattleStatusAndAbort(t *testing.T) {
 	hurt.Units[0].Pilot, hurt.Units[0].Gunnery, hurt.Units[0].Piloting = "Alrek", 3, 4
 	hurt.Units[0].Damaged, hurt.Units[0].AmmoUsed, hurt.Units[0].AmmoBins = true, 2, 1
 	hurt.Units[0].Locations = map[string]mekbay.LocationLoss{"CT": {Armor: 6}}
+	hurt.Units[1].Pilot, hurt.Units[1].CockpitGone = "Katarina", true // her cockpit is gone in this battle: the record sheet shows her dead
 	second := hangarOf("BMGrizzly")
 	second.Name = "Wolf Pack - Player 2"
 	fake.mu.Lock()
@@ -372,6 +373,9 @@ func TestBattleStatusAndAbort(t *testing.T) {
 	}
 	if f := got.Forces[0]; f.Name != "Wolf Pack - Player 1" || f.Alignment != "friendly" || len(f.Units) != 2 || f.Units[0].Pilot != "Alrek" || f.Units[0].Gunnery != 3 || f.Units[0].Condition == "" || f.Units[0].Condition == "ok" || !f.Units[0].AmmoExpended || f.Units[0].Name == "" {
 		t.Errorf("a player's force with its mechs' live condition: %+v", f)
+	}
+	if f := got.Forces[0]; f.Units[0].PilotDead || !f.Units[1].PilotDead {
+		t.Errorf("a pilot whose cockpit is gone in the battle is dead, the other not: %+v", f.Units)
 	}
 	if f := got.Forces[1]; f.Alignment != "friendly" || f.Name != "Wolf Pack - Player 2" || len(f.Units) != 1 || f.Units[0].Damaged {
 		t.Errorf("Player 2's force: %+v", f)
@@ -475,11 +479,14 @@ func TestCrewIsDead(t *testing.T) {
 		"no crew data": {``, false},
 	} {
 		h, err := mekbay.ParseHangarForce(json.RawMessage(reply(c.crew)))
-		if err != nil || len(h.Units) != 1 || h.Units[0].PilotDead != c.dead {
+		if err != nil || len(h.Units) != 1 || h.Units[0].CrewDead != c.dead {
 			t.Errorf("%s: %+v %v", name, h.Units, err)
 		}
 		if v := hangarViews(h)[0]; v.PilotDead != c.dead {
 			t.Errorf("%s: the view carries it: %+v", name, v)
+		}
+		if v := battleViews(h)[0]; v.PilotDead != c.dead {
+			t.Errorf("%s: the battle's view carries it: %+v", name, v)
 		}
 	}
 }

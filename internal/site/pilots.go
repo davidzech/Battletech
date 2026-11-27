@@ -73,7 +73,7 @@ func (s *Server) addPilot(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if cost > 0 {
-		if err := s.store.SpendWarchest(r.Context(), pt.ID, c.Slug, cost); errors.Is(err, storage.ErrInsufficientFunds) {
+		if _, err := s.store.SpendWarchest(r.Context(), pt.ID, c.Slug, cost); errors.Is(err, storage.ErrInsufficientFunds) {
 			http.Error(w, fmt.Sprintf("Not enough in the warchest: recruiting a pilot costs %d SP.", cost), http.StatusConflict)
 			return
 		} else if err != nil {
@@ -88,7 +88,7 @@ func (s *Server) addPilot(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if cost > 0 {
-			if err := s.store.RefundWarchest(paidCtx, pt.ID, c.Slug, cost); err != nil {
+			if _, err := s.store.RefundWarchest(paidCtx, pt.ID, c.Slug, cost); err != nil {
 				log.Printf("could not refund %d SP: %v", cost, err)
 			}
 		}

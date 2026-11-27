@@ -11,7 +11,7 @@ import (
 
 // Pristine reports whether a unit is fully repaired and rearmed: no recorded damage, not destroyed, no spent ammunition.
 func Pristine(hu mekbay.HangarUnit) bool {
-	return !hu.Damaged && !hu.Destroyed && hu.AmmoUsed == 0 && hu.AmmoBins == 0 && len(hu.Locations) == 0 && len(hu.Crits) == 0
+	return !hu.Damaged && !hu.IsDestroyed() && hu.AmmoUsed == 0 && hu.AmmoBins == 0 && len(hu.Locations) == 0 && len(hu.Crits) == 0
 }
 
 // SellValue is the SP a unit with this base BV sells for: half its BV when pristine, otherwise half of that, rounding down each time.

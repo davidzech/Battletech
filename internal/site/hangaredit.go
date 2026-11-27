@@ -246,7 +246,8 @@ func (k *keyedMutex) lock(key string) (unlock func()) {
 
 // payForHangarChange charges cost SP to the warchest and then makes the change in MekBay (change); if that fails the SP are refunded, so the player never pays
 // for a change that wasn't made. The refund doesn't stop when the request does: a player who closes the tab during the MekBay call would otherwise lose the SP.
-// It answers the request itself: {"cost", "warchest"} on success. what names the change for the log ("repair a unit").
+// It answers the request itself: {"cost", "warchest"} on success, the warchest being what the charge left (not the run loaded at the start of the request,
+// which another request may have changed since). what names the change for the log ("repair a unit").
 //
 // change returns the hangar force as MekBay saved it, which becomes the cached copy, so the page that reloads next paints the change at once instead of the
 // hangar from before it until a live read catches up.
@@ -259,8 +260,9 @@ func (s *Server) payForHangarChange(w http.ResponseWriter, r *http.Request, pt s
 		return
 	}
 	defer unlock()
-	if err := s.store.SpendWarchest(r.Context(), pt.ID, c.Slug, cost); errors.Is(err, storage.ErrInsufficientFunds) {
-		http.Error(w, fmt.Sprintf("Not enough in the warchest: that costs %d SP and you have %d.", cost, run.Warchest), http.StatusConflict)
+	left, err := s.store.SpendWarchest(r.Context(), pt.ID, c.Slug, cost)
+	if errors.Is(err, storage.ErrInsufficientFunds) {
+		http.Error(w, fmt.Sprintf("Not enough in the warchest: that costs %d SP and you have %d.", cost, left), http.StatusConflict)
 		return
 	} else if err != nil {
 		http.Error(w, "could not charge the warchest", http.StatusInternalServerError)
@@ -269,7 +271,7 @@ func (s *Server) payForHangarChange(w http.ResponseWriter, r *http.Request, pt s
 	h, err := change()
 	if err != nil {
 		log.Printf("%s in MekBay: %v", what, err) // never log the owner UID
-		if rerr := s.store.RefundWarchest(context.WithoutCancel(r.Context()), pt.ID, c.Slug, cost); rerr != nil {
+		if _, rerr := s.store.RefundWarchest(context.WithoutCancel(r.Context()), pt.ID, c.Slug, cost); rerr != nil {
 			log.Printf("could not refund %d SP: %v", cost, rerr)
 		}
 		status := http.StatusBadGateway
@@ -282,5 +284,5 @@ func (s *Server) payForHangarChange(w http.ResponseWriter, r *http.Request, pt s
 	s.cacheHangar(context.WithoutCancel(r.Context()), pt.ID, c.Slug, run.HangarInstance, h)
 	s.logHistory(r, pt.ID, c.Slug, storage.HistoryHangar, -cost, history)
 	w.Header().Set("Content-Type", "application/json")
-	fmt.Fprintf(w, `{"cost":%d,"warchest":%d}`, cost, run.Warchest-cost)
+	fmt.Fprintf(w, `{"cost":%d,"warchest":%d}`, cost, left)
 }

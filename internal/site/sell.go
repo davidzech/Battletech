@@ -60,12 +60,13 @@ func (s *Server) sellUnit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.cacheHangar(ctx, pt.ID, c.Slug, run.HangarInstance, after) // the page that reloads next shows the unit gone at once
-	if err := s.store.RefundWarchest(ctx, pt.ID, c.Slug, value); err != nil {
+	warchest, err := s.store.RefundWarchest(ctx, pt.ID, c.Slug, value)
+	if err != nil {
 		log.Printf("could not pay %d SP for a sold unit: %v", value, err)
 		http.Error(w, "The unit was sold but the warchest could not be paid. Set the funds under Advanced Management.", http.StatusInternalServerError)
 		return
 	}
 	s.logHistory(r, pt.ID, c.Slug, storage.HistoryHangar, value, fmt.Sprintf("Sold %s for %s SP.", catalog.DisplayName(cat), format.Commas(value)))
 	w.Header().Set("Content-Type", "application/json")
-	fmt.Fprintf(w, `{"value":%d,"warchest":%d}`, value, run.Warchest+value)
+	fmt.Fprintf(w, `{"value":%d,"warchest":%d}`, value, warchest) // what the payment made, whatever other requests did since this one loaded the run
 }

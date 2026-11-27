@@ -73,25 +73,35 @@ func TestApplyCrew(t *testing.T) {
 	}
 }
 
-// MekBay counts a pilot dead when the cockpit is gone, whatever the crew's stored state: the cockpit slot destroyed, or the head with no structure left.
-func TestPilotDeadFromTheCockpit(t *testing.T) {
-	reply := func(state string) string {
-		return `{"action":"forceData","data":{"name":"F","timestamp":"t","groups":[{"name":"G","units":[{"id":"u1","unit":"BMKoshi_E","state":{` + state + `,"crew":[{"name":"Alrek","gunnerySkill":3,"pilotingSkill":4,"hits":1,"state":0}]}}]}]}}`
+// MekBay counts a pilot dead when the cockpit is gone, whatever the crew's stored state: the cockpit slot destroyed, or the head with no structure left. That
+// is the unit's damage (CockpitGone), kept apart from the crew's own record (CrewDead); only PilotKilled, for a battle's forces, puts the two together.
+func TestPilotKilledFromTheCockpit(t *testing.T) {
+	reply := func(state, crew string) string {
+		return `{"action":"forceData","data":{"name":"F","timestamp":"t","groups":[{"name":"G","units":[{"id":"u1","unit":"BMKoshi_E","state":{` + state + `,"crew":[` + crew + `]}}]}]}}`
 	}
+	const alive = `{"name":"Alrek","gunnerySkill":3,"pilotingSkill":4,"hits":1,"state":0}`
+	const reset = `{"name":"","gunnerySkill":4,"pilotingSkill":5,"hits":0,"state":0}` // the crew a battle's write-back leaves in the hangar
 	for name, c := range map[string]struct {
-		state string
-		dead  bool
+		state, crew           string
+		cockpitGone, crewDead bool
 	}{
-		"nothing":        {`"x":1`, false},
-		"cockpit crit":   {`"crits":[{"name":"Cockpit","loc":"HD","slot":2,"destroyed":1}]`, true},
-		"cockpit intact": {`"crits":[{"name":"Cockpit","loc":"HD","slot":2}]`, false},
-		"command":        {`"crits":[{"name":"Command Console","loc":"HD","slot":2,"destroyed":1}]`, false},
-		"head gone":      {`"locations":{"HD":{"armor":9,"internal":3}}`, true},
-		"head hurt":      {`"locations":{"HD":{"armor":9,"internal":2}}`, false},
+		"nothing":                 {`"x":1`, alive, false, false},
+		"cockpit crit":            {`"crits":[{"name":"Cockpit","loc":"HD","slot":2,"destroyed":1}]`, alive, true, false},
+		"cockpit intact":          {`"crits":[{"name":"Cockpit","loc":"HD","slot":2}]`, alive, false, false},
+		"command":                 {`"crits":[{"name":"Command Console","loc":"HD","slot":2,"destroyed":1}]`, alive, false, false},
+		"head gone":               {`"locations":{"HD":{"armor":9,"internal":3}}`, alive, true, false},
+		"head hurt":               {`"locations":{"HD":{"armor":9,"internal":2}}`, alive, false, false},
+		"head gone, crew reset":   {`"locations":{"HD":{"armor":9,"internal":3}}`, reset, true, false},
+		"cockpit gone, crew dead": {`"crits":[{"name":"Cockpit","loc":"HD","slot":2,"destroyed":1}]`, `{"name":"Alrek","gunnerySkill":3,"pilotingSkill":4,"hits":6,"state":2}`, true, true},
+		"crew dead, cockpit fine": {`"x":1`, `{"name":"Alrek","gunnerySkill":3,"pilotingSkill":4,"hits":0,"state":4}`, false, true},
 	} {
-		h, err := ParseHangarForce(json.RawMessage(reply(c.state)))
-		if err != nil || len(h.Units) != 1 || h.Units[0].PilotDead != c.dead {
-			t.Errorf("%s: %+v %v", name, h.Units, err)
+		h, err := ParseHangarForce(json.RawMessage(reply(c.state, c.crew)))
+		if err != nil || len(h.Units) != 1 {
+			t.Fatalf("%s: %+v %v", name, h.Units, err)
+		}
+		u := h.Units[0]
+		if u.CockpitGone != c.cockpitGone || u.CrewDead != c.crewDead || u.PilotKilled() != (c.cockpitGone || c.crewDead) {
+			t.Errorf("%s: cockpit gone %v, crew dead %v, killed %v", name, u.CockpitGone, u.CrewDead, u.PilotKilled())
 		}
 	}
 }
