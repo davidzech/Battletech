@@ -367,6 +367,10 @@ dialog button:not(.button) {
   cursor: pointer;
 }
 dialog button:not(.button):hover { border-color: var(--accent); color: var(--accent); }
+/* Keyboard focus on a dialog's buttons is the site's yellow ring, not the system's blue. A dialog that opens on its title (autofocus, tabindex -1, so it isn't a
+   stop for Tab) shows no ring there: the focus is only where the keyboard starts. */
+dialog button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+dialog [tabindex="-1"]:focus { outline: none; }
 
 /* The starting rules listed on an unstarted campaign. */
 .start-rules { margin: 0.4rem 0 0.9rem; padding-left: 1.2rem; display: grid; gap: 0.3rem; }
@@ -587,7 +591,19 @@ dialog .link-field .refresh:disabled { opacity: 0.35; cursor: not-allowed; }
 dialog.deploy { width: min(68rem, calc(100vw - 2rem)); }
 .deploy-meter { margin: 0.5rem 0 0; font: 700 1.1rem var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
 .deploy-meter.over { color: #ff7a59; }
-.deploy-list { list-style: none; margin: 0.75rem 0; padding: 0; max-height: 42vh; overflow-y: auto; border-top: 1px solid var(--line); }
+/* The mech list scrolls on its own, a little below the Pilots box. */
+.deploy-list-wrap { position: relative; margin: 1rem 0 0.75rem; }
+.deploy-list { position: relative; list-style: none; margin: 0; padding: 0; max-height: 42vh; overflow-y: auto; } /* relative: the rows measure their place in it (updateMore) */
+/* Scroll shadows (mekbay.js updateMore): a soft shadow along an edge with mechs hidden past it, over the list, fading in and out. */
+.deploy-list-wrap::before, .deploy-list-wrap::after { content: ''; position: absolute; left: 0; right: 0; height: 1.1rem; pointer-events: none; opacity: 0; transition: opacity 0.2s ease; z-index: 1; }
+.deploy-list-wrap::before { top: 0; background: linear-gradient(to bottom, rgb(0 0 0 / 0.35), transparent); }
+.deploy-list-wrap::after { bottom: 0; background: linear-gradient(to top, rgb(0 0 0 / 0.35), transparent); }
+.deploy-list-wrap.shadow-above::before, .deploy-list-wrap.shadow-below::after { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .deploy-list-wrap::before, .deploy-list-wrap::after { transition: none; } }
+/* "▾ N more" under the list while mechs are hidden below it (mekbay.js updateMore). */
+dialog button.deploy-more { display: block; margin: -0.35rem auto 0.5rem; padding: 0.2rem 0.7rem; font: 700 0.72rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); background: none; border: 0; cursor: pointer; }
+dialog button.deploy-more:hover, dialog button.deploy-more:focus-visible { color: var(--accent); background: none; }
+dialog button.deploy-more[hidden] { display: none; }
 .deploy-unit { margin-bottom: 0.5rem; }
 dialog .deploy-unit label {
   display: grid;
@@ -601,6 +617,9 @@ dialog .deploy-unit label {
   text-transform: none;
 }
 .deploy-unit:hover .mech-row { border-color: rgb(242 184 0 / 0.6); }
+/* While a pilot is dragged (mekbay.js), a row the pointer is over doesn't light up: its slot does, as that is where the pilot goes. */
+dialog.pilot-dragging .deploy-unit:not(.picked):hover .mech-row { border-color: var(--line); }
+dialog.pilot-dragging .deploy-unit input.themed-box:not(:checked):hover { border-color: var(--line); }
 .deploy-unit.picked .mech-row { background: color-mix(in srgb, var(--accent) 38%, var(--bg)); border-color: var(--accent); }
 .deploy-unit.unavailable { opacity: 0.5; }
 .deploy-unit.unavailable label { cursor: not-allowed; }
@@ -1278,6 +1297,8 @@ input.themed-box:disabled { opacity: 0.4; cursor: not-allowed; }
 .deploy-pilots-list { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 .deploy-pilot, .deploy-slot.filled { display: flex; align-items: center; gap: 0.55rem; padding: 0.35rem 0.6rem 0.35rem 0.4rem; color: var(--text); background: var(--panel-2); border: 1px solid var(--line); font: inherit; letter-spacing: normal; text-transform: none; text-align: left; }
 .deploy-pilot { cursor: grab; }
+/* A bench card is a button: without this the dialog's buttons would make it transparent (the Pilots box's darker background), unlike the same card in a mech's slot. */
+dialog button.deploy-pilot { background: var(--panel-2); }
 dialog button.deploy-pilot:hover:not(:disabled), .deploy-pilot:focus-visible { border-color: var(--accent); background: var(--panel-2); outline: none; }
 .deploy-pilot.held { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 24%, var(--bg)); }
 .deploy-pilot.assigned:not(.held) { opacity: 0.7; }

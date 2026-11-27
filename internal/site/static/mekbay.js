@@ -265,9 +265,11 @@
       e.dataTransfer.setData('text/plain', 'pilot:' + name);
       e.dataTransfer.effectAllowed = 'move';
       node.classList.add('dragging');
+      dialog.classList.add('pilot-dragging'); // while a pilot is dragged, only the slot it would go in lights up (style.css)
     });
     node.addEventListener('dragend', function () {
       node.classList.remove('dragging');
+      dialog.classList.remove('pilot-dragging');
       // A drag given up (Escape, or let go elsewhere) leaves no drop target lit. Only the drop targets: the BV meter and the totals use .over too, for over the limit.
       dialog.querySelectorAll('.deploy-slot.over, .deploy-pilots.over').forEach(function (o) { o.classList.remove('over'); });
     });
@@ -348,17 +350,37 @@
     putBtn.addEventListener('keydown', function (e) { if (held && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); put(); } });
     box.insertBefore(putBtn, box.firstChild); // first, so it comes before the × in the tab order
     // The pilot's card shows on hovering or focusing the button, which covers the slot (style.css lights the slot while it is open).
-    if (p && typeof PilotCard !== 'undefined') PilotCard.attach(putBtn, p);
-    box.addEventListener('dragover', function (e) { e.preventDefault(); box.classList.add('over'); });
-    // Moving onto the slot's own text fires dragleave on the slot too: only leaving the slot itself takes the highlight off.
-    box.addEventListener('dragleave', function (e) { if (!e.relatedTarget || !box.contains(e.relatedTarget)) box.classList.remove('over'); });
-    box.addEventListener('drop', function (e) {
+    if (p && typeof PilotCard !== 'undefined') PilotCard.attach(putBtn, p); // dropping a pilot is taken by the whole row (dropOnRow)
+    return box;
+  }
+
+  // A pilot can be dropped anywhere on a mech's row, its mech as well as its slot: the slot is what lights up, as it is where the pilot goes. A row whose slot
+  // can't take one (an unavailable mech, or the mech limit reached) takes no drop.
+  function dropOnRow(li, u) {
+    function target() {
+      var s = li.querySelector(':scope > .deploy-slot');
+      return s && !s.classList.contains('unavailable') && !s.classList.contains('disabled') ? s : null;
+    }
+    li.addEventListener('dragover', function (e) {
+      var s = target();
+      if (!s) return;
       e.preventDefault();
-      box.classList.remove('over');
+      s.classList.add('over');
+    });
+    // Moving between the row's parts fires dragleave on the row too: only leaving the row itself takes the highlight off.
+    li.addEventListener('dragleave', function (e) {
+      if (e.relatedTarget && li.contains(e.relatedTarget)) return;
+      var s = li.querySelector(':scope > .deploy-slot');
+      if (s) s.classList.remove('over');
+    });
+    li.addEventListener('drop', function (e) {
+      var s = target();
+      if (!s) return;
+      e.preventDefault();
+      s.classList.remove('over');
       var name = dragName(e);
       if (name) assign(u.id, name);
     });
-    return box;
   }
 
   // Hovering (or focusing) a mech row of the review or the Operation in progress view shows the unit's card, as the Manage page's Hangar rows do: under the row,
@@ -402,6 +424,7 @@
       li.classList.add('has-slot');
       place = slot(u, unavailable);
       li.appendChild(place);
+      dropOnRow(li, u);
     }
     rows[u.id] = { u: u, li: li, box: box, mech: mech, slot: place, unavailable: unavailable };
     return li;
@@ -455,6 +478,8 @@
     setMeter();
     renderTray();
     renderFooter();
+    saveState();
+    updateMore();
   }
 
   // ---- Showing a step
@@ -500,11 +525,15 @@
     var line = el('span', 'bv-line');
     parts.forEach(function (p, i) {
       if (typeof p === 'string') { line.appendChild(document.createTextNode(p)); return; }
-      var slot = el('span', 'bv-fig');
-      slot.dataset.widest = p.bv ? '99,999' : '99'; // drawn by the stylesheet, invisibly, to give the slot its width
       var value = el('span', null);
-      slot.appendChild(value);
-      line.appendChild(slot);
+      if (p.free) { // a figure the line may grow and shrink around: no slot, it still counts
+        line.appendChild(value);
+      } else {
+        var slot = el('span', 'bv-fig');
+        slot.dataset.widest = p.bv ? '99,999' : '99'; // drawn by the stylesheet, invisibly, to give the slot its width
+        slot.appendChild(value);
+        line.appendChild(slot);
+      }
       countTo(value, key + '#' + i, p.n);
     });
     return line;
@@ -544,7 +573,8 @@
     var mechs = function (n) { return unitLimit ? [{ n: n }, ' / ' + unitLimit + ' mechs'] : [{ n: n }, ' selected']; };
     meter.textContent = '';
     if (playerCount > 1) {
-      meter.appendChild(el('span', null, countOf(step) + ' selected · ' + fmt(bvOf(step)) + ' BV')); // this player's share: plain text, it has no bar to keep still
+      // This player's share: its figures count like the total's, but in no slots (it has no bar to keep still, so it may change length).
+      meter.appendChild(figures('player', [{ n: countOf(step), free: true }, ' selected · ', { n: bvOf(step), bv: true, free: true }, ' BV']));
       meter.appendChild(withBar('meter', ['Force total: '].concat(unitLimit ? mechs(totalCount()).concat([' · ']) : [], [{ n: total, bv: true }, limitText]), total, total - bvOf(step)));
     } else {
       meter.appendChild(withBar('meter', mechs(countOf(0)).concat([' · ', { n: total, bv: true }, limitText]), total, 0));
@@ -767,6 +797,8 @@
       var inner = el('div', 'qr-inner');
       var h = el('h2', null, 'Scan to open');
       h.id = 'qr-title';
+      h.tabIndex = -1;
+      h.autofocus = true; // the dialog opens on its title, not its first button
       inner.appendChild(h);
       inner.appendChild(el('div', 'qr-box'));
       var actions = el('div', 'form-actions');
@@ -935,8 +967,86 @@
     else { var allHave = true; for (var i = 0; i < playerCount; i++) if (countOf(i) === 0) allHave = false; go.disabled = !ok || overBV() || dropCost() > warchest || !allHave || anyUnmanned() || (needCommander() && !effectiveCommander()); }
   }
 
+  // ---- More mechs past the edge
+  // The mech list scrolls without a frame, and macOS hides scrollbars, so it says when there is more to see: an edge with mechs hidden past it shows a soft
+  // shadow, as if the list slid under it (the wrapper's shadow-above and shadow-below), and while mechs are hidden below it a "▾ N more" button under it says
+  // how many (a mech cut off at the edge counts) and, clicked, scrolls down by most of the list's height. Each goes once the list reaches that end.
+  var listWrap = document.getElementById('deploy-list-wrap');
+  var moreBtn = document.getElementById('deploy-more');
+  function updateMore() {
+    var shown = !list.hidden;
+    if (listWrap) {
+      listWrap.classList.toggle('shadow-below', shown && list.scrollTop + list.clientHeight < list.scrollHeight - 1);
+      listWrap.classList.toggle('shadow-above', shown && list.scrollTop > 1);
+    }
+    if (!moreBtn) return;
+    var bottom = list.scrollTop + list.clientHeight;
+    var hidden = 0;
+    if (shown) for (var i = 0; i < list.children.length; i++) if (list.children[i].offsetTop + list.children[i].offsetHeight > bottom + 1) hidden++;
+    moreBtn.hidden = hidden === 0;
+    moreBtn.textContent = '\u25BE ' + hidden + ' more';
+  }
+  if (moreBtn) moreBtn.addEventListener('click', function () { list.scrollBy({ top: list.clientHeight * 0.8, behavior: 'smooth' }); });
+  list.addEventListener('scroll', updateMore, { passive: true });
+  window.addEventListener('resize', updateMore);
+
+  // ---- The plan in the URL
+  // The wizard's plan lives in the page's fragment (#deploy=...), so a reload brings the player back to where they were: the step, the number of players,
+  // each player's mechs and pilots, the proposed variants and the commander. A fragment never reaches the server and is replaced, not added to the history.
+  // Restoring keeps only what still holds (see restorePlan); a pilot held, an open Reconfigure dialog and the scroll are not kept.
+  var restoring = null; // a plan read from the URL, waiting for the hangar to restore it on
+  function encodePlan() {
+    var p = [];
+    for (var i = 0; i < playerCount; i++) {
+      var ids = units.filter(function (u) { return plan(i).selected[u.id]; }).map(function (u) { return u.id; });
+      var crew = {};
+      ids.forEach(function (id) { if (plan(i).crew[id]) crew[id] = plan(i).crew[id]; });
+      p.push({ u: ids, c: crew });
+    }
+    var json = JSON.stringify({ v: 1, n: playerCount, s: step, p: p, r: variants, k: commander });
+    return btoa(unescape(encodeURIComponent(json))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+  function decodePlan(text) {
+    try {
+      var b64 = text.replace(/-/g, '+').replace(/_/g, '/');
+      var d = JSON.parse(decodeURIComponent(escape(atob(b64 + '==='.slice((b64.length + 3) % 4)))));
+      return d && d.v === 1 && Array.isArray(d.p) ? d : null;
+    } catch (e) {
+      return null; // not a plan: the wizard isn't opened from it
+    }
+  }
+  // The URL follows the wizard: the plan while it is open and being planned, nothing once it is closed or the battle has started.
+  function saveState() {
+    if (restoring || !window.history || !history.replaceState) return;
+    var hash = dialog.open && !finished && units.length ? '#deploy=' + encodePlan() : '';
+    if (location.hash === hash || (!hash && location.hash.indexOf('#deploy=') !== 0)) return;
+    history.replaceState(history.state, '', location.pathname + location.search + hash);
+  }
+  // Puts a plan from the URL back, keeping only what still holds: the player count within the campaign's range, mechs still in the hangar and not destroyed
+  // (each taken once), living named pilots (each in one mech), and the commander; apply then drops variants no longer offered and caps the step.
+  function restorePlan(d, present) {
+    playerCount = Math.max(minPlayers, Math.min(maxPlayers, parseInt(d.n, 10) || defaultPlayers));
+    plans = [];
+    var taken = {}, crewed = {};
+    for (var i = 0; i < playerCount; i++) {
+      var saved = d.p[i] || {};
+      (Array.isArray(saved.u) ? saved.u : []).forEach(function (id) {
+        if (!present[id] || taken[id]) return;
+        taken[id] = true;
+        plan(i).selected[id] = true;
+        var p = saved.c && pilotNamed(saved.c[id]);
+        if (p && !crewed[p.name.toLowerCase()]) { plan(i).crew[id] = p.name; crewed[p.name.toLowerCase()] = true; }
+      });
+    }
+    variants = {};
+    if (d.r && typeof d.r === 'object') Object.keys(d.r).forEach(function (id) { if (taken[id] && typeof d.r[id] === 'string') variants[id] = d.r[id]; });
+    commander = typeof d.k === 'string' ? d.k : '';
+    step = parseInt(d.s, 10) || 0;
+  }
+
   function render() {
     if (typeof MechRow.hideTip === 'function') MechRow.hideTip(); // the pilot elements are about to be replaced, so a card open on one would point at nothing
+    dialog.classList.remove('pilot-dragging'); // a drop redraws the card that was dragged, which may then never hear its dragend
     renderPlayers();
     list.textContent = '';
     rows = {};
@@ -953,6 +1063,7 @@
       renderOperation();
       renderTray();
       renderFooter();
+      saveState(); // a battle started: the plan leaves the URL
       return;
     }
     meter.hidden = false;
@@ -983,6 +1094,8 @@
     }
     renderTray();
     renderFooter();
+    saveState();
+    updateMore();
   }
 
   // Shows a hangar (cached or live). A choice the player has already made is kept for the units that are still there; before that, the units already in the
@@ -998,6 +1111,7 @@
     });
     var present = {};
     units.forEach(function (u) { if (!u.destroyed && !u.unknown) present[u.id] = true; });
+    if (restoring) { restorePlan(restoring, present); restoring = null; touched = true; } // a plan from the URL (see saveState): the player's own, kept like one
     if (touched) {
       plans.forEach(function (pl) {
         Object.keys(pl.selected).forEach(function (id) { if (!present[id]) { delete pl.selected[id]; delete pl.crew[id]; } });
@@ -1021,6 +1135,7 @@
       for (var i = 0; i < plans.length; i++) if (plans[i] && plans[i].selected[id]) taken = true;
       if (!swaps || !u || !taken || !VariantPicker.option(u, variants[id])) delete variants[id];
     });
+    step = Math.max(0, Math.min(step, stepCount() - 1)); // a restored step past what the plan now has
     document.getElementById('deploy-provided').hidden = !provided;
     status.hidden = units.length > 0;
     if (!units.length) status.textContent = 'Your hangar has no mechs in it yet. Purchase some under Manage force first.';
@@ -1079,7 +1194,16 @@
   });
   // A battle started from this dialog changes the whole page (View operation, the mission log, no Manage force, the campaign lock), so closing it reloads.
   var startedHere = false;
-  dialog.addEventListener('close', function () { stopPolling(); if (startedHere) location.reload(); });
+  dialog.addEventListener('close', function () { stopPolling(); restoring = null; saveState(); if (startedHere) location.reload(); });
+  // A reload (or a bookmark) with the plan in the URL opens the wizard where the player was. Not over a battle in progress (that opens on its Operation view) or
+  // a mission that can't be deployed yet.
+  (function () {
+    var saved = location.hash.indexOf('#deploy=') === 0 ? decodePlan(location.hash.slice(8)) : null;
+    if (!saved || inProgress || openBtn.disabled) { if (location.hash.indexOf('#deploy=') === 0) history.replaceState(history.state, '', location.pathname + location.search); return; }
+    restoring = saved;
+    dialog.showModal();
+    load();
+  })();
   // One Escape can be taken for both dialogs when the QR code was opened without a click in between; the one under it stays.
   dialog.addEventListener('cancel', function (e) { if ((qrDialog && qrDialog.open) || (abortDialog && abortDialog.open)) e.preventDefault(); });
   cancel.addEventListener('click', function () { dialog.close(); });
@@ -1098,6 +1222,8 @@
         var inner = el('div', 'abort-inner');
         var h = el('h2', null, 'Abort mission');
         h.id = 'abort-title';
+        h.tabIndex = -1;
+        h.autofocus = true; // the dialog opens on its title: not on Roll back, which Enter would press
         inner.appendChild(h);
         inner.appendChild(el('p', 'muted', 'The battle is given up and the mission goes back to not started, with no rewards. Choose what happens to the campaign.'));
         [['rollback', 'Roll back', 'Return the campaign to the end of the previous mission. Repairs, sales, purchases and SP spent since then are undone.', 'button button-outline danger'],

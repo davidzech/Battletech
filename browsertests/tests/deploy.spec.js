@@ -322,6 +322,7 @@ test('reconfigures an omnimech on the review to fit the BV limit', async ({ page
   // Start battle pays for the swap, then builds the battle; the warchest shows it once the page reloads.
   await dlg.locator('#deploy-go').click();
   await expect(dlg.locator('#deploy-title')).toHaveText('Operation in progress');
+  await expect(page).not.toHaveURL(/#deploy=/); // a battle started: nothing left to come back to
   await page.goto('/muster/manage/');
   await expect(page.locator('#overview')).toContainText('962 SP');
 });
@@ -439,4 +440,109 @@ test('the meter stays red over the limit after dragging a pilot', async ({ page 
   await dlg.locator('#deploy-pilots-list .deploy-pilot', { hasText: 'Alrek' }).dragTo(rows.nth(0).locator('.deploy-slot'));
   await expect(rows.nth(0).locator('.deploy-slot')).toContainText('Alrek');
   await expect(dlg.locator('#deploy-meter')).toHaveClass(/over/);
+});
+
+// The wizard opens with the keyboard on its title, not on its first button (the Players picker), so no control shows a focus ring the player didn't put there.
+test('the wizard opens on its title', async ({ page }) => {
+  await newAccount(page);
+  await startCampaign(page, 'refusalwar', ['Alrek', 'Katarina']);
+  await openDeploy(page);
+  await expect(page.locator('#deploy-title')).toBeFocused();
+});
+
+// The wizard's plan is in the URL's fragment, so a reload brings the player back where they were; closing the wizard clears it, and a restore keeps only what
+// still holds (a mech no longer in the hangar is dropped, with its pilot).
+test('a reload brings the wizard back where it was', async ({ page }) => {
+  await newAccount(page);
+  await startCampaign(page, 'muster', ['Alrek', 'Katarina']);
+  const hangar = [unit('ua', 'BMMadCat_Prime'), unit('ub', 'BMDasher_Prime'), unit('uc', 'BMGrizzly')];
+  await setHangar(page, hangar, 'muster');
+  await page.goto('/muster/scenario_000/');
+  await page.locator('#deploy-open').click();
+  const dlg = page.locator('#deploy-dialog');
+  const rows = dlg.locator('#deploy-list .deploy-unit');
+  await dlg.locator('#deploy-players-pick').getByRole('button', { name: '2 players' }).click();
+  // Player 1: the Timber Wolf as the B, with Alrek.
+  await rows.nth(0).getByRole('button', { name: 'Reconfigure' }).click();
+  const swap = page.locator('#swap-dialog');
+  await swap.locator('#swap-available').uncheck();
+  await swap.locator('#swap-select').selectOption('BMMadCat_B');
+  await swap.locator('#swap-apply').click();
+  await dlg.locator('#deploy-pilots-list .deploy-pilot', { hasText: 'Alrek' }).click();
+  await rows.nth(0).locator('.deploy-slot').click();
+  await dlg.locator('#deploy-next').click();
+  // Player 2: the Fire Moth.
+  await expect(dlg.locator('#deploy-step')).toHaveText('Player 2 of 2');
+  await rows.filter({ hasText: 'Fire Moth' }).locator('input[type=checkbox]').check();
+  await expect(page).toHaveURL(/#deploy=/);
+
+  await page.reload();
+  await expect(dlg).toBeVisible();
+  await expect(dlg.locator('#deploy-step')).toHaveText('Player 2 of 2');
+  await expect(rows.filter({ hasText: 'Fire Moth' }).locator('input[type=checkbox]')).toBeChecked();
+  await dlg.locator('#deploy-back').click();
+  await expect(rows.nth(0)).toContainText('Prime → B');
+  await expect(rows.nth(0).locator('.deploy-slot')).toContainText('Alrek');
+
+  // A mech gone from the hangar is dropped on restore, and its pilot with it.
+  await setHangar(page, hangar.slice(1), 'muster');
+  await page.reload();
+  await expect(dlg).toBeVisible();
+  await expect(dlg.locator('#deploy-step')).toHaveText('Player 1 of 2');
+  await expect(rows.filter({ hasText: 'Timber Wolf' })).toHaveCount(0);
+  await expect(dlg.locator('#deploy-pilots-list .deploy-pilot', { hasText: 'Alrek' })).not.toContainText('in ');
+
+  // Closing the wizard takes the plan out of the URL.
+  await dlg.locator('#deploy-cancel').click();
+  await expect(page).not.toHaveURL(/#deploy=/);
+  await page.reload();
+  await expect(dlg).toBeHidden();
+});
+
+// A pilot can be dropped on a mech's row, not only its slot: the slot is what lights up while the pilot is over the row, and the pilot goes in it. A row whose
+// slot can't take a pilot (the mech limit reached) takes no drop.
+test('a pilot dropped on a mech goes in its slot', async ({ page }) => {
+  await newAccount(page);
+  await startCampaign(page, 'refusalwar', ['Alrek', 'Katarina']);
+  const dlg = await openDeploy(page);
+  const rows = dlg.locator('#deploy-list .deploy-unit');
+  const tray = dlg.locator('#deploy-pilots-list .deploy-pilot');
+  // Drag Katarina by hand, so the highlight can be seen half-way.
+  await tray.filter({ hasText: 'Katarina' }).hover();
+  await page.mouse.down();
+  await rows.nth(1).locator('.mr-name').hover();
+  await rows.nth(1).locator('.mr-name').hover({ position: { x: 5, y: 5 } });
+  await expect(rows.nth(1).locator('.deploy-slot')).toHaveClass(/over/);
+  await page.mouse.up();
+  await expect(rows.nth(1).locator('.deploy-slot')).toContainText('Katarina');
+  await expect(rows.nth(1).locator('.deploy-slot')).not.toHaveClass(/over/);
+  await expect(rows.nth(1).locator('input[type=checkbox]')).toBeChecked();
+
+  // With the limit of two reached, a row with no room takes no drop.
+  await rows.nth(0).locator('input[type=checkbox]').check();
+  await tray.filter({ hasText: 'Alrek' }).dragTo(rows.nth(3).locator('.mr-name'));
+  await expect(rows.nth(3).locator('input[type=checkbox]')).not.toBeChecked();
+  await expect(tray.filter({ hasText: 'Alrek' })).not.toContainText('in ');
+});
+
+// Under a list that scrolls, "▾ N more" says how many mechs are hidden below it; a click scrolls down, and it hides once the end is in sight.
+test('the mech list says how many more mechs are below it', async ({ page }) => {
+  await newAccount(page);
+  await startCampaign(page, 'muster', ['Alrek', 'Katarina']);
+  await setHangar(page, ['BMMadCat_Prime', 'BMMadCat_Prime', 'BMDasher_Prime', 'BMVulture_Prime', 'BMGrizzly', 'BMKoshi_E', 'BMUller_J'].map((u, i) => unit('u' + i, u)), 'muster');
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/muster/scenario_000/');
+  await page.locator('#deploy-open').click();
+  const more = page.locator('#deploy-more');
+  await expect(more).toHaveText(/^▾ \d+ more$/);
+  await expect(page.locator('#deploy-list-wrap')).toHaveClass(/shadow-below/);
+  await more.click();
+  await expect(async () => {
+    if (await more.isVisible()) await more.click();
+    await expect(more).toBeHidden();
+  }).toPass({ timeout: 5000 });
+  await expect(page.locator('#deploy-list-wrap')).not.toHaveClass(/shadow-below/);
+  await expect(page.locator('#deploy-list-wrap')).toHaveClass(/shadow-above/);
+  await page.locator('#deploy-list').evaluate((l) => { l.scrollTop = 0; });
+  await expect(more).toBeVisible();
 });
