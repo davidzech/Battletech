@@ -67,7 +67,7 @@ test('repairs a damaged mech, and refuses a repair the warchest cannot pay', asy
   const shop = page.locator('#purchase-dialog');
   await shop.locator('#purchase-search').fill('Grizzly');
   await shop.locator('.purchase-found .mech-row', { hasText: 'Grizzly' }).first().click();
-  await expect(shop.locator('#purchase-warchest')).toHaveText('Warchest 1 SP');
+  await expect(shop.locator('#purchase-warchest')).toHaveText('Warchest: 1 SP');
   await expect(shop.locator('#purchase-cost')).toHaveText(/^Total cost: [\d,]+ SP$/);
   await expect(shop.locator('#purchase-cost')).toHaveClass(/short/);
   await expect(shop.locator('#purchase-buy')).toBeDisabled();
@@ -164,7 +164,7 @@ test('buys units from the Purchase dialog', async ({ page }) => {
   const dlg = page.locator('#purchase-dialog');
   await expect(dlg).toBeVisible();
   // An empty cart costs nothing, and can't be bought.
-  await expect(dlg.locator('#purchase-warchest')).toHaveText('Warchest 4,500 SP');
+  await expect(dlg.locator('#purchase-warchest')).toHaveText('Warchest: 4,500 SP');
   await expect(dlg.locator('#purchase-cost')).toHaveText('Total cost: 0 SP');
   await expect(dlg.locator('#purchase-buy')).toBeDisabled();
   await dlg.locator('#purchase-search').fill('Grizzly');
