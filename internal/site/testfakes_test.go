@@ -252,6 +252,24 @@ func get(t *testing.T, srv *httptest.Server, path string, cookie *http.Cookie) *
 // by a plain Mark completed. The real Scenario 001 follows the Aces model (see TestScenario001Outcome).
 func plainScenario001Root(t *testing.T) string {
 	t.Helper()
+	return campaignsCopy(t, map[string]string{"RefusalWar/Scenario_001/Outcome.md": `---
+id: scenario_001
+default_next: ""
+branches: [scenario_002, scenario_003]
+---
+
+# Scenario 001: Pyre Light - Outcome
+
+## Victory & Rewards
+
+A plain scenario for the tests.
+`})
+}
+
+// campaignsCopy copies the campaigns into a temporary folder, without the scenarios' big images (a campaign's icon is kept), then writes the files in
+// files (path relative to the campaigns folder -> text), replacing or adding them.
+func campaignsCopy(t *testing.T, files map[string]string) string {
+	t.Helper()
 	src, dst := "../../campaigns", t.TempDir()
 	err := filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -268,24 +286,19 @@ func plainScenario001Root(t *testing.T) string {
 		if err != nil {
 			return err
 		}
-		if filepath.ToSlash(rel) == "RefusalWar/Scenario_001/Outcome.md" {
-			data = []byte(`---
-id: scenario_001
-default_next: ""
-branches: [scenario_002, scenario_003]
----
-
-# Scenario 001: Pyre Light - Outcome
-
-## Victory & Rewards
-
-A plain scenario for the tests.
-`)
-		}
 		return os.WriteFile(filepath.Join(dst, rel), data, 0o644)
 	})
 	if err != nil {
 		t.Fatal(err)
+	}
+	for rel, text := range files {
+		p := filepath.Join(dst, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
 	return dst
 }

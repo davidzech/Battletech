@@ -47,6 +47,35 @@ jobs:
       - name: Test
         run: go test ./...
 
+  browser:
+    # The Playwright suite in browsertests/, driving the browser scripts against the site served with the fake MekBay (TestBrowser in internal/site).
+    needs: go
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26.13.1
+          cache: npm
+          cache-dependency-path: browsertests/package-lock.json
+      - name: Install Playwright
+        working-directory: browsertests
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Browser tests
+        run: BROWSER_TESTS=1 go test ./internal/site -run '^TestBrowser$' -count=1 -v
+      - name: Upload traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-results
+          path: browsertests/test-results/
+          retention-days: 7
+
   docker:
     runs-on: ubuntu-latest
     steps:

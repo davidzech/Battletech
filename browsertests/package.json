@@ -1,0 +1,9 @@
+{
+  "name": "battletech-browsertests",
+  "private": true,
+  "description": "Playwright tests of the site's browser scripts, run against a test server with a fake MekBay. Run them through Go: BROWSER_TESTS=1 go test ./internal/site -run TestBrowser",
+  "license": "GPL-3.0-or-later",
+  "devDependencies": {
+    "@playwright/test": "1.65.0"
+  }
+}
