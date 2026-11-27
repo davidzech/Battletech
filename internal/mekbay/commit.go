@@ -75,18 +75,50 @@ func commitState(hangar map[string]any, battle map[string]map[string]any) Commit
 	return rep
 }
 
-// CommitBattle reads the battle's operation, takes the state of every unit in the players' forces and saves it into the matching units of the hangar force.
-func (c *Client) CommitBattle(ctx context.Context, req CommitBattleRequest) (CommitBattleReport, error) {
+// errNothingToCommit stops editForce from saving a hangar none of the battle's units matched.
+var errNothingToCommit = errors.New("nothing to write back")
+
+// CommitBattle reads the battle's operation, takes the state of every unit in the players' forces and saves it into the matching units of the hangar force,
+// through editForce like every other hangar edit. It returns the hangar as saved, for the site's cached copy; when no unit matched nothing is saved and the
+// hangar returned is the zero HangarForce.
+//
+// A hangar MekBay no longer has is reported as such (import it again); any other failure to read it (a timeout, say) is passed on as it is, so the player tries
+// again rather than re-importing.
+func (c *Client) CommitBattle(ctx context.Context, req CommitBattleRequest) (CommitBattleReport, HangarForce, error) {
 	ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
+	battle, err := c.readBattleUnits(ctx, req)
+	if err != nil {
+		return CommitBattleReport{}, HangarForce{}, err
+	}
+	var rep CommitBattleReport
+	h, err := c.editForce(ctx, req.OwnerUID, req.HangarInstance, func(hangar map[string]any, _ time.Time) error {
+		if rep = commitState(hangar, battle); rep.Matched == 0 {
+			return errNothingToCommit
+		}
+		return nil
+	})
+	switch {
+	case errors.Is(err, errNothingToCommit):
+		return rep, HangarForce{}, nil
+	case errors.Is(err, errNoHangarForce):
+		return CommitBattleReport{}, HangarForce{}, errors.New("MekBay has no force for your hangar; try importing it again")
+	case err != nil:
+		return CommitBattleReport{}, HangarForce{}, err
+	}
+	return rep, h, nil
+}
+
+// readBattleUnits reads the battle's operation and the players' forces in it (every friendly force but those req.Skip names), and answers their units by ID.
+func (c *Client) readBattleUnits(ctx context.Context, req CommitBattleRequest) (map[string]map[string]any, error) {
 	s, err := Dial(ctx, c.url(), req.OwnerUID)
 	if err != nil {
-		return CommitBattleReport{}, err
+		return nil, err
 	}
 	defer s.Close()
 	raw, err := s.Call(ctx, map[string]any{"action": "getOperation", "operationId": req.OperationID})
 	if err != nil {
-		return CommitBattleReport{}, err
+		return nil, err
 	}
 	var op struct {
 		Data *struct {
@@ -97,23 +129,19 @@ func (c *Client) CommitBattle(ctx context.Context, req CommitBattleRequest) (Com
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(raw, &op); err != nil || op.Data == nil {
-		return CommitBattleReport{}, errors.New("MekBay has no such operation any more")
-	}
-	read := func(instance string) (map[string]any, error) {
-		f, err := s.getForce(ctx, instance, false)
-		if err == nil && f == nil {
-			err = fmt.Errorf("MekBay has no force %s", instance)
-		}
-		return f, err
+		return nil, errors.New("MekBay has no such operation any more")
 	}
 	battle := map[string]map[string]any{}
 	for _, f := range op.Data.Forces {
 		if f.Alignment != "friendly" || slices.Contains(req.Skip, f.InstanceID) {
 			continue
 		}
-		force, err := read(f.InstanceID)
+		force, err := s.getForce(ctx, f.InstanceID, false)
 		if err != nil {
-			return CommitBattleReport{}, err
+			return nil, err
+		}
+		if force == nil {
+			return nil, fmt.Errorf("MekBay has no force %s", f.InstanceID)
 		}
 		groups, _ := force["groups"].([]any)
 		for _, g := range groups {
@@ -129,17 +157,9 @@ func (c *Client) CommitBattle(ctx context.Context, req CommitBattleRequest) (Com
 		}
 	}
 	if len(battle) == 0 {
-		return CommitBattleReport{}, errors.New("none of the players' forces could be read from MekBay")
+		return nil, errors.New("none of the players' forces could be read from MekBay")
 	}
-	hangar, err := read(req.HangarInstance)
-	if err != nil {
-		return CommitBattleReport{}, errors.New("MekBay has no force for your hangar; try importing it again")
-	}
-	rep := commitState(hangar, battle)
-	if rep.Matched == 0 {
-		return rep, nil
-	}
-	return rep, s.saveForce(ctx, hangar, time.Now())
+	return battle, nil
 }
 
 // resetCrew turns every crew member of a unit's state into the default one: no name, Gunnery 4, Piloting 5, unhurt (a 4/5 pilot is what MekBay gives a new unit).

@@ -1,6 +1,7 @@
 package site
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log"
@@ -142,7 +143,7 @@ func (s *Server) commitOutcome(w http.ResponseWriter, r *http.Request) {
 
 // writeBackBattle, for a mission fought with the player's own force (not a provided one) that has a battle in progress, writes the battle's units back into the
 // hangar before the mission is completed (see internal/mekbay/commit.go), so a failure leaves the mission open to try again (writing the same state twice changes nothing). It
-// answers the request itself and returns false when it fails.
+// runs under the run's hangar lock (lockHangar) and caches the hangar as saved. It answers the request itself and returns false when it fails.
 func (s *Server) writeBackBattle(w http.ResponseWriter, r *http.Request, pt storage.Playthrough, c *content.Campaign, sc *content.Scenario) bool {
 	if sc.Provides() {
 		return true
@@ -160,10 +161,18 @@ func (s *Server) writeBackBattle(w http.ResponseWriter, r *http.Request, pt stor
 	if !had || !started || !run.Owned() {
 		return true // no battle to write back, or a hangar the site doesn't own
 	}
-	rep, err := s.mekbay.CommitBattle(r.Context(), mekbay.CommitBattleRequest{OwnerUID: mekbay.AccountUID(currentSeed(r), mekbay.SlotHangar), HangarInstance: run.HangarInstance, OperationID: op.OperationID, Skip: skipAllies(op.AlliesInstance)})
+	unlock, ok := s.lockHangarRequest(w, r, pt, c) // the write-back edits the hangar force like any other hangar edit: one at a time
+	if !ok {
+		return false
+	}
+	defer unlock()
+	rep, h, err := s.mekbay.CommitBattle(r.Context(), mekbay.CommitBattleRequest{OwnerUID: mekbay.AccountUID(currentSeed(r), mekbay.SlotHangar), HangarInstance: run.HangarInstance, OperationID: op.OperationID, Skip: skipAllies(op.AlliesInstance)})
 	if err != nil {
 		http.Error(w, "Could not write the battle's damage back into your hangar: "+err.Error(), http.StatusBadGateway)
 		return false
+	}
+	if rep.Matched > 0 {
+		s.cacheHangar(context.WithoutCancel(r.Context()), pt.ID, c.Slug, run.HangarInstance, h) // the page that reloads next shows the battle's damage at once
 	}
 	if len(rep.Skipped) > 0 {
 		log.Printf("battle write-back: %d units written, no match in the hangar for %v", rep.Matched, rep.Skipped)
