@@ -544,7 +544,7 @@
     var mechs = function (n) { return unitLimit ? [{ n: n }, ' / ' + unitLimit + ' mechs'] : [{ n: n }, ' selected']; };
     meter.textContent = '';
     if (playerCount > 1) {
-      meter.appendChild(figures('player', ['This player: ', { n: countOf(step) }, ' selected · ', { n: bvOf(step), bv: true }, ' BV']));
+      meter.appendChild(el('span', null, countOf(step) + ' selected · ' + fmt(bvOf(step)) + ' BV')); // this player's share: plain text, it has no bar to keep still
       meter.appendChild(withBar('meter', ['Force total: '].concat(unitLimit ? mechs(totalCount()).concat([' · ']) : [], [{ n: total, bv: true }, limitText]), total, total - bvOf(step)));
     } else {
       meter.appendChild(withBar('meter', mechs(countOf(0)).concat([' · ', { n: total, bv: true }, limitText]), total, 0));
