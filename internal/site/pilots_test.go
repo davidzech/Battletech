@@ -626,7 +626,7 @@ func TestRepairEndpoints(t *testing.T) {
 	}
 	// The records dialog offers both repairs for every pilot.
 	page := body(t, srv, "/refusalwar/manage/", cookie)
-	for _, want := range []string{`class="rec-reset"`, `class="rec-total"`, `class="rec-total-form"`, `data-allocated="150"`, `data-total="150"`} {
+	for _, want := range []string{`class="rec-reset"`, `class="rec-total"`, `id="number-dialog"`, `data-allocated="150"`, `data-total="150"`} {
 		if !strings.Contains(page, want) {
 			t.Errorf("the records dialog is missing %q", want)
 		}
@@ -669,6 +669,41 @@ func TestRepairEndpoints(t *testing.T) {
 	}
 	if got := status("/api/pilots/reset", form("pilot", "nobody")); got != http.StatusNotFound {
 		t.Errorf("reset of an unknown pilot: %d", got)
+	}
+}
+
+// Advanced Management's Set MVPs: a whole number from 0 to 99 (the card has room for two digits), logged in the History.
+func TestSetPilotMVPs(t *testing.T) {
+	srv, store, cookie := startedCompany(t)
+	ctx := context.Background()
+	id := playthroughID("wolfpack2026")
+	ps, _ := store.Pilots(ctx, id, "refusalwar")
+	pl := ps[0].ID
+	set := func(pilot, mvps, origin string) int {
+		return post(t, srv, "/api/pilots/mvps", url.Values{"campaign": {"refusalwar"}, "pilot": {pilot}, "mvps": {mvps}}, cookie, origin).StatusCode
+	}
+	if !strings.Contains(body(t, srv, "/refusalwar/manage/", cookie), `class="rec-mvps-set"`) {
+		t.Error("the records dialog has no Set MVPs button")
+	}
+	if got := set(pl, "3", "https://evil.example"); got != http.StatusForbidden {
+		t.Errorf("cross-origin: %d", got)
+	}
+	for _, bad := range []string{"", "-1", "100", "two", "1.5"} {
+		if got := set(pl, bad, srv.URL); got != http.StatusBadRequest {
+			t.Errorf("mvps %q: %d", bad, got)
+		}
+	}
+	if got := set("nobody", "3", srv.URL); got != http.StatusNotFound {
+		t.Errorf("unknown pilot: %d", got)
+	}
+	if got := set(pl, "12", srv.URL); got != http.StatusNoContent {
+		t.Fatalf("set: %d", got)
+	}
+	if ps, _ := store.Pilots(ctx, id, "refusalwar"); ps[0].MVPs != 12 || ps[1].MVPs != 0 {
+		t.Errorf("after setting 12: %d, %d", ps[0].MVPs, ps[1].MVPs)
+	}
+	if page := body(t, srv, "/refusalwar/", cookie); !strings.Contains(page, "MVP count was set to 12 (Advanced Management).") {
+		t.Error("the History has no line for it")
 	}
 }
 

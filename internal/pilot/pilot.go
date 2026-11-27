@@ -118,8 +118,10 @@ type NamedPilot struct {
 	// TotalSP is every SP the pilot has earned. The four columns in SP hold what has been allocated so far, so what is
 	// still unallocated is TotalSP minus their sum (see Unallocated).
 	TotalSP int
-	Fallen  bool // died, and is permanently removed from the campaign (kept so the record isn't lost)
-	SP      SPAllocation
+	// MVPs is how many missions the pilot has been chosen MVP of.
+	MVPs   int
+	Fallen bool // died, and is permanently removed from the campaign (kept so the record isn't lost)
+	SP     SPAllocation
 	// Learned are the IDs of the Edge abilities the pilot has chosen (see abilities.go), in the order they were chosen. A pilot may hold as
 	// many as their Edge abilities level (EdgeAbilities); what they haven't chosen yet is PendingAbilities.
 	Learned []string
@@ -179,6 +181,7 @@ type PilotView struct {
 	Earned, Unallocated, Allocated           int           // total SP earned, the part not yet in a column, and the part that is
 	EdgeLearned                              []EdgeAbility // the Edge abilities the pilot has chosen, in order
 	EdgePending                              int           // how many more they have earned and still have to choose
+	MVPs                                     int           // missions they were the MVP of
 	Columns                                  []pilotColumn
 }
 
@@ -196,7 +199,7 @@ func (p NamedPilot) View(ranks []string) PilotView {
 	return PilotView{
 		ID: p.ID, Name: p.Name, Rank: RankFor(ranks, p.Rank), Fallen: p.Fallen, Portrait: portraitOf(p.ID, p.Portrait), PortraitURL: portraitURL(portraitOf(p.ID, p.Portrait)),
 		Gunnery: p.Gunnery(), Piloting: p.Piloting(), EdgeTokens: p.EdgeTokens(), Abilities: p.EdgeAbilities(),
-		Earned: p.Earned(), Unallocated: p.Unallocated(), Allocated: p.SP.Total(),
+		Earned: p.Earned(), Unallocated: p.Unallocated(), Allocated: p.SP.Total(), MVPs: p.MVPs,
 		EdgeLearned: edgeAbilityList(p.Learned), EdgePending: p.PendingAbilities(),
 		Columns: []pilotColumn{
 			col(gunneryLadder, p.SP.Gunnery), col(pilotingLadder, p.SP.Piloting),

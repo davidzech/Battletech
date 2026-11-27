@@ -315,12 +315,13 @@
       rRefresh();
       rGo.disabled = false;
       if (rCost > 0) {
-        var cost = Dom.costLine(rCost, rWarchest);
+        // Only the cost: the warchest isn't needed here, unless it can't pay.
+        var short = rCost > rWarchest;
         rCostText.hidden = false;
-        rCostText.textContent = cost.text;
-        rCostText.classList.toggle('short', cost.short);
+        rCostText.textContent = 'Cost ' + commas(rCost) + ' SP.' + (short ? ' Not enough funds in the warchest.' : '');
+        rCostText.classList.toggle('short', short);
         rGo.textContent = 'Recruit for ' + commas(rCost) + ' SP';
-        if (cost.short) rGo.disabled = true;
+        if (short) rGo.disabled = true;
       }
       recruit.showModal();
       rName.focus();
@@ -498,6 +499,54 @@
       }, function () { button.disabled = false; recError.textContent = 'Could not reach the server.'; });
     }
 
+    // The number dialog (Set total SP, Set MVPs), opened over Advanced Management: a title, a note, one whole-number box, Save and Cancel. opts.save(n, done) is
+    // called with a number within opts.min..opts.max; it calls done() when saved (the dialog closes), done(message) to show an error, or done('') to stay open.
+    var numDialog = document.getElementById('number-dialog');
+    var numInput = document.getElementById('number-input');
+    var numError = document.getElementById('number-error');
+    var numSave = document.getElementById('number-save');
+    var numOpts = null;
+    function askNumber(opts) {
+      numOpts = opts;
+      document.getElementById('number-title').textContent = opts.title;
+      document.getElementById('number-note').textContent = opts.note || '';
+      document.getElementById('number-label').textContent = opts.label;
+      numInput.min = opts.min; numInput.max = opts.max; numInput.step = opts.step || 1;
+      numInput.value = opts.value;
+      numError.textContent = '';
+      numSave.disabled = false;
+      numDialog.showModal();
+      numInput.focus();
+      numInput.select();
+    }
+    if (numDialog) {
+      document.getElementById('number-cancel').addEventListener('click', function () { numDialog.close(); });
+      numDialog.addEventListener('click', function (e) { if (e.target === numDialog) numDialog.close(); });
+      document.getElementById('number-form').addEventListener('submit', function (e) {
+        e.preventDefault();
+        if (!numOpts) return;
+        var n = Number(numInput.value);
+        if (numInput.value === '' || !Number.isInteger(n) || n < numOpts.min || n > numOpts.max) {
+          numError.textContent = 'Enter a whole number from ' + numOpts.min + ' to ' + Dom.commas(numOpts.max) + '.';
+          return;
+        }
+        numError.textContent = '';
+        numSave.disabled = true;
+        numOpts.save(n, function (err) {
+          numSave.disabled = false;
+          if (err === undefined) { numDialog.close(); return; }
+          numError.textContent = err;
+        });
+      });
+    }
+    // Posts a correction from the number dialog: onOk updates the row, then done() closes the dialog; a refusal shows the server's reason in it.
+    function postNumber(url, li, extra, done, onOk) {
+      post(url, 'pilot=' + encodeURIComponent(li.dataset.pilot) + '&' + extra).then(function (res) {
+        if (res.ok) { recDirty = true; onOk(); done(); return; }
+        return res.text().then(function (t) { done(t.trim() || 'Something went wrong.'); });
+      }, function () { done('Could not reach the server.'); });
+    }
+
     // Shows the row's SP numbers from its data attributes.
     function showSP(li) {
       var total = parseInt(li.dataset.total, 10) || 0, allocated = parseInt(li.dataset.allocated, 10) || 0;
@@ -586,34 +635,45 @@
         });
       });
 
-      // Override the total SP. A total below what is already allocated has to reset the allocation, so it asks first (the
-      // server refuses it without that agreement too).
-      var form = li.querySelector('.rec-total-form');
-      var totalInput = form.querySelector('input');
+      // Override the total SP, in the number dialog. A total below what is already allocated has to reset the allocation, so it asks first (the server
+      // refuses it without that agreement too).
       li.querySelector('.rec-total').addEventListener('click', function () {
-        form.hidden = !form.hidden;
-        if (!form.hidden) { totalInput.value = li.dataset.total; totalInput.focus(); totalInput.select(); }
+        askNumber({
+          title: 'Set ' + li.dataset.name + '\u2019s total SP',
+          note: 'Every SP they have earned. Their allocation stays unless the new total is below it.',
+          label: 'Total SP', value: li.dataset.total, min: 0, max: 1000000, step: 10,
+          save: function (total, done) {
+            var allocated = parseInt(li.dataset.allocated, 10) || 0, resets = total < allocated;
+            function send() {
+              postNumber('/api/pilots/total', li, 'total=' + total + (resets ? '&reset=1' : ''), done, function () {
+                li.dataset.total = total;
+                if (resets) { li.dataset.allocated = 0; clearLearned(li); }
+                showSP(li);
+              });
+            }
+            if (!resets) { send(); return; }
+            Confirm.ask({
+              title: 'Reset the allocation?',
+              message: 'Setting ' + li.dataset.name + '\u2019s total to ' + total + ' SP is below the ' + allocated + ' SP already allocated. Doing this resets all of their allocations (Gunnery, Piloting and Edge go back to the starting levels) and leaves ' + total + ' SP unallocated.' + learnedNote(li),
+              confirmLabel: 'Set total and reset', danger: true
+            }).then(function (ok) { if (ok) send(); else done(''); });
+          }
+        });
       });
-      form.querySelector('.rec-total-cancel').addEventListener('click', function () { form.hidden = true; });
-      form.addEventListener('submit', function (e) {
-        e.preventDefault();
-        var total = parseInt(totalInput.value, 10), allocated = parseInt(li.dataset.allocated, 10) || 0;
-        if (isNaN(total) || total < 0) { recError.textContent = 'Enter a whole number of SP, 0 or more.'; return; }
-        var resets = total < allocated;
-        function save() {
-          recAct('/api/pilots/total', li, form.querySelector('button[type=submit]'), 'total=' + total + (resets ? '&reset=1' : ''), function () {
-            li.dataset.total = total;
-            if (resets) { li.dataset.allocated = 0; clearLearned(li); }
-            showSP(li);
-            form.hidden = true;
-          });
-        }
-        if (!resets) { save(); return; }
-        Confirm.ask({
-          title: 'Reset the allocation?',
-          message: 'Setting ' + li.dataset.name + '\u2019s total to ' + total + ' SP is below the ' + allocated + ' SP already allocated. Doing this resets all of their allocations (Gunnery, Piloting and Edge go back to the starting levels) and leaves ' + total + ' SP unallocated.' + learnedNote(li),
-          confirmLabel: 'Set total and reset', danger: true
-        }).then(function (ok) { if (ok) save(); });
+
+      // Override the MVP count (missions won as MVP), 0 to 99, in the number dialog.
+      li.querySelector('.rec-mvps-set').addEventListener('click', function () {
+        askNumber({
+          title: 'Set ' + li.dataset.name + '\u2019s MVPs',
+          note: 'How many missions they have been chosen MVP of.',
+          label: 'MVPs', value: li.dataset.mvps, min: 0, max: 99, step: 1,
+          save: function (n, done) {
+            postNumber('/api/pilots/mvps', li, 'mvps=' + n, done, function () {
+              li.dataset.mvps = n;
+              li.querySelector('.rec-n-mvps').textContent = n;
+            });
+          }
+        });
       });
 
       // Rank: an advanced correction (promotions come from mission outcomes). The rank button opens the Change rank dialog on top of this one.

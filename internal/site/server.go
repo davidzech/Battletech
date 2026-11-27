@@ -224,6 +224,7 @@ func NewHandler(contentRoot string, store *storage.Store, opts ...Option) http.H
 	mux.HandleFunc("POST /api/pilots/abilities", s.learnAbilities)
 	mux.HandleFunc("POST /api/pilots/abilities/reset", s.resetEdgeAbilities)
 	mux.HandleFunc("POST /api/pilots/total", s.setPilotTotal)
+	mux.HandleFunc("POST /api/pilots/mvps", s.setPilotMVPs)
 	mux.HandleFunc("POST /api/warchest", s.setWarchest)
 	mux.HandleFunc("POST /api/campaign/players", s.setPlayers)
 	mux.HandleFunc("POST /api/campaign/rollback", s.rollbackCampaign)
