@@ -1049,6 +1049,10 @@ a.unit-link.tip-open { color: var(--accent); }
 /* The values in bold, so they stand out from their small-caps labels. */
 .unit-card .tip-facts dd { font-weight: 700; }
 .mr-chip[tabindex]:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
+/* A chip with a tooltip (the condition and ammo pills) fills lightly with its own colour while hovered or focused, so it shows it has more to say. The chips
+   without one (BV, tons) stay as they are. */
+.mr-chip[aria-describedby="pill-tip"] { transition: background-color 0.12s; }
+.mr-chip[aria-describedby="pill-tip"]:hover, .mr-chip[aria-describedby="pill-tip"]:focus-visible { background: color-mix(in srgb, currentColor 32%, transparent); }
 .force-summary .icons img { transition: border-color 0.12s, background-color 0.12s; cursor: default; }
 .force-summary .icons img:hover, .force-summary .icons img:focus-visible { border-color: var(--accent); background: rgba(255, 204, 0, 0.1); outline: none; }
 
