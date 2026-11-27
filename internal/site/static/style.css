@@ -1778,3 +1778,8 @@ fieldset.battle-lock-scope:disabled button:not(.button) { opacity: 0.45; cursor:
 
 /* A cost line (Dom.costLine) is two lines, the cost and then the warchest: the elements that show one keep its line break. */
 .repair-cost, .confirm-detail, .deploy-drop-cost { white-space: pre-line; }
+
+/* The Purchase dialog's head: the title, and the warchest at the right in white (the cost line under the cart is only the cart's total). */
+.purchase-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0.3rem 1.5rem; }
+.purchase-head h2 { margin-bottom: 0; }
+.purchase-warchest { font: 700 1rem var(--display); letter-spacing: 0.06em; text-transform: uppercase; color: var(--text); white-space: nowrap; }

@@ -67,7 +67,8 @@ test('repairs a damaged mech, and refuses a repair the warchest cannot pay', asy
   const shop = page.locator('#purchase-dialog');
   await shop.locator('#purchase-search').fill('Grizzly');
   await shop.locator('.purchase-found .mech-row', { hasText: 'Grizzly' }).first().click();
-  await expect(shop.locator('#purchase-cost')).toHaveText(/^Cost [\d,]+ SP\.\nWarchest 1 SP\. Not enough funds\.$/);
+  await expect(shop.locator('#purchase-warchest')).toHaveText('Warchest: 1 SP');
+  await expect(shop.locator('#purchase-cost')).toHaveText(/^Total cost: [\d,]+ SP$/);
   await expect(shop.locator('#purchase-cost')).toHaveClass(/short/);
   await expect(shop.locator('#purchase-buy')).toBeDisabled();
 });
@@ -163,7 +164,8 @@ test('buys units from the Purchase dialog', async ({ page }) => {
   const dlg = page.locator('#purchase-dialog');
   await expect(dlg).toBeVisible();
   // An empty cart costs nothing, and can't be bought.
-  await expect(dlg.locator('#purchase-cost')).toHaveText('Cost 0 SP. Warchest 4,500 SP.');
+  await expect(dlg.locator('#purchase-warchest')).toHaveText('Warchest: 4,500 SP');
+  await expect(dlg.locator('#purchase-cost')).toHaveText('Total cost: 0 SP');
   await expect(dlg.locator('#purchase-buy')).toBeDisabled();
   await dlg.locator('#purchase-search').fill('Grizzly');
   const found = dlg.locator('.purchase-found .mech-row', { hasText: 'Grizzly' }).first();
@@ -171,8 +173,12 @@ test('buys units from the Purchase dialog', async ({ page }) => {
   await expect(found).toContainText('In cart');
   await expect(dlg.locator('#purchase-staged .mech-row')).toHaveCount(1);
   const cost = dlg.locator('#purchase-cost');
-  await expect(cost).toHaveText(/^Cost [\d,]+ SP\.\nWarchest 4,500 → [\d,]+ SP\.$/);
-  const price = Number(/Cost ([\d,]+) SP/.exec(await cost.textContent())[1].replace(/,/g, ''));
+  // The total counts up to the unit's BV (and the Buy button with it).
+  const bv = /BV: (\d{1,3}(?:,\d{3})*)/.exec(await found.textContent())[1]; // the tons chip follows straight after in the text
+  await expect(cost).toHaveText('Total cost: ' + bv + ' SP');
+  await expect(dlg.locator('#purchase-buy')).toHaveText('Buy for ' + bv + ' SP');
+  await expect(cost).not.toHaveClass(/short/);
+  const price = Number(bv.replace(/,/g, ''));
   // A second click takes it back out of the cart.
   await found.click();
   await expect(dlg.locator('#purchase-staged .mech-row')).toHaveCount(0);
