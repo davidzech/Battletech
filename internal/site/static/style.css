@@ -596,8 +596,8 @@ dialog.deploy { width: min(68rem, calc(100vw - 2rem)); }
 .deploy-list { position: relative; list-style: none; margin: 0; padding: 0; max-height: 42vh; overflow-y: auto; } /* relative: the rows measure their place in it (updateMore) */
 /* Scroll shadows (mekbay.js updateMore): a soft shadow along an edge with mechs hidden past it, over the list, fading in and out. */
 .deploy-list-wrap::before, .deploy-list-wrap::after { content: ''; position: absolute; left: 0; right: 0; height: 1.1rem; pointer-events: none; opacity: 0; transition: opacity 0.2s ease; z-index: 1; }
-.deploy-list-wrap::before { top: 0; background: linear-gradient(to bottom, rgb(0 0 0 / 0.6), transparent); }
-.deploy-list-wrap::after { bottom: 0; background: linear-gradient(to top, rgb(0 0 0 / 0.6), transparent); }
+.deploy-list-wrap::before { top: 0; background: linear-gradient(to bottom, rgb(0 0 0 / 0.35), transparent); }
+.deploy-list-wrap::after { bottom: 0; background: linear-gradient(to top, rgb(0 0 0 / 0.35), transparent); }
 .deploy-list-wrap.shadow-above::before, .deploy-list-wrap.shadow-below::after { opacity: 1; }
 @media (prefers-reduced-motion: reduce) { .deploy-list-wrap::before, .deploy-list-wrap::after { transition: none; } }
 /* "▾ N more" under the list while mechs are hidden below it (mekbay.js updateMore). */
