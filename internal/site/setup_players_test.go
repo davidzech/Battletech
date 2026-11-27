@@ -68,7 +68,12 @@ func TestOverviewDefaultPlayers(t *testing.T) {
 			t.Errorf("the Manage page is missing %q", want)
 		}
 	}
-	if strings.Contains(page, ">Warchest<") || strings.Contains(page, "data-player-ids") {
+	if strings.Contains(page, `class="section-title">Warchest<`) || strings.Contains(page, "data-player-ids") {
 		t.Error("the section is Overview now, and says nothing of saved IDs")
+	}
+	// Its boxes: the living pilots, then the warchest (once called Funds).
+	pilots, warchest := strings.Index(page, `id="overview-pilots"`), strings.Index(page, `id="overview-warchest"`)
+	if pilots < 0 || warchest < pilots || strings.Contains(page, ">Funds<") {
+		t.Error("the overview's boxes should be Pilots then Warchest")
 	}
 }

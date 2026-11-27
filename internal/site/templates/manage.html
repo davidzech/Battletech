@@ -6,7 +6,8 @@
 <section class="warchest overview" id="overview" data-campaign="{{.Campaign.Slug}}" data-min-players="{{.Campaign.MinPlayers}}" data-max-players="{{.Campaign.MaxPlayers}}" data-players="{{.Run.Players}}">
 <h2 class="section-title force-name" id="force-name"><span class="force-name-value" id="force-name-value">{{.Run.ForceLabel}}</span><button type="button" class="force-name-edit" id="force-name-edit" data-name="{{.Run.ForceName}}" title="Rename force" aria-label="Rename force"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button></h2>
 <div class="hangar-stats">
-<div class="hangar-stat"><span class="hangar-stat-label">Funds</span><span class="hangar-stat-value">{{.Run.WarchestText}} SP</span></div>
+<div class="hangar-stat" id="overview-pilots"><span class="hangar-stat-label">Pilots</span><span class="hangar-stat-value">{{.LivingPilots}}</span></div>
+<div class="hangar-stat" id="overview-warchest"><span class="hangar-stat-label">Warchest</span><span class="hangar-stat-value">{{.Run.WarchestText}} SP</span></div>
 <div class="hangar-stat overview-players" id="overview-players"><span class="hangar-stat-label">Default players</span><span class="overview-players-pick" id="overview-players-pick"></span></div>
 </div>
 <p class="form-error" id="overview-error" role="alert"></p>
