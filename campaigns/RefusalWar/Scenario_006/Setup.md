@@ -6,7 +6,8 @@ map: Ice Rift
 bv_limit: 8000
 forces:
   opfor1: OpFor1.mul
-images: []   # the Evciler banner is still to be made
+images:
+  - images/evciler.png
 readout:   # from Sarna, except the 3057 population, which is invented (Sarna gives 11,235,700 in 3150)
   - Star: Evciler (K4V)
   - Orbit: 2nd

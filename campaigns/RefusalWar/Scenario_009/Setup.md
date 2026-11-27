@@ -4,7 +4,8 @@ title: Aquiline Fire
 planet: Wotan
 map: Tundra
 forces: {}   # OpFor .mul files TBD
-images: []
+images:
+  - images/borealtown.png
 readout:   # from Sarna, except the 3057 population, which is invented (Sarna gives only 1,298,000 in 3150, after Borealtown was razed)
   - Star: Wotan (G2V)
   - Orbit: 5th of 6
