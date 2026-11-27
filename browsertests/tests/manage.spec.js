@@ -35,7 +35,7 @@ test('repairs a damaged mech, and refuses a repair the warchest cannot pay', asy
   await expect(dlg).toBeVisible();
   await expect(dlg.locator('#repair-title')).toHaveText('Repair Kit Fox');
   const cost = dlg.locator('#repair-cost');
-  await expect(cost).toHaveText(/^Cost \d+ SP\. Warchest 4,500 → [\d,]+ SP\.$/);
+  await expect(cost).toHaveText(/^Cost \d+ SP\.\nWarchest 4,500 → [\d,]+ SP\.$/);
   // Each repair the unit needs is offered with its price; the dearest is chosen to begin with.
   const options = await dlg.locator('#repair-select option').allTextContents();
   expect(options.length).toBeGreaterThan(1);
@@ -50,7 +50,7 @@ test('repairs a damaged mech, and refuses a repair the warchest cannot pay', asy
   await setWarchest(page, 'refusalwar', 1);
   await page.reload();
   await row(list, 'Fire Moth').getByRole('button', { name: 'Repair' }).click();
-  await expect(dlg.locator('#repair-cost')).toHaveText(/^Cost [\d,]+ SP\. Warchest 1 SP\. Not enough funds\.$/);
+  await expect(dlg.locator('#repair-cost')).toHaveText(/^Cost [\d,]+ SP\.\nWarchest 1 SP\. Not enough funds\.$/);
   await expect(dlg.locator('#repair-cost')).toHaveClass(/short/);
   await expect(dlg.locator('#repair-apply')).toBeDisabled();
   await dlg.locator('#repair-cancel').click();
@@ -67,7 +67,7 @@ test('repairs a damaged mech, and refuses a repair the warchest cannot pay', asy
   const shop = page.locator('#purchase-dialog');
   await shop.locator('#purchase-search').fill('Grizzly');
   await shop.locator('.purchase-found .mech-row', { hasText: 'Grizzly' }).first().click();
-  await expect(shop.locator('#purchase-cost')).toHaveText(/^Cost [\d,]+ SP\. Warchest 1 SP\. Not enough funds\.$/);
+  await expect(shop.locator('#purchase-cost')).toHaveText(/^Cost [\d,]+ SP\.\nWarchest 1 SP\. Not enough funds\.$/);
   await expect(shop.locator('#purchase-cost')).toHaveClass(/short/);
   await expect(shop.locator('#purchase-buy')).toBeDisabled();
 });
@@ -112,7 +112,7 @@ test('reconfigures an omnimech to another variant', async ({ page }) => {
   const values = await dlg.locator('#swap-select option:not([disabled])').evaluateAll((os) => os.map((o) => o.value).filter(Boolean));
   expect(values.length).toBeGreaterThan(0);
   await dlg.locator('#swap-select').selectOption(values[0]);
-  await expect(dlg.locator('#swap-cost')).toHaveText(/^Cost \d+ SP\. Warchest 4,500 → [\d,]+ SP\.$/);
+  await expect(dlg.locator('#swap-cost')).toHaveText(/^Cost \d+ SP\.\nWarchest 4,500 → [\d,]+ SP\.$/);
   await expect(dlg.locator('#swap-breakdown')).toContainText('50% of tonnage');
   const price = Number(/Cost (\d+) SP/.exec(await dlg.locator('#swap-cost').textContent())[1]);
   await dlg.locator('#swap-apply').click();
@@ -171,7 +171,7 @@ test('buys units from the Purchase dialog', async ({ page }) => {
   await expect(found).toContainText('In cart');
   await expect(dlg.locator('#purchase-staged .mech-row')).toHaveCount(1);
   const cost = dlg.locator('#purchase-cost');
-  await expect(cost).toHaveText(/^Cost [\d,]+ SP\. Warchest 4,500 → [\d,]+ SP\.$/);
+  await expect(cost).toHaveText(/^Cost [\d,]+ SP\.\nWarchest 4,500 → [\d,]+ SP\.$/);
   const price = Number(/Cost ([\d,]+) SP/.exec(await cost.textContent())[1].replace(/,/g, ''));
   // A second click takes it back out of the cart.
   await found.click();
@@ -237,4 +237,32 @@ test('dismisses a pilot from the More menu', async ({ page }) => {
   await expect(page.locator('li.pilot', { hasText: 'Katarina' })).toHaveCount(0);
   await expect(page.locator('li.pilot', { hasText: 'Alrek' })).toHaveCount(1);
   await expect(page.getByText('Memorial')).toHaveCount(0);
+});
+
+// The Purchase dialog is kept in the URL: a reload opens it again with its search (the query and the faction box) and its cart; closing it clears that.
+test('a reload brings the Purchase dialog back as it was', async ({ page }) => {
+  await newAccount(page);
+  await startCampaign(page, 'refusalwar', ['Alrek', 'Katarina'], STARTING);
+  await page.goto('/refusalwar/manage/');
+  await page.locator('#purchase-open').click();
+  const dlg = page.locator('#purchase-dialog');
+  await dlg.locator('#purchase-search').fill('Timber Wolf A');
+  await dlg.locator('#purchase-results .mech-row', { hasText: 'Timber Wolf' }).first().click();
+  await dlg.locator('#purchase-search').fill('Fire Moth');
+  await dlg.locator('#purchase-available').uncheck();
+  await expect(dlg.locator('#purchase-staged .mech-row')).toHaveCount(1);
+  await expect(page).toHaveURL(/#purchase=/);
+
+  await page.reload();
+  await expect(dlg).toBeVisible();
+  await expect(dlg.locator('#purchase-search')).toHaveValue('Fire Moth');
+  await expect(dlg.locator('#purchase-available')).not.toBeChecked();
+  await expect(dlg.locator('#purchase-staged .mech-row')).toHaveCount(1);
+  await expect(dlg.locator('#purchase-staged')).toContainText('Timber Wolf');
+  await expect(dlg.locator('#purchase-results .mech-row').first()).toContainText('Fire Moth');
+
+  await dlg.locator('#purchase-cancel').click();
+  await expect(page).not.toHaveURL(/#purchase=/);
+  await page.reload();
+  await expect(dlg).toBeHidden();
 });
