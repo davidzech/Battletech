@@ -655,7 +655,8 @@ dialog.pilot-dragging .deploy-unit input.themed-box:not(:checked):hover { border
 .mr-model { min-height: 1.1em; font-size: 0.72rem; line-height: 1.1; color: var(--muted); }
 .mr-name { font: 700 1rem/1.1 var(--display); letter-spacing: 0.03em; overflow-wrap: anywhere; }
 .mr-chips { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.15rem; }
-.mr-chip { display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.06rem 0.4rem; font: 700 0.72rem var(--display); letter-spacing: 0.04em; background: rgb(0 0 0 / 0.4); }
+/* A chip is a label, not text to select: the arrow cursor, never the text one. */
+.mr-chip { cursor: default; user-select: none; -webkit-user-select: none; display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.06rem 0.4rem; font: 700 0.72rem var(--display); letter-spacing: 0.04em; background: rgb(0 0 0 / 0.4); }
 .mr-chip .mr-ico { display: inline-flex; }
 .mr-chip svg { width: 0.8rem; height: 0.8rem; fill: currentColor; }
 .mr-chip.pilot { color: var(--accent-ink); background: var(--accent); }
