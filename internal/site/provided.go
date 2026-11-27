@@ -25,10 +25,18 @@ import (
 const providedPrefix = "provided-"
 
 // providedForce is the scenario's provided mechs as a hangar force, so everything that reads a hangar (the Deploy popup, the plan checks) works on it unchanged.
+// A mech listed more than once is that many mechs: the first copy's ID is provided-<name>, later ones provided-<name>-2, -3 and so on, so every copy can be fielded.
 func providedForce(sc *content.Scenario) mekbay.HangarForce {
 	h := mekbay.HangarForce{Name: "Provided mechs"}
+	used := map[string]bool{}
 	for _, name := range sc.ProvidedUnits {
-		h.Units = append(h.Units, mekbay.HangarUnit{ID: providedPrefix + strings.ToLower(name), Unit: name, Group: "Provided", Gunnery: mekbay.DefaultGunnery, Piloting: mekbay.DefaultPiloting})
+		base := providedPrefix + strings.ToLower(name)
+		id := base
+		for n := 2; used[id]; n++ {
+			id = fmt.Sprintf("%s-%d", base, n)
+		}
+		used[id] = true
+		h.Units = append(h.Units, mekbay.HangarUnit{ID: id, Unit: name, Group: "Provided", Gunnery: mekbay.DefaultGunnery, Piloting: mekbay.DefaultPiloting})
 	}
 	return h
 }
