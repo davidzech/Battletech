@@ -379,8 +379,8 @@ func TestRollbackFailureChangesNothing(t *testing.T) {
 	post(t, srv, "/api/warchest", url.Values{"campaign": {"refusalwar"}, "funds": {"42"}}, cookie, srv.URL)
 	setRunHangar(t, store, seed, "refusalwar", hangarOf("BMMadCat_H"))
 
-	// The checkpoint's snapshot names a column the table doesn't have (as one taken before a column was dropped would), so restoring it fails.
-	broken := `{"campaign_runs":[{"playthrough_id":"` + id + `","campaign":"refusalwar","hangar":"{}","no_such_column":1}]}`
+	// The checkpoint's snapshot has a NULL where the table allows none, so restoring it fails.
+	broken := `{"campaign_runs":[{"playthrough_id":"` + id + `","campaign":"refusalwar","hangar":"{}","warchest":null}]}`
 	if _, err := store.DB().ExecContext(ctx, store.Rebind(`UPDATE campaign_checkpoints SET snapshot = ? WHERE playthrough_id = ? AND campaign = ?`), broken, id, "refusalwar"); err != nil {
 		t.Fatal(err)
 	}

@@ -651,7 +651,7 @@ func TestFailedAbortKeepsTheBattleInMekBay(t *testing.T) {
 		defer fake.mu.Unlock()
 		return slices.Clone(fake.battleDeletes)
 	}
-	// The checkpoint's snapshot names a column the table doesn't have, so restoring it fails.
+	// The checkpoint's snapshot has a NULL where the table allows none, so restoring it fails.
 	cps, _ := store.Checkpoints(ctx, id, "refusalwar")
 	cp, _, _ := store.Checkpoint(ctx, id, "refusalwar", cps[0].Seq)
 	setSnapshot := func(snap string) {
@@ -659,7 +659,7 @@ func TestFailedAbortKeepsTheBattleInMekBay(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	setSnapshot(`{"campaign_runs":[{"playthrough_id":"` + id + `","campaign":"refusalwar","hangar":"{}","no_such_column":1}]}`)
+	setSnapshot(`{"campaign_runs":[{"playthrough_id":"` + id + `","campaign":"refusalwar","hangar":"{}","warchest":null}]}`)
 	if got := abort(); got != http.StatusInternalServerError {
 		t.Fatalf("an abort whose rollback fails: %d", got)
 	}

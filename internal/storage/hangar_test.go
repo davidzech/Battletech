@@ -7,7 +7,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/davidzech/Battletech/internal/content"
@@ -154,9 +153,8 @@ func TestHangarPostgres(t *testing.T) {
 	hangarStore(t, s)
 }
 
-// A database from before hangars were stored here: runs and checkpoints point at forces in MekBay, and the hangar cache table exists. Opening it adds the hangar
-// column and leaves the cache (an older version still serving uses it); the import lists what is still in MekBay until it is stored or skipped, never stores
-// over a hangar that is there, and a checkpoint without a hangar can't be rolled back to.
+// A database from the hangar import's time: runs with their old MekBay columns, a hangar cache, and checkpoints whose snapshots still name those columns. Opening
+// it drops what only the import read, keeps everything else, and the old checkpoints still roll back (the dropped columns in their snapshots are left out).
 func TestHangarMigration(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "old.db")
@@ -164,26 +162,25 @@ func TestHangarMigration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Turn the new database back into an old one: no hangar column, a cache table, runs and checkpoints in MekBay.
 	for _, stmt := range []string{
-		`ALTER TABLE campaign_runs DROP COLUMN hangar`,
+		`ALTER TABLE campaign_runs ADD COLUMN hangar_url TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE campaign_runs ADD COLUMN hangar_instance TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE campaign_runs ADD COLUMN source_url TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE campaign_checkpoints ADD COLUMN hangar_copy TEXT NOT NULL DEFAULT ''`,
 		`CREATE TABLE hangar_cache (playthrough_id TEXT NOT NULL, campaign TEXT NOT NULL, instance TEXT NOT NULL, data TEXT NOT NULL, fetched_at BIGINT NOT NULL, PRIMARY KEY (playthrough_id, campaign))`,
 		`INSERT INTO playthroughs (id) VALUES ('pt')`,
-		`INSERT INTO campaign_runs (playthrough_id, campaign, hangar_url, hangar_instance, source_url) VALUES ('pt', 'owned', 'u', 'live-1', 'src')`,
-		`INSERT INTO campaign_runs (playthrough_id, campaign, hangar_url, hangar_instance) VALUES ('pt', 'linked', 'u', 'players-own')`,
-		`INSERT INTO hangar_cache VALUES ('pt', 'owned', 'live-1', '{}', 0)`,
+		`INSERT INTO campaign_runs (playthrough_id, campaign, hangar, warchest, hangar_url, hangar_instance, source_url) VALUES ('pt', 'c', '{"name":"then"}', 500, 'u', '', 'src')`,
+		`INSERT INTO hangar_cache VALUES ('pt', 'c', 'live-1', '{}', 0)`,
 	} {
 		if _, err := s.db.Exec(stmt); err != nil {
 			t.Fatal(stmt, err)
 		}
 	}
-	// Checkpoints taken by the old site: their snapshots have no hangar.
-	for _, c := range []string{"owned", "owned", "linked"} {
-		if err := s.AddCheckpoint(ctx, "pt", c, "Start"); err != nil {
-			t.Fatal(err)
-		}
+	// A checkpoint taken then: its snapshot names hangar_url, hangar_instance and source_url.
+	if err := s.AddCheckpoint(ctx, "pt", "c", "Start"); err != nil {
+		t.Fatal(err)
 	}
-	if _, err := s.db.Exec(`UPDATE campaign_checkpoints SET hangar_copy = 'frozen-' || seq WHERE campaign = 'owned'`); err != nil {
+	if _, err := s.db.Exec(`UPDATE campaign_runs SET hangar = '{"name":"now"}', warchest = 100`); err != nil {
 		t.Fatal(err)
 	}
 	s.Close()
@@ -192,89 +189,39 @@ func TestHangarMigration(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	if has, err := s.columnExists("campaign_runs", "hangar"); err != nil || !has {
-		t.Fatalf("the hangar column is added: %v %v", has, err)
+	for _, c := range [][2]string{{"campaign_runs", "hangar_url"}, {"campaign_runs", "hangar_instance"}, {"campaign_runs", "source_url"}, {"campaign_checkpoints", "hangar_copy"}} {
+		if has, err := s.columnExists(c[0], c[1]); err != nil || has {
+			t.Errorf("%s.%s is dropped: %v %v", c[0], c[1], has, err)
+		}
 	}
-	if has, _ := s.columnExists("hangar_cache", "data"); !has {
-		t.Error("the hangar cache is left for an older version still serving")
+	if has, _ := s.columnExists("hangar_cache", "data"); has {
+		t.Error("the hangar cache is dropped")
 	}
-	runs, err := s.RunHangarImports(ctx)
-	if err != nil || len(runs) != 2 || runs[0].Campaign != "linked" || runs[0].Instance != "players-own" || runs[0].SourceURL != "" || runs[1].Instance != "live-1" || runs[1].SourceURL != "src" {
-		t.Fatalf("runs to import: %+v %v", runs, err)
-	}
-	cps, err := s.CheckpointHangarImports(ctx)
-	if err != nil || len(cps) != 2 || cps[0].Campaign != "owned" || cps[0].Instance != "frozen-1" || cps[0].Seq != 1 || cps[1].Seq != 2 {
-		t.Fatalf("checkpoints to import: %+v %v", cps, err)
-	}
-
-	// Importing stores them and forgets their MekBay forces; skipping forgets the force alone. Either way they are listed no more.
-	if stored, err := s.ImportHangar(ctx, "pt", "owned", []byte(`{"name":"live"}`)); err != nil || !stored {
-		t.Fatal(stored, err)
-	}
-	if err := s.SkipHangarImport(ctx, "pt", "linked"); err != nil {
-		t.Fatal(err)
-	}
-	if stored, err := s.ImportCheckpointHangar(ctx, "pt", "owned", 1, []byte(`{"name":"frozen"}`)); err != nil || !stored {
-		t.Fatal(stored, err)
-	}
-	if err := s.SkipCheckpointHangarImport(ctx, "pt", "owned", 2); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.ImportCheckpointHangar(ctx, "pt", "owned", 9, []byte(`{}`)); !errors.Is(err, sql.ErrNoRows) {
-		t.Fatalf("no such checkpoint: %v", err)
-	}
-	if runs, _ := s.RunHangarImports(ctx); len(runs) != 0 {
-		t.Errorf("handled runs are not listed again: %+v", runs)
-	}
-	if cps, _ := s.CheckpointHangarImports(ctx); len(cps) != 0 {
-		t.Errorf("handled checkpoints are not listed again: %+v", cps)
-	}
-
-	// An import never stores over a hangar that is there (another server imported it first, or the site has changed it since).
-	if stored, err := s.ImportHangar(ctx, "pt", "owned", []byte(`{"name":"late"}`)); err != nil || stored {
-		t.Errorf("a second import of the run: %v %v", stored, err)
-	}
-	if h, _ := s.Hangar(ctx, "pt", "owned"); string(h) != `{"name":"live"}` {
+	if h, _ := s.Hangar(ctx, "pt", "c"); string(h) != `{"name":"now"}` {
 		t.Errorf("the run keeps its hangar: %s", h)
 	}
-	if stored, err := s.ImportCheckpointHangar(ctx, "pt", "owned", 1, []byte(`{"name":"late"}`)); err != nil || stored {
-		t.Errorf("a second import of the checkpoint: %v %v", stored, err)
+	cps, err := s.Checkpoints(ctx, "pt", "c")
+	if err != nil || len(cps) != 1 || !cps[0].HasHangar {
+		t.Fatalf("the old checkpoint: %+v %v", cps, err)
 	}
-	if _, err := s.db.Exec(`UPDATE campaign_checkpoints SET snapshot = 'not json' WHERE campaign = 'owned' AND seq = 2`); err != nil {
-		t.Fatal(err)
+	if err := s.RestoreCheckpoint(ctx, "pt", "c", cps[0].Seq); err != nil {
+		t.Fatalf("rolling back to a snapshot naming dropped columns: %v", err)
 	}
-	if _, err := s.ImportCheckpointHangar(ctx, "pt", "owned", 2, []byte(`{}`)); !errors.Is(err, ErrBadSnapshot) {
-		t.Errorf("a snapshot that can't be read: %v", err)
-	}
-
-	// The checkpoints say which hold a hangar. Rolling back to the imported one restores its hangar; one with no hangar is refused, changing nothing.
-	list, _ := s.Checkpoints(ctx, "pt", "owned")
-	if len(list) != 2 || list[0].HasHangar || !list[1].HasHangar {
-		t.Errorf("which checkpoints hold a hangar: %+v", list)
-	}
-	if err := s.RestoreCheckpoint(ctx, "pt", "owned", 1); err != nil {
-		t.Fatal(err)
-	}
-	if h, _ := s.Hangar(ctx, "pt", "owned"); string(h) != `{"name":"frozen"}` {
+	if h, _ := s.Hangar(ctx, "pt", "c"); string(h) != `{"name":"then"}` {
 		t.Errorf("the checkpoint's hangar: %s", h)
 	}
-	if _, err := s.EditHangar(ctx, "pt", "linked", addUnit(0)); !errors.Is(err, ErrNoHangar) {
-		t.Errorf("a run without a hangar can't be edited: %v", err)
+	if r, ok, _ := s.Run(ctx, "pt", "c"); !ok || r.Warchest != 500 {
+		t.Errorf("the checkpoint's warchest: %+v", r)
 	}
-	if _, err := s.db.Exec(`UPDATE campaign_runs SET hangar = '{"name":"linked"}', warchest = 7 WHERE campaign = 'linked'`); err != nil {
+	// Opening it again changes nothing.
+	s.Close()
+	again, err := OpenSQLite(path)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.RestoreCheckpoint(ctx, "pt", "linked", 1); !errors.Is(err, ErrCheckpointNoHangar) {
-		t.Errorf("a checkpoint without a hangar can't be rolled back to: %v", err)
-	}
-	if r, ok, _ := s.Run(ctx, "pt", "linked"); !ok || r.Warchest != 7 {
-		t.Errorf("the refused rollback changes nothing: %+v", r)
-	}
-	if err := s.SetHangar(ctx, "pt", "nope", []byte(`{}`)); !errors.Is(err, sql.ErrNoRows) {
-		t.Errorf("no such run: %v", err)
-	}
-	if _, err := s.ImportHangar(ctx, "pt", "owned", []byte(`{`)); err == nil || !strings.Contains(err.Error(), "JSON") {
-		t.Errorf("not JSON: %v", err)
+	defer again.Close()
+	if h, _ := again.Hangar(ctx, "pt", "c"); string(h) != `{"name":"then"}` {
+		t.Errorf("reopened: %s", h)
 	}
 }
 

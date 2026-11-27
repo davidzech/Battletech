@@ -24,7 +24,7 @@ Code is **GPL-3.0-or-later** (`LICENSE`). Everything with its own terms (CC BY-N
 
 Packages under `internal/`, dependencies only pointing down this list:
 
-- `site`: HTTP server (`NewHandler`), pages, JSON endpoints, templates (`templates/*.html`) and static files (`static/`), plus glue: seeds/cookies, starting a campaign, deploying, battles, checkpoints, hangar import.
+- `site`: HTTP server (`NewHandler`), pages, JSON endpoints, templates (`templates/*.html`) and static files (`static/`), plus glue: seeds/cookies, starting a campaign, deploying, battles, checkpoints.
 - `mekbayproxy`: the MekBay proxy (web app, `/ws` relay, host parsing, `CheckMekBay`).
 - `storage`: the database (`Store`, `OpenSQLite`/`OpenPostgres`): schema, migrations, runs, pilots, battles, outcomes, history, checkpoints, hangars, links.
 - `content`: campaign folders (`Library`, `Campaign`, `Scenario`): front matter, names, `.mul` parsing, the outcome engine and expressions, keywords, aftermath.
@@ -37,7 +37,7 @@ Packages under `internal/`, dependencies only pointing down this list:
 Conventions:
 - Tests live with their package; a test file is named after the source file it tests (suffix like `pilots_recruit_test.go` when needed). Shared site fakes/helpers are in `internal/site/testfakes_test.go`.
 - Every endpoint that changes a campaign starts with `runRequest` (same origin, seed, named account, started campaign) or `pilotRequest` (the same checks, for handlers that do not need the run itself); hangar changes go through `changeHangar` (`hangaredit.go`): check and edit run on the stored hangar in `Store.EditHangarGuarded`'s transaction with the warchest charge (run row lock: safe across servers; a battle claimed or recorded since the battle lock check refuses it); a refusal changes nothing. Endpoints are same-origin only.
-- A run's hangar is MekBay's force JSON in `campaign_runs.hangar` (so checkpoints hold it); only battles live in MekBay. The old `hangar_instance`/`source_url`/`hangar_copy` columns are read only by `site.ImportHangars` (run by `main` before serving), which clears each once imported or skipped (only MekBay transport errors stop startup). A run left without a hangar answers `noHangarMessage` (409) wherever its hangar is needed.
+- A run's hangar is MekBay's force JSON in `campaign_runs.hangar` (so checkpoints hold it); only battles live in MekBay. Rollback restores only the snapshot columns a table still has, so dropping a column keeps old checkpoints working. A run left without a hangar answers `noHangarMessage` (409) wherever its hangar is needed.
 - Every endpoint that changes a campaign logs a history line once the change is made (`Server.logHistory`, `site/history.go`).
 - Pages render into a buffer first, so a template error is a clean 500.
 - Schema changes go through `Store.init` (`CREATE TABLE IF NOT EXISTS`, one statement at a time, after `migrateLegacy`); add columns with `Store.ensureColumn`. Write SQL once with `?` placeholders (rebound for Postgres by `Store.q`) and keep to what both SQLite and Postgres accept. Add a migration test with any migration.
