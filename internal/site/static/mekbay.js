@@ -767,6 +767,8 @@
       var inner = el('div', 'qr-inner');
       var h = el('h2', null, 'Scan to open');
       h.id = 'qr-title';
+      h.tabIndex = -1;
+      h.autofocus = true; // the dialog opens on its title, not its first button
       inner.appendChild(h);
       inner.appendChild(el('div', 'qr-box'));
       var actions = el('div', 'form-actions');
@@ -1098,6 +1100,8 @@
         var inner = el('div', 'abort-inner');
         var h = el('h2', null, 'Abort mission');
         h.id = 'abort-title';
+        h.tabIndex = -1;
+        h.autofocus = true; // the dialog opens on its title: not on Roll back, which Enter would press
         inner.appendChild(h);
         inner.appendChild(el('p', 'muted', 'The battle is given up and the mission goes back to not started, with no rewards. Choose what happens to the campaign.'));
         [['rollback', 'Roll back', 'Return the campaign to the end of the previous mission. Repairs, sales, purchases and SP spent since then are undone.', 'button button-outline danger'],

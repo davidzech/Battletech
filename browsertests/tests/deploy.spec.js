@@ -440,3 +440,11 @@ test('the meter stays red over the limit after dragging a pilot', async ({ page 
   await expect(rows.nth(0).locator('.deploy-slot')).toContainText('Alrek');
   await expect(dlg.locator('#deploy-meter')).toHaveClass(/over/);
 });
+
+// The wizard opens with the keyboard on its title, not on its first button (the Players picker), so no control shows a focus ring the player didn't put there.
+test('the wizard opens on its title', async ({ page }) => {
+  await newAccount(page);
+  await startCampaign(page, 'refusalwar', ['Alrek', 'Katarina']);
+  await openDeploy(page);
+  await expect(page.locator('#deploy-title')).toBeFocused();
+});

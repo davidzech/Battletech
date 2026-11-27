@@ -57,7 +57,7 @@
 </section>
 <dialog id="deploy-dialog" class="deploy" aria-labelledby="deploy-title" data-campaign="{{.Campaign.Slug}}" data-scenario="{{.Scenario.Slug}}" data-in-progress="{{if .InProgress}}1{{end}}" data-operation-url="{{.OperationURL}}"{{if .BattleCache}} data-cached-status="{{.BattleCache}}"{{end}} data-limit="{{.Scenario.BVLimit}}" data-unit-limit="{{.Scenario.UnitLimit}}" data-pilots-required="{{if .Scenario.PilotsRequired}}1{{end}}" data-commander="{{if .Scenario.ChoosesCommander}}1{{end}}" data-default-players="{{.Run.Players}}" data-min-players="{{.Campaign.MinPlayers}}" data-max-players="{{.Campaign.MaxPlayers}}"{{if and .Campaign.AvailabilityFaction .Campaign.AvailabilityEra}} data-swap-availability="Only variants {{.Campaign.AvailabilityFaction}} fields in the {{.Campaign.AvailabilityEra}} era"{{end}} data-pilots="{{.PilotsJSON}}" data-abilities="{{.Abilities}}" data-hangar="{{.DeployJSON}}">
 <div class="deploy-head">
-<h2 id="deploy-title">Deploy your force</h2>
+<h2 id="deploy-title" tabindex="-1" autofocus>Deploy your force</h2>
 <div class="deploy-players" id="deploy-players" hidden>
 <span class="deploy-players-label" id="deploy-players-label">Players</span>
 <div class="deploy-players-pick" id="deploy-players-pick" role="group" aria-labelledby="deploy-players-label"></div>
