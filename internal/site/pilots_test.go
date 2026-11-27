@@ -168,7 +168,7 @@ func TestStartWizardSubmission(t *testing.T) {
 		t.Error("an unstarted campaign has no change-hangar dialog")
 	}
 	// The starting rules are a short bulleted list, not one dense sentence.
-	for _, want := range []string{`class="start-rules"`, `<li>Your hangar holds <b>at least 5 mechs</b>, totalling <b>up to 10,000 BV</b> (base BV, whatever the pilots&rsquo; skills).</li>`, `<li>You create <b>2 named pilots</b>, each allocating <b>150 SP</b>.</li>`, `<li>You name your force, then pick the mechs it fields from the unit list`} {
+	for _, want := range []string{`class="start-rules"`, `<li>Your hangar holds <b>at least 5 mechs</b>, totalling <b>up to 7,500 BV</b> (base BV, whatever the pilots&rsquo; skills).</li>`, `<li>You create <b>2 named pilots</b>, each allocating <b>150 SP</b>.</li>`, `<li>You name your force, then pick the mechs it fields from the unit list`} {
 		if !strings.Contains(page, want) {
 			t.Errorf("starting rules are missing %s", want)
 		}

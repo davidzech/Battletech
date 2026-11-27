@@ -90,7 +90,7 @@ func TestStartWithABuiltForce(t *testing.T) {
 	if len(ids) != 5 {
 		t.Errorf("each mech has an ID of its own: %v", ids)
 	}
-	if run, _, _ := store.Run(ctx, playthroughID(seed), "refusalwar"); run.Warchest != 5000 {
+	if run, _, _ := store.Run(ctx, playthroughID(seed), "refusalwar"); run.Warchest != 2500 {
 		t.Errorf("the run: %+v", run)
 	}
 	if cps, _ := store.Checkpoints(ctx, playthroughID(seed), "refusalwar"); len(cps) != 1 {
