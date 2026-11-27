@@ -56,7 +56,8 @@ func TestParseCrewPairs(t *testing.T) {
 func TestOverviewCarriesPilotCards(t *testing.T) {
 	srv, _, cookie := startedCompany(t)
 	page := body(t, srv, "/refusalwar/", cookie)
-	for _, want := range []string{`id="force-overview"`, `data-pilots="`, `data-abilities="`, `data-name="Alrek"`, `data-name="Katarina"`, "edgeTokens", "/static/pilotcard.js", "/static/roster.js", "/static/abilitycard.js"} {
+	for _, want := range []string{`id="force-overview"`, `data-pilots="`, `data-abilities="`, `data-name="Alrek"`, `data-name="Katarina"`, "edgeTokens", "/static/pilotcard.js", "/static/roster.js", "/static/abilitycard.js",
+		"/static/campaign.js"} { // campaign.js drops a start wizard fragment left over
 		if !strings.Contains(page, want) {
 			t.Errorf("the overview is missing %q", want)
 		}

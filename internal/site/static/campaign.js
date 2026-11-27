@@ -2,9 +2,18 @@
 // allocator for that pilot's starting SP), then the hangar: built from mechs picked with the unit search (unitsearch.js, the default) or copied from a MekBay
 // hangar link (a shortcut for a force already built there), with a step count and progress bar at the bottom. The server checks every field again; this keeps
 // the player from a doomed request and previews the pilots' levels.
+//
+// The wizard's state is kept in the page's fragment (#start=...), so a reload brings the player back to where they were: the step, the force's name, the
+// player count, each pilot's name, portrait, SP allocation and Edge abilities, the hangar's mode with the mechs picked (their MekBay unit IDs, looked up again
+// with GET /api/units) or the link pasted, and the unit search's query and faction box. The fragment is replaced, not added to the history, and goes when the
+// wizard closes or the campaign starts. This script loads on every campaign page, so a started campaign (no wizard) drops a fragment left over.
 (function () {
+  var FRAGMENT = '#start=';
+  function clearState() {
+    if (location.hash.indexOf(FRAGMENT) === 0 && window.history && history.replaceState) history.replaceState(history.state, '', location.pathname + location.search);
+  }
   var box = document.getElementById('campaign-run');
-  if (!box) return;
+  if (!box || !document.getElementById('start-wizard')) { clearState(); return; }
 
   var UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
   var HANGAR_HELP = 'Paste a MekBay hangar link, like https://mekbay.com/?instance=…';
@@ -120,8 +129,11 @@
   var maxBV = parseInt(wiz.dataset.maxBv, 10) || 0;
   var minMechs = parseInt(wiz.dataset.minMechs, 10) || 0;
   var unitSearch = null, picksBox = null, pickSummary = null;
+  var search = { query: '', all: false }; // the unit search's query and faction box, kept across its redraws (Back and forward, a reload)
   var step = 0;
   var busy = false;
+  var started = false; // the campaign has started and the page is reloading: nothing goes back into the URL
+  var restoring = false; // while the picks from the URL are being looked up, the URL is left as it is
 
   // The ladder maths, the sliders and the stat boxes are shared with the Manage SP dialog (allocator.js).
   function reach(l, spent) { return SPAllocator.reach(l, spent); }
@@ -153,7 +165,7 @@
     body.textContent = '';
     body.appendChild(el('p', 'muted', 'This campaign can be played by ' + minPlayers + ' to ' + maxPlayers + ' players sharing one force. The number you choose is what every Deploy starts with; you can still change it for a single deploy.'));
     var pick = el('div', 'deploy-players-pick');
-    var show = Dom.players(pick, minPlayers, maxPlayers, function (n) { players = n; show(players); });
+    var show = Dom.players(pick, minPlayers, maxPlayers, function (n) { players = n; show(players); saveState(); });
     show(players);
     body.appendChild(pick);
   }
@@ -185,6 +197,7 @@
         taken: pilots.filter(function (o) { return o !== p; }).map(function (o) { return o.portrait; }),
         onPick: function (file) {
           p.portrait = file; portraitImg.src = '/portraits/' + file;
+          saveState();
           // The placeholder name follows the portrait's gender (only while the player hasn't typed a name of their own).
           if (window.PilotNames && !nameInput.value) nameInput.placeholder = PilotNames.random(PilotNames.groupOf(portraits, file));
         }
@@ -525,6 +538,7 @@
     body.appendChild(el('p', 'muted', 'Pick the mechs of your starting force' + (limits.length ? ': ' + limits.join(', ') : '') + '. Click a mech to add it, and again to add another of it; right-click it to take one off. Each starts fully repaired, with an unnamed 4/5 pilot.'));
     unitSearch = UnitSearch.create({
       campaign: wiz.dataset.campaign, faction: wiz.dataset.faction, era: wiz.dataset.era, idPrefix: 'wiz-units',
+      onChange: function () { search = unitSearch.state(); saveState(); },
       decorate: function (row, u) { var n = pickCount(u.unit); if (n) { row.picked = true; row.badge = n === 1 ? 'In force' : n + ' in force'; } },
       onPick: function (u) { picks.push(u); renderPicks(); unitSearch.repaint(); updateNext(); },
       // A right-click takes one of that mech back off (the last one picked), down to none.
@@ -534,6 +548,7 @@
       }
     });
     body.appendChild(unitSearch.element);
+    if (search.query || search.all) unitSearch.set(search.query, search.all); // the search as it was left (Back and forward, or a reload)
     body.appendChild(el('p', 'purchase-staged-head', 'Your force'));
     pickSummary = el('p', 'hc-summary');
     body.appendChild(pickSummary);
@@ -565,10 +580,12 @@
     var spelledOut = step >= lead + pilotCount && (hangarMode === 'build' ? picks.length > 0 : check.link === hangar.trim() && (check.state === 'done' || check.state === 'error'));
     hint.textContent = busy || spelledOut ? '' : missing;
     if (missing) next.title = missing; else next.removeAttribute('title');
+    saveState(); // every change to the wizard's state ends here, so the URL follows it
   }
 
   // The problem with the current step, or ''.
-  function problem() {
+  function problem() { return problemAt(step); }
+  function problemAt(step) {
     if (step === 0) return forceName.trim() ? '' : 'Name your force.';
     if (asksPlayers && step === 1) return '';
     if (step >= lead + pilotCount && hangarMode === 'build') return buildProblem();
@@ -604,7 +621,7 @@
     busy = true;
     updateNext();
     post(parts.join('&')).then(function (res) {
-      if (res.ok) { location.reload(); return; }
+      if (res.ok) { started = true; clearState(); location.reload(); return; } // cleared first: the close event comes after the reload starts
       busy = false;
       updateNext();
       return res.text().then(function (t) { error.textContent = t.trim() || 'Could not start the campaign.'; });
@@ -620,10 +637,134 @@
   back.addEventListener('click', function () { if (step > 0) { step--; render(); } });
   document.getElementById('wiz-cancel').addEventListener('click', function () { wiz.close(); });
   wizOpen.addEventListener('click', function () { step = 0; wiz.showModal(); render(); });
+  wiz.addEventListener('close', function () { restoring = false; clearState(); });
   function comingBack() {
     var failing = check.state === 'error' || (check.state === 'done' && !check.result.ok && !check.refreshing);
     if (wiz.hasAttribute('open') && step >= lead + pilotCount && hangarMode === 'link' && failing) forceCheck();
   }
   window.addEventListener('focus', comingBack);
   document.addEventListener('visibilitychange', function () { if (!document.hidden) comingBack(); });
+
+  // ---- The wizard in the URL (#start=...)
+  // { v: 1, s: step, f: force name, n: players, p: [{ n: name, i: portrait, a: [SP per ladder, in the ladders' order], e: [Edge abilities] }], m: 'b' (build) or
+  // 'l' (link), u: [[unit ID, how many], ...] (the picks in order, runs of one ID counted), l: the link, q: the search's query, all: 1 when the faction box is
+  // unticked }.
+  function encode(o) { return btoa(unescape(encodeURIComponent(JSON.stringify(o)))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
+  function decode(t) {
+    try {
+      var b = t.replace(/-/g, '+').replace(/_/g, '/');
+      var d = JSON.parse(decodeURIComponent(escape(atob(b + '==='.slice((b.length + 3) % 4)))));
+      return d && typeof d === 'object' && d.v === 1 ? d : null;
+    } catch (e) {
+      return null;
+    }
+  }
+  function snapshot() {
+    var o = { v: 1, s: step, f: forceName, n: players };
+    o.p = pilots.map(function (p) {
+      return { n: p.name, i: p.portrait, a: ladders.map(function (l) { return p.sp[l.key]; }), e: p.abilities };
+    });
+    o.m = hangarMode === 'build' ? 'b' : 'l';
+    if (picks.length) {
+      o.u = [];
+      picks.forEach(function (u) {
+        var last = o.u[o.u.length - 1];
+        if (last && last[0] === u.unit) last[1]++; else o.u.push([u.unit, 1]);
+      });
+    }
+    if (hangar) o.l = hangar;
+    if (search.query) o.q = search.query;
+    if (search.all) o.all = 1;
+    return o;
+  }
+  // The URL follows the open wizard; only closing it (or starting the campaign) takes it out, so a render while the wizard is closed leaves the fragment alone.
+  function saveState() {
+    if (restoring || started || !wiz.open || !window.history || !history.replaceState) return;
+    var hash = FRAGMENT + encode(snapshot());
+    if (location.hash !== hash) history.replaceState(history.state, '', location.pathname + location.search + hash);
+  }
+
+  function str(v, max) { return typeof v === 'string' ? v.slice(0, max) : ''; }
+  function posInt(v) { var n = Number(v); return isFinite(n) && n > 0 ? Math.floor(n) : 0; }
+  // Puts the wizard's state from the URL back, keeping only what still holds: names cut to their boxes' lengths, portraits that exist and no other pilot has,
+  // allocations within the budget (each column taken as the allocator would), Edge abilities that exist, once each, as many as the allocation earns, and the
+  // player count within the campaign's range. The step is capped at the first one still missing something, as its Next button would have been.
+  function restore(d) {
+    forceName = str(d.f, 40);
+    players = Math.max(minPlayers, Math.min(maxPlayers, parseInt(d.n, 10) || minPlayers));
+    var saved = Array.isArray(d.p) ? d.p : [];
+    var exists = {}, claimed = {};
+    portraits.forEach(function (q) { exists[q.file] = true; });
+    pilots.forEach(function (p, i) {
+      var s = saved[i] && typeof saved[i] === 'object' ? saved[i] : {};
+      p.name = str(s.n, 30);
+      var file = str(s.i, 200);
+      if (exists[file] && !claimed[file]) { p.portrait = file; claimed[file] = true; } else { p.portrait = ''; }
+      var a = Array.isArray(s.a) ? s.a : [];
+      ladders.forEach(function (l) { p.sp[l.key] = 0; });
+      ladders.forEach(function (l, j) { p.sp[l.key] = Math.min(posInt(a[j]), budget - spentOf(p)); });
+      var slots = abilitySlots(p), seen = {};
+      p.abilities = (Array.isArray(s.e) ? s.e : []).filter(function (id) {
+        if (typeof id !== 'string' || !abilityCatalog.some(function (c) { return c.id === id; }) || seen[id]) return false;
+        seen[id] = true;
+        return true;
+      }).slice(0, slots);
+      while (p.abilities.length < slots) p.abilities.push('');
+    });
+    // A pilot left without a portrait (none saved, or one gone or taken) gets a random one nobody has.
+    pilots.forEach(function (p) {
+      if (p.portrait) return;
+      var free = portraits.filter(function (q) { return !claimed[q.file]; });
+      if (free.length) { p.portrait = free[Math.floor(Math.random() * free.length)].file; claimed[p.portrait] = true; }
+    });
+    hangarMode = d.m === 'l' ? 'link' : 'build';
+    hangar = str(d.l, 500);
+    search = { query: str(d.q, 100), all: !!d.all };
+    var want = Math.min(parseInt(d.s, 10) || 0, total - 1);
+    step = 0;
+    while (step < want && !problemAt(step)) step++;
+  }
+
+  // The picks from the URL: each ID looked up once (twenty at a time, GET /api/units' limit), then put back in their order with their counts. A unit no
+  // longer known is left out, and no more than the server's 40 mechs are taken.
+  var MAX_PICKS = 40, LOOKUP = 20;
+  function restorePicks(runs) {
+    var wanted = [], ids = [], seen = {}, n = 0;
+    (Array.isArray(runs) ? runs : []).forEach(function (r) {
+      if (!Array.isArray(r) || typeof r[0] !== 'string' || !r[0] || n >= MAX_PICKS) return;
+      var c = Math.min(posInt(r[1]) || 1, MAX_PICKS - n);
+      n += c;
+      wanted.push([r[0], c]);
+      if (!seen[r[0]]) { seen[r[0]] = true; ids.push(r[0]); }
+    });
+    if (!ids.length) return Promise.resolve();
+    var batches = [];
+    for (var i = 0; i < ids.length; i += LOOKUP) batches.push(ids.slice(i, i + LOOKUP));
+    return Promise.all(batches.map(function (b) {
+      return fetch('/api/units?ids=' + encodeURIComponent(b.join(',')), { credentials: 'same-origin' }).then(function (res) { return res.ok ? res.json() : { units: [] }; });
+    })).then(function (replies) {
+      var known = {};
+      replies.forEach(function (data) { (data.units || []).forEach(function (u) { known[u.unit] = u; }); });
+      picks = [];
+      wanted.forEach(function (w) { if (known[w[0]]) for (var k = 0; k < w[1]; k++) picks.push(known[w[0]]); });
+    });
+  }
+
+  // A reload (or a bookmark) with the wizard in the URL opens it where the player was. A picker or popover open then, and the scroll, are not kept.
+  (function () {
+    if (location.hash.indexOf(FRAGMENT) !== 0) return;
+    var saved = decode(location.hash.slice(FRAGMENT.length));
+    if (!saved || wizOpen.disabled) { clearState(); return; }
+    restore(saved);
+    restoring = true;
+    wiz.showModal();
+    render();
+    var done = function () {
+      if (!restoring) return; // closed while the picks were looked up
+      restoring = false;
+      if (step >= lead + pilotCount && hangarMode === 'build') { renderPicks(); unitSearch.repaint(); }
+      updateNext();
+    };
+    restorePicks(saved.u).then(done, done);
+  })();
 })();
