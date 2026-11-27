@@ -8,6 +8,11 @@ on:
 permissions:
   contents: read
 
+# A newer push to the same pull request cancels the run it makes stale; main keeps every run.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   go:
     runs-on: ubuntu-latest
@@ -49,7 +54,7 @@ jobs:
 
   browser:
     # The Playwright suite in browsertests/, driving the browser scripts against the site served with the fake MekBay (TestBrowser in internal/site).
-    needs: go
+    # It runs alongside the go job rather than after it, so a run takes as long as its slowest job.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -61,11 +66,24 @@ jobs:
           node-version: 26.13.1
           cache: npm
           cache-dependency-path: browsertests/package-lock.json
-      - name: Install Playwright
+      - name: Install packages
         working-directory: browsertests
-        run: |
-          npm ci
-          npx playwright install --with-deps chromium
+        run: npm ci
+      # Chromium is cached by the lockfile (it pins the Playwright version); only its system libraries are installed on a hit.
+      - name: Cache Playwright's Chromium
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('browsertests/package-lock.json') }}
+      - name: Install Chromium
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        working-directory: browsertests
+        run: npx playwright install --with-deps chromium
+      - name: Install Chromium's system libraries
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        working-directory: browsertests
+        run: npx playwright install-deps chromium
       - name: Browser tests
         run: BROWSER_TESTS=1 go test ./internal/site -run '^TestBrowser$' -count=1 -v
       - name: Upload traces
@@ -80,5 +98,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      # Layers (the base images, go mod download) are cached in the Actions cache between runs.
       - name: Build image
-        run: docker build -t battletech .
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: battletech
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
