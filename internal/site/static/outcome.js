@@ -261,14 +261,21 @@
         lines.push(money('To the warchest', (res.warchest > 0 ? '+' : '') + res.warchest + ' SP'));
         lines.push(money('Warchest', isNaN(before) ? (res.warchest > 0 ? '+' : '') + res.warchest + ' SP' : before + ' \u2192 ' + (before + res.warchest) + ' SP'));
       }
-      if (res.keywords && res.keywords.length) lines.push({ text: 'Keywords: ' + (res.keywordNames || res.keywords).join(', ') });
+      if (res.keywords && res.keywords.length) lines.push({ label: 'Keywords', keywords: res.keywords.map(function (id, i) { return { name: (res.keywordNames || [])[i] || id, text: (res.keywordTexts || [])[i] || '' }; }) });
       if (res.freeRecruits) lines.push({ text: res.freeRecruits === 1 ? '1 free recruit: a replacement pilot can be recruited for free.' : res.freeRecruits + ' free recruits: replacement pilots can be recruited for free.' });
     }
     total.hidden = !lines.length;
     total.textContent = '';
     lines.forEach(function (l) {
       var row = el('div', 'outcome-total-row');
-      if (l.label) { row.appendChild(el('span', 'muted', l.label)); row.appendChild(el('b', null, l.text)); } else row.textContent = l.text;
+      if (l.keywords) {
+        // The keywords the mission grants, as the same chips as the campaign overview's (keywordchips.js), each with its description on hover.
+        row.classList.add('keywords');
+        row.appendChild(el('span', 'muted', l.label + ':'));
+        var list = el('ul', 'keyword-list');
+        l.keywords.forEach(function (k) { list.appendChild(typeof KeywordChips !== 'undefined' ? KeywordChips.chip(k.name, k.text) : el('li', 'keyword-chip', k.name)); });
+        row.appendChild(list);
+      } else if (l.label) { row.appendChild(el('span', 'muted', l.label)); row.appendChild(el('b', null, l.text)); } else row.textContent = l.text;
       total.appendChild(row);
     });
   }

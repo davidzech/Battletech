@@ -316,6 +316,7 @@ type OutcomeResult struct {
 	FreeRecruits int            `json:"freeRecruits"`           // recruits that cost no SP
 	Keywords     []string       `json:"keywords"`               // keywords added to the campaign ledger
 	KeywordNames []string       `json:"keywordNames,omitempty"` // the same keywords as players see them (Campaign.KeywordName); filled by the site for the preview
+	KeywordTexts []string       `json:"keywordTexts,omitempty"` // and their descriptions from Keywords.md ("" when none), for the preview's keyword chips
 	Notes        []string       `json:"notes"`                  // notes about the mission as a whole
 	// Mission is what was reported for the mission as a whole (its objectives and mission inputs), kept in the recorded report so the aftermath can follow it.
 	Mission map[string]any `json:"mission,omitempty"`

@@ -1798,3 +1798,6 @@ fieldset.battle-lock-scope:disabled button:not(.button) { opacity: 0.45; cursor:
 .pilot-card > .pilot-main > .pilot-mvp { grid-column: 1; align-self: start; justify-self: center; width: 4.5rem; padding: 0 0.45rem; box-sizing: border-box; height: 2.5rem; margin-top: 0.4rem; display: flex; align-items: center; justify-content: center; gap: 0.6rem; background: var(--bg); border: 1px solid var(--line); }
 .pilot-mvp-label { font: 700 0.68rem var(--display); letter-spacing: 0.12em; text-transform: uppercase; color: var(--text); }
 .pilot-mvp-value { font: 700 1.5rem/1 var(--display); color: var(--accent); }
+
+/* The Complete mission dialog's result: "Keywords:" and then the keyword chips the mission grants, together on the left. */
+.outcome-total-row.keywords { justify-content: flex-start; align-items: center; }

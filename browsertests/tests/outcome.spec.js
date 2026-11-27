@@ -33,6 +33,12 @@ test('reports a mission with a benched and a killed pilot, then rolls it back', 
   await expect(out.locator('#outcome-total')).toContainText('Awarded400 SP');
   await expect(out.locator('#outcome-total')).toContainText('Assigned to pilots120 SP');
   await expect(out.locator('#outcome-total')).toContainText('Warchest4700 → 4980 SP');
+  // The keyword the objective grants is a keyword chip, its description on hover.
+  const kw = out.locator('#outcome-total .keyword-chip');
+  await expect(kw).toHaveText('Depot Gone');
+  await kw.hover();
+  await expect(page.locator('#pill-tip')).toContainText('The depot was destroyed.');
+  await page.mouse.move(0, 0);
 
   // Only a pilot who took part and lives can be the MVP, and one has to be chosen.
   await expect(out.locator('.outcome-mvp-box:not([disabled])')).toHaveCount(1);
