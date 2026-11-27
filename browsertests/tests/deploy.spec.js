@@ -418,3 +418,19 @@ test('the Reconfigure button looks the same in the wizard as on the Manage page'
   await expect(page.locator('#deploy-list').getByRole('button', { name: 'Reconfigure' }).first()).toBeVisible();
   expect(await look(page.locator('#deploy-list').getByRole('button', { name: 'Reconfigure' }).first())).toEqual(manage);
 });
+
+// Dragging a pilot onto a mech doesn't take the meter's red off while the force is over the BV limit (the drag's clean-up once cleared every .over).
+test('the meter stays red over the limit after dragging a pilot', async ({ page }) => {
+  await newAccount(page);
+  await startCampaign(page, 'muster', ['Alrek', 'Katarina']);
+  await setHangar(page, [unit('ua', 'BMMadCat_Prime'), unit('ub', 'BMMadCat_Prime'), unit('uc', 'BMMadCat_Prime')]);
+  await page.goto('/muster/scenario_000/');
+  await page.locator('#deploy-open').click();
+  const dlg = page.locator('#deploy-dialog');
+  const rows = dlg.locator('#deploy-list .deploy-unit');
+  for (let i = 0; i < 3; i++) await rows.nth(i).locator('input[type=checkbox]').check();
+  await expect(dlg.locator('#deploy-meter')).toHaveClass(/over/);
+  await dlg.locator('#deploy-pilots-list .deploy-pilot', { hasText: 'Alrek' }).dragTo(rows.nth(0).locator('.deploy-slot'));
+  await expect(rows.nth(0).locator('.deploy-slot')).toContainText('Alrek');
+  await expect(dlg.locator('#deploy-meter')).toHaveClass(/over/);
+});

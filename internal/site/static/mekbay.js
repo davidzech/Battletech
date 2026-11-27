@@ -268,7 +268,8 @@
     });
     node.addEventListener('dragend', function () {
       node.classList.remove('dragging');
-      dialog.querySelectorAll('.over').forEach(function (o) { o.classList.remove('over'); }); // a drag given up (Escape, or let go elsewhere) leaves nothing lit
+      // A drag given up (Escape, or let go elsewhere) leaves no drop target lit. Only the drop targets: the BV meter and the totals use .over too, for over the limit.
+      dialog.querySelectorAll('.deploy-slot.over, .deploy-pilots.over').forEach(function (o) { o.classList.remove('over'); });
     });
   }
 
