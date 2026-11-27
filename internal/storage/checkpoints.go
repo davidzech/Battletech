@@ -174,6 +174,9 @@ func (s *Store) AddCheckpoint(ctx context.Context, playthroughID, campaign, labe
 		}
 	}
 	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	for _, q := range old {
 		if _, err := tx.ExecContext(ctx, s.q(`DELETE FROM campaign_checkpoints WHERE playthrough_id = ? AND campaign = ? AND seq = ?`), playthroughID, campaign, q); err != nil {
 			return nil, err
