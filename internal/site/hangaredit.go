@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/davidzech/Battletech/internal/content"
 	"github.com/davidzech/Battletech/internal/mekbay"
@@ -149,11 +150,66 @@ func (s *Server) hangarRequest(w http.ResponseWriter, r *http.Request) (pt stora
 	return pt, c, run, true
 }
 
+// errHangarBusy is lockHangar giving up on a claim another server holds.
+var errHangarBusy = errors.New("Another change to your hangar is still being saved. Try again in a moment.")
+
+// hangarClaimWait is how long lockHangar waits for another server's claim on a hangar before giving up, and hangarClaimPoll how often it tries again.
+var hangarClaimWait, hangarClaimPoll = 15 * time.Second, 200 * time.Millisecond
+
+// lockHangar locks a campaign run's hangar for one MekBay edit and returns the function that unlocks it. A MekBay force edit is read-modify-save, so two at
+// once would both start from the same force and the later save would undo the earlier one, with both paid for. One at a time, the second starts from what the
+// first saved, and an edit that then has nothing left to do (the same repair clicked twice) fails with mekbay.ErrNoChange and is refunded.
+//
+// Edits made by this process queue on an in-process mutex first (keyedMutex), so only one of them at a time asks the database; the database claim
+// (Store.ClaimHangarEdit) then keeps out edits made by other servers sharing it. While another server holds the claim this tries again every hangarClaimPoll
+// for up to hangarClaimWait, then fails with errHangarBusy. The claim is released even if the request has stopped.
+func (s *Server) lockHangar(ctx context.Context, playthroughID, campaign string) (unlock func(), err error) {
+	unlockLocal := s.hangarEdits.lock(playthroughID + "/" + campaign)
+	deadline := time.Now().Add(hangarClaimWait)
+	for {
+		token, ok, err := s.store.ClaimHangarEdit(ctx, playthroughID, campaign)
+		if err != nil {
+			unlockLocal()
+			return nil, fmt.Errorf("claim the hangar: %w", err)
+		}
+		if ok {
+			return func() {
+				if err := s.store.ReleaseHangarEdit(context.WithoutCancel(ctx), playthroughID, campaign, token); err != nil {
+					log.Printf("release the hangar claim: %v", err) // it expires after storage.HangarClaimTTL
+				}
+				unlockLocal()
+			}, nil
+		}
+		if time.Now().After(deadline) {
+			unlockLocal()
+			return nil, errHangarBusy
+		}
+		select {
+		case <-ctx.Done():
+			unlockLocal()
+			return nil, ctx.Err()
+		case <-time.After(hangarClaimPoll):
+		}
+	}
+}
+
+// lockHangarRequest is lockHangar for a request: it answers the request itself when the hangar can't be locked (409 while another server's edit holds it)
+// and reports ok=false.
+func (s *Server) lockHangarRequest(w http.ResponseWriter, r *http.Request, pt storage.Playthrough, c *content.Campaign) (unlock func(), ok bool) {
+	unlock, err := s.lockHangar(r.Context(), pt.ID, c.Slug)
+	if errors.Is(err, errHangarBusy) {
+		http.Error(w, err.Error(), http.StatusConflict)
+		return nil, false
+	} else if err != nil {
+		log.Printf("lock the hangar: %v", err)
+		http.Error(w, "could not lock the hangar", http.StatusInternalServerError)
+		return nil, false
+	}
+	return unlock, true
+}
+
 // keyedMutex is one mutex per key, made when first locked and forgotten when nobody holds or waits for it. The server keeps one per campaign run for the
-// edits to its hangar: a MekBay force edit is read-modify-save, so two at once would both start from the same force and the later save would undo the earlier
-// one, with both paid for. One at a time, the second starts from what the first saved, and an edit that then has nothing left to do (the same repair clicked
-// twice) fails with mekbay.ErrNoChange and is refunded. It only serializes edits made by this process: several servers on one database would need a lock in
-// the database, as Store.ClaimBattle is for battle starts.
+// edits to its hangar (see lockHangar).
 type keyedMutex struct {
 	mu    sync.Mutex
 	locks map[string]*keyedLock
@@ -195,8 +251,14 @@ func (k *keyedMutex) lock(key string) (unlock func()) {
 // change returns the hangar force as MekBay saved it, which becomes the cached copy, so the page that reloads next paints the change at once instead of the
 // hangar from before it until a live read catches up.
 //
-// The change runs under the run's hangar lock (keyedMutex). One that had already been made (mekbay.ErrNoChange) is refunded like any failed change, and answered 409.
+// The charge and the change run under the run's hangar lock (lockHangar). A change that had already been made (mekbay.ErrNoChange) is refunded like any
+// failed change, and answered 409.
 func (s *Server) payForHangarChange(w http.ResponseWriter, r *http.Request, pt storage.Playthrough, c *content.Campaign, run storage.CampaignRun, cost int, what, history string, change func() (mekbay.HangarForce, error)) {
+	unlock, ok := s.lockHangarRequest(w, r, pt, c) // one edit of the run's hangar at a time
+	if !ok {
+		return
+	}
+	defer unlock()
 	if err := s.store.SpendWarchest(r.Context(), pt.ID, c.Slug, cost); errors.Is(err, storage.ErrInsufficientFunds) {
 		http.Error(w, fmt.Sprintf("Not enough in the warchest: that costs %d SP and you have %d.", cost, run.Warchest), http.StatusConflict)
 		return
@@ -204,9 +266,7 @@ func (s *Server) payForHangarChange(w http.ResponseWriter, r *http.Request, pt s
 		http.Error(w, "could not charge the warchest", http.StatusInternalServerError)
 		return
 	}
-	unlock := s.hangarEdits.lock(pt.ID + "/" + c.Slug) // one edit of the run's hangar at a time (see keyedMutex)
 	h, err := change()
-	unlock()
 	if err != nil {
 		log.Printf("%s in MekBay: %v", what, err) // never log the owner UID
 		if rerr := s.store.RefundWarchest(context.WithoutCancel(r.Context()), pt.ID, c.Slug, cost); rerr != nil {
