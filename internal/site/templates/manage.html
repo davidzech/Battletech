@@ -104,7 +104,7 @@
 </fieldset>
 <dialog id="purchase-dialog" class="wizard purchase" aria-labelledby="purchase-title" data-faction="{{.Campaign.AvailabilityFaction}}" data-era="{{.Campaign.AvailabilityEra}}">
   <form id="purchase-form" autocomplete="off">
-    <h2 id="purchase-title">Purchase new units</h2>
+    <div class="purchase-head"><h2 id="purchase-title">Purchase new units</h2><span class="purchase-warchest" id="purchase-warchest">Warchest {{.Run.WarchestText}} SP</span></div>
     <p class="muted">Search MekBay&rsquo;s unit list and click a unit to add it to your cart, and click it again to take it out. Each costs its base BV in SP, paid from the warchest, and joins your hangar.</p>
     <div id="purchase-search-box"></div>
     <p class="purchase-staged-head" id="purchase-staged-head">Your cart</p>

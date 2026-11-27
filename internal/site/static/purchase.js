@@ -42,10 +42,11 @@
       row.actions = [{ icon: '×', label: 'Remove', title: 'Remove from your cart', onClick: function () { staged = staged.filter(function (x) { return x !== s; }); render(); paintResults(); } }];
       listEl.appendChild(MechRow.build(row));
     });
-    var cost = total(), line = Dom.costLine(cost, warchest);
-    costEl.textContent = line.text;
-    costEl.classList.toggle('short', line.short);
-    var why = !staged.length ? 'Add at least one unit to your cart.' : line.short ? 'The warchest cannot cover that.' : '';
+    // The warchest is in the dialog's head; down here is only what the cart costs, red when the warchest can't cover it.
+    var cost = total(), short = cost > warchest;
+    costEl.textContent = 'Total cost: ' + commas(cost) + ' SP';
+    costEl.classList.toggle('short', short);
+    var why = !staged.length ? 'Add at least one unit to your cart.' : short ? 'The warchest cannot cover that.' : '';
     buyBtn.disabled = !!why;
     buyBtn.title = why;
     buyBtn.textContent = staged.length ? 'Buy for ' + commas(cost) + ' SP' : 'Buy';
