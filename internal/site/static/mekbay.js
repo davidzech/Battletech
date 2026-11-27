@@ -534,9 +534,20 @@
         slot.appendChild(value);
         line.appendChild(slot);
       }
-      countTo(value, key + '#' + i, p.n);
+      if (p.bv) countTo(value, key + '#' + i, p.n); else rollTo(value, key + '#' + i, p.n);
     });
     return line;
+  }
+  // A count of mechs is too small to count through (0 to 1 has nothing between), so its new value rolls in instead: from below when it went up, from above
+  // when it went down.
+  function rollTo(node, id, to) {
+    var from = id in shownNums ? shownNums[id] : to;
+    shownNums[id] = to;
+    node.textContent = fmt(to);
+    if (from === to || calm || typeof node.animate !== 'function') return;
+    node.classList.add('bv-roll');
+    var dir = to > from ? 1 : -1;
+    node.animate([{ transform: 'translateY(' + (dir * 0.6) + 'em)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 250, easing: 'ease-out' });
   }
   function countTo(node, id, to) {
     var from = id in shownNums ? shownNums[id] : to;
