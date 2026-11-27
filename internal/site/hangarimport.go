@@ -2,6 +2,7 @@ package site
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"time"
@@ -19,7 +20,9 @@ import (
 const importTimeout = 10 * time.Minute
 
 // ImportHangars imports the hangars still in MekBay (see above) with the MekBay client mb (nil is the real one). It stops at the first failure and returns it,
-// so the server doesn't start on a database with hangars missing; what was imported before stays imported, and the next start carries on.
+// so the server doesn't start on a database with hangars missing; what was imported before stays imported, and the next start carries on. A force MekBay no
+// longer has (mekbay.ErrNoForce) can't be imported by trying again, so it is logged and skipped rather than keeping the server down: a checkpoint without its
+// hangar keeps the live one when rolled back to, and a campaign without one says so on its pages. A skipped hangar is tried again at the next start.
 func ImportHangars(ctx context.Context, store *storage.Store, mb mekbay.MekBay) error {
 	if mb == nil {
 		mb = &mekbay.Client{}
@@ -48,8 +51,14 @@ func ImportHangars(ctx context.Context, store *storage.Store, mb mekbay.MekBay) 
 		}
 		return data, nil
 	}
+	skipped := 0
 	for _, h := range runs {
 		data, err := read(h)
+		if errors.Is(err, mekbay.ErrNoForce) {
+			log.Printf("hangar import: MekBay no longer has the hangar of campaign %s (playthrough %.8s, force %s); it is left without one", h.Campaign, h.PlaythroughID, h.Instance)
+			skipped++
+			continue
+		}
 		if err != nil {
 			return fmt.Errorf("import the hangar of campaign %s (playthrough %.8s, force %s): %w", h.Campaign, h.PlaythroughID, h.Instance, err)
 		}
@@ -59,6 +68,11 @@ func ImportHangars(ctx context.Context, store *storage.Store, mb mekbay.MekBay) 
 	}
 	for _, h := range checkpoints {
 		data, err := read(h)
+		if errors.Is(err, mekbay.ErrNoForce) {
+			log.Printf("hangar import: MekBay no longer has the hangar of checkpoint %d of campaign %s (playthrough %.8s, force %s); rolling back to it will keep the live hangar", h.Seq, h.Campaign, h.PlaythroughID, h.Instance)
+			skipped++
+			continue
+		}
 		if err != nil {
 			return fmt.Errorf("import the hangar of checkpoint %d of campaign %s (playthrough %.8s, force %s): %w", h.Seq, h.Campaign, h.PlaythroughID, h.Instance, err)
 		}
@@ -66,6 +80,6 @@ func ImportHangars(ctx context.Context, store *storage.Store, mb mekbay.MekBay) 
 			return fmt.Errorf("store the hangar of checkpoint %d of campaign %s (playthrough %.8s): %w", h.Seq, h.Campaign, h.PlaythroughID, err)
 		}
 	}
-	log.Printf("imported hangars from MekBay: %d campaigns, %d checkpoints", len(runs), len(checkpoints))
+	log.Printf("imported hangars from MekBay: %d campaigns, %d checkpoints (%d skipped: no longer in MekBay)", len(runs), len(checkpoints), skipped)
 	return nil
 }

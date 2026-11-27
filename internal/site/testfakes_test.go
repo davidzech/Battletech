@@ -37,6 +37,7 @@ type fakeMekBay struct {
 	hangar mekbay.HangarForce // the force every ReadForce answers (unless forces has the instance)
 	err    error              // ReadForce fails with it
 	forces map[string][]byte  // forces by instance, as saved data (the import's tests)
+	gone   map[string]bool    // forces MekBay no longer has: ReadForce answers mekbay.ErrNoForce
 	reads  []string           // the instances ReadForce was asked for
 	// battles records Start battle requests; battleErr makes them fail.
 	battles       []mekbay.BattleRequest
@@ -57,6 +58,9 @@ func (f *fakeMekBay) ReadForce(_ context.Context, instance string) (json.RawMess
 	f.reads = append(f.reads, instance)
 	if f.err != nil {
 		return nil, f.err
+	}
+	if f.gone[instance] {
+		return nil, mekbay.ErrNoForce
 	}
 	if data, ok := f.forces[instance]; ok {
 		return data, nil

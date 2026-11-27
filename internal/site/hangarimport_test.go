@@ -101,3 +101,32 @@ func TestImportHangarsFailsOnARead(t *testing.T) {
 		t.Errorf("nothing is stored: %v", err)
 	}
 }
+
+// A force MekBay no longer has can't be imported by trying again, so it is skipped rather than keeping the server down: the rest is imported, and the skipped
+// hangars stay listed, to be tried again at the next start.
+func TestImportHangarsSkipsForcesMekBayNoLongerHas(t *testing.T) {
+	ctx := context.Background()
+	store := oldStore(t)
+	fake := &fakeMekBay{forces: map[string][]byte{"live-1": forceOf(startingHangar())}, gone: map[string]bool{"frozen-1": true}}
+	if err := ImportHangars(ctx, store, fake); err != nil {
+		t.Fatalf("a checkpoint's frozen copy MekBay no longer has: %v", err)
+	}
+	if _, err := store.Hangar(ctx, "pt", "refusalwar"); err != nil {
+		t.Errorf("the run's hangar is imported: %v", err)
+	}
+	if left, _ := store.CheckpointHangarImports(ctx); len(left) != 1 {
+		t.Errorf("the skipped checkpoint stays to try again: %+v", left)
+	}
+
+	store2 := oldStore(t)
+	gone := &fakeMekBay{forces: map[string][]byte{"frozen-1": forceOf(startingHangar())}, gone: map[string]bool{"live-1": true}}
+	if err := ImportHangars(ctx, store2, gone); err != nil {
+		t.Fatalf("a run's hangar MekBay no longer has: %v", err)
+	}
+	if _, err := store2.Hangar(ctx, "pt", "refusalwar"); !errors.Is(err, storage.ErrNoHangar) {
+		t.Errorf("the run is left without a hangar: %v", err)
+	}
+	if left, _ := store2.CheckpointHangarImports(ctx); len(left) != 0 {
+		t.Errorf("the checkpoint is still imported: %+v", left)
+	}
+}

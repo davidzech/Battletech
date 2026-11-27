@@ -133,10 +133,13 @@ func (c *Client) ReadForce(ctx context.Context, instance string) (json.RawMessag
 		return nil, err
 	}
 	if data == nil {
-		return nil, errors.New("MekBay has no force for that hangar link; check that the link is saved in MekBay")
+		return nil, ErrNoForce
 	}
 	return json.Marshal(data)
 }
+
+// ErrNoForce is ReadForce's answer for a force MekBay doesn't have (never saved, or deleted), as against a failure to ask.
+var ErrNoForce = errors.New("MekBay has no force for that hangar link; check that the link is saved in MekBay")
 
 // ParseForce reads a force's saved data (the JSON the site stores a hangar as) into a HangarForce.
 func ParseForce(data []byte) (HangarForce, error) {
