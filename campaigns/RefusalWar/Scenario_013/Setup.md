@@ -4,7 +4,8 @@ title: Epilogue
 planet: Strana Mechty
 map: ""   # TBD
 forces: {}   # OpFor .mul files TBD
-images: []
+images:
+  - images/strana_mechty_sunset.png
 readout:   # Strana Mechty, as on Scenario 000's survey
   - Star: Rodina (G3VI)
   - Orbit: 4th of 7
