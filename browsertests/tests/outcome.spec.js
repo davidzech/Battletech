@@ -1,5 +1,5 @@
 // The Complete mission dialog without a battle (outcome.js), on the test server's Drill campaign: an Aces-style mission whose dialog opens from the page, with
-// an Active and a Killed in action box per pilot, the mission's objective, the MVP and Commit (confirm.js). Then the campaign History's Roll back
+// an Active, a Kills and a Killed in action box per pilot, the mission's objective, the MVP and Commit (confirm.js). Then the campaign History's Roll back
 // (campaignhistory.js) undoes it.
 const { test, expect, newAccount, startCampaign, recruit } = require('./helpers');
 
@@ -22,6 +22,9 @@ test('reports a mission with a benched and a killed pilot, then rolls it back', 
   // Katarina is killed in action.
   await card('Katarina').getByLabel('Killed in action').check();
   await out.getByLabel('Destroy the depot').check();
+  // Every active pilot reports their kills; the result waits for them.
+  await card('Alrek').getByLabel('Kills').fill('2');
+  await card('Katarina').getByLabel('Kills').fill('0');
 
   // The preview: the objective fills the pool; Alrek takes 80 SP, Jarek half for being benched, Katarina nothing; the rest goes to the warchest.
   await expect(card('Alrek').locator('.outcome-preview')).toContainText('80');
@@ -70,4 +73,79 @@ test('reports a mission with a benched and a killed pilot, then rolls it back', 
   // The page reloads as it was just after the start: two pilots, Katarina among them, and the mission open again.
   await expect(page.locator('.roster-pilot')).toHaveText([/Alrek/, /Katarina/]);
   await expect(page.locator('#scenario-cards .card').first()).toContainText('Open');
+});
+
+test('keeps what was entered in the URL, so a reload reopens the dialog with it', async ({ page }) => {
+  await newAccount(page);
+  await startCampaign(page, 'drill', ['Alrek', 'Katarina']);
+  await recruit(page, 'drill', 'Jarek');
+
+  await page.goto('/drill/scenario_000/');
+  await expect(page).not.toHaveURL(/#outcome=/); // nothing in the URL before the dialog opens
+  await page.locator('#outcome-open').click();
+  const out = page.locator('#outcome-dialog');
+  const card = (name) => out.locator('.outcome-pilot', { hasText: name });
+  await expect(out).toBeVisible();
+  await card('Jarek').getByLabel('Active').uncheck();
+  await card('Katarina').getByLabel('Killed in action').check();
+  await card('Alrek').getByLabel('Kills').fill('3');
+  await card('Katarina').getByLabel('Kills').fill('1');
+  await out.getByLabel('Destroy the depot').check();
+  await out.locator('#outcome-mvp').selectOption({ label: 'Alrek' });
+  await expect(out.locator('#outcome-commit')).toBeEnabled();
+  await expect(page).toHaveURL(/#outcome=/);
+
+  // A reload opens the dialog again with all of it, and the result worked out from it.
+  await page.reload();
+  await expect(out).toBeVisible();
+  await expect(card('Jarek').getByLabel('Active')).not.toBeChecked();
+  await expect(card('Jarek').getByLabel('Killed in action')).toBeHidden();
+  await expect(card('Alrek').getByLabel('Active')).toBeChecked();
+  await expect(card('Katarina').getByLabel('Killed in action')).toBeChecked();
+  await expect(card('Alrek').getByLabel('Killed in action')).not.toBeChecked();
+  await expect(card('Alrek').getByLabel('Kills')).toHaveValue('3');
+  await expect(card('Katarina').getByLabel('Kills')).toHaveValue('1');
+  await expect(out.getByLabel('Destroy the depot')).toBeChecked();
+  await expect(out.locator('#outcome-mvp')).toHaveValue(/.+/);
+  await expect(out.locator('#outcome-mvp option:checked')).toHaveText('Alrek');
+  await expect(out.locator('#outcome-total')).toContainText('Warchest4700 → 4980 SP');
+  await expect(out.locator('#outcome-commit')).toBeEnabled();
+
+  // Closing takes it out of the URL, so a reload leaves the dialog closed; opening it again starts afresh.
+  await out.locator('#outcome-cancel').click();
+  await expect(out).toBeHidden();
+  await expect(page).not.toHaveURL(/#outcome=/);
+  await page.reload();
+  await expect(page.locator('#outcome-open')).toBeVisible();
+  await expect(out).toBeHidden();
+
+  // A value out of range or for an input or pilot that doesn't exist is dropped; the rest is kept.
+  const pilotIds = await out.evaluate((d) => JSON.parse(d.dataset.pilots).map((p) => p.id));
+  const bad = { v: 1, p: { [pilotIds[0]]: { a: 1, k: 0, v: { kills: 9, nope: 1 } }, ghost: { a: 0 } }, m: { depot: 1, nope: 2 }, mvp: 'ghost' };
+  const frag = Buffer.from(JSON.stringify(bad)).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  await page.goto('/drill/'); // from another page: going to the same one with only a new fragment wouldn't load it again
+  await page.goto('/drill/scenario_000/#outcome=' + frag);
+  await expect(out).toBeVisible();
+  await expect(out.getByLabel('Destroy the depot')).toBeChecked();
+  await expect(out.locator('.outcome-pilot').first().getByLabel('Kills')).toHaveValue('');
+  await expect(out.locator('#outcome-mvp')).toHaveValue('');
+
+  // Committing leaves nothing behind: the page reloads on the completed mission, without the dialog.
+  await card('Alrek').getByLabel('Kills').fill('3');
+  await card('Katarina').getByLabel('Kills').fill('1');
+  await card('Jarek').getByLabel('Kills').fill('0');
+  await out.locator('#outcome-mvp').selectOption({ label: 'Alrek' });
+  await out.locator('#outcome-commit').click();
+  await page.getByRole('dialog', { name: 'Commit this outcome?' }).getByRole('button', { name: 'Commit' }).click();
+  await expect(page.locator('#mission-log-state')).toHaveText('Completed');
+  await expect(page).not.toHaveURL(/#outcome=/);
+  await page.reload();
+  await expect(page.locator('#mission-log-state')).toHaveText('Completed');
+  await expect(page.locator('#outcome-dialog')).toHaveCount(0);
+
+  // A fragment for a mission that can no longer be completed is dropped.
+  await page.goto('/drill/'); // from another page: going to the same one with only a new fragment wouldn't load it again
+  await page.goto('/drill/scenario_000/#outcome=' + frag);
+  await expect(page.locator('#mission-log-state')).toHaveText('Completed');
+  await expect(page).not.toHaveURL(/#outcome=/);
 });

@@ -1,10 +1,18 @@
 // The mission completion dialog: report each named pilot's inputs (who took part, kills, whether they were killed, ... whatever the scenario's outcome engine asks for,
 // see outcomes.go), see the result as you enter it, and commit the mission as completed. The preview comes from the server (POST /api/campaign/scenario-outcome) so
 // the rules live in one place; committing (POST /api/campaign/scenario-outcome/commit) applies them and cannot be undone, so it asks first (confirm.js).
+//
+// What the players have entered is kept in the page's fragment (#outcome=...; the Deploy wizard on the same page uses #deploy=...), so a reload brings the dialog
+// back as it was: each pilot's Active and Killed in action boxes and inputs, the mission's inputs and the MVP. The fragment is replaced, not added to the history,
+// and goes when the dialog closes or the mission is committed.
 (function () {
   var dialog = document.getElementById('outcome-dialog');
   var open = document.getElementById('outcome-open');
-  if (!dialog || !open || typeof dialog.showModal !== 'function') return;
+  if (!dialog || !open || typeof dialog.showModal !== 'function') {
+    // No dialog (the mission is completed, or locked): a saved one has nothing to come back to.
+    if (location.hash.indexOf('#outcome=') === 0 && window.history && history.replaceState) history.replaceState(history.state, '', location.pathname + location.search);
+    return;
+  }
   var inputs = JSON.parse(dialog.dataset.inputs || '[]');
   var pilots = JSON.parse(dialog.dataset.pilots || '[]');
   var body = document.getElementById('outcome-body');
@@ -17,7 +25,8 @@
   // Whether a battle is in progress, so who took part and who is dead are read from it. Checked when the dialog opens, not when the page loads: Start battle
   // (mekbay.js) begins one without reloading the page and marks the dialog then.
   var inBattle = false;
-  var ui = {};        // pilot id -> { took, fields, killedBox }, the parts of a card the battle fills in
+  var ui = {};        // pilot id -> { took, tb, fields, killedBox, boxes }, the parts of a card the battle (or a restore) fills in; boxes: input id -> its box
+  var missionBoxes = {}; // mission input id -> its box
   var state = null;   // { pilots: { id: { tookPart, killed, values } }, mission: { id: value }, mvp: the MVP's pilot id, '' while not chosen }
   var results = {};   // pilot id -> the preview's lines, and the mission's
   var seq = 0, timer = null, valid = false;
@@ -58,6 +67,7 @@
     mvpSelect = null; mvpNote = null; candidates = null;
     results = {};
     ui = {};
+    missionBoxes = {};
     body.textContent = '';
     var pilotInputs = byScope('pilot');
     if (!pilots.length) body.appendChild(el('p', 'muted', 'You have no living named pilots to report on.'));
@@ -87,11 +97,12 @@
       }
       card.appendChild(head);
       var fields = el('div', 'outcome-fields');
-      pilotInputs.forEach(function (i) { fields.appendChild(field(i, st.values, changed)); });
+      var boxes = {};
+      pilotInputs.forEach(function (i) { var f = field(i, st.values, changed); boxes[i.id] = f.querySelector('input'); fields.appendChild(f); });
       // Every pilot can be killed in action, whatever the scenario asks: a pilot killed gets nothing and is removed from the campaign.
       fields.appendChild(field({ id: 'killed', label: 'Killed in action', type: 'bool' }, st, changed, 'killed'));
       card.appendChild(fields);
-      ui[p.id] = { took: took, fields: fields, killedBox: fields.lastChild.querySelector('input') };
+      ui[p.id] = { took: took, tb: tb, fields: fields, killedBox: fields.lastChild.querySelector('input'), boxes: boxes };
       var preview = el('ul', 'outcome-preview');
       preview.id = 'outcome-preview-' + p.id;
       card.appendChild(preview);
@@ -102,7 +113,7 @@
     if (mission.length) {
       var box = el('div', 'outcome-mission');
       box.appendChild(el('h3', 'alloc-head', 'The mission'));
-      mission.forEach(function (i) { box.appendChild(field(i, state.mission, changed)); });
+      mission.forEach(function (i) { var f = field(i, state.mission, changed); missionBoxes[i.id] = f.querySelector('input'); box.appendChild(f); });
       body.appendChild(box);
     }
     if (mvpSP > 0 && pilots.length) {
@@ -246,8 +257,92 @@
     });
   }
 
+  // ---- The dialog in the URL (#outcome=...): { v: 1, p: { pilot id: { a: active 1/0, k: killed 1/0, v: { input id: value } } }, m: { input id: value }, mvp }.
+  // Only what was entered is kept: a number box left empty and an unticked box are left out.
+  var restoring = null; // a state read from the URL, waiting for the dialog to be built (and the battle read) to be put back on
+  function encode(o) { return btoa(unescape(encodeURIComponent(JSON.stringify(o)))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
+  function decode(t) {
+    try {
+      var b = t.replace(/-/g, '+').replace(/_/g, '/');
+      var d = JSON.parse(decodeURIComponent(escape(atob(b + '==='.slice((b.length + 3) % 4)))));
+      return d && d.v === 1 ? d : null;
+    } catch (e) {
+      return null;
+    }
+  }
+  function entered(list, values) {
+    var out = {}, any = false;
+    list.forEach(function (i) {
+      var x = values[i.id];
+      if (i.type === 'bool' ? x === true && !i.required : typeof x === 'number' && !isNaN(x)) { out[i.id] = i.type === 'bool' ? 1 : x; any = true; }
+    });
+    return any ? out : null;
+  }
+  // The URL follows the open dialog; only closing it (or committing) takes it out, so nothing done while the dialog is closed touches it.
+  function saveState() {
+    if (restoring || !state || !dialog.open || !window.history || !history.replaceState) return;
+    var d = { v: 1, p: {} };
+    pilots.forEach(function (p) {
+      var st = state.pilots[p.id], o = { a: st.tookPart ? 1 : 0, k: st.tookPart && st.killed ? 1 : 0 };
+      var v = st.tookPart && entered(byScope('pilot'), st.values);
+      if (v) o.v = v;
+      d.p[p.id] = o;
+    });
+    var m = entered(byScope('mission'), state.mission);
+    if (m) d.m = m;
+    if (state.mvp) d.mvp = state.mvp;
+    var hash = '#outcome=' + encode(d);
+    if (location.hash !== hash) history.replaceState(history.state, '', location.pathname + location.search + hash);
+  }
+  function clearState() {
+    if (location.hash.indexOf('#outcome=') === 0 && window.history && history.replaceState) history.replaceState(history.state, '', location.pathname + location.search);
+  }
+  // Puts saved values back over the defaults, keeping only what still holds: inputs the mission still has, of their type and within their range, pilots still in
+  // the campaign, and an MVP who is one of them (mvpOptions and the preview then drop one who can't be the MVP). With a battle behind it, who took part comes from
+  // the battle, not the URL.
+  function restoreValues(list, values, saved, boxes) {
+    if (!saved || typeof saved !== 'object') return;
+    list.forEach(function (i) {
+      if (!Object.prototype.hasOwnProperty.call(saved, i.id)) return;
+      var x = saved[i.id], box = boxes[i.id];
+      if (i.type === 'bool') {
+        if (i.required || (x !== 1 && x !== 0 && typeof x !== 'boolean')) return;
+        values[i.id] = !!x;
+        if (box) box.checked = !!x;
+      } else {
+        if (typeof x !== 'number' || Math.floor(x) !== x || x < i.min || x > i.max) return;
+        values[i.id] = x;
+        if (box) box.value = x;
+      }
+    });
+  }
+  function restore(d) {
+    var saved = d.p && typeof d.p === 'object' ? d.p : {};
+    pilots.forEach(function (p) {
+      var s = saved[p.id], st = state.pilots[p.id], u = ui[p.id];
+      if (!s || typeof s !== 'object') return;
+      if (!inBattle && (s.a === 0 || s.a === 1)) {
+        st.tookPart = s.a === 1;
+        u.tb.checked = st.tookPart;
+        u.fields.hidden = !st.tookPart;
+      }
+      if (s.k === 0 || s.k === 1) st.killed = st.tookPart && s.k === 1;
+      if (!st.tookPart) st.killed = false;
+      u.killedBox.checked = st.killed;
+      if (st.tookPart) restoreValues(byScope('pilot'), st.values, s.v, u.boxes);
+    });
+    restoreValues(byScope('mission'), state.mission, d.m, missionBoxes);
+    if (typeof d.mvp === 'string' && pilots.some(function (p) { return p.id === d.mvp; })) state.mvp = d.mvp;
+  }
+  // Called once the dialog is built (and filled in from the battle, if any): puts back a state from the URL, then works out the result.
+  function ready() {
+    if (restoring) { restore(restoring); restoring = null; }
+    changed();
+  }
+
   function changed() {
     mvpOptions();
+    saveState();
     error.textContent = '';
     valid = false;
     commit.disabled = true;
@@ -263,6 +358,7 @@
           if (mine !== seq) return;
           candidates = data.mvpCandidates || [];
           mvpOptions();
+          saveState(); // the MVP may have been dropped
           render(data);
           // The result is previewed without an MVP too, but it can only be committed once the MVP is chosen.
           valid = !mvpMissing();
@@ -278,7 +374,7 @@
     total.hidden = true;
     commit.disabled = true;
     inBattle = dialog.dataset.inBattle === '1';
-    if (!inBattle) { build(); dialog.showModal(); changed(); return; }
+    if (!inBattle) { build(); dialog.showModal(); ready(); return; }
     // With a battle behind it, who took part and who is dead come from its record sheets, so nothing that depends on them is shown until they have been read.
     body.textContent = '';
     state = null;
@@ -292,7 +388,7 @@
       if (mine !== seq || !dialog.open) return;
       build();
       applyBattle(crewOf(status));
-      changed();
+      ready();
     }, function (err) {
       if (mine !== seq) return;
       body.textContent = '';
@@ -301,6 +397,7 @@
   });
   document.getElementById('outcome-cancel').addEventListener('click', function () { dialog.close(); });
   dialog.addEventListener('click', function (e) { if (e.target === dialog) dialog.close(); });
+  dialog.addEventListener('close', function () { restoring = null; clearState(); });
   document.getElementById('outcome-form').addEventListener('submit', function (e) {
     e.preventDefault();
     if (!valid || commit.disabled) return;
@@ -313,10 +410,22 @@
       if (!yes) return;
       commit.disabled = true;
       request('/api/campaign/scenario-outcome/commit').then(function (res) {
-        if (res && res.ok) { location.reload(); return; }
+        if (res && res.ok) { clearState(); location.reload(); return; } // cleared first: a reload with it would open the dialog again
         commit.disabled = false;
         if (res) res.text().then(function (t) { error.textContent = t.trim() || 'Could not save the outcome.'; });
       }, function () { commit.disabled = false; error.textContent = 'Could not reach the server.'; });
     });
   });
+
+  // A reload (or a bookmark) with the dialog in the URL opens it as the page would, and puts the saved values back once it is built. Only while the mission can
+  // still be completed from here: the dialog is on the page (not for a mission completed or locked), its button isn't disabled (another mission's battle), and a
+  // mission with forces has its battle in progress (its button is on the Operation view, which shows only then).
+  (function () {
+    if (location.hash.indexOf('#outcome=') !== 0) return;
+    var saved = decode(location.hash.slice(9));
+    var hosted = open.closest('dialog'); // the Deploy wizard's Operation view, for a mission with a battle
+    if (!saved || open.disabled || (hosted && dialog.dataset.inBattle !== '1')) { clearState(); return; }
+    restoring = saved;
+    open.click();
+  })();
 })();

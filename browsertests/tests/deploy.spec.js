@@ -160,6 +160,16 @@ test('deploys two pilots, reconfigures a mech, starts the battle and completes t
   await expect(alrek.locator('.outcome-preview')).toContainText('400');
   await expect(katarina.locator('.outcome-preview')).toContainText('Killed in Action');
   await expect(out.locator('#outcome-commit')).toBeEnabled();
+  // A reload brings the dialog back from the URL: the battle read again, and what was entered put back over it.
+  await expect(page).toHaveURL(/#outcome=/);
+  await page.reload();
+  await expect(out).toBeVisible();
+  await expect(katarina.locator('.outcome-took')).toContainText('dead on the record sheet');
+  await expect(katarina.getByLabel('Killed in action')).toBeChecked();
+  await expect(alrek.getByLabel('Kills')).toHaveValue('2');
+  await expect(katarina.getByLabel('Kills')).toHaveValue('1');
+  await expect(out.locator('#outcome-mvp option:checked')).toHaveText('Alrek');
+  await expect(out.locator('#outcome-commit')).toBeEnabled();
   await out.locator('#outcome-commit').click();
 
   // Committing asks first (confirm.js), then the page reloads with the mission completed.

@@ -95,7 +95,7 @@ func strictJSON(r *http.Request, v any) error {
 	return dec.Decode(v)
 }
 
-// browserCampaigns is the real campaigns plus two small ones. Drill's Scenario 000 has no forces and an Aces-style outcome (an objective, pilot SP and an
+// browserCampaigns is the real campaigns plus two small ones. Drill's Scenario 000 has no forces and an Aces-style outcome (an objective, pilot SP, a Kills box per pilot and an
 // MVP), so its Complete mission dialog opens straight from the page, with the Active and Killed in action boxes, rather than from a battle. Muster's
 // Scenario 000 is deployed from the hangar (Refusal War's first missions are the Trial, with its own mechs, and then one that waits for it), with Scenario
 // 001's OpFor and BV limit.
@@ -121,6 +121,8 @@ func browserCampaigns(t *testing.T) string {
 id: scenario_000
 branches: []
 pilot_sp: 80
+inputs:
+  - {id: kills, label: Kills, max: 4}
 objectives:
   - id: depot
     label: Destroy the depot
