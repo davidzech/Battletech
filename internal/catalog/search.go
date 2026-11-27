@@ -55,9 +55,13 @@ func buildSearch() {
 
 const maxSearchResults = 40
 
+// minInnerMatch is the shortest typed word that may be found inside a word rather than at its start: a letter or two is in nearly every name.
+const minInnerMatch = 3
+
 // Search finds the mechs whose chassis or model contain every typed word, best matches first: those where each word starts a word of the
-// chassis or model come before those where a word is only found inside one, then by name. An empty query finds nothing. available, when not nil,
-// limits the results to those units.
+// chassis or model come before those where a word is only found inside one, then by name. A typed word of one or two characters has to start a word
+// of the chassis or model ("Timber Wolf A" finds the A, not every Timber Wolf for the "a" in "Mad Cat"); a longer one may also be found inside one
+// ("madcat" finds "Mad Cat", "as7d" finds "AS7-D"). An empty query finds nothing. available, when not nil, limits the results to those units.
 func Search(query string, available map[string]bool) (units []Unit, total int) {
 	buildSearch()
 	var tokens []string
@@ -81,16 +85,16 @@ func Search(query string, available map[string]bool) (units []Unit, total int) {
 		rank := 0
 		ok := true
 		for _, t := range tokens {
-			if !strings.Contains(e.key, t) {
-				ok = false
-				break
-			}
 			starts := false
 			for _, w := range e.words {
 				if strings.HasPrefix(w, t) {
 					starts = true
 					break
 				}
+			}
+			if !starts && (len(t) < minInnerMatch || !strings.Contains(e.key, t)) {
+				ok = false
+				break
 			}
 			if !starts {
 				rank = 1
