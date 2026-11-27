@@ -63,9 +63,21 @@ test('reports a mission with a benched and a killed pilot, then rolls it back', 
   // History: roll back to the start (the oldest line with a checkpoint), through two confirmations.
   await page.goto('/drill/');
   await expect(page.locator('.roster-pilot')).toHaveCount(2); // Katarina has fallen
-  await page.locator('#history-open').click();
   const history = page.locator('#history-dialog');
+  // The Danger zone's Rollback opens the same dialog with only the lines it can roll back to (the start and the completed mission), without the filters.
+  await page.locator('#danger-zone summary').click();
+  await page.locator('#rollback-open').click();
   await expect(history).toBeVisible();
+  await expect(history.locator('#history-title')).toHaveText('Rollback points');
+  await expect(history.locator('.history-filters')).toBeHidden();
+  await expect(history.locator('.history-entry:visible')).toHaveCount(2);
+  await expect(history.locator('.history-entry:visible .history-rollback')).toHaveCount(2);
+  await history.locator('#history-close').click();
+  // History itself still shows every line, with its filters.
+  await page.locator('#history-open').click();
+  await expect(history.locator('#history-title')).toHaveText('Campaign history');
+  await expect(history.locator('.history-filters')).toBeVisible();
+  expect(await history.locator('.history-entry:visible').count()).toBeGreaterThan(2);
   const rollbacks = history.locator('.history-rollback');
   await expect(rollbacks).toHaveCount(2); // the start and the completed mission
   await rollbacks.last().click();
