@@ -72,10 +72,7 @@ func TestNamedPilotsFlow(t *testing.T) {
 	}
 	id := playthroughID("wolfpack2026")
 	// A campaign started without pilots (before they were part of starting one) has to name them afterwards.
-	if err := store.StartRun(ctx, id, "refusalwar", mekbay.Hangar{URL: goodHangarURL, Instance: goodInstance}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := store.DB().Exec(`UPDATE campaign_runs SET warchest = 5000`); err != nil { // recruiting costs SP
+	if err := store.StartRunWithPilots(ctx, id, "refusalwar", mekbay.Hangar{URL: goodHangarURL, Instance: goodInstance}, nil, 5000, 0, ""); err != nil { // recruiting costs SP
 		t.Fatal(err)
 	}
 
@@ -124,7 +121,7 @@ func TestNamedPilotsFlow(t *testing.T) {
 	}
 
 	// SP earned and allocated (the allocate endpoint, with its validation, is covered by TestSPEndpoints).
-	if err := store.AwardSP(ctx, id, "refusalwar", alrek.ID, pilot.SPAllocation{Gunnery: 300, EdgeTokens: 60}); err != nil {
+	if err := store.ApplySP(ctx, id, "refusalwar", alrek.ID, 360, pilot.SPAllocation{Gunnery: 300, EdgeTokens: 60}); err != nil {
 		t.Fatalf("award: %v", err)
 	}
 	ps, _ = store.Pilots(ctx, id, "refusalwar")
@@ -474,7 +471,7 @@ func TestMigrateSPTotal(t *testing.T) {
 		t.Fatalf("migrated pilot: %+v %v", ps, err)
 	}
 	// And it leaves a consistent pilot alone: unallocated SP survives a reopen.
-	if err := s.EarnSP(ctx, id, "refusalwar", "p1", 40); err != nil {
+	if err := s.ApplySP(ctx, id, "refusalwar", "p1", 40, pilot.SPAllocation{}); err != nil {
 		t.Fatal(err)
 	}
 	s.Close()
@@ -535,14 +532,14 @@ func TestReviveAndDeletePilots(t *testing.T) {
 	}
 	// The limit of living pilots still holds.
 	for _, n := range []string{"C", "D"} {
-		if _, err := store.AddPilot(ctx, id, "refusalwar", n, "", pilot.SPAllocation{}, pilot.MaxNamedPilots); err != nil {
+		if _, err := store.AddPilotWithRank(ctx, id, "refusalwar", n, "", "", pilot.SPAllocation{}, 0, pilot.MaxNamedPilots); err != nil {
 			t.Fatal(err)
 		}
 	}
 	if got := do("/api/pilots/fallen", a.ID); got != http.StatusNoContent {
 		t.Fatal(got)
 	}
-	if _, err := store.AddPilot(ctx, id, "refusalwar", "E", "", pilot.SPAllocation{}, pilot.MaxNamedPilots); err != nil {
+	if _, err := store.AddPilotWithRank(ctx, id, "refusalwar", "E", "", "", pilot.SPAllocation{}, 0, pilot.MaxNamedPilots); err != nil {
 		t.Fatal(err)
 	}
 	if got := do("/api/pilots/revive", a.ID); got != http.StatusBadRequest {
@@ -692,7 +689,7 @@ func TestStatBoxCaptions(t *testing.T) {
 	if !strings.Contains(page, `stat-next">0/100 SP<`) || strings.Contains(page, "top level") || strings.Contains(page, "next:") || strings.Contains(page, " at 100 SP") {
 		t.Errorf("captions should read next: SP/needed SP: %.1500s", page)
 	}
-	if err := store.AwardSP(ctx, id, "refusalwar", ps[0].ID, pilot.SPAllocation{Gunnery: 1000000}); err != nil {
+	if err := store.ApplySP(ctx, id, "refusalwar", ps[0].ID, 1000000, pilot.SPAllocation{Gunnery: 1000000}); err != nil {
 		t.Fatal(err)
 	}
 	if page := body(t, srv, "/refusalwar/manage/", cookie); !strings.Contains(page, `stat-next">max<`) {

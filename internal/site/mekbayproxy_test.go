@@ -294,15 +294,10 @@ func TestMekBayProxyRefusesBadLinks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	revoked := p.link(t, "gone", otherAccount)
-	if ok, err := p.store.RevokeMekBayLink(context.Background(), "pt", "camp", "gone"); err != nil || !ok {
-		t.Fatal(ok, err)
-	}
 	for name, host := range map[string]string{
 		"an unknown id":   storage.LinkPrefix + storage.NewLinkID() + ".localhost",
 		"a malformed id":  "mekbay-nope.localhost",
 		"an expired link": storage.LinkPrefix + expired + ".localhost",
-		"a revoked link":  revoked,
 	} {
 		resp, body := p.get(t, host, "/")
 		if resp.StatusCode != http.StatusForbidden || strings.Contains(body, "base href") || !strings.Contains(body, "not valid or has expired") {
@@ -437,15 +432,15 @@ func TestMekBayRelayTwoLinksTwoAccounts(t *testing.T) {
 	if got := whoIs(t, again); got != testAccount {
 		t.Errorf("the same address is the same account after reconnecting: %q", got)
 	}
-	// Revoking a link stops it at once; asking again makes a new host.
-	if ok, err := p.store.RevokeMekBayLink(context.Background(), "pt", "camp", "player-1"); err != nil || !ok {
-		t.Fatal(ok, err)
+	// A link that has expired stops at once; asking again makes a new host.
+	if _, err := p.store.EnsureMekBayLink(context.Background(), "pt", "camp", "player-1", testAccount, -time.Minute, time.Now()); err != nil {
+		t.Fatal(err)
 	}
 	if _, resp, err := p.dial(t, player, nil); err == nil || resp == nil || resp.StatusCode != http.StatusForbidden {
-		t.Errorf("a revoked link no longer connects: %v %v", resp, err)
+		t.Errorf("an expired link no longer connects: %v %v", resp, err)
 	}
 	if fresh := p.link(t, "player-1", testAccount); fresh == player {
-		t.Error("a revoked label gets a new link")
+		t.Error("an expired label gets a new link")
 	}
 	// A page from another origin can't use a link's host through a visitor's browser.
 	_, resp, err := p.dial(t, opfor, http.Header{"Origin": {"https://evil.example"}})

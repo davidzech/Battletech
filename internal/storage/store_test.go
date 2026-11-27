@@ -68,11 +68,11 @@ func storeContract(t *testing.T, s *Store) {
 	if err := s.StartRun(ctx, id, "another", mekbay.Hangar{URL: "u2", Instance: "i2"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.StartRun(ctx, id, "refusalwar", mekbay.Hangar{URL: "u3", Instance: "i3"}); err != nil {
-		t.Fatalf("starting again should change the hangar: %v", err)
+	if err := s.StartRun(ctx, id, "refusalwar", mekbay.Hangar{URL: "u3", Instance: "i3"}); !errors.Is(err, ErrAlreadyStarted) {
+		t.Fatalf("starting again should be refused: %v", err)
 	}
-	if r, _, _ := s.Run(ctx, id, "refusalwar"); r.HangarInstance != "i3" || r.HangarURL != "u3" {
-		t.Fatalf("hangar not changed: %+v", r)
+	if r, _, _ := s.Run(ctx, id, "refusalwar"); r.HangarInstance != goodInstance || r.HangarURL != goodHangarURL {
+		t.Fatalf("starting again must not change the hangar: %+v", r)
 	}
 	if r, _, _ := s.Run(ctx, id, "another"); r.HangarInstance != "i2" {
 		t.Fatalf("campaigns must not share a hangar: %+v", r)

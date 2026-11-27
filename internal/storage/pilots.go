@@ -73,11 +73,6 @@ func (s *Store) lockRun(ctx context.Context, tx *sql.Tx, playthroughID, campaign
 	return err
 }
 
-// AddPilot adds a pilot with the lowest rank and every SP allocated (see AddPilotWithRank).
-func (s *Store) AddPilot(ctx context.Context, playthroughID, campaign, name, portrait string, start pilot.SPAllocation, limit int) (pilot.NamedPilot, error) {
-	return s.AddPilotWithRank(ctx, playthroughID, campaign, name, portrait, "", start, start.Total(), limit)
-}
-
 // AddPilotWithRank adds a living named pilot to a campaign run with the given rank ("" is the lowest) and starting SP, refusing
 // it when the command already has max living pilots (ErrPilotLimit), another living pilot has the portrait (ErrPortraitTaken) or
 // the name is taken (ErrNameTaken, ignoring case).
@@ -129,45 +124,8 @@ func (s *Store) AddPilotWithRank(ctx context.Context, playthroughID, campaign, n
 	return p, tx.Commit()
 }
 
-// AwardSP adds SP to a living pilot's columns (sql.ErrNoRows if there is no such pilot, or they have fallen).
-func (s *Store) AwardSP(ctx context.Context, playthroughID, campaign, pilotID string, a pilot.SPAllocation) error {
-	res, err := s.db.ExecContext(ctx,
-		s.q(`UPDATE named_pilots SET sp_gunnery = sp_gunnery + ?, sp_piloting = sp_piloting + ?, sp_edge_tokens = sp_edge_tokens + ?, sp_edge_abilities = sp_edge_abilities + ?, sp_total = sp_total + ?
-		     WHERE id = ? AND playthrough_id = ? AND campaign = ? AND fallen = 0`),
-		a.Gunnery, a.Piloting, a.EdgeTokens, a.EdgeAbilities, a.Total(), pilotID, playthroughID, campaign)
-	if err != nil {
-		return err
-	}
-	if n, _ := res.RowsAffected(); n == 0 {
-		return sql.ErrNoRows
-	}
-	return nil
-}
-
 // ErrNotEnoughSP is returned when more SP is allocated than the pilot has unallocated.
 var ErrNotEnoughSP = errors.New("that is more SP than the pilot has unallocated")
-
-// EarnSP adds earned SP to a living pilot's total, unallocated until they spend it (sql.ErrNoRows if there is no such
-// living pilot).
-func (s *Store) EarnSP(ctx context.Context, playthroughID, campaign, pilotID string, n int) error {
-	res, err := s.db.ExecContext(ctx,
-		s.q(`UPDATE named_pilots SET sp_total = sp_total + ? WHERE id = ? AND playthrough_id = ? AND campaign = ? AND fallen = 0`),
-		n, pilotID, playthroughID, campaign)
-	if err != nil {
-		return err
-	}
-	if r, _ := res.RowsAffected(); r == 0 {
-		return sql.ErrNoRows
-	}
-	return nil
-}
-
-// AllocateSP spends a living pilot's unallocated SP: a is added to their four columns, and may not exceed what is
-// unallocated (total minus the columns' sum), checked in the same statement that writes it so two requests can't both
-// spend the same SP. sql.ErrNoRows if there is no such living pilot, ErrNotEnoughSP if a is too much.
-func (s *Store) AllocateSP(ctx context.Context, playthroughID, campaign, pilotID string, a pilot.SPAllocation) error {
-	return s.ApplySP(ctx, playthroughID, campaign, pilotID, 0, a)
-}
 
 // ApplySP adds `earned` SP to a living pilot's total and allocates `a` to their columns, both in one statement, so the
 // Manage SP dialog can stage earned SP and an allocation and commit them together or not at all. The allocation may use
