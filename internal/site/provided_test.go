@@ -45,6 +45,22 @@ func TestProvidedForce(t *testing.T) {
 	}
 }
 
+// A mech listed twice is two mechs: each copy has its own ID, the first keeping provided-<name>, so both can be fielded together.
+func TestProvidedForceRepeatsAMech(t *testing.T) {
+	h := providedForce(&content.Scenario{ProvidedUnits: []string{"BMBlackHawk_Prime", "BMRyoken_Prime", "BMBlackHawk_Prime", "BMBlackHawk_Prime"}})
+	var ids []string
+	for _, u := range h.Units {
+		ids = append(ids, u.ID)
+	}
+	want := []string{providedPrefix + "bmblackhawk_prime", providedPrefix + "bmryoken_prime", providedPrefix + "bmblackhawk_prime-2", providedPrefix + "bmblackhawk_prime-3"}
+	if strings.Join(ids, " ") != strings.Join(want, " ") {
+		t.Errorf("ids %v, want %v", ids, want)
+	}
+	if msg := deployProblem(h, []string{want[0], want[2]}, 0); msg != "" {
+		t.Errorf("both Novas can be fielded: %q", msg)
+	}
+}
+
 func TestProvidedScenarioDeploy(t *testing.T) {
 	fake := &fakeMekBay{hangar: startingHangar()}
 	srv, store := newMekBayTestServer(t, fake)
