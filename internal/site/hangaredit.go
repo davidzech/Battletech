@@ -2,19 +2,19 @@ package site
 
 import (
 	"context"
+	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"net/http"
-	"sync"
-	"time"
 
 	"github.com/davidzech/Battletech/internal/content"
 	"github.com/davidzech/Battletech/internal/mekbay"
 	"github.com/davidzech/Battletech/internal/storage"
 )
 
-// What every endpoint that changes a campaign needs first, and how a paid change to the site's copy of the hangar is made.
+// What every endpoint that changes a campaign needs first, and how a change to the campaign's hangar is made.
 
 // runRequest checks what every endpoint that changes a campaign needs: a same-origin POST from a visitor with a seed whose account is named and who has
 // started the campaign the request names. It returns the playthrough, the campaign and the playthrough's run of it, answers the request itself on a problem and
@@ -138,151 +138,117 @@ func (s *Server) startedRun(w http.ResponseWriter, r *http.Request, seed string,
 	return pt, run, true
 }
 
-// hangarRequest is runRequest for a change to the hangar: the run's hangar must be a copy the site owns, since MekBay only takes the owner's saves.
-func (s *Server) hangarRequest(w http.ResponseWriter, r *http.Request) (pt storage.Playthrough, c *content.Campaign, run storage.CampaignRun, ok bool) {
-	if pt, c, run, ok = s.runRequest(w, r); !ok {
-		return
-	}
-	if !run.Owned() {
-		http.Error(w, notOwnedMessage, http.StatusConflict)
-		return pt, c, run, false
-	}
-	return pt, c, run, true
+// hangarError is a change to the hangar refused for what the hangar holds (the unit is gone, has nothing to repair, can't take that variant), with the status it
+// answers. A change is checked against the hangar as it is inside the transaction that makes it, so the check still holds when it is made.
+type hangarError struct {
+	status int
+	msg    string
 }
 
-// errHangarBusy is lockHangar giving up on a claim another server holds.
-var errHangarBusy = errors.New("Another change to your hangar is still being saved. Try again in a moment.")
+func (e hangarError) Error() string { return e.msg }
 
-// hangarClaimWait is how long lockHangar waits for another server's claim on a hangar before giving up, and hangarClaimPoll how often it tries again.
-var hangarClaimWait, hangarClaimPoll = 15 * time.Second, 200 * time.Millisecond
-
-// lockHangar locks a campaign run's hangar for one MekBay edit and returns the function that unlocks it. A MekBay force edit is read-modify-save, so two at
-// once would both start from the same force and the later save would undo the earlier one, with both paid for. One at a time, the second starts from what the
-// first saved, and an edit that then has nothing left to do (the same repair clicked twice) fails with mekbay.ErrNoChange and is refunded.
-//
-// Edits made by this process queue on an in-process mutex first (keyedMutex), so only one of them at a time asks the database; the database claim
-// (Store.ClaimHangarEdit) then keeps out edits made by other servers sharing it. While another server holds the claim this tries again every hangarClaimPoll
-// for up to hangarClaimWait, then fails with errHangarBusy. The claim is released even if the request has stopped.
-func (s *Server) lockHangar(ctx context.Context, playthroughID, campaign string) (unlock func(), err error) {
-	unlockLocal := s.hangarEdits.lock(playthroughID + "/" + campaign)
-	deadline := time.Now().Add(hangarClaimWait)
-	for {
-		token, ok, err := s.store.ClaimHangarEdit(ctx, playthroughID, campaign)
-		if err != nil {
-			unlockLocal()
-			return nil, fmt.Errorf("claim the hangar: %w", err)
-		}
-		if ok {
-			return func() {
-				if err := s.store.ReleaseHangarEdit(context.WithoutCancel(ctx), playthroughID, campaign, token); err != nil {
-					log.Printf("release the hangar claim: %v", err) // it expires after storage.HangarClaimTTL
-				}
-				unlockLocal()
-			}, nil
-		}
-		if time.Now().After(deadline) {
-			unlockLocal()
-			return nil, errHangarBusy
-		}
-		select {
-		case <-ctx.Done():
-			unlockLocal()
-			return nil, ctx.Err()
-		case <-time.After(hangarClaimPoll):
-		}
+// refused is a change the edits in package mekbay turned down (mekbay.ErrNoChange: it has already been made) as a hangarError.
+func refused(err error) error {
+	if err == nil {
+		return nil
 	}
+	return hangarError{http.StatusConflict, err.Error()}
 }
 
-// lockHangarRequest is lockHangar for a request: it answers the request itself when the hangar can't be locked (409 while another server's edit holds it)
-// and reports ok=false.
-func (s *Server) lockHangarRequest(w http.ResponseWriter, r *http.Request, pt storage.Playthrough, c *content.Campaign) (unlock func(), ok bool) {
-	unlock, err := s.lockHangar(r.Context(), pt.ID, c.Slug)
-	if errors.Is(err, errHangarBusy) {
-		http.Error(w, err.Error(), http.StatusConflict)
-		return nil, false
-	} else if err != nil {
-		log.Printf("lock the hangar: %v", err)
-		http.Error(w, "could not lock the hangar", http.StatusInternalServerError)
-		return nil, false
-	}
-	return unlock, true
-}
-
-// keyedMutex is one mutex per key, made when first locked and forgotten when nobody holds or waits for it. The server keeps one per campaign run for the
-// edits to its hangar (see lockHangar).
-type keyedMutex struct {
-	mu    sync.Mutex
-	locks map[string]*keyedLock
-}
-
-type keyedLock struct {
-	mu      sync.Mutex
-	holders int // goroutines holding or waiting for mu
-}
-
-// lock locks the key's mutex and returns the function that unlocks it.
-func (k *keyedMutex) lock(key string) (unlock func()) {
-	k.mu.Lock()
-	if k.locks == nil {
-		k.locks = map[string]*keyedLock{}
-	}
-	l := k.locks[key]
-	if l == nil {
-		l = &keyedLock{}
-		k.locks[key] = l
-	}
-	l.holders++
-	k.mu.Unlock()
-	l.mu.Lock()
-	return func() {
-		l.mu.Unlock()
-		k.mu.Lock()
-		if l.holders--; l.holders == 0 {
-			delete(k.locks, key)
-		}
-		k.mu.Unlock()
-	}
-}
-
-// payForHangarChange charges cost SP to the warchest and then makes the change in MekBay (change); if that fails the SP are refunded, so the player never pays
-// for a change that wasn't made. The refund doesn't stop when the request does: a player who closes the tab during the MekBay call would otherwise lose the SP.
-// It answers the request itself: {"cost", "warchest"} on success, the warchest being what the charge left (not the run loaded at the start of the request,
-// which another request may have changed since). what names the change for the log ("repair a unit").
-//
-// change returns the hangar force as MekBay saved it, which becomes the cached copy, so the page that reloads next paints the change at once instead of the
-// hangar from before it until a live read catches up.
-//
-// The charge and the change run under the run's hangar lock (lockHangar). A change that had already been made (mekbay.ErrNoChange) is refunded like any
-// failed change, and answered 409.
-func (s *Server) payForHangarChange(w http.ResponseWriter, r *http.Request, pt storage.Playthrough, c *content.Campaign, run storage.CampaignRun, cost int, what, history string, change func() (mekbay.HangarForce, error)) {
-	unlock, ok := s.lockHangarRequest(w, r, pt, c) // one edit of the run's hangar at a time
-	if !ok {
-		return
-	}
-	defer unlock()
-	left, err := s.store.SpendWarchest(r.Context(), pt.ID, c.Slug, cost)
-	if errors.Is(err, storage.ErrInsufficientFunds) {
-		http.Error(w, fmt.Sprintf("Not enough in the warchest: that costs %d SP and you have %d.", cost, left), http.StatusConflict)
-		return
-	} else if err != nil {
-		http.Error(w, "could not charge the warchest", http.StatusInternalServerError)
-		return
-	}
-	h, err := change()
+// parseHangarMap reads a hangar being edited (the decoded JSON of its saved data) as the site reads a hangar.
+func parseHangarMap(force map[string]any) (mekbay.HangarForce, error) {
+	b, err := json.Marshal(force)
 	if err != nil {
-		log.Printf("%s in MekBay: %v", what, err) // never log the owner UID
-		if _, rerr := s.store.RefundWarchest(context.WithoutCancel(r.Context()), pt.ID, c.Slug, cost); rerr != nil {
-			log.Printf("could not refund %d SP: %v", cost, rerr)
-		}
-		status := http.StatusBadGateway
-		if errors.Is(err, mekbay.ErrNoChange) {
-			status = http.StatusConflict // nothing was wrong with MekBay: the change had already been made
-		}
-		http.Error(w, err.Error(), status)
-		return
+		return mekbay.HangarForce{}, err
 	}
-	s.cacheHangar(context.WithoutCancel(r.Context()), pt.ID, c.Slug, run.HangarInstance, h)
-	s.logHistory(r, pt.ID, c.Slug, storage.HistoryHangar, -cost, history)
+	return mekbay.ParseForce(b)
+}
+
+// noHangarMessage is the answer for a campaign whose hangar the import couldn't bring over from MekBay (storage.ErrNoHangar): it can't be used.
+const noHangarMessage = "This campaign's hangar couldn't be brought over from MekBay, so it can't be used. Delete the campaign (Danger zone) and start it again."
+
+// hangarLoadFailed answers a request whose campaign hangar couldn't be loaded (what says for what, for the log): a campaign without a hangar says so (409), one
+// not started is asked to start (400), anything else is a 500.
+func hangarLoadFailed(w http.ResponseWriter, err error, what string) {
+	switch {
+	case errors.Is(err, storage.ErrNoHangar):
+		http.Error(w, noHangarMessage, http.StatusConflict)
+	case errors.Is(err, sql.ErrNoRows):
+		http.Error(w, "Start this campaign first.", http.StatusBadRequest)
+	default:
+		log.Printf("load the hangar %s: %v", what, err)
+		http.Error(w, "could not load your hangar", http.StatusInternalServerError)
+	}
+}
+
+// hangarGuard is the battle guard of an edit to a campaign's hangar (see storage.BattleGuard): every battle locks it, but one of a scenario the campaign no
+// longer has (as battleInProgress), and the claim of the scenario allowed ("" allows none).
+func hangarGuard(c *content.Campaign, allowed string) storage.BattleGuard {
+	return storage.BattleGuard{AllowClaim: allowed, Counts: func(id string) bool { _, ok := c.ScenarioByID(id); return ok }}
+}
+
+// battleRefusal is the battle lock's message for an edit refused inside its transaction because a battle started after the request checked the lock.
+func battleRefusal(c *content.Campaign, e storage.BattleInProgressError) string {
+	if sc, ok := c.ScenarioByID(e.Scenario); ok {
+		return battleLockMessage(c, sc)
+	}
+	return "A battle is in progress. Complete or abort it before changing the campaign."
+}
+
+// loadHangar reads a campaign run's hangar from the database.
+func (s *Server) loadHangar(ctx context.Context, playthroughID, campaign string) (mekbay.HangarForce, error) {
+	raw, err := s.store.Hangar(ctx, playthroughID, campaign)
+	if err != nil {
+		return mekbay.HangarForce{}, err
+	}
+	return mekbay.ParseForce(raw)
+}
+
+// hangarChange is one change to a run's hangar: it gets the hangar to change (force, the decoded JSON of its saved data) and the same hangar as the site reads it
+// (h, to check the change against), changes force, and returns the SP it moves into the warchest (negative for a charge) and its history line. A hangarError
+// refuses it with that status and message.
+type hangarChange func(force map[string]any, h mekbay.HangarForce) (sp int, history string, err error)
+
+// changeHangar makes a change to a run's hangar and its warchest together, in one transaction (Store.EditHangarGuarded), so a change that is refused, or that
+// the warchest can't cover, changes nothing and charges nothing. Changes made at once, by this server or another sharing the database, take turns, each starting
+// from the hangar the last one saved. A battle started after the request passed the battle lock refuses it inside the transaction, with the lock's message. The
+// change's line is logged once it is made. It answers the request itself on a problem and reports ok=false; on success it
+// returns the warchest the change left (not the run loaded at the start of the request, which another request may have changed since) and the SP it moved.
+func (s *Server) changeHangar(w http.ResponseWriter, r *http.Request, pt storage.Playthrough, c *content.Campaign, change hangarChange) (warchest, sp int, ok bool) {
+	var history string
+	warchest, err := s.store.EditHangarGuarded(r.Context(), pt.ID, c.Slug, hangarGuard(c, ""), func(force map[string]any) (int, error) {
+		h, err := parseHangarMap(force)
+		if err != nil {
+			return 0, err
+		}
+		sp, history, err = change(force, h)
+		return sp, err
+	})
+	var refusal hangarError
+	var battle storage.BattleInProgressError
+	switch {
+	case errors.As(err, &refusal):
+		http.Error(w, refusal.msg, refusal.status)
+	case errors.As(err, &battle):
+		http.Error(w, battleRefusal(c, battle), http.StatusConflict)
+	case errors.Is(err, storage.ErrInsufficientFunds):
+		http.Error(w, fmt.Sprintf("Not enough in the warchest: that costs %d SP and you have %d.", -sp, warchest), http.StatusConflict)
+	case errors.Is(err, storage.ErrNoHangar):
+		http.Error(w, noHangarMessage, http.StatusConflict)
+	case errors.Is(err, sql.ErrNoRows):
+		http.Error(w, "Start this campaign first.", http.StatusBadRequest)
+	case err != nil:
+		log.Printf("change the hangar: %v", err)
+		http.Error(w, "could not save the change to your hangar", http.StatusInternalServerError)
+	default:
+		s.logHistory(r, pt.ID, c.Slug, storage.HistoryHangar, sp, history)
+		return warchest, sp, true
+	}
+	return warchest, sp, false
+}
+
+// writeCharge answers a paid change to the hangar: {"cost", "warchest"}.
+func writeCharge(w http.ResponseWriter, cost, warchest int) {
 	w.Header().Set("Content-Type", "application/json")
-	fmt.Fprintf(w, `{"cost":%d,"warchest":%d}`, cost, left)
+	fmt.Fprintf(w, `{"cost":%d,"warchest":%d}`, cost, warchest)
 }

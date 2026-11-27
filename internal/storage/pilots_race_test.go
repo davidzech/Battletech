@@ -9,7 +9,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/davidzech/Battletech/internal/mekbay"
 	"github.com/davidzech/Battletech/internal/pilot"
 )
 
@@ -58,7 +57,7 @@ func pilotRaces(t *testing.T, s *Store) {
 	if _, err := s.EnsurePlaythrough(ctx, id); err != nil {
 		t.Fatal(err)
 	}
-	hangar := mekbay.Hangar{URL: goodHangarURL, Instance: goodInstance}
+	hangar := testHangar(goodInstance)
 	living := func(camp string) (n int) {
 		ps, err := s.Pilots(ctx, id, camp)
 		if err != nil {

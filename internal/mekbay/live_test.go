@@ -8,6 +8,34 @@ import (
 	"time"
 )
 
+// liveHangar is a hangar built the way the site stores one (never saved in MekBay), and its units' IDs.
+func liveHangar(t *testing.T, units ...string) ([]byte, []string) {
+	t.Helper()
+	var drafts []UnitDraft
+	for _, u := range units {
+		drafts = append(drafts, UnitDraft{Unit: u})
+	}
+	hangar := BuildForce(NewID(), time.Now().UTC(), ForceDraft{Name: "Live hangar", Groups: []GroupDraft{{Name: "Hangar", Units: drafts}}})
+	var ids []string
+	for _, u := range hangar.Groups[0].Units {
+		ids = append(ids, u.ID)
+	}
+	b, err := json.Marshal(hangar)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b, ids
+}
+
+// readLive reads a force from mekbay.com as the site reads one.
+func readLive(ctx context.Context, cl *Client, instance string) (HangarForce, error) {
+	raw, err := cl.ReadForce(ctx, instance)
+	if err != nil {
+		return HangarForce{}, err
+	}
+	return ParseForce(raw)
+}
+
 // TestStartBattleLive starts a battle on the real mekbay.com with a throwaway account (a random UUID, tiny forces) and checks what was saved, starting twice to
 // see the operation updated in place. It runs only when MEKBAY_LIVE_BATTLE is set.
 func TestStartBattleLive(t *testing.T) {
@@ -17,29 +45,19 @@ func TestStartBattleLive(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 	account := NewID()
-
-	// A hangar with three mechs, owned by the same account (as the site's hangar copy is).
 	hs, err := Dial(ctx, mekbayWS, account)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer hs.Close()
-	hangarID := NewID()
-	hangar := BuildForce(hangarID, time.Now().UTC(), ForceDraft{Name: "Live hangar", Groups: []GroupDraft{{Name: "Hangar", Units: []UnitDraft{{Unit: "BMBlackHawk_Prime"}, {Unit: "BMShadowCat_Prime"}, {Unit: "BMRyoken_Prime"}}}}})
-	if _, err := hs.Call(ctx, map[string]any{"action": "saveForce", "uuid": account, "data": hangar, "savedForceCount": 1}); err != nil {
-		t.Fatal(err)
-	}
-	var ids []string
-	for _, u := range hangar.Groups[0].Units {
-		ids = append(ids, u.ID)
-	}
+	hangar, ids := liveHangar(t, "BMBlackHawk_Prime", "BMShadowCat_Prime", "BMRyoken_Prime")
 
 	cl := &Client{}
 	req := BattleRequest{
-		Account:        account,
-		HangarInstance: hangarID,
-		OperationName:  "Live test - Scenario",
-		OpFor:          BattleOpFor{Draft: ForceDraft{Name: "Live OpFor", Groups: []GroupDraft{{Name: "OpFor 1", Units: []UnitDraft{{Unit: "BMLoki_Prime", Pilot: "Alrek", Gunnery: 3, Piloting: 4}}}}}},
+		Account:       account,
+		Hangar:        hangar,
+		OperationName: "Live test - Scenario",
+		OpFor:         BattleOpFor{Draft: ForceDraft{Name: "Live OpFor", Groups: []GroupDraft{{Name: "OpFor 1", Units: []UnitDraft{{Unit: "BMLoki_Prime", Pilot: "Alrek", Gunnery: 3, Piloting: 4}}}}}},
 		Players: []BattlePlayer{
 			{Number: 1, Name: "Live - Player 1", Units: []string{ids[0], ids[1]}, Crew: []CrewAssignment{{UnitID: ids[0], Name: "Katarina", Gunnery: 3, Piloting: 4}}},
 			{Number: 2, Name: "Live - Player 2", Units: []string{ids[2]}},
@@ -50,15 +68,16 @@ func TestStartBattleLive(t *testing.T) {
 		t.Fatalf("start battle: %v", err)
 	}
 	t.Logf("operation %s, opfor %s, players %v", res.OperationID, res.OpForInstance, res.PlayerInstances)
+	defer func() { _ = cl.DeleteBattle(context.Background(), account, res.OperationID) }()
 
 	// The forces read back as built.
 	for i, want := range []int{2, 1} {
-		h, err := cl.ReadHangar(ctx, res.PlayerInstances[i])
+		h, err := readLive(ctx, cl, res.PlayerInstances[i])
 		if err != nil || len(h.Units) != want {
 			t.Errorf("player %d's force: %d units (want %d) %v", i+1, len(h.Units), want, err)
 		}
 	}
-	if h, _ := cl.ReadHangar(ctx, res.PlayerInstances[0]); len(h.Units) == 2 && h.Units[0].Pilot != "Katarina" {
+	if h, _ := readLive(ctx, cl, res.PlayerInstances[0]); len(h.Units) == 2 && h.Units[0].Pilot != "Katarina" {
 		t.Errorf("the crew assigned to Player 1's first mech: %q", h.Units[0].Pilot)
 	}
 
@@ -105,7 +124,8 @@ func TestStartBattleLive(t *testing.T) {
 	}
 }
 
-// TestCommitBattleLive writes a battle back into a hangar on the real mekbay.com with a throwaway account. It runs only when MEKBAY_LIVE_BATTLE is set.
+// TestCommitBattleLive reads a battle's units back from the real mekbay.com with a throwaway account and writes them into a hangar as the site does. It runs only
+// when MEKBAY_LIVE_BATTLE is set.
 func TestCommitBattleLive(t *testing.T) {
 	if os.Getenv("MEKBAY_LIVE_BATTLE") == "" {
 		t.Skip("set MEKBAY_LIVE_BATTLE=1 to run against mekbay.com")
@@ -113,37 +133,35 @@ func TestCommitBattleLive(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 	account := NewID()
-	hs, err := Dial(ctx, mekbayWS, account)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer hs.Close()
-	hangarID := NewID()
-	hangar := BuildForce(hangarID, time.Now().UTC(), ForceDraft{Name: "Live hangar", Groups: []GroupDraft{{Name: "Hangar", Units: []UnitDraft{{Unit: "BMBlackHawk_Prime"}, {Unit: "BMBlackHawk_Prime"}}}}})
-	if _, err := hs.Call(ctx, map[string]any{"action": "saveForce", "uuid": account, "data": hangar, "savedForceCount": 1}); err != nil {
-		t.Fatal(err)
-	}
-	ids := []string{hangar.Groups[0].Units[0].ID, hangar.Groups[0].Units[1].ID}
+	hangar, ids := liveHangar(t, "BMBlackHawk_Prime", "BMBlackHawk_Prime")
 	cl := &Client{}
-	res, err := cl.StartBattle(ctx, BattleRequest{Account: account, HangarInstance: hangarID, OperationName: "Live commit", OpFor: BattleOpFor{Draft: ForceDraft{Name: "OpFor", Groups: []GroupDraft{{Name: "OpFor 1", Units: []UnitDraft{{Unit: "BMLoki_Prime"}}}}}},
+	res, err := cl.StartBattle(ctx, BattleRequest{Account: account, Hangar: hangar, OperationName: "Live commit", OpFor: BattleOpFor{Draft: ForceDraft{Name: "OpFor", Groups: []GroupDraft{{Name: "OpFor 1", Units: []UnitDraft{{Unit: "BMLoki_Prime"}}}}}},
 		Players: []BattlePlayer{{Number: 1, Name: "P1", Units: []string{ids[1]}, Crew: []CrewAssignment{{UnitID: ids[1], Name: "Katarina", Gunnery: 3, Piloting: 4}}}}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	rep, saved, err := cl.CommitBattle(ctx, CommitBattleRequest{OwnerUID: account, HangarInstance: hangarID, OperationID: res.OperationID})
-	if err != nil || rep.Matched != 1 || len(saved.Units) != 2 {
-		t.Fatalf("commit: %+v %v", rep, err)
+	defer func() { _ = cl.DeleteBattle(context.Background(), account, res.OperationID) }()
+	battle, err := cl.ReadBattleUnits(ctx, account, res.OperationID, nil)
+	if err != nil {
+		t.Fatal(err)
 	}
-	h, err := cl.ReadHangar(ctx, hangarID)
-	if err != nil || len(h.Units) != 2 || h.Units[0].Pilot != "" && h.Units[0].Pilot != "Pilot" {
-		t.Errorf("the hangar after: %+v %v", h.Units, err)
+	var h map[string]any
+	if err := json.Unmarshal(hangar, &h); err != nil {
+		t.Fatal(err)
 	}
-	t.Logf("hangar crew after: %q / %q", h.Units[0].Pilot, h.Units[1].Pilot)
+	if rep := CommitState(h, battle); rep.Matched != 1 {
+		t.Fatalf("commit: %+v", rep)
+	}
+	b, _ := json.Marshal(h)
+	after, err := ParseForce(b)
+	if err != nil || len(after.Units) != 2 || after.Units[1].Pilot != "" {
+		t.Errorf("the hangar after: %+v %v", after.Units, err)
+	}
 }
 
-// TestCheckpointForcesLive copies a force, deletes forces and deletes a battle on the real mekbay.com with a throwaway account: what checkpoints and aborts
-// rely on. It runs only when MEKBAY_LIVE_BATTLE is set.
-func TestCheckpointForcesLive(t *testing.T) {
+// TestDeleteBattleLive deletes a battle on the real mekbay.com with a throwaway account: what aborts and completions rely on. It runs only when
+// MEKBAY_LIVE_BATTLE is set.
+func TestDeleteBattleLive(t *testing.T) {
 	if os.Getenv("MEKBAY_LIVE_BATTLE") == "" {
 		t.Skip("set MEKBAY_LIVE_BATTLE=1 to run against mekbay.com")
 	}
@@ -155,11 +173,7 @@ func TestCheckpointForcesLive(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer hs.Close()
-	hangarID := NewID()
-	hangar := BuildForce(hangarID, time.Now().UTC(), ForceDraft{Name: "Live hangar", Groups: []GroupDraft{{Name: "Hangar", Units: []UnitDraft{{Unit: "BMBlackHawk_Prime"}}}}})
-	if err := hs.saveData(ctx, hangar); err != nil {
-		t.Fatal(err)
-	}
+	hangar, ids := liveHangar(t, "BMBlackHawk_Prime")
 	cl := &Client{}
 	exists := func(instance string) bool {
 		f, err := hs.getForce(ctx, instance, true)
@@ -169,32 +183,9 @@ func TestCheckpointForcesLive(t *testing.T) {
 		return f != nil
 	}
 
-	// A copy is a force of its own, with the same units.
-	copyID := NewID()
-	if err := cl.CopyForce(ctx, CopyRequest{OwnerUID: account, Source: hangarID, Target: copyID}); err != nil {
-		t.Fatalf("copy: %v", err)
-	}
-	if h, err := cl.ReadHangar(ctx, copyID); err != nil || len(h.Units) != 1 || h.Units[0].Unit != "BMBlackHawk_Prime" {
-		t.Fatalf("the copy: %+v %v", h, err)
-	}
-	// Copying it back over the original works too (a rollback).
-	if err := cl.CopyForce(ctx, CopyRequest{OwnerUID: account, Source: copyID, Target: hangarID}); err != nil {
-		t.Fatalf("copy back: %v", err)
-	}
-	// Deleting it removes it (MekBay doesn't acknowledge, so DeleteForce waits for a read on the same connection).
-	if err := cl.DeleteForce(ctx, account, copyID); err != nil {
-		t.Fatalf("delete: %v", err)
-	}
-	if exists(copyID) {
-		t.Error("the deleted copy is gone")
-	}
-	if !exists(hangarID) {
-		t.Error("the hangar is still there")
-	}
-
 	// A battle's operation and every force in it go with DeleteBattle.
-	res, err := cl.StartBattle(ctx, BattleRequest{Account: account, HangarInstance: hangarID, OperationName: "Live delete", OpFor: BattleOpFor{Draft: ForceDraft{Name: "OpFor", Groups: []GroupDraft{{Name: "OpFor 1", Units: []UnitDraft{{Unit: "BMLoki_Prime"}}}}}},
-		Players: []BattlePlayer{{Number: 1, Name: "P1", Units: []string{hangar.Groups[0].Units[0].ID}}}})
+	res, err := cl.StartBattle(ctx, BattleRequest{Account: account, Hangar: hangar, OperationName: "Live delete", OpFor: BattleOpFor{Draft: ForceDraft{Name: "OpFor", Groups: []GroupDraft{{Name: "OpFor 1", Units: []UnitDraft{{Unit: "BMLoki_Prime"}}}}}},
+		Players: []BattlePlayer{{Number: 1, Name: "P1", Units: []string{ids[0]}}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -208,8 +199,5 @@ func TestCheckpointForcesLive(t *testing.T) {
 	}
 	if _, err := cl.ReadBattle(ctx, res.OperationID); err == nil {
 		t.Error("the operation is gone")
-	}
-	if !exists(hangarID) {
-		t.Error("the hangar is untouched")
 	}
 }

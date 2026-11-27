@@ -2,7 +2,6 @@ package site
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 
 	"github.com/davidzech/Battletech/internal/content"
@@ -40,14 +39,10 @@ func (s *Server) hangarJSON(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	h, err := s.scenarioHangar(r.Context(), run, sc)
+	h, err := s.scenarioHangar(r.Context(), pt.ID, c, sc)
 	if err != nil {
-		log.Printf("read hangar for %s: %v", sc.ID, err)
-		http.Error(w, err.Error(), http.StatusBadGateway)
+		hangarLoadFailed(w, err, "for "+sc.ID)
 		return
-	}
-	if !sc.Provides() { // the scenario's own mechs are not the hangar, so they are never cached as it
-		s.cacheHangar(r.Context(), pt.ID, c.Slug, run.HangarInstance, h)
 	}
 	out := deployData(h, c, sc, run)
 	w.Header().Set("Content-Type", "application/json")

@@ -17,7 +17,7 @@
 <ul class="roster">
 {{range .Pilots}}{{if not .Fallen}}<li class="roster-pilot" data-name="{{.Name}}"><img src="{{.PortraitURL}}" alt="" width="72" height="72"><div class="roster-name"><b>{{.Name}}</b><span>{{if .Rank}}{{.Rank}} &middot; {{end}}{{.Earned}} SP earned</span></div><div class="stat-boxes"><div class="stat-box"><span class="stat-label">Gunnery</span><span class="stat-value">{{.Gunnery}}</span></div><div class="stat-box"><span class="stat-label">Piloting</span><span class="stat-value">{{.Piloting}}</span></div><div class="stat-box"><span class="stat-label">Edge</span><span class="stat-value">{{.EdgeTokens}}</span></div><div class="stat-box"><span class="stat-label">Abilities</span><span class="stat-value">{{.Abilities}}</span></div></div></li>
 {{end}}{{end}}</ul>
-<div id="force-units" class="force-units" aria-live="polite" data-cached="{{.ForceJSON}}"><p class="muted">Reading your hangar&hellip;</p></div>
+<div id="force-units" class="force-units" aria-live="polite" data-hangar="{{.ForceJSON}}"><p class="muted">Reading your hangar&hellip;</p></div>
 {{template "keywords" .}}
 <p class="downloads"><a class="button" href="/{{.Campaign.Slug}}/manage/">Manage force</a></p>
 </section>
@@ -101,7 +101,7 @@
 <div class="fold-body">
 <p class="muted">Edit keywords sets which keywords the campaign holds, to correct a mission&rsquo;s report or a misclick. Keywords decide what lies ahead, so change them only when they are wrong.</p>
 <p class="danger-action"><button type="button" class="button" id="keywords-open"{{if .OtherBattle}} disabled title="{{.Lock.Mission}} is in progress."{{end}}>Edit keywords</button></p>
-<p class="muted">Deleting this campaign removes {{.Run.ForceLabel}}&rsquo;s progress in it: its named pilots and the site&rsquo;s copy of its hangar. Your account, its other campaigns and anything saved in MekBay are not touched.</p>
+<p class="muted">Deleting this campaign removes {{.Run.ForceLabel}}&rsquo;s progress in it: its named pilots, its hangar and its battles. Your account, its other campaigns and any force of yours in MekBay are not touched.</p>
 <button type="button" class="button danger" id="delete-open">Delete campaign</button>
 </div>
 </details>

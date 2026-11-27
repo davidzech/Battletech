@@ -1,7 +1,6 @@
 package site
 
 import (
-	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -10,188 +9,188 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/davidzech/Battletech/internal/catalog"
+	"github.com/davidzech/Battletech/internal/content"
 	"github.com/davidzech/Battletech/internal/mekbay"
+	"github.com/davidzech/Battletech/internal/storage"
 )
 
-// A change made to the hangar (here a sale and a purchase) updates the cached copy with the force as MekBay saved it, so the Manage page that reloads next
-// embeds the hangar after the change at once, rather than the one from before it until a live read catches up.
-func TestHangarChangesRefreshTheCache(t *testing.T) {
+// startedWith4500 starts Refusal War for the seed wolfpack2026 on a test server, with 4,500 SP in the warchest (the hangar tests are about prices, not the
+// campaign's starting funds).
+func startedWith4500(t *testing.T) (*httptest.Server, *storage.Store, *fakeMekBay, *http.Cookie) {
+	t.Helper()
 	fake := &fakeMekBay{hangar: startingHangar()}
 	srv, store := newMekBayTestServer(t, fake)
-	ctx := context.Background()
 	cookie := post(t, srv, "/api/seed", url.Values{"seed": {"wolfpack2026"}}, nil, "").Cookies()[0]
 	post(t, srv, "/api/account", url.Values{"account": {"Wolf Pack"}}, cookie, srv.URL)
 	if r := post(t, srv, "/api/campaign/start", startForm(goodHangar, "Alrek", "Katarina"), cookie, srv.URL); r.StatusCode != http.StatusNoContent {
 		t.Fatalf("start: %d", r.StatusCode)
 	}
-	id := playthroughID("wolfpack2026")
-	run, _, _ := store.Run(ctx, id, "refusalwar")
-	cached := func() map[string]bool {
-		h, _, ok, err := store.CachedHangar(ctx, id, "refusalwar", run.HangarInstance)
-		if err != nil || !ok {
-			t.Fatalf("cached hangar: %v %v", ok, err)
-		}
-		out := map[string]bool{}
-		for _, u := range h.Units {
-			out[u.ID] = true
+	if _, err := store.DB().Exec(`UPDATE campaign_runs SET warchest = 4500`); err != nil {
+		t.Fatal(err)
+	}
+	return srv, store, fake, cookie
+}
+
+// A change made to the hangar (here a sale and a purchase) is in the hangar the next page shows; a refused one changes neither the hangar nor the warchest.
+func TestHangarChangesAreStored(t *testing.T) {
+	srv, store, fake, cookie := startedWith4500(t)
+	units := func() map[string]string {
+		out := map[string]string{}
+		for _, u := range runHangar(t, store, "wolfpack2026", "refusalwar").Units {
+			out[u.ID] = u.Unit
 		}
 		return out
 	}
-	if !cached()["ua"] {
-		t.Fatal("the started campaign's cache holds ua")
+	funds := func() int {
+		r, _, _ := store.Run(t.Context(), playthroughID("wolfpack2026"), "refusalwar")
+		return r.Warchest
+	}
+	if units()["ua"] == "" {
+		t.Fatal("the started campaign's hangar holds ua")
 	}
 	if got := post(t, srv, "/api/hangar/sell", url.Values{"campaign": {"refusalwar"}, "unit": {"ua"}}, cookie, srv.URL).StatusCode; got != http.StatusOK {
 		t.Fatalf("sell: %d", got)
 	}
-	if cached()["ua"] {
-		t.Error("after the sale the cache no longer holds the unit sold")
+	if units()["ua"] != "" {
+		t.Error("after the sale the hangar no longer holds the unit sold")
 	}
 	if got := post(t, srv, "/api/hangar/purchase", url.Values{"campaign": {"refusalwar"}, "unit": {"BMGrizzly"}}, cookie, srv.URL).StatusCode; got != http.StatusOK {
 		t.Fatalf("buy: %d", got)
 	}
-	if c := cached(); !c["bought-0"] || c["ua"] {
-		t.Errorf("after the purchase the cache holds the unit bought: %v", c)
-	}
-	// A change MekBay refuses leaves the cache as it was.
-	fake.serviceErr = context.DeadlineExceeded
-	post(t, srv, "/api/hangar/purchase", url.Values{"campaign": {"refusalwar"}, "unit": {"BMGrizzly"}}, cookie, srv.URL)
-	if c := cached(); !c["bought-0"] {
-		t.Errorf("a refused change keeps the cache: %v", c)
-	}
-}
-
-// postDisconnecting posts the form straight to the server's handler with a request context that the returned cancel ends, as the server does when the browser
-// goes away. It returns a function that makes the request and answers its status.
-func postDisconnecting(srv *httptest.Server, path string, form url.Values, cookie *http.Cookie) (do func() int, cancel context.CancelFunc) {
-	ctx, cancel := context.WithCancel(context.Background())
-	req := httptest.NewRequest("POST", srv.URL+path, strings.NewReader(form.Encode())).WithContext(ctx)
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("Origin", srv.URL)
-	req.AddCookie(cookie)
-	return func() int {
-		rec := httptest.NewRecorder()
-		srv.Config.Handler.ServeHTTP(rec, req)
-		return rec.Code
-	}, cancel
-}
-
-// A player who closes the tab while MekBay is being called still gets the SP back when the change fails, and is still paid for a unit that was sold: the
-// refund and the payout don't run on the request's context, which is cancelled by then.
-func TestDisconnectKeepsRefundAndPayout(t *testing.T) {
-	fake := &fakeMekBay{hangar: startingHangar()}
-	srv, store := newMekBayTestServer(t, fake)
-	ctx := context.Background()
-	cookie := post(t, srv, "/api/seed", url.Values{"seed": {"wolfpack2026"}}, nil, "").Cookies()[0]
-	post(t, srv, "/api/account", url.Values{"account": {"Wolf Pack"}}, cookie, srv.URL)
-	if r := post(t, srv, "/api/campaign/start", startForm(goodHangar, "Alrek", "Katarina"), cookie, srv.URL); r.StatusCode != http.StatusNoContent {
-		t.Fatalf("start: %d", r.StatusCode)
-	}
-	if _, err := store.DB().Exec(`UPDATE campaign_runs SET warchest = 4500`); err != nil {
-		t.Fatal(err)
-	}
-	id := playthroughID("wolfpack2026")
-	funds := func() int { r, _, _ := store.Run(ctx, id, "refusalwar"); return r.Warchest }
-	h := hangarOf("BMMadCat_H", "BMUller_J")
-	h.Units[1].Locations = map[string]mekbay.LocationLoss{"LA": {Armor: 3, Internal: 1}}
-	fake.setHangar(h, nil)
-
-	// A repair: the tab closes during the MekBay call, which fails with the request; the charge is given back.
-	do, cancel := postDisconnecting(srv, "/api/hangar/service", url.Values{"campaign": {"refusalwar"}, "kind": {"repair"}, "unit": {"ub"}, "level": {"armor"}}, cookie)
-	fake.onEdit, fake.serviceErr = cancel, context.Canceled
-	if got := do(); got != http.StatusBadGateway || len(fake.services) != 1 {
-		t.Fatalf("repair cut off: %d, %d service calls", got, len(fake.services))
-	}
-	if funds() != 4500 {
-		t.Errorf("after a repair cut off by a disconnect the warchest holds %d, want the 4500 it had", funds())
-	}
-
-	// A sale: the tab closes during the MekBay call, which goes through; the unit is paid for and the sale is in the history.
-	do, cancel = postDisconnecting(srv, "/api/hangar/sell", url.Values{"campaign": {"refusalwar"}, "unit": {"ua"}}, cookie)
-	fake.onEdit, fake.serviceErr = cancel, nil
-	if got := do(); got != http.StatusOK || len(fake.sales) != 1 {
-		t.Fatalf("sale cut off: %d, %d sales", got, len(fake.sales))
-	}
-	madCat, _ := catalog.ByName("BMMadCat_H")
-	if funds() != 4500+madCat.BV/2 {
-		t.Errorf("after a sale cut off by a disconnect the warchest holds %d, want %d", funds(), 4500+madCat.BV/2)
-	}
-	hist, err := store.History(ctx, id, "refusalwar")
-	if err != nil {
-		t.Fatal(err)
-	}
-	sold := false
-	for _, e := range hist {
-		sold = sold || strings.HasPrefix(e.Text, "Sold ")
-	}
-	if !sold {
-		t.Errorf("the sale is missing from the history: %+v", hist)
-	}
-	if h, _, ok, err := store.CachedHangar(ctx, id, "refusalwar", fake.sales[0].Instance); err != nil || !ok || len(h.Units) != 1 {
-		t.Errorf("the cache after the sale: %+v %v %v", h.Units, ok, err)
-	}
-}
-
-// readHookMekBay is a fakeMekBay that runs onRead whenever the hangar is read: between the run an endpoint loads at its start and the charge or payment it
-// makes after reading the hangar, as another request (another tab) would.
-type readHookMekBay struct {
-	*fakeMekBay
-	onRead func()
-}
-
-func (f *readHookMekBay) ReadHangar(ctx context.Context, instance string) (mekbay.HangarForce, error) {
-	if f.onRead != nil {
-		f.onRead()
-	}
-	return f.fakeMekBay.ReadHangar(ctx, instance)
-}
-
-// startedWithHookedMekBay starts Refusal War for a seed on a test server whose MekBay runs onRead on every hangar read, with 4,500 SP in the warchest.
-func startedWithHookedMekBay(t *testing.T) (*httptest.Server, *readHookMekBay, *http.Cookie, func(n int) func()) {
-	t.Helper()
-	fake := &readHookMekBay{fakeMekBay: &fakeMekBay{hangar: startingHangar()}}
-	srv, store := newMekBayTestServer(t, fake)
-	cookie := post(t, srv, "/api/seed", url.Values{"seed": {"wolfpack2026"}}, nil, "").Cookies()[0]
-	post(t, srv, "/api/account", url.Values{"account": {"Wolf Pack"}}, cookie, srv.URL)
-	if r := post(t, srv, "/api/campaign/start", startForm(goodHangar, "Alrek", "Katarina"), cookie, srv.URL); r.StatusCode != http.StatusNoContent {
-		t.Fatalf("start: %d", r.StatusCode)
-	}
-	if _, err := store.DB().Exec(`UPDATE campaign_runs SET warchest = 4500`); err != nil {
-		t.Fatal(err)
-	}
-	// setTo makes an onRead that sets the warchest to n, as another request spending or earning would.
-	setTo := func(n int) func() {
-		return func() {
-			if _, err := store.DB().Exec(`UPDATE campaign_runs SET warchest = ?`, n); err != nil {
-				t.Error(err)
-			}
+	u := units()
+	grizzlies := 0
+	for _, design := range u {
+		if design == "BMGrizzly" {
+			grizzlies++
 		}
 	}
-	return srv, fake, cookie, setTo
+	if len(u) != 5 || grizzlies != 2 {
+		t.Errorf("after the purchase the hangar holds the unit bought: %v", u)
+	}
+	if p := body(t, srv, "/refusalwar/manage/", cookie); strings.Count(p, "Grizzly") < 2 {
+		t.Error("the Manage page shows the hangar as it is now")
+	}
+	// A purchase the warchest can't cover changes nothing.
+	before, left := units(), funds()
+	if _, err := store.DB().Exec(`UPDATE campaign_runs SET warchest = 10`); err != nil {
+		t.Fatal(err)
+	}
+	if got := post(t, srv, "/api/hangar/purchase", url.Values{"campaign": {"refusalwar"}, "unit": {"BMGrizzly"}}, cookie, srv.URL).StatusCode; got != http.StatusConflict || len(units()) != len(before) || funds() != 10 {
+		t.Errorf("a refused purchase: %d, %v, %d SP (was %d)", got, units(), funds(), left)
+	}
+	if len(fake.reads) != 1 {
+		t.Errorf("no change reads MekBay: %v", fake.reads)
+	}
 }
 
-// A paid hangar edit answers with the warchest its charge left, and a refusal with the warchest there is, even when another request changed it after this
-// one loaded the run.
+// A paid hangar edit answers with the warchest its charge left, and a refusal with the warchest there is.
 func TestPaidHangarEditRepliesWithTheWarchestCharged(t *testing.T) {
-	srv, fake, cookie, setTo := startedWithHookedMekBay(t)
+	srv, store, _, cookie := startedWith4500(t)
 	h := hangarOf("BMDasher_Prime")
 	h.Units[0].AmmoBins, h.Units[0].AmmoUsed = 2, 8 // a rearm costs 20 SP
-	fake.setHangar(h, nil)
+	setRunHangar(t, store, "wolfpack2026", "refusalwar", h)
 	rearm := func() *http.Response {
 		return post(t, srv, "/api/hangar/service", url.Values{"campaign": {"refusalwar"}, "kind": {"rearm"}, "unit": {"ua"}}, cookie, srv.URL)
 	}
 
-	fake.onRead = setTo(1000)
+	if _, err := store.DB().Exec(`UPDATE campaign_runs SET warchest = 1000`); err != nil {
+		t.Fatal(err)
+	}
 	res := rearm()
 	var got struct{ Cost, Warchest int }
 	if err := json.NewDecoder(res.Body).Decode(&got); err != nil || res.StatusCode != http.StatusOK || got.Cost != 20 || got.Warchest != 980 {
-		t.Errorf("a rearm after another request left 1,000 SP: %d %+v %v", res.StatusCode, got, err)
+		t.Errorf("a rearm with 1,000 SP: %d %+v %v", res.StatusCode, got, err)
 	}
 
-	fake.onRead = setTo(5)
+	setRunHangar(t, store, "wolfpack2026", "refusalwar", h)
+	if _, err := store.DB().Exec(`UPDATE campaign_runs SET warchest = 5`); err != nil {
+		t.Fatal(err)
+	}
 	res = rearm()
 	b, _ := io.ReadAll(res.Body)
-	if res.StatusCode != http.StatusConflict || !strings.Contains(string(b), "you have 5.") {
-		t.Errorf("a rearm the warchest another request left can't cover: %d %q", res.StatusCode, b)
+	if res.StatusCode != http.StatusConflict || !strings.Contains(string(b), "that costs 20 SP and you have 5.") {
+		t.Errorf("a rearm the warchest can't cover: %d %q", res.StatusCode, b)
+	}
+	if u, _ := runUnit(t, store, "wolfpack2026", "refusalwar", "ua"); u.AmmoBins != 2 {
+		t.Errorf("a refused rearm leaves the unit as it was: %+v", u)
+	}
+}
+
+// A campaign whose hangar couldn't be imported from MekBay (none stored) says so, the same way, wherever its hangar is needed: the hangar's JSON for the pages,
+// every change to it, the Deploy popup and Start battle.
+func TestCampaignWithoutAHangar(t *testing.T) {
+	srv, store, _, cookie := startedWith4500(t)
+	if _, err := store.DB().Exec(`UPDATE campaign_runs SET hangar = ''`); err != nil {
+		t.Fatal(err)
+	}
+	check := func(what string, res *http.Response) {
+		t.Helper()
+		b, _ := io.ReadAll(res.Body)
+		if res.StatusCode != http.StatusConflict || strings.TrimSpace(string(b)) != noHangarMessage {
+			t.Errorf("%s: %d %s", what, res.StatusCode, b)
+		}
+	}
+	form := func(kv ...string) url.Values {
+		v := url.Values{"campaign": {"refusalwar"}}
+		for i := 0; i+1 < len(kv); i += 2 {
+			v.Add(kv[i], kv[i+1])
+		}
+		return v
+	}
+	check("force JSON", get(t, srv, "/api/campaign/force?campaign=refusalwar", cookie))
+	check("deploy hangar", get(t, srv, "/api/mekbay/hangar?campaign=refusalwar&scenario=scenario_001", cookie))
+	check("repair", post(t, srv, "/api/hangar/service", form("unit", "ua", "kind", "repair", "level", "armor"), cookie, srv.URL))
+	check("sell", post(t, srv, "/api/hangar/sell", form("unit", "ua"), cookie, srv.URL))
+	check("purchase", post(t, srv, "/api/hangar/purchase", form("unit", "BMGrizzly"), cookie, srv.URL))
+	check("swap", post(t, srv, "/api/hangar/swap", form("unit", "ua", "to", "BMKoshi_A"), cookie, srv.URL))
+	check("start battle", post(t, srv, "/api/battle/start", form("scenario", "scenario_001", "players", "1", "p1_units", "ua"), cookie, srv.URL))
+	if r, _, _ := store.Run(t.Context(), playthroughID("wolfpack2026"), "refusalwar"); r.Warchest != 4500 {
+		t.Errorf("nothing is charged: %d", r.Warchest)
+	}
+	// The pages still render (they fetch the hangar, and show the message).
+	for _, path := range []string{"/refusalwar/", "/refusalwar/manage/", "/refusalwar/scenario_001/"} {
+		if r := get(t, srv, path, cookie); r.StatusCode != http.StatusOK {
+			t.Errorf("%s: %d", path, r.StatusCode)
+		}
+	}
+}
+
+// A hangar edit that passed the battle lock is still refused if a battle is started (claimed) before its transaction: the check inside the transaction gives the
+// battle lock's own message, and the hangar and the warchest are left as they were.
+func TestHangarEditRefusedWhenABattleStartsAfterTheLockCheck(t *testing.T) {
+	srv, store, _, cookie := startedWith4500(t)
+	s := &Server{lib: content.Library{Root: plainScenario001Root(t)}, store: store}
+	id := playthroughID("wolfpack2026")
+	pt, _, err := store.Playthrough(t.Context(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, _ := s.lib.Campaign("refusalwar")
+	before := len(runHangar(t, store, "wolfpack2026", "refusalwar").Units)
+	// The request has passed runRequest's battle lock; now a start claims the campaign.
+	if ok, err := store.ClaimBattle(t.Context(), id, "refusalwar", "scenario_001"); err != nil || !ok {
+		t.Fatal(ok, err)
+	}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest(http.MethodPost, "/api/hangar/sell", nil)
+	_, _, ok := s.changeHangar(w, r, pt, c, func(force map[string]any, h mekbay.HangarForce) (int, string, error) {
+		mekbay.RemoveUnitFromForce(force, "ua")
+		return 100, "Sold a unit.", nil
+	})
+	sc, _ := c.ScenarioByID("scenario_001")
+	if ok || w.Code != http.StatusConflict || strings.TrimSpace(w.Body.String()) != battleLockMessage(c, sc) {
+		t.Errorf("an edit after a battle was claimed: ok=%v %d %q", ok, w.Code, w.Body.String())
+	}
+	if n := len(runHangar(t, store, "wolfpack2026", "refusalwar").Units); n != before {
+		t.Errorf("the hangar is unchanged: %d units, was %d", n, before)
+	}
+	if run, _, _ := store.Run(t.Context(), id, "refusalwar"); run.Warchest != 4500 {
+		t.Errorf("nothing is paid: %d", run.Warchest)
+	}
+	// The same message as the battle lock gives a request that comes later.
+	res := post(t, srv, "/api/hangar/sell", url.Values{"campaign": {"refusalwar"}, "unit": {"ua"}}, cookie, srv.URL)
+	b, _ := io.ReadAll(res.Body)
+	if res.StatusCode != http.StatusConflict || strings.TrimSpace(string(b)) != battleLockMessage(c, sc) {
+		t.Errorf("the battle lock: %d %s", res.StatusCode, b)
 	}
 }

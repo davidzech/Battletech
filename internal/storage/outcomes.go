@@ -22,8 +22,10 @@ var ErrOutcomeFunds = errors.New("the outcome would take the warchest below zero
 
 // CompleteWithOutcome applies a mission's outcome and records the mission as completed, all in one transaction: SP to the pilots who earned it, pilots killed in
 // action, promotions (a pilot's Rank, as ResolvePromotions settled it), the warchest and the free recruits, the keywords granted (into the campaign ledger), and the completion row holding the report. It fails with ErrAlreadyCompleted if the mission was already completed, so
-// the rewards can never be given twice.
-func (s *Store) CompleteWithOutcome(ctx context.Context, playthroughID, campaign, scenario string, res content.OutcomeResult) error {
+// the rewards can never be given twice. writeBack, when not nil, changes the hangar in the same transaction (the battle's damage written back into it); the SP it
+// returns go into the warchest with the outcome's. A run with no hangar (one MekBay's couldn't be imported for) has nothing to write back into: writeBack is
+// skipped and the mission completes.
+func (s *Store) CompleteWithOutcome(ctx context.Context, playthroughID, campaign, scenario string, res content.OutcomeResult, writeBack HangarEdit) error {
 	record, err := json.Marshal(res)
 	if err != nil {
 		return err
@@ -70,6 +72,26 @@ func (s *Store) CompleteWithOutcome(ctx context.Context, playthroughID, campaign
 			if c, _ := r.RowsAffected(); c == 0 {
 				return ErrOutcomePilot
 			}
+		}
+	}
+	if writeBack != nil {
+		var data string
+		if err := tx.QueryRowContext(ctx, s.q(`SELECT hangar FROM campaign_runs WHERE playthrough_id = ? AND campaign = ?`), playthroughID, campaign).Scan(&data); err != nil {
+			return err
+		}
+		if data != "" {
+			hangar, err := decodeHangar(data)
+			if err != nil {
+				return err
+			}
+			sp, err := writeBack(hangar)
+			if err != nil {
+				return err
+			}
+			if err := s.saveHangar(ctx, tx, playthroughID, campaign, hangar, 0); err != nil {
+				return err
+			}
+			res.Warchest += sp
 		}
 	}
 	if res.Warchest != 0 || res.FreeRecruits != 0 {

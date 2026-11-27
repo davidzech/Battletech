@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/davidzech/Battletech/internal/catalog"
 	"github.com/davidzech/Battletech/internal/content"
@@ -32,49 +33,43 @@ func markSwapAvailability(views []hangarUnitView, c *content.Campaign) {
 }
 
 // swapUnit is POST /api/hangar/swap: reconfigure the hangar unit named by `unit` to the variant `to`. The server works the price out itself, refuses a unit that isn't
-// fully repaired and rearmed or a variant that isn't one of its chassis's, and charges the warchest first (refunded if MekBay fails).
+// fully repaired and rearmed or a variant that isn't one of its chassis's, and charges the warchest in the same transaction that makes the change.
 func (s *Server) swapUnit(w http.ResponseWriter, r *http.Request) {
-	pt, c, run, ok := s.hangarRequest(w, r)
+	pt, c, _, ok := s.runRequest(w, r)
 	if !ok {
 		return
 	}
-	h, err := s.mekbay.ReadHangar(r.Context(), run.HangarInstance)
-	if err != nil {
-		log.Printf("read hangar to swap a unit: %v", err)
-		http.Error(w, err.Error(), http.StatusBadGateway)
-		return
-	}
-	hu, found := hangarUnit(h, r.PostFormValue("unit"))
-	if !found {
-		http.Error(w, "That unit is no longer in your hangar.", http.StatusNotFound)
-		return
-	}
-	cat, known := catalog.ByName(hu.Unit)
-	if !known || cat.Type != "Mek" || cat.Omni == 0 {
-		http.Error(w, "Only omnimechs can be reconfigured.", http.StatusBadRequest)
-		return
-	}
-	if !hangar.Pristine(hu) {
-		http.Error(w, "An omnimech has to be fully repaired and rearmed before it can be reconfigured.", http.StatusConflict)
-		return
-	}
-	to := r.PostFormValue("to")
-	var option *hangar.SwapOption
-	for _, o := range hangar.SwapOptions(cat) {
-		if o.Unit == to {
-			o := o
-			option = &o
+	unitID, to := r.PostFormValue("unit"), r.PostFormValue("to")
+	warchest, sp, ok := s.changeHangar(w, r, pt, c, func(force map[string]any, h mekbay.HangarForce) (int, string, error) {
+		hu, found := hangarUnit(h, unitID)
+		if !found {
+			return 0, "", hangarError{http.StatusNotFound, "That unit is no longer in your hangar."}
 		}
-	}
-	if option == nil {
-		http.Error(w, "That isn't a variant this omnimech can be reconfigured to.", http.StatusBadRequest)
-		return
-	}
-	cost := option.Cost
-	history := fmt.Sprintf("Reconfigured %s to %s for %s SP.", catalog.DisplayName(cat), option.Model, format.Commas(cost))
-	s.payForHangarChange(w, r, pt, c, run, cost, "swap a unit", history, func() (mekbay.HangarForce, error) {
-		return s.mekbay.SwapUnit(r.Context(), mekbay.SwapRequest{OwnerUID: mekbay.AccountUID(currentSeed(r), mekbay.SlotHangar), Instance: run.HangarInstance, UnitID: hu.ID, To: to})
+		cat, known := catalog.ByName(hu.Unit)
+		if !known || cat.Type != "Mek" || cat.Omni == 0 {
+			return 0, "", hangarError{http.StatusBadRequest, "Only omnimechs can be reconfigured."}
+		}
+		if !hangar.Pristine(hu) {
+			return 0, "", hangarError{http.StatusConflict, "An omnimech has to be fully repaired and rearmed before it can be reconfigured."}
+		}
+		var option *hangar.SwapOption
+		for _, o := range hangar.SwapOptions(cat) {
+			if o.Unit == to {
+				o := o
+				option = &o
+			}
+		}
+		if option == nil {
+			return 0, "", hangarError{http.StatusBadRequest, "That isn't a variant this omnimech can be reconfigured to."}
+		}
+		if err := mekbay.SwapUnitState(force, hu.ID, to, time.Now()); err != nil {
+			return 0, "", refused(err)
+		}
+		return -option.Cost, fmt.Sprintf("Reconfigured %s to %s for %s SP.", catalog.DisplayName(cat), option.Model, format.Commas(option.Cost)), nil
 	})
+	if ok {
+		writeCharge(w, -sp, warchest)
+	}
 }
 
 // plannedSwap is a hangar omnimech the Deploy wizard reconfigures before its battle: proposed on the review, paid for and written to the hangar by Start battle.
@@ -88,17 +83,14 @@ type plannedSwap struct {
 
 // reconfigureHangar applies the variants a deploy plan proposes for hangar omnimechs (the paired, repeated variant_unit and variant_to fields, as for provided
 // mechs) and returns the force as the players will fly it, the swaps to pay for, and the problem as a sentence. The rules are the Manage page's Reconfigure:
-// a site-owned hangar, an omnimech fully repaired and rearmed, and another variant of its chassis, at the same price. A variant that is the unit's own changes
+// an omnimech fully repaired and rearmed, and another variant of its chassis, at the same price. A variant that is the unit's own changes
 // nothing. The unit keeps its ID, so the plan's ticks and pilot assignments still point at it.
-func reconfigureHangar(h mekbay.HangarForce, owned bool, ids, tos []string) (mekbay.HangarForce, []plannedSwap, string) {
+func reconfigureHangar(h mekbay.HangarForce, ids, tos []string) (mekbay.HangarForce, []plannedSwap, string) {
 	if len(ids) == 0 && len(tos) == 0 {
 		return h, nil, ""
 	}
 	if len(ids) != len(tos) {
 		return h, nil, "Each reconfigured mech needs a variant."
-	}
-	if !owned {
-		return h, nil, notOwnedMessage
 	}
 	out := h
 	out.Units = append([]mekbay.HangarUnit(nil), h.Units...)
@@ -156,35 +148,52 @@ func swapsCost(swaps []plannedSwap) int {
 	return total
 }
 
-// reconfigureForBattle pays for a plan's reconfigurations and makes them in the hangar, one at a time under the hangar lock, before Start battle builds the
-// battle from it. Each is charged, made in MekBay and logged like a Reconfigure on the Manage page, and refunded if MekBay fails; the ones already made stay
-// (paid, in the hangar and in the history), so a start that fails part-way can just be tried again. It returns the problem and its status, or "".
+// reconfigureForBattle pays for a plan's reconfigurations and makes them in the hangar, all in one transaction, before Start battle builds the battle from it: the
+// plan is checked again against the hangar as it is then, and if any of it can't be made (or the warchest can't cover it) none of it is. Each is logged like a
+// Reconfigure on the Manage page. Made, they stay made if the battle then fails to build: they are paid for and in the History, and Start battle can just be
+// tried again. It returns the problem and its status, or "".
 func (s *Server) reconfigureForBattle(ctx context.Context, r *http.Request, bp *builtPlan) (string, int) {
-	unlock, err := s.lockHangar(ctx, bp.pt.ID, bp.c.Slug)
-	if errors.Is(err, errHangarBusy) {
-		return err.Error(), http.StatusConflict
-	} else if err != nil {
-		log.Printf("lock the hangar: %v", err)
-		return "could not lock the hangar", http.StatusInternalServerError
+	ids, tos := make([]string, len(bp.swaps)), make([]string, len(bp.swaps))
+	for i, sw := range bp.swaps {
+		ids[i], tos[i] = sw.unitID, sw.to
 	}
-	defer unlock()
-	owner := mekbay.AccountUID(currentSeed(r), mekbay.SlotHangar)
-	for _, sw := range bp.swaps {
-		left, err := s.store.SpendWarchest(ctx, bp.pt.ID, bp.c.Slug, sw.cost)
-		if errors.Is(err, storage.ErrInsufficientFunds) {
-			return fmt.Sprintf("Not enough in the warchest: reconfiguring %s costs %d SP and you have %d.", sw.name, sw.cost, left), http.StatusConflict
-		} else if err != nil {
-			return "could not charge the warchest", http.StatusInternalServerError
-		}
-		h, err := s.mekbay.SwapUnit(ctx, mekbay.SwapRequest{OwnerUID: owner, Instance: bp.run.HangarInstance, UnitID: sw.unitID, To: sw.to})
+	var made []plannedSwap
+	cost := 0
+	// The start holds its claim for this scenario while it reconfigures (Store.ClaimBattle), which the guard allows; any other battle refuses it.
+	left, err := s.store.EditHangarGuarded(ctx, bp.pt.ID, bp.c.Slug, hangarGuard(bp.c, bp.sc.ID), func(force map[string]any) (int, error) {
+		h, err := parseHangarMap(force)
 		if err != nil {
-			log.Printf("swap a unit for the battle in MekBay: %v", err) // never log the owner UID
-			if _, rerr := s.store.RefundWarchest(ctx, bp.pt.ID, bp.c.Slug, sw.cost); rerr != nil {
-				log.Printf("could not refund %d SP: %v", sw.cost, rerr)
-			}
-			return fmt.Sprintf("Could not reconfigure %s: %v", sw.name, err), http.StatusBadGateway
+			return 0, err
 		}
-		s.cacheHangar(ctx, bp.pt.ID, bp.c.Slug, bp.run.HangarInstance, h)
+		_, swaps, msg := reconfigureHangar(h, ids, tos)
+		if msg != "" {
+			return 0, hangarError{http.StatusConflict, msg}
+		}
+		now := time.Now()
+		for _, sw := range swaps {
+			if err := mekbay.SwapUnitState(force, sw.unitID, sw.to, now); err != nil {
+				return 0, refused(err)
+			}
+		}
+		made, cost = swaps, swapsCost(swaps)
+		return -cost, nil
+	})
+	var refusal hangarError
+	var battle storage.BattleInProgressError
+	switch {
+	case errors.As(err, &refusal):
+		return refusal.msg, refusal.status
+	case errors.As(err, &battle):
+		return battleRefusal(bp.c, battle), http.StatusConflict
+	case errors.Is(err, storage.ErrInsufficientFunds):
+		return fmt.Sprintf("Not enough in the warchest: reconfiguring costs %d SP and you have %d.", cost, left), http.StatusConflict
+	case errors.Is(err, storage.ErrNoHangar):
+		return noHangarMessage, http.StatusConflict
+	case err != nil:
+		log.Printf("reconfigure for the battle: %v", err)
+		return "could not reconfigure your mechs", http.StatusInternalServerError
+	}
+	for _, sw := range made {
 		s.logHistory(r, bp.pt.ID, bp.c.Slug, storage.HistoryHangar, -sw.cost, fmt.Sprintf("Reconfigured %s to %s for %s SP before %s.", sw.name, sw.model, format.Commas(sw.cost), bp.sc.Title))
 	}
 	return "", 0

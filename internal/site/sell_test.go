@@ -12,16 +12,18 @@ import (
 	"github.com/davidzech/Battletech/internal/mekbay"
 )
 
-// A sale answers with the warchest its payment made, even when another request changed the warchest after this one loaded the run.
+// A sale answers with the warchest its payment made.
 func TestSellRepliesWithTheWarchestPaid(t *testing.T) {
-	srv, fake, cookie, setTo := startedWithHookedMekBay(t)
-	fake.setHangar(hangarOf("BMMadCat_H"), nil)
+	srv, store, _, cookie := startedWith4500(t)
+	setRunHangar(t, store, "wolfpack2026", "refusalwar", hangarOf("BMMadCat_H"))
 	madCat, _ := catalog.ByName("BMMadCat_H")
-	fake.onRead = setTo(1000)
+	if _, err := store.DB().Exec(`UPDATE campaign_runs SET warchest = 1000`); err != nil {
+		t.Fatal(err)
+	}
 	res := post(t, srv, "/api/hangar/sell", url.Values{"campaign": {"refusalwar"}, "unit": {"ua"}}, cookie, srv.URL)
 	var got struct{ Value, Warchest int }
 	if err := json.NewDecoder(res.Body).Decode(&got); err != nil || res.StatusCode != http.StatusOK || got.Value != madCat.BV/2 || got.Warchest != 1000+madCat.BV/2 {
-		t.Errorf("a sale after another request left 1,000 SP: %d %+v %v (want %d)", res.StatusCode, got, err, 1000+madCat.BV/2)
+		t.Errorf("a sale with 1,000 SP: %d %+v %v (want %d)", res.StatusCode, got, err, 1000+madCat.BV/2)
 	}
 }
 
@@ -45,7 +47,7 @@ func TestSellUnitEndpoint(t *testing.T) {
 	h.Units[1].Damaged = true
 	h.Units[2].Destroyed, h.Units[2].Locations = true, map[string]mekbay.LocationLoss{"CT": {Internal: 8}}
 	h.Units[2].Damaged = true
-	fake.setHangar(h, nil)
+	setRunHangar(t, store, "wolfpack2026", "refusalwar", h)
 	funds := func() int { r, _, _ := store.Run(ctx, id, "refusalwar"); return r.Warchest }
 	sell := func(unit string) int {
 		return post(t, srv, "/api/hangar/sell", url.Values{"campaign": {"refusalwar"}, "unit": {unit}}, cookie, srv.URL).StatusCode
@@ -57,19 +59,12 @@ func TestSellUnitEndpoint(t *testing.T) {
 	if got := post(t, srv, "/api/hangar/sell", url.Values{"campaign": {"refusalwar"}, "unit": {"ua"}}, cookie, "https://evil.example").StatusCode; got != http.StatusForbidden {
 		t.Errorf("cross-origin: %d", got)
 	}
-	// A run from before the site kept its own copy can't sell.
-	_, _ = store.DB().Exec(`UPDATE campaign_runs SET source_url = ''`)
-	if got := sell("ua"); got != http.StatusConflict || funds() != 4500 {
-		t.Errorf("a hangar the site doesn't own: %d, funds %d", got, funds())
-	}
-	_, _ = store.DB().Exec(`UPDATE campaign_runs SET source_url = ?`, goodHangarURL)
-
-	// A fully repaired and rearmed unit sells for half its BV; the unit leaves the hangar in MekBay.
+	// A fully repaired and rearmed unit sells for half its BV; the unit leaves the hangar.
 	if got := sell("ua"); got != http.StatusOK || funds() != 4500+madCat.BV/2 {
 		t.Fatalf("sell pristine: %d, funds %d (want %d)", got, funds(), 4500+madCat.BV/2)
 	}
-	if len(fake.sales) != 1 || fake.sales[0].UnitID != "ua" || fake.sales[0].OwnerUID != mekbay.MekBayUID("wolfpack2026", mekbay.SlotHangar) || fake.sales[0].Instance == goodInstance {
-		t.Errorf("MekBay was asked: %+v", fake.sales)
+	if _, still := runUnit(t, store, "wolfpack2026", "refusalwar", "ua"); still || len(runHangar(t, store, "wolfpack2026", "refusalwar").Units) != 2 {
+		t.Errorf("the unit sold is gone from the hangar: %+v", runHangar(t, store, "wolfpack2026", "refusalwar").Units)
 	}
 	// Worn units sell for a quarter: spent ammunition, and a truly destroyed mech.
 	before := funds()
@@ -80,28 +75,24 @@ func TestSellUnitEndpoint(t *testing.T) {
 	if got := sell("uc"); got != http.StatusOK || funds() != before+koshi.BV/4 {
 		t.Errorf("sell truly destroyed: %d, funds %d (want %d)", got, funds(), before+koshi.BV/4)
 	}
-	// Unknown units are refused, and a failure in MekBay pays nothing.
+	// Unknown units are refused, and so is a unit already sold (a second click): nothing more is paid.
 	before = funds()
 	if got := sell("u-ghost"); got != http.StatusNotFound || funds() != before {
 		t.Errorf("unknown unit: %d, funds %d", got, funds())
 	}
-	fake.serviceErr = context.DeadlineExceeded
-	fake.setHangar(hangarOf("BMMadCat_H"), nil)
-	if got := sell("ua"); got != http.StatusBadGateway || funds() != before {
-		t.Errorf("MekBay failure: %d, funds %d", got, funds())
+	if got := sell("ua"); got != http.StatusNotFound || funds() != before {
+		t.Errorf("selling again: %d, funds %d", got, funds())
 	}
 	// A truly destroyed mech can't be rearmed either: selling is all that is left.
-	fake.serviceErr = nil
 	h = hangarOf("BMKoshi_E")
 	h.Units[0].Destroyed, h.Units[0].Damaged, h.Units[0].Locations = true, true, map[string]mekbay.LocationLoss{"CT": {Internal: 8}}
 	h.Units[0].AmmoBins, h.Units[0].AmmoUsed = 1, 3
-	fake.setHangar(h, nil)
+	setRunHangar(t, store, "wolfpack2026", "refusalwar", h)
 	if got := post(t, srv, "/api/hangar/service", url.Values{"campaign": {"refusalwar"}, "kind": {"rearm"}, "unit": {"ua"}}, cookie, srv.URL).StatusCode; got != http.StatusConflict {
 		t.Errorf("rearming a truly destroyed unit: %d", got)
 	}
-	// The hangar view carries the price for the page. (The sales above emptied the cached copy, as they should; a live read fills it again.)
-	body(t, srv, "/api/campaign/force?campaign=refusalwar", cookie)
+	// The hangar view carries the price for the page.
 	if p := body(t, srv, "/refusalwar/manage/", cookie); !strings.Contains(p, "sellValue") {
-		t.Error("the Manage page's cached hangar should carry each unit's sell value")
+		t.Error("the Manage page's hangar should carry each unit's sell value")
 	}
 }

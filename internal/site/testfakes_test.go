@@ -2,7 +2,7 @@ package site
 
 import (
 	"context"
-	"fmt"
+	"encoding/json"
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
@@ -30,73 +30,42 @@ func hangarFixture() mekbay.HangarForce {
 	}}
 }
 
-// fakeMekBay serves a fixed hangar and records requests instead of calling mekbay.com.
+// fakeMekBay answers a fixed force for every hangar link and records battle requests instead of calling mekbay.com. Campaign hangars are in the database: tests
+// set and read them with setRunHangar and runHangar.
 type fakeMekBay struct {
 	mu     sync.Mutex
-	hangar mekbay.HangarForce
-	err    error
-	// services records repair and rearm requests; serviceErr makes them fail.
-	services   []mekbay.ServiceRequest
-	purchases  []mekbay.PurchaseRequest
-	clones     []mekbay.CloneRequest
-	created    []createdForce
-	sales      []mekbay.SellRequest
-	swaps      []mekbay.SwapRequest
-	cloneErr   error
-	serviceErr error
-	onEdit     func() // called at the start of every hangar edit (say, to cancel the request while MekBay is being called)
+	hangar mekbay.HangarForce // the force every ReadForce answers (unless forces has the instance)
+	err    error              // ReadForce fails with it
+	forces map[string][]byte  // forces by instance, as saved data (the import's tests)
+	gone   map[string]bool    // forces MekBay no longer has: ReadForce answers mekbay.ErrNoForce
+	reads  []string           // the instances ReadForce was asked for
 	// battles records Start battle requests; battleErr makes them fail.
 	battles       []mekbay.BattleRequest
 	battleErr     error
 	status        mekbay.BattleStatus // what ReadBattle answers
 	statusErr     error
-	statusOps     []string // the operations ReadBattle was asked for
-	commits       []mekbay.CommitBattleRequest
-	copies        []mekbay.CopyRequest
-	deletes       []string
+	statusOps     []string                  // the operations ReadBattle was asked for
+	battleUnits   map[string]map[string]any // what ReadBattleUnits answers: the battle's units by ID
+	unitsErr      error                     // ReadBattleUnits fails with it
+	unitReads     []string                  // the operations ReadBattleUnits was asked for
+	unitSkips     [][]string                // and the forces it was told to skip
 	battleDeletes []string
-	copyErr       error
-	commitErr     error
-	committed     mekbay.HangarForce // what CommitBattle answers as the hangar it saved (f.hangar when it has no units)
 }
 
-func (f *fakeMekBay) ReadHangar(context.Context, string) (mekbay.HangarForce, error) {
+func (f *fakeMekBay) ReadForce(_ context.Context, instance string) (json.RawMessage, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return f.hangar, f.err
-}
-
-// CreateForce records the force it was asked to make and answers it as MekBay would read it back.
-func (f *fakeMekBay) CreateForce(_ context.Context, owner, instance string, d mekbay.ForceDraft) (mekbay.HangarForce, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.created = append(f.created, createdForce{Owner: owner, Instance: instance, Draft: d})
-	if f.cloneErr != nil {
-		return mekbay.HangarForce{}, f.cloneErr
+	f.reads = append(f.reads, instance)
+	if f.err != nil {
+		return nil, f.err
 	}
-	h := mekbay.HangarForce{Name: d.Name}
-	for _, g := range d.Groups {
-		for i, u := range g.Units {
-			h.Units = append(h.Units, mekbay.HangarUnit{ID: fmt.Sprintf("%s-%d", instance[:8], i), Unit: u.Unit, Group: g.Name, Gunnery: u.Gunnery, Piloting: u.Piloting})
-		}
+	if f.gone[instance] {
+		return nil, mekbay.ErrNoForce
 	}
-	return h, nil
-}
-
-// createdForce is one CreateForce call.
-type createdForce struct {
-	Owner, Instance string
-	Draft           mekbay.ForceDraft
-}
-
-func (f *fakeMekBay) CloneHangar(_ context.Context, req mekbay.CloneRequest) (mekbay.HangarForce, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.clones = append(f.clones, req)
-	if f.cloneErr != nil {
-		return mekbay.HangarForce{}, f.cloneErr
+	if data, ok := f.forces[instance]; ok {
+		return data, nil
 	}
-	return f.hangar, f.err
+	return forceOf(f.hangar), nil
 }
 
 func (f *fakeMekBay) StartBattle(_ context.Context, req mekbay.BattleRequest) (mekbay.BattleResult, error) {
@@ -122,33 +91,15 @@ func (f *fakeMekBay) StartBattle(_ context.Context, req mekbay.BattleRequest) (m
 	return res, nil
 }
 
-// CommitBattle records what it was asked to write back, and answers committed (or the hangar) as the hangar it saved.
-func (f *fakeMekBay) CommitBattle(_ context.Context, req mekbay.CommitBattleRequest) (mekbay.CommitBattleReport, mekbay.HangarForce, error) {
+// ReadBattleUnits records what it was asked and answers battleUnits.
+func (f *fakeMekBay) ReadBattleUnits(_ context.Context, _, operationID string, skip []string) (map[string]map[string]any, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.commits = append(f.commits, req)
-	if f.commitErr != nil {
-		return mekbay.CommitBattleReport{}, mekbay.HangarForce{}, f.commitErr
+	f.unitReads, f.unitSkips = append(f.unitReads, operationID), append(f.unitSkips, skip)
+	if f.unitsErr != nil {
+		return nil, f.unitsErr
 	}
-	if len(f.committed.Units) > 0 {
-		return mekbay.CommitBattleReport{Matched: 1}, f.committed, nil
-	}
-	return mekbay.CommitBattleReport{Matched: 1}, f.hangar, nil
-}
-
-// CopyForce and DeleteForce record what they were asked.
-func (f *fakeMekBay) CopyForce(_ context.Context, req mekbay.CopyRequest) error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.copies = append(f.copies, req)
-	return f.copyErr
-}
-
-func (f *fakeMekBay) DeleteForce(_ context.Context, _ string, instances ...string) error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.deletes = append(f.deletes, instances...)
-	return nil
+	return f.battleUnits, nil
 }
 
 func (f *fakeMekBay) DeleteBattle(_ context.Context, _ string, operationID string) error {
@@ -165,61 +116,126 @@ func (f *fakeMekBay) ReadBattle(_ context.Context, operationID string) (mekbay.B
 	return f.status, f.statusErr
 }
 
-// The fake's edits save and return the hangar as it would be after them: a sale without the unit sold, a purchase with the units bought; repairs and swaps
-// leave it as is.
-func (f *fakeMekBay) edited(change func(h *mekbay.HangarForce)) (mekbay.HangarForce, error) {
-	if f.onEdit != nil {
-		f.onEdit()
-	}
-	if f.serviceErr != nil {
-		return mekbay.HangarForce{}, f.serviceErr
-	}
-	h := f.hangar
-	h.Units = append([]mekbay.HangarUnit(nil), f.hangar.Units...)
-	if change != nil {
-		change(&h)
-	}
-	f.hangar = h // MekBay keeps what was saved, so the next read or edit starts from it
-	return h, nil
-}
-
-func (f *fakeMekBay) SellUnit(_ context.Context, req mekbay.SellRequest) (mekbay.HangarForce, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.sales = append(f.sales, req)
-	return f.edited(func(h *mekbay.HangarForce) {
-		for i, u := range h.Units {
-			if u.ID == req.UnitID {
-				h.Units = append(h.Units[:i], h.Units[i+1:]...)
-				break
+// forceOf is a hangar as MekBay saves it (and the site stores it), built so that it reads back as h: groups, crews, damage, critical hits, spent ammunition, the
+// destroyed flag and the torso check. A unit marked Damaged with no damage recorded gets one point of armor lost on its left arm; engine hits and spent
+// ammunition with no slots of their own get slots in the center torso.
+func forceOf(h mekbay.HangarForce) []byte {
+	var groups []any
+	byName := map[string]map[string]any{}
+	for _, u := range h.Units {
+		g := byName[u.Group]
+		if g == nil {
+			g = map[string]any{"id": "g-" + u.Group, "name": u.Group, "color": "", "units": []any{}}
+			byName[u.Group] = g
+			groups = append(groups, g)
+		}
+		crewState := 0
+		if u.CrewDead {
+			crewState = 2
+		}
+		locs := map[string]any{}
+		for k, l := range u.Locations {
+			locs[k] = map[string]any{"armor": l.Armor, "internal": l.Internal}
+		}
+		crits := []any{}
+		engines := 0
+		for _, c := range u.Crits {
+			name := "Upper Arm Actuator"
+			if c.Engine {
+				name, engines = "Engine", engines+1
+			}
+			crits = append(crits, map[string]any{"name": name, "loc": c.Loc, "hits": 1})
+		}
+		for ; engines < u.EngineHits; engines++ {
+			crits = append(crits, map[string]any{"name": "Engine", "loc": "CT", "hits": 1})
+		}
+		if u.Damaged && len(locs) == 0 && len(crits) == 0 {
+			locs["LA"] = map[string]any{"armor": 1, "internal": 0}
+		}
+		if len(u.AmmoUsed2) > 0 {
+			for _, a := range u.AmmoUsed2 {
+				crits = append(crits, map[string]any{"name": a.Name, "loc": a.Loc, "consumed": a.Used})
+			}
+		} else {
+			for i := 0; i < u.AmmoBins; i++ {
+				used := u.AmmoUsed / u.AmmoBins
+				if i == 0 {
+					used += u.AmmoUsed % u.AmmoBins
+				}
+				crits = append(crits, map[string]any{"name": "Ammo", "loc": "CT", "consumed": max(used, 1)})
 			}
 		}
-	})
-}
-
-func (f *fakeMekBay) SwapUnit(_ context.Context, req mekbay.SwapRequest) (mekbay.HangarForce, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.swaps = append(f.swaps, req)
-	return f.edited(nil)
-}
-
-func (f *fakeMekBay) ServiceUnit(_ context.Context, req mekbay.ServiceRequest) (mekbay.HangarForce, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.services = append(f.services, req)
-	return f.edited(nil)
-}
-
-func (f *fakeMekBay) PurchaseUnits(_ context.Context, req mekbay.PurchaseRequest) (mekbay.HangarForce, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.purchases = append(f.purchases, req)
-	return f.edited(func(h *mekbay.HangarForce) {
-		for i, id := range req.Units {
-			h.Units = append(h.Units, mekbay.HangarUnit{ID: fmt.Sprintf("bought-%d", i), Unit: id, Group: "Hangar", Gunnery: 4, Piloting: 5})
+		if u.CockpitGone {
+			crits = append(crits, map[string]any{"name": "Cockpit", "loc": "HD", "destroyed": 1})
 		}
-	})
+		state := map[string]any{
+			"crew":      []any{map[string]any{"id": 0, "name": u.Pilot, "gunnerySkill": u.Gunnery, "pilotingSkill": u.Piloting, "hits": 0, "state": crewState}},
+			"crits":     crits,
+			"locations": locs,
+			"heat":      map[string]any{"current": 0, "previous": 0},
+			"destroyed": u.Destroyed,
+			"turnState": map[string]any{"applyMovePSR": false},
+		}
+		if u.TorsoCheckFailed {
+			state["ruleChecks"] = map[string]any{"core.torso-crippling": map[string]any{"status": "failed"}}
+		}
+		g["units"] = append(g["units"].([]any), map[string]any{"id": u.ID, "unit": u.Unit, "alias": "", "state": state})
+	}
+	if groups == nil {
+		groups = []any{}
+	}
+	b, err := json.Marshal(map[string]any{"version": 1, "instanceId": "hangar-" + h.Name, "type": "cbt", "name": h.Name, "timestamp": h.Timestamp, "groups": groups})
+	if err != nil {
+		panic(err)
+	}
+	return b
+}
+
+// battleUnitsOf is h's units as a battle's forces hold them in MekBay (what ReadBattleUnits answers), by ID.
+func battleUnitsOf(h mekbay.HangarForce) map[string]map[string]any {
+	var force struct {
+		Groups []struct {
+			Units []map[string]any `json:"units"`
+		} `json:"groups"`
+	}
+	if err := json.Unmarshal(forceOf(h), &force); err != nil {
+		panic(err)
+	}
+	out := map[string]map[string]any{}
+	for _, g := range force.Groups {
+		for _, u := range g.Units {
+			out[u["id"].(string)] = u
+		}
+	}
+	return out
+}
+
+// setRunHangar stores h as the hangar of a started campaign of the seed's.
+func setRunHangar(t *testing.T, store *storage.Store, seed, campaign string, h mekbay.HangarForce) {
+	t.Helper()
+	if err := store.SetHangar(context.Background(), playthroughID(seed), campaign, forceOf(h)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// runHangar is the hangar of a started campaign of the seed's, as the site reads it.
+func runHangar(t *testing.T, store *storage.Store, seed, campaign string) mekbay.HangarForce {
+	t.Helper()
+	raw, err := store.Hangar(context.Background(), playthroughID(seed), campaign)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h, err := mekbay.ParseForce(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return h
+}
+
+// runUnit is the unit with this ID in a started campaign's hangar (found is false if it is not there).
+func runUnit(t *testing.T, store *storage.Store, seed, campaign, id string) (mekbay.HangarUnit, bool) {
+	t.Helper()
+	return hangarUnit(runHangar(t, store, seed, campaign), id)
 }
 
 func newMekBayTestServer(t *testing.T, mb mekbay.MekBay) (*httptest.Server, *storage.Store) {

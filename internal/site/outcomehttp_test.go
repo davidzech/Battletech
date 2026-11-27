@@ -3,8 +3,11 @@ package site
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -265,5 +268,67 @@ func TestScenario000PromotesOnCommit(t *testing.T) {
 	}
 	if ranks["Alrek"] != "MechWarrior" || ranks["Katarina"] != "Star Commander" {
 		t.Errorf("ranks after the Trial: %v", ranks)
+	}
+}
+
+// A campaign whose hangar couldn't be imported from MekBay still completes a mission fought with a battle: there is no hangar to write the damage into, so the
+// battle's units aren't even read, and the outcome is applied.
+func TestCompletingWithoutAHangarSkipsTheWriteBack(t *testing.T) {
+	root := t.TempDir()
+	camp := filepath.Join(root, "RefusalWar")
+	write := func(path, text string) {
+		p := filepath.Join(camp, path)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	intro, err := os.ReadFile("../../campaigns/RefusalWar/Intro.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	write("Intro.md", string(intro))
+	write("Keywords.md", "---\nkeywords: []\n---\n")
+	write("Scenario_000/Setup.md", "---\nid: scenario_000\ntitle: Raid\nplanet: Colmar\nforces: {}\n---\n# Raid\n")
+	write("Scenario_000/Outcome.md", "---\nid: scenario_000\nmvp_sp: 0\npilot_sp: 10\nobjectives:\n  - id: win\n    label: Win\n    sp: 100\n---\n# Raid - Outcome\n")
+	fake := &fakeMekBay{hangar: startingHangar()}
+	store, err := storage.OpenSQLite(t.TempDir() + "/nohangar.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { store.DB().Close() })
+	srv := newTestServerAt(t, root, store, fake)
+	ctx := context.Background()
+	cookie := post(t, srv, "/api/seed", url.Values{"seed": {"wolfpack2026"}}, nil, "").Cookies()[0]
+	id := playthroughID("wolfpack2026")
+	post(t, srv, "/api/account", url.Values{"account": {"Wolf Pack"}}, cookie, srv.URL)
+	if r := post(t, srv, "/api/campaign/start", startForm(goodHangar, "Alrek", "Katarina"), cookie, srv.URL); r.StatusCode != http.StatusNoContent {
+		t.Fatalf("start: %d", r.StatusCode)
+	}
+	if err := store.SaveMekBayOperation(ctx, id, "refusalwar", "scenario_000", storage.MekBayOperation{OpForInstance: "opfor", OperationID: "op-1"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.DB().Exec(`UPDATE campaign_runs SET hangar = ''`); err != nil {
+		t.Fatal(err)
+	}
+	before, _, _ := store.Run(ctx, id, "refusalwar")
+	b, _ := json.Marshal(content.OutcomeInputs{Mission: map[string]any{"win": true}})
+	res := post(t, srv, "/api/campaign/scenario-outcome/commit", url.Values{"campaign": {"refusalwar"}, "scenario": {"scenario_000"}, "inputs": {string(b)}}, cookie, srv.URL)
+	if res.StatusCode != http.StatusNoContent {
+		msg, _ := io.ReadAll(res.Body)
+		t.Fatalf("commit: %d %s", res.StatusCode, msg)
+	}
+	if done, _ := store.Completions(ctx, id, "refusalwar"); !done["scenario_000"] {
+		t.Errorf("the mission is completed: %v", done)
+	}
+	if after, _, _ := store.Run(ctx, id, "refusalwar"); after.Warchest != before.Warchest+100 {
+		t.Errorf("the outcome is applied: %d, was %d", after.Warchest, before.Warchest)
+	}
+	fake.mu.Lock()
+	defer fake.mu.Unlock()
+	if len(fake.unitReads) != 0 {
+		t.Errorf("the battle's units are not read: %v", fake.unitReads)
 	}
 }

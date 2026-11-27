@@ -269,24 +269,14 @@ func (s *Server) setPortrait(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// deleteCampaign deletes the playthrough's progress in one campaign (see Store.DeleteRun). The browser asks the player
-// to confirm first. What the campaign saved in MekBay goes too, in the background once the rows are gone: the hangar (only
-// the site's own copy, never a force the player linked), its checkpoints' frozen copies, and every battle it recorded.
+// deleteCampaign deletes the playthrough's progress in one campaign (see Store.DeleteRun), its hangar with it. The browser asks the player
+// to confirm first. Every battle it recorded in MekBay goes too, in the background once the rows are gone.
 func (s *Server) deleteCampaign(w http.ResponseWriter, r *http.Request) {
-	pt, c, run, ok := s.openRunRequest(w, r) // deleting is allowed during a battle: it removes the battle with everything else
+	pt, c, _, ok := s.openRunRequest(w, r) // deleting is allowed during a battle: it removes the battle with everything else
 	if !ok {
 		return
 	}
 	// Listed before the rows that name them are deleted. A list that can't be read only leaves those behind in MekBay.
-	var forces []string
-	if run.Owned() && run.HangarInstance != "" {
-		forces = append(forces, run.HangarInstance)
-	}
-	copies, err := s.store.CheckpointHangars(r.Context(), pt.ID, c.Slug)
-	if err != nil {
-		log.Printf("list the checkpoints' hangars to delete: %v", err)
-	}
-	forces = append(forces, copies...)
 	operations, err := s.store.MekBayOperationIDs(r.Context(), pt.ID, c.Slug)
 	if err != nil {
 		log.Printf("list the battles to delete: %v", err)
@@ -295,7 +285,7 @@ func (s *Server) deleteCampaign(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not delete the campaign", http.StatusInternalServerError)
 		return
 	}
-	s.cleanUpInBackground(currentSeed(r), forces, operations)
+	s.cleanUpInBackground(currentSeed(r), operations)
 	w.WriteHeader(http.StatusNoContent)
 }
 

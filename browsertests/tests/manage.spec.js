@@ -14,11 +14,11 @@ const HANGAR = [
 async function managePage(page, warchest) {
   await newAccount(page);
   await startCampaign(page, 'refusalwar', ['Alrek', 'Katarina'], STARTING);
-  await setHangar(page, HANGAR);
+  await setHangar(page, HANGAR, 'refusalwar');
   await setWarchest(page, 'refusalwar', warchest);
   await page.goto('/refusalwar/manage/');
   const list = page.locator('#hangar-units-list');
-  // The live read replaces the cached hangar from the start with the one above.
+  // The page shows the hangar set above, which replaced the one the campaign started with.
   await expect(list.locator('.mech-row')).toHaveCount(5);
   await expect(list.locator('.mech-row', { hasText: 'Fire Moth' }).locator('.mr-chip', { hasText: 'Crippled' })).toBeVisible();
   return list;

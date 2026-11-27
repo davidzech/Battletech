@@ -12,7 +12,6 @@ import (
 	"testing"
 
 	"github.com/davidzech/Battletech/internal/content"
-	"github.com/davidzech/Battletech/internal/mekbay"
 	"github.com/davidzech/Battletech/internal/pilot"
 	"github.com/davidzech/Battletech/internal/storage"
 )
@@ -72,7 +71,7 @@ func TestNamedPilotsFlow(t *testing.T) {
 	}
 	id := playthroughID("wolfpack2026")
 	// A campaign started without pilots (before they were part of starting one) has to name them afterwards.
-	if err := store.StartRunWithPilots(ctx, id, "refusalwar", mekbay.Hangar{URL: goodHangarURL, Instance: goodInstance}, nil, 5000, 0, ""); err != nil { // recruiting costs SP
+	if err := store.StartRunWithPilots(ctx, id, "refusalwar", forceOf(startingHangar()), nil, 5000, 0, ""); err != nil { // recruiting costs SP
 		t.Fatal(err)
 	}
 

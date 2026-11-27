@@ -51,6 +51,13 @@ func main() {
 	}
 	defer store.Close()
 
+	// Hangars MekBay still holds (from before they lived in the database) are imported before anything is served. A failure stops the server: on a host that
+	// deploys a new version only once it starts, the old version keeps serving.
+	if err := site.ImportHangars(context.Background(), store, nil); err != nil {
+		store.Close()
+		log.Fatalf("import the hangars from MekBay: %v", err)
+	}
+
 	go func() { // a MekBay release that changes what the proxy relies on shows here, not as a player's broken table link
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()

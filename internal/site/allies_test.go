@@ -76,7 +76,7 @@ func TestScenarioAlliesJoinTheBattle(t *testing.T) {
 	if got := post(t, srv, "/api/campaign/scenario-outcome/commit", url.Values{"campaign": {"refusalwar"}, "scenario": {"scenario_004"}, "inputs": {string(b)}}, cookie, srv.URL).StatusCode; got != http.StatusNoContent {
 		t.Fatalf("commit: %d", got)
 	}
-	if len(fake.commits) != 1 || strings.Join(fake.commits[0].Skip, ",") != op.AlliesInstance {
-		t.Errorf("the write-back leaves the allies out: %+v", fake.commits)
+	if len(fake.unitReads) != 1 || strings.Join(fake.unitSkips[0], ",") != op.AlliesInstance {
+		t.Errorf("the write-back leaves the allies out: %v %v", fake.unitReads, fake.unitSkips)
 	}
 }

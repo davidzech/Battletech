@@ -1,8 +1,8 @@
 // Manage page: the campaign's MekBay hangar as two big labelled numbers, UNITS and BASE BV (forcesummary.js), above the full list of its mechs, as the same mech
-// rows the deploy popup uses (mechrow.js). Both scripts must load first. Like the overview, the page embeds the hangar as it was last read, so the list paints at once and
-// the live read (GET /api/campaign/force) only refreshes it; only a run that has never been read shows "Reading your hangar...". Names,
-// roles and models go in as text, never HTML. Each mech row also has Rearm and Repair buttons (costs come from the server, which charges the
-// warchest and changes the unit in the site's own copy of the hangar (Sell pays the warchest); both need a copy the site owns). Confirm (confirm.js) must load first.
+// rows the deploy popup uses (mechrow.js). Both scripts must load first. Like the overview, the page embeds the hangar, so the list paints at once (only a page
+// that could not load it reads GET /api/campaign/force). Names, roles and models go in as text, never HTML. Each mech row also has Rearm and Repair buttons
+// (costs come from the server, which charges the warchest and changes the unit in the campaign's hangar; Sell pays the warchest). Confirm (confirm.js) must
+// load first.
 (function () {
   var section = document.getElementById('hangar-units');
   var list = document.getElementById('hangar-units-list');
@@ -11,9 +11,7 @@
 
   var el = Dom.el;
   // The count and total BV as big yellow numbers with labels; the rows underneath carry the per-unit detail, so no icons here.
-  var canModify = section.dataset.canModify === '1';
   var warchest = parseInt(section.dataset.warchest, 10) || 0;
-  var NO_UID = 'This hangar is from before the site kept its own copy. Delete the campaign and start it again to import your hangar.';
   var commas = Dom.commas;
   function fullName(u) { return (u.name + (u.model ? ' ' + u.model : '')).trim(); }
 
@@ -168,23 +166,22 @@
     return [
       {
         label: 'Rearm', onClick: function () { rearm(u); },
-        disabled: !canModify || truly || !u.ammoExpended,
-        title: !canModify ? NO_UID : truly ? 'A truly destroyed unit can only be sold.' : !u.ammoExpended ? 'No ammunition has been spent.' : 'Refill spent ammunition for ' + u.rearmCost + ' SP'
+        disabled: truly || !u.ammoExpended,
+        title: truly ? 'A truly destroyed unit can only be sold.' : !u.ammoExpended ? 'No ammunition has been spent.' : 'Refill spent ammunition for ' + u.rearmCost + ' SP'
       },
       {
         label: 'Repair', onClick: function () { repair(u); },
-        disabled: !canModify || !(u.repairLevels && u.repairLevels.length),
-        title: !canModify ? NO_UID : truly ? 'Truly destroyed units cannot be repaired.' : !(u.repairLevels && u.repairLevels.length) ? 'Nothing to repair.' : 'Choose a repair'
+        disabled: !(u.repairLevels && u.repairLevels.length),
+        title: truly ? 'Truly destroyed units cannot be repaired.' : !(u.repairLevels && u.repairLevels.length) ? 'Nothing to repair.' : 'Choose a repair'
       },
       u.swapOptions && u.swapOptions.length ? {
         label: 'Reconfigure', onClick: function () { swap(u); },
-        disabled: !canModify || !u.sellFull,
-        title: !canModify ? NO_UID : !u.sellFull ? 'An omnimech has to be fully repaired and rearmed before it can be reconfigured.' : 'Swap to another variant of this omnimech'
+        disabled: !u.sellFull,
+        title: !u.sellFull ? 'An omnimech has to be fully repaired and rearmed before it can be reconfigured.' : 'Swap to another variant of this omnimech'
       } : null,
       {
         label: 'Sell', onClick: function () { sell(u); },
-        disabled: !canModify,
-        title: !canModify ? NO_UID : 'Sell for ' + u.sellValue + ' SP' + (u.sellFull ? '' : ' (repair and rearm it first to get twice as much)')
+        title: 'Sell for ' + u.sellValue + ' SP' + (u.sellFull ? '' : ' (repair and rearm it first to get twice as much)')
       }
     ].filter(Boolean);
   }
@@ -214,37 +211,27 @@
     });
   }
 
-  var shown = false;
-  try {
-    if (section.dataset.cached) { render(JSON.parse(section.dataset.cached)); shown = true; }
-  } catch (e) { shown = false; }
-
-  // A failed refresh keeps what is on screen and says so; with nothing on screen it is an error with a retry.
-  function stale(message) {
-    if (!shown) {
-      list.textContent = '';
-      list.appendChild(el('p', 'form-error', message));
-      var retry = el('button', null, 'Try again');
-      retry.type = 'button';
-      retry.addEventListener('click', load);
-      list.appendChild(retry);
-      return;
-    }
-    var old = section.querySelector('.stale-note');
-    if (old) old.remove();
-    section.appendChild(el('p', 'muted stale-note', 'Showing your last known hangar. ' + message));
+  function fail(message) {
+    list.textContent = '';
+    list.appendChild(el('p', 'form-error', message));
+    var retry = el('button', null, 'Try again');
+    retry.type = 'button';
+    retry.addEventListener('click', load);
+    list.appendChild(retry);
   }
 
   function load() {
-    if (!shown) {
-      list.textContent = '';
-      list.appendChild(el('p', 'muted', 'Reading your hangar…'));
-    }
+    list.textContent = '';
+    list.appendChild(el('p', 'muted', 'Reading your hangar…'));
     fetch('/api/campaign/force?campaign=' + encodeURIComponent(section.dataset.campaign), { credentials: 'same-origin' })
       .then(function (res) {
-        if (res.ok) return res.json().then(function (data) { var old = section.querySelector('.stale-note'); if (old) old.remove(); render(data); shown = true; });
-        return res.text().then(function (t) { stale(t.trim() || 'Could not read your hangar.'); });
-      }, function () { stale('Could not reach the server.'); });
+        if (res.ok) return res.json().then(render);
+        return res.text().then(function (t) { fail(t.trim() || 'Could not read your hangar.'); });
+      }, function () { fail('Could not reach the server.'); });
   }
-  load();
+
+  var embedded = null;
+  try { embedded = section.dataset.hangar ? JSON.parse(section.dataset.hangar) : null; } catch (e) { embedded = null; }
+  if (embedded) render(embedded);
+  else load();
 })();

@@ -264,7 +264,7 @@ func TestCampaignLedger(t *testing.T) {
 	if p := body(t, srv, "/refusalwar/", cookie); !strings.Contains(p, `id="force-keywords"`) || !strings.Contains(p, "No keywords earned yet.") {
 		t.Error("the overview says when no keywords are earned")
 	}
-	if err := store.CompleteWithOutcome(ctx, id, "refusalwar", "scenario_000", content.OutcomeResult{Pilots: []content.PilotOutcome{}, Keywords: []string{"depot_gone", "data_saved"}}); err != nil {
+	if err := store.CompleteWithOutcome(ctx, id, "refusalwar", "scenario_000", content.OutcomeResult{Pilots: []content.PilotOutcome{}, Keywords: []string{"depot_gone", "data_saved"}}, nil); err != nil {
 		t.Fatal(err)
 	}
 	ledger, _ := store.Ledger(ctx, id, "refusalwar")
@@ -272,13 +272,13 @@ func TestCampaignLedger(t *testing.T) {
 		t.Fatalf("ledger: %+v", ledger)
 	}
 	// A keyword already held is not recorded twice (a later scenario granting it again leaves the ledger alone).
-	if err := store.CompleteWithOutcome(ctx, id, "refusalwar", "scenario_001", content.OutcomeResult{Pilots: []content.PilotOutcome{}, Keywords: []string{"depot_gone"}}); err != nil {
+	if err := store.CompleteWithOutcome(ctx, id, "refusalwar", "scenario_001", content.OutcomeResult{Pilots: []content.PilotOutcome{}, Keywords: []string{"depot_gone"}}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if ledger, _ = store.Ledger(ctx, id, "refusalwar"); len(ledger) != 2 {
 		t.Errorf("a keyword is held once: %+v", ledger)
 	}
-	if err := store.CompleteWithOutcome(ctx, id, "refusalwar", "scenario_002", content.OutcomeResult{Pilots: []content.PilotOutcome{}, Keywords: []string{"scorched_earth"}}); err != nil {
+	if err := store.CompleteWithOutcome(ctx, id, "refusalwar", "scenario_002", content.OutcomeResult{Pilots: []content.PilotOutcome{}, Keywords: []string{"scorched_earth"}}, nil); err != nil {
 		t.Fatal(err)
 	}
 	p := body(t, srv, "/refusalwar/", cookie)

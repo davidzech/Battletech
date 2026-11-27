@@ -1,5 +1,5 @@
 // Shared set-up for the tests: a fresh account per test, made through the site's own endpoints (page.request shares the page's cookies), and the fake
-// MekBay's hangar and battle set through the test server's /__test/ endpoints (internal/site/browser_test.go).
+// MekBay's battle and the hangars set through the test server's /__test/ endpoints (internal/site/browser_test.go).
 const base = require('@playwright/test');
 
 // The test fixture fails a test on any uncaught error in a page script, which no assertion would otherwise notice.
@@ -13,7 +13,7 @@ const test = base.test.extend({
 });
 const expect = base.expect;
 
-// A hangar link the fake MekBay accepts (any instance will do: it answers the same hangar for all).
+// A hangar link the fake MekBay accepts (any instance will do: it answers the same force for all).
 const HANGAR_LINK = 'https://mekbay.com/?instance=01a12f9e-188f-7158-ad67-3fc9700ec733';
 
 let seq = 0;
@@ -38,9 +38,12 @@ function unit(id, unitId, extra) {
   return Object.assign({ ID: id, Unit: unitId, Group: 'Hangar', Gunnery: 4, Piloting: 5 }, extra || {});
 }
 
-// The hangar every read of the fake MekBay answers from now on.
-async function setHangar(page, units) {
-  await ok(await page.request.post('/__test/hangar', { data: { Name: 'Test Hangar', Timestamp: 't', Units: units } }), 'set hangar');
+// Sets a hangar: with a campaign, the account's hangar of that started campaign (the site's database); without one, the force the fake MekBay answers for
+// every hangar link, which starting a campaign from a link imports (clean: undamaged, with unnamed 4/5 crews).
+async function setHangar(page, units, campaign) {
+  const data = { Name: 'Test Hangar', Timestamp: 't', Units: units };
+  if (campaign) data.Campaign = campaign;
+  await ok(await page.request.post('/__test/hangar', { data: data }), 'set hangar');
 }
 
 // The battle status the fake MekBay reports (mekbay.BattleStatus).

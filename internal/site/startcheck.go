@@ -117,7 +117,7 @@ func (s *Server) hangarCheck(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	h, err := s.mekbay.ReadHangar(r.Context(), link.Instance)
+	h, err := s.readLink(r.Context(), link)
 	if err != nil {
 		log.Printf("read hangar for the start check: %v", err)
 		http.Error(w, err.Error(), http.StatusBadGateway)

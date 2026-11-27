@@ -62,35 +62,36 @@ func TestStartWithABuiltForce(t *testing.T) {
 		t.Errorf("an unknown unit is refused: %d", code)
 	}
 
-	// Starting refuses a force that fails the check, and makes nothing in MekBay.
+	// Starting refuses a force that fails the check, and starts nothing.
 	if got := post(t, srv, "/api/campaign/start", startWithUnits(heavy, "Alrek", "Katarina"), cookie, srv.URL).StatusCode; got != http.StatusBadRequest {
 		t.Errorf("over the BV limit: %d", got)
 	}
-	if len(fake.created) != 0 {
-		t.Fatalf("nothing was made: %+v", fake.created)
+	if _, ok, _ := store.Run(ctx, playthroughID(seed), "refusalwar"); ok {
+		t.Fatal("nothing was started")
 	}
-	// A good one makes the hangar as a new force, and the run points at it.
+	// A good one makes the hangar as a new force in the database, and nothing in MekBay.
 	if got := post(t, srv, "/api/campaign/start", startWithUnits(light, "Alrek", "Katarina"), cookie, srv.URL).StatusCode; got != http.StatusNoContent {
 		t.Fatalf("start: %d", got)
 	}
-	if len(fake.created) != 1 {
-		t.Fatalf("one force made: %+v", fake.created)
+	if len(fake.reads) != 0 {
+		t.Errorf("nothing is read from MekBay: %v", fake.reads)
 	}
-	made := fake.created[0]
-	if made.Owner != mekbay.MekBayUID(seed, mekbay.SlotHangar) || made.Draft.Name != "Wolf's Dragoons" || len(made.Draft.Groups) != 1 || made.Draft.Groups[0].Name != "Hangar" || len(made.Draft.Groups[0].Units) != 5 {
-		t.Errorf("the force: %+v", made)
+	h := runHangar(t, store, seed, "refusalwar")
+	if h.Name != "Wolf's Dragoons" || len(h.Units) != 5 {
+		t.Errorf("the hangar: %+v", h)
 	}
-	for _, u := range made.Draft.Groups[0].Units {
-		if u.Pilot != "" || u.Gunnery != mekbay.DefaultGunnery || u.Piloting != mekbay.DefaultPiloting || u.BV == 0 {
-			t.Errorf("each mech is uncrewed, 4/5, with its BV: %+v", u)
+	ids := map[string]bool{}
+	for i, u := range h.Units {
+		ids[u.ID] = true
+		if u.Unit != light[i] || u.Group != "Hangar" || u.Pilot != "" || u.Gunnery != mekbay.DefaultGunnery || u.Piloting != mekbay.DefaultPiloting || u.Damaged {
+			t.Errorf("each mech is pristine and uncrewed, 4/5, in the Hangar group: %+v", u)
 		}
 	}
-	run, _, _ := store.Run(ctx, playthroughID(seed), "refusalwar")
-	if run.HangarInstance != made.Instance || !run.Owned() || run.Warchest != 5000 {
-		t.Errorf("the run's hangar is the new force, and the site owns it: %+v", run)
+	if len(ids) != 5 {
+		t.Errorf("each mech has an ID of its own: %v", ids)
 	}
-	if h, _, ok, _ := store.CachedHangar(ctx, playthroughID(seed), "refusalwar", made.Instance); !ok || len(h.Units) != 5 {
-		t.Errorf("the new hangar is cached: %v %+v", ok, h)
+	if run, _, _ := store.Run(ctx, playthroughID(seed), "refusalwar"); run.Warchest != 5000 {
+		t.Errorf("the run: %+v", run)
 	}
 	if cps, _ := store.Checkpoints(ctx, playthroughID(seed), "refusalwar"); len(cps) != 1 {
 		t.Errorf("and the starting checkpoint is taken: %+v", cps)

@@ -2,7 +2,6 @@ package site
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"net/url"
 	"strings"
@@ -37,20 +36,21 @@ func TestPurchaseEndpoint(t *testing.T) {
 	if got := post(t, srv, "/api/hangar/purchase", url.Values{"campaign": {"refusalwar"}, "unit": {"BMMadCat_H"}}, cookie, "https://evil.example").StatusCode; got != http.StatusForbidden {
 		t.Errorf("cross-origin: %d", got)
 	}
-	// A run from before the site kept its own copy of the hangar can't be changed.
-	_, _ = store.DB().Exec(`UPDATE campaign_runs SET source_url = ''`)
-	if got := buy("BMMadCat_H"); got != http.StatusConflict || funds() != 4500 {
-		t.Errorf("a hangar the site doesn't own: %d, funds %d", got, funds())
-	}
-	_, _ = store.DB().Exec(`UPDATE campaign_runs SET source_url = ?`, goodHangarURL)
-
-	// BV is SP: two units cost the sum of their base BV, and both are added to the hangar in MekBay.
+	// BV is SP: two units cost the sum of their base BV, and both are added to the hangar's Hangar group, undamaged with an unnamed 4/5 crew.
 	want := madCat.BV + koshi.BV
 	if got := buy("BMMadCat_H", "BMKoshi_E"); got != http.StatusOK || funds() != 4500-want {
 		t.Fatalf("buy: %d, funds %d (want %d)", got, funds(), 4500-want)
 	}
-	if len(fake.purchases) != 1 || strings.Join(fake.purchases[0].Units, ",") != "BMMadCat_H,BMKoshi_E" || fake.purchases[0].OwnerUID != mekbay.MekBayUID("wolfpack2026", mekbay.SlotHangar) || fake.purchases[0].Instance == goodInstance || fake.purchases[0].Instance == "" {
-		t.Errorf("MekBay was asked: %+v", fake.purchases)
+	h := runHangar(t, store, "wolfpack2026", "refusalwar")
+	var bought []string
+	for _, u := range h.Units[5:] {
+		bought = append(bought, u.Unit)
+		if u.Group != mekbay.HangarGroup || u.Pilot != "" || u.Gunnery != 4 || u.Piloting != 5 || u.Damaged || u.ID == "" {
+			t.Errorf("a unit bought: %+v", u)
+		}
+	}
+	if len(h.Units) != 7 || strings.Join(bought, ",") != "BMMadCat_H,BMKoshi_E" {
+		t.Errorf("the hangar after the purchase: %+v", h.Units)
 	}
 	// Refused: nothing chosen, an unknown unit, and too little in the warchest. Nothing is charged.
 	before := funds()
@@ -62,17 +62,7 @@ func TestPurchaseEndpoint(t *testing.T) {
 	if err := store.SetWarchest(ctx, id, "refusalwar", madCat.BV-1); err != nil {
 		t.Fatal(err)
 	}
-	if got := buy("BMMadCat_H"); got != http.StatusConflict || funds() != madCat.BV-1 || len(fake.purchases) != 1 {
+	if got := buy("BMMadCat_H"); got != http.StatusConflict || funds() != madCat.BV-1 || len(runHangar(t, store, "wolfpack2026", "refusalwar").Units) != 7 {
 		t.Errorf("too poor: %d, funds %d", got, funds())
-	}
-	// A MekBay failure refunds the charge.
-	if err := store.SetWarchest(ctx, id, "refusalwar", 5000); err != nil {
-		t.Fatal(err)
-	}
-	fake.mu.Lock()
-	fake.serviceErr = errors.New("MekBay said no")
-	fake.mu.Unlock()
-	if got := buy("BMMadCat_H"); got != http.StatusBadGateway || funds() != 5000 {
-		t.Errorf("MekBay failure: %d, funds %d (should be refunded)", got, funds())
 	}
 }

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 
 	"github.com/davidzech/Battletech/internal/content"
@@ -51,8 +50,7 @@ func (s *Server) manage(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, http.StatusOK, "manage", p)
 }
 
-// forceJSON describes the units in a started campaign's hangar for the campaign overview, read anonymously from MekBay (see
-// forceData), and keeps the copy for the page's next visit (see hangarcache.go).
+// forceJSON describes the units in a started campaign's hangar for the campaign overview and the Manage page (see forceData).
 func (s *Server) forceJSON(w http.ResponseWriter, r *http.Request) {
 	seed := currentSeed(r)
 	if seed == "" {
@@ -64,22 +62,11 @@ func (s *Server) forceJSON(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unknown campaign", http.StatusNotFound)
 		return
 	}
-	run, started, err := s.store.Run(r.Context(), playthroughID(seed), c.Slug)
+	h, err := s.loadHangar(r.Context(), playthroughID(seed), c.Slug)
 	if err != nil {
-		http.Error(w, "could not load campaign", http.StatusInternalServerError)
+		hangarLoadFailed(w, err, "for the overview")
 		return
 	}
-	if !started {
-		http.Error(w, "Start this campaign first.", http.StatusBadRequest)
-		return
-	}
-	h, err := s.mekbay.ReadHangar(r.Context(), run.HangarInstance)
-	if err != nil {
-		log.Printf("read hangar for the overview: %v", err)
-		http.Error(w, err.Error(), http.StatusBadGateway)
-		return
-	}
-	s.cacheHangar(r.Context(), playthroughID(seed), c.Slug, run.HangarInstance, h)
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
 	_ = json.NewEncoder(w).Encode(forceData(h, c))

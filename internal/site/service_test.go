@@ -3,7 +3,6 @@ package site
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"net/url"
 	"strings"
@@ -49,7 +48,11 @@ func TestServiceUnitEndpoint(t *testing.T) {
 	h.Units[0].EngineHits, h.Units[0].AmmoBins, h.Units[0].AmmoUsed = 2, 2, 8
 	h.Units[1].Destroyed, h.Units[1].Locations = true, map[string]mekbay.LocationLoss{"CT": {Internal: 8}}
 	h.Units[3].Locations = map[string]mekbay.LocationLoss{"LA": {Armor: 3, Internal: 1}}
-	fake.setHangar(h, nil)
+	setRunHangar(t, store, "wolfpack2026", "refusalwar", h)
+	unit := func(id string) mekbay.HangarUnit {
+		u, _ := runUnit(t, store, "wolfpack2026", "refusalwar", id)
+		return u
+	}
 	form := func(kv ...string) url.Values {
 		v := url.Values{"campaign": {"refusalwar"}}
 		for i := 0; i+1 < len(kv); i += 2 {
@@ -66,19 +69,16 @@ func TestServiceUnitEndpoint(t *testing.T) {
 	if got := post(t, srv, "/api/hangar/service", form("kind", "rearm", "unit", "ua"), cookie, "https://evil.example").StatusCode; got != http.StatusForbidden {
 		t.Errorf("cross-origin: %d", got)
 	}
-	// A run from before the site kept its own copy of the hangar can't be changed.
-	_, _ = store.DB().Exec(`UPDATE campaign_runs SET source_url = ''`)
-	if got := status(form("kind", "rearm", "unit", "ua")); got != http.StatusConflict || funds() != 4500 {
-		t.Errorf("a hangar the site doesn't own: %d, funds %d", got, funds())
-	}
-	_, _ = store.DB().Exec(`UPDATE campaign_runs SET source_url = ?`, goodHangarURL)
-
 	// Rearm: 10 SP per spent bin, two bins.
 	if got := status(form("kind", "rearm", "unit", "ua")); got != http.StatusOK || funds() != 4480 {
 		t.Fatalf("rearm: %d, funds %d", got, funds())
 	}
-	if len(fake.services) != 1 || fake.services[0].Kind != "rearm" || fake.services[0].UnitID != "ua" || fake.services[0].OwnerUID != mekbay.MekBayUID("wolfpack2026", mekbay.SlotHangar) {
-		t.Errorf("MekBay was asked: %+v", fake.services)
+	if u := unit("ua"); u.AmmoBins != 0 || u.EngineHits != 2 {
+		t.Errorf("the rearm refilled the ammunition and left the damage: %+v", u)
+	}
+	// The same rearm again finds nothing to do and charges nothing.
+	if got := status(form("kind", "rearm", "unit", "ua")); got != http.StatusConflict || funds() != 4480 {
+		t.Errorf("rearm again: %d, funds %d", got, funds())
 	}
 	// Repair: the level must match the unit's condition (crippled, 20t Clan: 90 SP).
 	if got := status(form("kind", "repair", "unit", "ua", "level", "armor")); got != http.StatusConflict || funds() != 4480 {
@@ -86,6 +86,9 @@ func TestServiceUnitEndpoint(t *testing.T) {
 	}
 	if got := status(form("kind", "repair", "unit", "ua", "level", "crippled")); got != http.StatusOK || funds() != 4390 {
 		t.Errorf("repair: %d, funds %d", got, funds())
+	}
+	if u := unit("ua"); u.Damaged || u.EngineHits != 0 {
+		t.Errorf("the crippled repair cleared every hit: %+v", u)
 	}
 	// Truly destroyed, undamaged and unknown units are refused, and nothing is charged.
 	for name, v := range map[string]url.Values{
@@ -106,37 +109,32 @@ func TestServiceUnitEndpoint(t *testing.T) {
 	if got := status(form("kind", "repair", "unit", "ud", "level", "armor")); got != http.StatusOK || funds() != 4367 {
 		t.Errorf("armor only: %d, funds %d", got, funds())
 	}
-	if last := fake.services[len(fake.services)-1]; last.Level != "armor" || last.Kind != "repair" || last.UnitID != "ud" || last.Tons != 30 {
-		t.Errorf("MekBay was asked: %+v", last)
+	if u := unit("ud"); u.Locations["LA"] != (mekbay.LocationLoss{Internal: 1}) {
+		t.Errorf("the armor repair left the structure: %+v", u.Locations)
 	}
 	// One destroyed arm does not cripple the Kit Fox, so it is structure damage (30 x 2 x 1.5 = 90 SP): the crippled level isn't offered, and the structure
 	// repair is told the unit isn't crippled, which is what lets it restore the arm.
 	h.Units[3].Locations = map[string]mekbay.LocationLoss{"LA": {Internal: 5}}
-	fake.setHangar(h, nil)
+	setRunHangar(t, store, "wolfpack2026", "refusalwar", h)
 	if got := status(form("kind", "repair", "unit", "ud", "level", "crippled")); got != http.StatusConflict || funds() != 4367 {
 		t.Errorf("crippled-level repair of a unit that isn't crippled: %d, funds %d", got, funds())
 	}
 	if got := status(form("kind", "repair", "unit", "ud", "level", "structure")); got != http.StatusOK || funds() != 4277 {
 		t.Errorf("structure repair of a destroyed arm: %d, funds %d", got, funds())
 	}
-	if last := fake.services[len(fake.services)-1]; last.Level != mekbay.RepairStructure || last.Crippled {
-		t.Errorf("the structure repair sent to MekBay: %+v", last)
+	if u := unit("ud"); u.Damaged || len(u.Locations) != 0 {
+		t.Errorf("the structure repair restored the arm: %+v", u)
 	}
 	if hist, _ := store.History(ctx, id, "refusalwar"); len(hist) == 0 || hist[len(hist)-1].Text != "Repaired Kit Fox J (structure and critical hits) for 90 SP." {
 		t.Errorf("history: %+v", hist)
 	}
-	// Not enough funds, and a MekBay failure refunds the charge.
+	// Not enough funds changes nothing.
+	setRunHangar(t, store, "wolfpack2026", "refusalwar", h)
 	if err := store.SetWarchest(ctx, id, "refusalwar", 50); err != nil {
 		t.Fatal(err)
 	}
-	if got := status(form("kind", "repair", "unit", "ua", "level", "crippled")); got != http.StatusConflict || funds() != 50 {
+	if got := status(form("kind", "repair", "unit", "ua", "level", "crippled")); got != http.StatusConflict || funds() != 50 || unit("ua").EngineHits != 2 {
 		t.Errorf("too poor: %d, funds %d", got, funds())
-	}
-	fake.mu.Lock()
-	fake.serviceErr = errors.New("MekBay said no")
-	fake.mu.Unlock()
-	if got := status(form("kind", "rearm", "unit", "ua")); got != http.StatusBadGateway || funds() != 50 {
-		t.Errorf("MekBay failure: %d, funds %d (should be refunded)", got, funds())
 	}
 }
 

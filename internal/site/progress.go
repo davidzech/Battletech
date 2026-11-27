@@ -109,16 +109,10 @@ func (s *Server) setScenarioCompleted(w http.ResponseWriter, r *http.Request) {
 		s.logHistory(r, pt.ID, c.Slug, storage.HistoryMission, 0, "Marked "+c.MissionName(*sc)+" not completed.")
 	}
 	if battle != "" {
-		s.cleanUpInBackground(currentSeed(r), nil, []string{battle})
+		s.cleanUpInBackground(currentSeed(r), []string{battle})
 	}
 	if done { // a mission completed by hand is a rollback point too (recorded after the line above, so rolling back to it keeps the line)
-		if run, ok, err := s.store.Run(r.Context(), pt.ID, c.Slug); err == nil && ok {
-			if copyID, err := s.checkpointCopy(r.Context(), currentSeed(r), run); err != nil {
-				log.Printf("checkpoint after %s: %v", sc.Slug, err)
-			} else {
-				s.recordCheckpoint(r.Context(), currentSeed(r), pt.ID, c.Slug, "Completed "+c.MissionName(*sc), copyID)
-			}
-		}
+		s.recordCheckpoint(r.Context(), pt.ID, c.Slug, "Completed "+c.MissionName(*sc))
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

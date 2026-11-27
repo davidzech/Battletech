@@ -54,6 +54,8 @@ type entry struct {
 	Ballistic int `json:"ballistic,omitempty"`
 	Energy    int `json:"energy,omitempty"`
 	Missile   int `json:"missile,omitempty"`
+	// CockpitLoc is where a mech's cockpit is when it is not in the head (a torso-mounted cockpit: "CT"); "" for the usual head cockpit, and for anything else.
+	CockpitLoc string `json:"cockpitLoc,omitempty"`
 	// Comp is read from data/units.json (the unit's components) and never written; the index keeps only the ammo among them, as Ammo.
 	Comp []compEntry `json:"comp,omitempty"`
 	// MulID is the unit's Master Unit List ID, read for the availability lookup and never written.
@@ -185,6 +187,9 @@ func main() {
 					u.Energy += max(c.Q, 1)
 				case "M":
 					u.Missile += max(c.Q, 1)
+				}
+				if c.ID == "cockpit" && c.Loc != "" && c.Loc != "HD" {
+					u.CockpitLoc = c.Loc
 				}
 			}
 		}

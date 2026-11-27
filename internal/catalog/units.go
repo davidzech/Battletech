@@ -61,6 +61,8 @@ type Unit struct {
 	Ballistic int `json:"ballistic"`
 	Energy    int `json:"energy"`
 	Missile   int `json:"missile"`
+	// CockpitLoc is where a mech's cockpit is when it is not in the head ("CT" for a torso-mounted cockpit); "" for a head cockpit (gen_units.go).
+	CockpitLoc string `json:"cockpitLoc"`
 }
 
 var (

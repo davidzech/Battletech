@@ -17,7 +17,7 @@ func TestEditKeywords(t *testing.T) {
 	srv, store, cookie := startedCompany(t)
 	ctx := context.Background()
 	id := playthroughID("wolfpack2026")
-	if err := store.CompleteWithOutcome(ctx, id, "refusalwar", "scenario_000", content.OutcomeResult{Pilots: []content.PilotOutcome{}, Keywords: []string{"scorched_earth", "sigint"}}); err != nil {
+	if err := store.CompleteWithOutcome(ctx, id, "refusalwar", "scenario_000", content.OutcomeResult{Pilots: []content.PilotOutcome{}, Keywords: []string{"scorched_earth", "sigint"}}, nil); err != nil {
 		t.Fatal(err)
 	}
 	p := body(t, srv, "/refusalwar/", cookie)

@@ -3,7 +3,6 @@ package site
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"net/url"
 	"strings"
@@ -12,7 +11,6 @@ import (
 	"github.com/davidzech/Battletech/internal/catalog"
 	"github.com/davidzech/Battletech/internal/content"
 	"github.com/davidzech/Battletech/internal/hangar"
-	"github.com/davidzech/Battletech/internal/mekbay"
 	"github.com/davidzech/Battletech/internal/storage"
 )
 
@@ -72,8 +70,8 @@ func TestProvidedScenarioDeploy(t *testing.T) {
 		t.Fatalf("start: %d", r.StatusCode)
 	}
 	id := playthroughID("wolfpack2026")
-	// A MekBay that can't be reached must not matter: the provided mechs are not read from it, and the hangar isn't touched.
-	fake.setHangar(mekbay.HangarForce{}, errors.New("MekBay must not be read for a provided force"))
+	// The provided mechs are not the hangar's, and the hangar isn't touched.
+	before, _ := store.Hangar(ctx, id, "refusalwar")
 	const hangarPath = "/api/mekbay/hangar?campaign=refusalwar&scenario=scenario_000"
 	r := get(t, srv, hangarPath, cookie)
 	var view struct {
@@ -86,13 +84,16 @@ func TestProvidedScenarioDeploy(t *testing.T) {
 	if !view.Provided || len(view.Units) != 5 || view.Units[0].Name != "Nova" {
 		t.Fatalf("the popup should list the five provided mechs: %+v", view)
 	}
-	// Scenario 001 still reads the hangar (and so fails here).
-	if r := get(t, srv, "/api/mekbay/hangar?campaign=refusalwar&scenario=scenario_001", cookie); r.StatusCode != http.StatusBadGateway {
-		t.Errorf("an ordinary scenario reads the hangar: %d", r.StatusCode)
+	// Scenario 001 lists the hangar.
+	var ordinary struct {
+		Provided bool             `json:"provided"`
+		Units    []hangarUnitView `json:"units"`
 	}
-	// Nothing about the provided force is cached as the hangar.
-	if h, _, ok, _ := store.CachedHangar(ctx, id, "refusalwar", goodInstance); ok {
-		t.Errorf("a provided force must not be cached as the hangar: %+v", h)
+	if r := get(t, srv, "/api/mekbay/hangar?campaign=refusalwar&scenario=scenario_001", cookie); r.StatusCode != http.StatusOK || json.NewDecoder(r.Body).Decode(&ordinary) != nil || ordinary.Provided || len(ordinary.Units) != 5 || ordinary.Units[0].Name != "Mist Lynx" {
+		t.Errorf("an ordinary scenario lists the hangar: %d %+v", r.StatusCode, ordinary)
+	}
+	if after, _ := store.Hangar(ctx, id, "refusalwar"); string(after) != string(before) {
+		t.Error("a provided force must not touch the hangar")
 	}
 	// The page carries it at once, with the explanation.
 	page := body(t, srv, "/refusalwar/scenario_000/", cookie)
