@@ -160,10 +160,21 @@ test('deploys two pilots, reconfigures a mech, starts the battle and completes t
   await expect(alrek.locator('.outcome-preview')).toContainText('400');
   await expect(katarina.locator('.outcome-preview')).toContainText('Killed in Action');
   await expect(out.locator('#outcome-commit')).toBeEnabled();
-  // A reload brings the dialog back from the URL: the battle read again, and what was entered put back over it.
+  // A reload brings the dialog back from the URL at once, from the battle as last read (the page carries it), with what was entered put back over it; the
+  // fresh read from MekBay is held back here to show nothing waits for it.
   await expect(page).toHaveURL(/#outcome=/);
+  let release;
+  const held = new Promise((r) => { release = r; });
+  await page.route('**/api/battle/status*', async (route) => { await held; await route.continue(); });
   await page.reload();
   await expect(out).toBeVisible();
+  await expect(out.locator('.outcome-battle-note')).toHaveText('Checking MekBay for changes to the battle');
+  await expect(katarina.locator('.outcome-took')).toContainText('dead on the record sheet');
+  await expect(katarina.getByLabel('Killed in action')).toBeChecked();
+  await expect(alrek.getByLabel('Kills')).toHaveValue('2');
+  release();
+  await expect(out.locator('.outcome-battle-note')).toHaveCount(0);
+  await page.unroute('**/api/battle/status*');
   await expect(katarina.locator('.outcome-took')).toContainText('dead on the record sheet');
   await expect(katarina.getByLabel('Killed in action')).toBeChecked();
   await expect(alrek.getByLabel('Kills')).toHaveValue('2');

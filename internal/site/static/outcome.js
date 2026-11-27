@@ -30,6 +30,7 @@
   var state = null;   // { pilots: { id: { tookPart, killed, values } }, mission: { id: value }, mvp: the MVP's pilot id, '' while not chosen }
   var results = {};   // pilot id -> the preview's lines, and the mission's
   var seq = 0, timer = null, valid = false;
+  var battleSeq = 0; // the battle reads, counted apart from the previews
 
   var el = Dom.el;
   function byScope(scope) { return inputs.filter(function (i) { return i.scope === scope; }); }
@@ -124,7 +125,8 @@
       var boxes = {};
       pilotInputs.forEach(function (i) { var f = field(i, st.values, changed); boxes[i.id] = f.querySelector('input'); fields.appendChild(f); });
       if (pilotInputs.length) card.appendChild(fields);
-      ui[p.id] = { took: took, tb: tb, mvpBox: mb, fields: fields, kill: kill, killedBox: kill.querySelector('input'), boxes: boxes };
+      ui[p.id] = { took: took, tb: tb, mvpBox: mb, fields: fields, kill: kill, killedBox: kill.querySelector('input'), boxes: boxes, killTouched: false };
+      ui[p.id].killedBox.addEventListener('change', function () { ui[p.id].killTouched = true; });
       var preview = el('ul', 'outcome-preview');
       preview.id = 'outcome-preview-' + p.id;
       card.appendChild(preview);
@@ -192,11 +194,13 @@
 
   // Fills the cards in from the battle: a pilot who crews a mech took part, the rest are benched, and a pilot the record sheet shows dead starts ticked as killed in
   // action (the players can untick it).
-  function applyBattle(crew) {
+  // With keepTouched, a Killed in action box the player has changed keeps their choice (a fresh read arriving after the dialog opened from the cached one).
+  function applyBattle(crew, keepTouched) {
     pilots.forEach(function (p) {
       var c = crew[p.name.toLowerCase()], u = ui[p.id], st = state.pilots[p.id];
       st.tookPart = !!c;
-      st.killed = !!(c && c.dead);
+      if (!(keepTouched && u.killTouched)) st.killed = !!(c && c.dead);
+      if (!c) st.killed = false;
       u.took.textContent = c ? (c.dead ? 'Took part \u00b7 dead on the record sheet' : 'Took part') : 'Benched: not in the battle';
       u.took.classList.toggle('outcome-bad', !!(c && c.dead));
       part(u, !!c);
@@ -338,7 +342,7 @@
         u.tb.checked = st.tookPart;
         part(u, st.tookPart);
       }
-      if (s.k === 0 || s.k === 1) st.killed = st.tookPart && s.k === 1;
+      if (s.k === 0 || s.k === 1) { st.killed = st.tookPart && s.k === 1; u.killTouched = true; } // the player's, so a fresh battle read keeps it
       if (!st.tookPart) st.killed = false;
       u.killedBox.checked = st.killed;
       if (st.tookPart) restoreValues(byScope('pilot'), st.values, s.v, u.boxes);
@@ -387,22 +391,41 @@
     commit.disabled = true;
     inBattle = dialog.dataset.inBattle === '1';
     if (!inBattle) { build(); dialog.showModal(); ready(); return; }
-    // With a battle behind it, who took part and who is dead come from its record sheets, so nothing that depends on them is shown until they have been read.
-    body.textContent = '';
-    state = null;
-    body.appendChild(el('p', 'muted outcome-battle-note', 'Reading the battle from MekBay'));
-    dialog.showModal();
-    var mine = ++seq;
+    // With a battle behind it, who took part and who is dead come from its record sheets. The page carries the last read of them (the battle view's), so the
+    // dialog opens from that at once while a fresh read is made; if the fresh one differs, the cards follow it, keeping a Killed in action box the player has
+    // changed. With no earlier read, nothing that depends on them is shown until they have been read. Committing reads the battle again on the server either way.
+    var cached = null;
+    try { cached = dialog.dataset.cachedStatus ? JSON.parse(dialog.dataset.cachedStatus) : null; } catch (e) { cached = null; }
+    var note = null, mine = ++battleSeq; // its own count: the preview's requests (seq) start while this one is out
+    if (cached) {
+      build();
+      applyBattle(crewOf(cached));
+      note = el('p', 'muted outcome-battle-note', 'Checking MekBay for changes to the battle');
+      body.insertBefore(note, body.firstChild);
+      dialog.showModal();
+      ready();
+    } else {
+      body.textContent = '';
+      state = null;
+      body.appendChild(el('p', 'muted outcome-battle-note', 'Reading the battle from MekBay'));
+      dialog.showModal();
+    }
     fetch('/api/battle/status?campaign=' + encodeURIComponent(dialog.dataset.campaign) + '&scenario=' + encodeURIComponent(dialog.dataset.scenario), { credentials: 'same-origin' }).then(function (res) {
       if (!res.ok) return res.text().then(function (t) { throw new Error(t.trim() || 'Could not read the battle.'); });
       return res.json();
     }).then(function (status) {
-      if (mine !== seq || !dialog.open) return;
+      if (mine !== battleSeq || !dialog.open) return;
+      if (cached) {
+        if (note) note.remove();
+        if (JSON.stringify(crewOf(status)) !== JSON.stringify(crewOf(cached))) { applyBattle(crewOf(status), true); changed(); }
+        return;
+      }
       build();
       applyBattle(crewOf(status));
       ready();
     }, function (err) {
-      if (mine !== seq) return;
+      if (mine !== battleSeq) return;
+      if (cached) { if (note) note.textContent = 'Could not reach MekBay: this is the battle as last read. Committing reads it again.'; return; }
       body.textContent = '';
       error.textContent = (err && err.message) || 'Could not read the battle.';
     });

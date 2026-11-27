@@ -20,7 +20,7 @@
 </section>
 <script src="/static/missionlog.js" defer></script>
 <script src="/static/confirm.js" defer></script>
-{{if and .Scenario.HasOutcome (ne .ScenarioState "locked") (ne .ScenarioState "completed")}}<dialog id="outcome-dialog" class="wizard outcome" aria-labelledby="outcome-title" data-in-battle="{{if .InProgress}}1{{end}}" data-mvp-sp="{{.Scenario.MVPSP}}" data-warchest="{{.Run.Warchest}}" data-campaign="{{.Campaign.Slug}}" data-scenario="{{.Scenario.Slug}}" data-inputs="{{.OutcomeInputsJSON}}" data-pilots="{{.OutcomePilotsJSON}}">
+{{if and .Scenario.HasOutcome (ne .ScenarioState "locked") (ne .ScenarioState "completed")}}<dialog id="outcome-dialog" class="wizard outcome" aria-labelledby="outcome-title" data-in-battle="{{if .InProgress}}1{{end}}" data-cached-status="{{.BattleCache}}" data-mvp-sp="{{.Scenario.MVPSP}}" data-warchest="{{.Run.Warchest}}" data-campaign="{{.Campaign.Slug}}" data-scenario="{{.Scenario.Slug}}" data-inputs="{{.OutcomeInputsJSON}}" data-pilots="{{.OutcomePilotsJSON}}">
   <form id="outcome-form" autocomplete="off" novalidate>
     <h2 id="outcome-title">Complete mission</h2>
     <div id="outcome-body"></div>
