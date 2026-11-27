@@ -102,10 +102,6 @@ func (s *Server) rollbackTo(ctx context.Context, seed, playthroughID, campaign s
 	if !ok {
 		return "", sql.ErrNoRows
 	}
-	cur, _, err := s.store.Run(ctx, playthroughID, campaign)
-	if err != nil {
-		return "", err
-	}
 	owner := mekbay.AccountUID(seed, mekbay.SlotHangar)
 	live := storage.SnapshotHangarInstance(cp.Snapshot)
 	aside := "" // the copy the live hangar is set aside in while the rows are restored
@@ -135,9 +131,6 @@ func (s *Server) rollbackTo(ctx context.Context, seed, playthroughID, campaign s
 	}
 	if aside != "" {
 		dropped = append(dropped, aside)
-	}
-	if cur.Owned() && cur.HangarInstance != live && cur.HangarInstance != "" {
-		dropped = append(dropped, cur.HangarInstance) // a hangar imported since is not part of the campaign any more
 	}
 	s.deleteHangars(ctx, seed, dropped)
 	return cp.Label, nil

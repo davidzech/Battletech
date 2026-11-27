@@ -40,7 +40,7 @@ func TestEdgeAbilitiesThroughThePages(t *testing.T) {
 	}
 
 	// Level 1 in Edge abilities: one ability to choose.
-	if err := store.AwardSP(ctx, id, "refusalwar", pl.ID, pilot.SPAllocation{EdgeAbilities: 60}); err != nil {
+	if err := store.ApplySP(ctx, id, "refusalwar", pl.ID, 60, pilot.SPAllocation{EdgeAbilities: 60}); err != nil {
 		t.Fatal(err)
 	}
 	p = page()
@@ -79,7 +79,7 @@ func TestEdgeAbilitiesThroughThePages(t *testing.T) {
 	}
 
 	// More levels, more choices at once; each only once.
-	if err := store.AwardSP(ctx, id, "refusalwar", pl.ID, pilot.SPAllocation{EdgeAbilities: 540}); err != nil { // 600: level 4
+	if err := store.ApplySP(ctx, id, "refusalwar", pl.ID, 540, pilot.SPAllocation{EdgeAbilities: 540}); err != nil { // 600: level 4
 		t.Fatal(err)
 	}
 	if !strings.Contains(page(), "Choose 3 new Edge abilities") {
@@ -154,7 +154,7 @@ func TestSPResetForgetsEdgeAbilities(t *testing.T) {
 	}
 	setUp := func() {
 		t.Helper()
-		if err := store.AwardSP(ctx, id, "refusalwar", pl.ID, pilot.SPAllocation{EdgeAbilities: 60}); err != nil {
+		if err := store.ApplySP(ctx, id, "refusalwar", pl.ID, 60, pilot.SPAllocation{EdgeAbilities: 60}); err != nil {
 			t.Fatal(err)
 		}
 		if err := store.LearnAbilities(ctx, id, "refusalwar", pl.ID, []string{"marksman"}); err != nil {

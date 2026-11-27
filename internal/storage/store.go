@@ -38,7 +38,7 @@ type CampaignRun struct {
 	Campaign       string // the campaign's slug, e.g. "refusalwar"
 	HangarURL      string // the link to the site's own copy of the hangar, https://mekbay.com/?instance=<id>; never shown to the player
 	HangarInstance string // that copy's instance ID: the hangar the site reads and manages (see clone.go)
-	SourceURL      string // the MekBay link the player gave, which the copy was made from; kept so it can be imported again
+	SourceURL      string // the MekBay link the player gave, which the copy was made from
 	Warchest       int    // the force's finances in SP; starts at the campaign's starting_warchest
 	ForceName      string // the campaign's force name, e.g. "Wolf's Dragoons", chosen when the campaign is started and editable on the Manage page ("" on a run from before it was asked)
 	FreeRecruits   int    // recruits that cost no SP (a mission outcome can grant them, e.g. a replacement for a pilot who died)
@@ -60,7 +60,7 @@ func (r CampaignRun) WarchestText() string { return format.Commas(r.Warchest) }
 func (r CampaignRun) Started() bool { return r.HangarInstance != "" }
 
 // Owned reports whether the run's hangar is the site's own copy. A run started before the site made copies points at the player's own force, which the site
-// cannot change, so it has to be imported again before anything can be repaired, rearmed, bought or assigned.
+// cannot change, so nothing can be repaired, rearmed, bought or assigned in it.
 func (r CampaignRun) Owned() bool { return r.SourceURL != "" }
 
 // timestampColumn is the created_at / started_at column type, which differs between the two databases.
@@ -498,16 +498,6 @@ func (s *Store) Run(ctx context.Context, playthroughID, campaign string) (r Camp
 		return CampaignRun{}, false, nil
 	}
 	return r, err == nil, err
-}
-
-// StartRun starts a campaign with its MekBay hangar. Doing it again for a started campaign changes the hangar and
-// keeps when it was started.
-func (s *Store) StartRun(ctx context.Context, playthroughID, campaign string, h mekbay.Hangar) error {
-	_, err := s.db.ExecContext(ctx,
-		s.q(`INSERT INTO campaign_runs (playthrough_id, campaign, hangar_url, hangar_instance, source_url) VALUES (?, ?, ?, ?, ?)
-		     ON CONFLICT (playthrough_id, campaign) DO UPDATE SET hangar_url = excluded.hangar_url, hangar_instance = excluded.hangar_instance, source_url = excluded.source_url`),
-		playthroughID, campaign, h.URL, h.Instance, h.Source)
-	return err
 }
 
 // SetForceName renames a started campaign's force. sql.ErrNoRows if the campaign hasn't been started.

@@ -113,13 +113,3 @@ func (s *Store) MekBayLink(ctx context.Context, id string, now time.Time) (accou
 	}
 	return account, true, nil
 }
-
-// RevokeMekBayLink deletes a link, so its host name stops working at once. Asking for the label again makes a new id.
-func (s *Store) RevokeMekBayLink(ctx context.Context, playthroughID, campaign, label string) (bool, error) {
-	res, err := s.db.ExecContext(ctx, s.q(`DELETE FROM mekbay_links WHERE playthrough_id = ? AND campaign = ? AND label = ?`), playthroughID, campaign, label)
-	if err != nil {
-		return false, err
-	}
-	n, _ := res.RowsAffected()
-	return n > 0, nil
-}

@@ -37,7 +37,7 @@ func TestPurchaseEndpoint(t *testing.T) {
 	if got := post(t, srv, "/api/hangar/purchase", url.Values{"campaign": {"refusalwar"}, "unit": {"BMMadCat_H"}}, cookie, "https://evil.example").StatusCode; got != http.StatusForbidden {
 		t.Errorf("cross-origin: %d", got)
 	}
-	// A run from before the site kept its own copy of the hangar has to be imported again first.
+	// A run from before the site kept its own copy of the hangar can't be changed.
 	_, _ = store.DB().Exec(`UPDATE campaign_runs SET source_url = ''`)
 	if got := buy("BMMadCat_H"); got != http.StatusConflict || funds() != 4500 {
 		t.Errorf("a hangar the site doesn't own: %d, funds %d", got, funds())

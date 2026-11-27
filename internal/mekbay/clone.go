@@ -10,7 +10,7 @@ import (
 // Cloning a hangar. The player does not hand the site their MekBay force: they hand it a link, and the site makes its own copy of that force and owns the copy,
 // under the MekBay identity derived from their seed (accounts.go). Everything the site does to the force's hangar (repairs, rearms, purchases, the crews it
 // assigns) is done to its own copy, so it never needs, or touches, the player's MekBay account, and the player never sees the copy. They can keep arranging
-// their own force in their own MekBay tab and re-import it later.
+// their own force in their own MekBay tab.
 //
 // The copy starts clean: every unit fully repaired and rearmed, heat and pilot wounds cleared, and every crew set to an unnamed 4/5 pilot, so the campaign begins
 // from the units alone, whatever state the source force was left in.

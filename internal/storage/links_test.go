@@ -99,17 +99,6 @@ func TestMekBayLinkStore(t *testing.T) {
 		t.Errorf("an expired link is replaced by a new id: %q %v", fresh, err)
 	}
 
-	// Revoking.
-	live, _ := store.EnsureMekBayLink(ctx, "pt", "camp", "opfor", testAccount, ttl, now.Add(200*24*time.Hour))
-	if ok, err := store.RevokeMekBayLink(ctx, "pt", "camp", "opfor"); err != nil || !ok {
-		t.Fatal(ok, err)
-	}
-	if _, ok, _ := store.MekBayLink(ctx, live, now.Add(200*24*time.Hour)); ok {
-		t.Error("a revoked link is gone")
-	}
-	if ok, _ := store.RevokeMekBayLink(ctx, "pt", "camp", "opfor"); ok {
-		t.Error("revoking what isn't there says so")
-	}
 	if _, err := store.EnsureMekBayLink(ctx, "pt", "camp", "bad", "nope", ttl, now); err == nil {
 		t.Error("only a real account can be put in a link")
 	}
