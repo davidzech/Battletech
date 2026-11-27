@@ -91,18 +91,28 @@ func (b browserMekBay) CreateForce(ctx context.Context, owner, instance string, 
 	return h, err
 }
 
-// browserCampaigns is the real campaigns plus Drill, a small campaign whose Scenario 000 has no forces and an Aces-style outcome (an objective, pilot SP and
-// an MVP), so its Complete mission dialog opens straight from the page, with the Active and Killed in action boxes, rather than from a battle.
+// browserCampaigns is the real campaigns plus two small ones. Drill's Scenario 000 has no forces and an Aces-style outcome (an objective, pilot SP and an
+// MVP), so its Complete mission dialog opens straight from the page, with the Active and Killed in action boxes, rather than from a battle. Muster's
+// Scenario 000 is deployed from the hangar (Refusal War's first missions are the Trial, with its own mechs, and then one that waits for it), with Scenario
+// 001's OpFor and BV limit.
 func browserCampaigns(t *testing.T) string {
 	t.Helper()
 	intro, err := os.ReadFile("../../campaigns/RefusalWar/Intro.md")
 	if err != nil {
 		t.Fatal(err)
 	}
+	opfor, err := os.ReadFile("../../campaigns/RefusalWar/Scenario_001/OpFor1.mul")
+	if err != nil {
+		t.Fatal(err)
+	}
 	return campaignsCopy(t, map[string]string{
-		"Drill/Intro.md":              string(intro),
-		"Drill/Keywords.md":           "---\nkeywords:\n  - {id: depot_gone, name: Depot Gone, scenario: scenario_000, description: The depot was destroyed.}\n---\n",
-		"Drill/Scenario_000/Setup.md": "---\nid: scenario_000\ntitle: Raid\nplanet: Colmar\n---\n# Scenario 000: Raid\n\n## Briefing\n\nRaid the depot.\n",
+		"Muster/Intro.md":                string(intro),
+		"Muster/Keywords.md":             "---\nkeywords: []\n---\n",
+		"Muster/Scenario_000/OpFor1.mul": string(opfor),
+		"Muster/Scenario_000/Setup.md":   "---\nid: scenario_000\ntitle: Muster\nplanet: Colmar\nbv_limit: 7500\nforces:\n  opfor1: OpFor1.mul\n---\n# Scenario 000: Muster\n\n## Briefing\n\nMuster the force.\n",
+		"Drill/Intro.md":                 string(intro),
+		"Drill/Keywords.md":              "---\nkeywords:\n  - {id: depot_gone, name: Depot Gone, scenario: scenario_000, description: The depot was destroyed.}\n---\n",
+		"Drill/Scenario_000/Setup.md":    "---\nid: scenario_000\ntitle: Raid\nplanet: Colmar\n---\n# Scenario 000: Raid\n\n## Briefing\n\nRaid the depot.\n",
 		"Drill/Scenario_000/Outcome.md": `---
 id: scenario_000
 branches: []

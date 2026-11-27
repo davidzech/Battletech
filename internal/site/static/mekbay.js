@@ -1,21 +1,22 @@
 // Scenario page: the Deploy wizard. The force's mechs (its MekBay hangar) and named pilots are one shared pool, and the players divide it: each takes the mechs
 // and pilots they want from what the players before them left, and the last step reviews the whole plan.
 //
-//   1 player:  one step (pick mechs, assign pilots, Deploy).
-//   2-4:       a "Players" picker on the first step (within the campaign's min_players and max_players), then one step per player, then a review, with a
-//              progress bar and "Step n of m" at the bottom.
+//   1 player:  a step to pick mechs and assign pilots, then the review (and Start battle).
+//   2-4:       a "Players" picker on the first step (within the campaign's min_players and max_players), then one step per player, then the review.
+// A progress bar and "Step n of m" run along the bottom.
 //
 // A player's mechs are the ones they tick; the Pilots tray above the list holds the named pilots nobody else has taken. Drag a pilot onto a ticked mech's slot to
 // assign them (or click the pilot, then the slot, which also works by keyboard and on touch screens). A pilot drives one mech, so assigning them again moves them;
 // dropping a pilot on the tray, or the x on a slot, takes them off. A mech another player took is not offered, and neither is a pilot they took.
 //
-// After the players' steps comes a Configure step when the scenario lets its provided omnimechs be reconfigured (the hangar data's `swaps`, Setup.md
-// provided_swaps) and a mech taken has variants to offer: each taken omnimech gets the shared variant picker (variantpicker.js), with only the variants the
-// campaign's faction fields in its era, free of charge. Every mech starts on its own variant, so going straight on keeps them all; a chosen variant changes the
-// mech everywhere after it (its row, BV and card, the commander strip and the review) and is sent as variant_unit / variant_to with the plan. Unticking a mech
-// puts it back on its own variant.
+// A force over the BV limit can still go on: the limit holds back only Start battle. On the review, each omnimech taken has a Reconfigure button, which opens
+// the shared Reconfigure dialog (swapdialog.js) to propose another variant, typically to bring the force under the limit. A hangar's omnimechs are proposed at
+// the Manage page's price (the hangar data's `paidSwaps`; it has to be fully repaired and rearmed), and the review adds the prices up as the drop cost, paid
+// by Start battle from the warchest when it makes the swaps in the hangar; a scenario's own mechs (Setup.md provided_swaps) are free, and only to the variants
+// the campaign's faction fields in its era. A chosen variant changes the mech everywhere (its row, BV and card, the commander strip and the review) and is sent
+// as variant_unit / variant_to with the plan. Unticking a mech puts it back on its own variant.
 //
-// Then comes a Commander step, when the scenario chooses one (data-commander) and two or more named pilots are deployed: a click on one of
+// After the players' steps comes a Commander step, when the scenario chooses one (data-commander) and two or more named pilots are deployed: a click on one of
 // them makes them the force's commander, whose mech MekBay marks on the record sheet (with one named pilot deployed, they command without being asked).
 // The last step, Start battle, sends the whole plan to POST /api/battle/start, which checks it on the server (the same rules, over every player's mechs together), builds a
 // force for each player and one for the OpFor in MekBay, saves the operation that sets them against each other, and answers with the one MekBay link the whole table opens,
@@ -61,7 +62,9 @@
 
   var units = [];         // the hangar's mechs, as the server describes them
   var provided = false;   // the scenario provides its own mechs in place of the hangar
-  var swaps = false;      // ... and they can be reconfigured for free on the Configure step
+  var swaps = false;      // the review offers to reconfigure the omnimechs taken (see the top of the file)
+  var paidSwaps = false;  // ... at a price, paid by Start battle (a hangar's mechs; a scenario's own are free)
+  var warchest = 0;       // the SP there is to pay for them
   var variants = {};      // unit ID -> the MekBay unit ID of the variant it was reconfigured to (only for a unit that was)
   var original = {};      // unit ID -> the named pilot the hangar has in it now, if any
   var plans = [];         // per player: { selected: { unitId: true }, crew: { unitId: pilot name } }
@@ -101,20 +104,22 @@
   // ---- The plan
   function plan(i) { if (!plans[i]) plans[i] = { selected: {}, crew: {} }; return plans[i]; }
   function cur() { return plan(step); }
-  // The steps: one per player, then the Configure step when a mech taken can be reconfigured, then the Commander step when there is a commander to choose,
-  // then the review when there are several players.
-  function stepCount() { return playerCount + (needConfigure() ? 1 : 0) + (needCommander() ? 1 : 0) + (playerCount > 1 ? 1 : 0); }
+  // The steps: one per player, then the Commander step when there is a commander to choose, then the review.
+  function stepCount() { return playerCount + (needCommander() ? 1 : 0) + 1; }
   function isPlayerStep() { return step < playerCount; }
-  function isConfigureStep() { return needConfigure() && step === playerCount; }
-  function isCommanderStep() { return needCommander() && step === playerCount + (needConfigure() ? 1 : 0); }
-  // A mech the Configure step offers: the scenario allows it and the mech has a variant the campaign's faction fields.
-  function configurable(u) { return swaps && (u.swapOptions || []).some(function (o) { return o.available !== false; }); }
-  function needConfigure() {
-    if (!swaps) return false;
-    for (var i = 0; i < playerCount; i++) {
-      for (var j = 0; j < units.length; j++) if (plan(i).selected[units[j].id] && configurable(units[j])) return true;
-    }
-    return false;
+  function isCommanderStep() { return needCommander() && step === playerCount; }
+  // A mech the review offers to reconfigure: the scenario or the hangar allows it and the mech has another variant (for a scenario's own mechs, one the
+  // campaign's faction fields; the Manage page's dialog lists a hangar's all, behind a box).
+  function configurable(u) { return swaps && (u.swapOptions || []).some(function (o) { return paidSwaps || o.available !== false; }); }
+  // What reconfiguring a mech to its proposed variant costs (0 when it isn't, or for a scenario's own mechs), and the whole plan's: the drop cost.
+  function swapCost(u) {
+    var o = paidSwaps && u && variants[u.id] && VariantPicker.option(u, variants[u.id]);
+    return o ? o.cost : 0;
+  }
+  function dropCost() {
+    var t = 0;
+    for (var i = 0; i < playerCount; i++) units.forEach(function (u) { if (plan(i).selected[u.id]) t += swapCost(u); });
+    return t;
   }
   // A mech as it will be flown: reconfigured to its chosen variant (name, model, BV, role, icon, card), or as it is. It keeps its ID, so ticks and pilots stay on it.
   function effective(u) {
@@ -134,7 +139,7 @@
     out.model = (v.model || '') + ' · from ' + (v.from || 'standard');
     return out;
   }
-  function isReview() { return playerCount > 1 && step === stepCount() - 1; }
+  function isReview() { return step === stepCount() - 1; }
   function isLast() { return step === stepCount() - 1; }
   // The named pilots in the plan's mechs, in player and mech order: [{ name, unit, player }].
   function deployedPilots() {
@@ -192,7 +197,9 @@
   }
   function totalBV() { var t = 0; for (var i = 0; i < playerCount; i++) t += bvOf(i); return t; }
   function totalCount() { var t = 0; for (var i = 0; i < playerCount; i++) t += countOf(i); return t; }
-  function over() { return (limit > 0 && totalBV() > limit) || (unitLimit > 0 && totalCount() > unitLimit); }
+  function overBV() { return limit > 0 && totalBV() > limit; }
+  function overUnits() { return unitLimit > 0 && totalCount() > unitLimit; }
+  function over() { return overBV() || overUnits(); }
   // The most mechs player i may take under the scenario's unit limit: every other player needs at least one, so a player who has taken none yet still
   // holds a place (with a limit of 2 and two players, each takes one). Infinity without a limit.
   function roomFor(i) {
@@ -440,13 +447,17 @@
     var parts = [];
     if (unitLimit) parts.push('Take up to ' + unitLimit + ' mechs in all' + (playerCount > 1 ? ', at least one for each player' : ''));
     if (needPilots) parts.push('every mech needs a named pilot');
-    rules.hidden = !parts.length;
+    // Over the BV limit, the force can still go on to the review, where omnimechs can be reconfigured to bring it under.
+    var overText = overBV() ? 'The force is over the BV limit: take fewer mechs, or reconfigure omnimechs on the review. Start battle waits until it fits.' : '';
+    rules.hidden = !parts.length && !overText;
+    rules.textContent = '';
     if (parts.length) {
       var text = parts.join(', ') + '.';
       if (anyUnmanned()) text += ' Assign a named pilot to each mech you take.';
       if (countOf(step) > roomFor(step)) text += ' Leave a mech for each other player.';
       rules.textContent = text.charAt(0).toUpperCase() + text.slice(1);
     }
+    if (overText) rules.textContent = (rules.textContent ? rules.textContent + ' ' : '') + overText;
   }
 
   var showPlayers = Dom.players(playersPick, minPlayers, maxPlayers, function (n) {
@@ -480,14 +491,16 @@
     notes.forEach(function (n) { review.appendChild(n); });
     data.forEach(function (pl) {
       var sec = el('section', 'deploy-review-player');
-      var h = el('h3', null, 'Player ' + pl.player);
+      var h = el('h3', null, playerCount > 1 ? 'Player ' + pl.player : 'Your force');
       h.appendChild(el('span', null, pl.units.length + (pl.units.length === 1 ? ' mech' : ' mechs') + ' · ' + fmt(pl.bv) + ' BV'));
       sec.appendChild(h);
       var ul = el('ul', 'deploy-review-list');
       pl.units.forEach(function (pu) {
-        var u = effective(unitById(pu.id));
+        var base = unitById(pu.id), u = effective(base);
         var li = el('li', 'deploy-unit review' + (pilots.length ? ' has-slot' : ''));
-        li.appendChild(infoRow(viewOf(labelled(u) || { name: pu.name, model: pu.model, bv: pu.bv, icon: '', role: '', tons: 0 }), u));
+        var view = viewOf(labelled(u) || { name: pu.name, model: pu.model, bv: pu.bv, icon: '', role: '', tons: 0 });
+        if (base && configurable(base)) view.actions = [reconfigureAction(base)];
+        li.appendChild(infoRow(view, u));
         if (pilots.length) li.appendChild(staticPilot(pl.crew[pu.id] || ''));
         ul.appendChild(li);
       });
@@ -501,6 +514,52 @@
     var total = el('p', 'deploy-review-total' + ((limit > 0 && tot > limit) || (unitLimit > 0 && count > unitLimit) ? ' over' : ''));
     total.appendChild(el('span', null, 'Force total: ' + (unitLimit ? count + ' / ' + unitLimit + ' mechs · ' : '') + fmt(tot) + (limit ? ' / ' + fmt(limit) : '') + ' BV'));
     review.appendChild(total);
+    if (limit > 0 && tot > limit) review.appendChild(el('p', 'deploy-review-note', 'Over the BV limit by ' + fmt(tot - limit) + ' BV: reconfigure an omnimech, or go back and take fewer mechs.'));
+    // The drop cost: what reconfiguring the hangar's omnimechs costs, paid by Start battle.
+    var cost = dropCost();
+    if (cost > 0) {
+      var line = Dom.costLine(cost, warchest);
+      var drop = el('p', 'deploy-review-total deploy-drop-cost' + (line.short ? ' over' : ''));
+      drop.appendChild(el('span', null, 'Drop cost: ' + line.text));
+      review.appendChild(drop);
+    }
+  }
+
+  // The review's Reconfigure button for an omnimech: the shared Reconfigure dialog, which here only proposes the variant (Start battle pays for it). A hangar's
+  // mech has to be fully repaired and rearmed, as on the Manage page; what the other proposals already cost is set aside from the warchest.
+  function reconfigureAction(u) {
+    var pristine = !paidSwaps || u.sellFull;
+    return {
+      label: variants[u.id] ? 'Reconfigured' : 'Reconfigure',
+      disabled: !pristine,
+      title: pristine ? 'Choose another variant for this mission' + (paidSwaps ? ', paid when the battle starts' : '') : 'An omnimech has to be fully repaired and rearmed before it can be reconfigured.',
+      onClick: function () {
+        if (typeof SwapDialog === 'undefined') return;
+        var o = {
+          title: 'Reconfigure ' + u.name,
+          value: variants[u.id] || '',
+          apply: 'Choose',
+          submit: function (opt) {
+            if (opt) variants[u.id] = opt.unit; else delete variants[u.id];
+            touched = true;
+            error.textContent = '';
+            render();
+            return Promise.resolve();
+          }
+        };
+        if (paidSwaps) {
+          o.availability = dialog.dataset.swapAvailability || '';
+          o.price = function (opt) { return opt.cost + ' SP'; };
+          o.cost = function (opt) { return opt.cost; };
+          o.warchest = warchest - (dropCost() - swapCost(u));
+        } else {
+          o.onlyAvailable = true;
+          o.current = 'standard';
+          o.price = function () { return 'Free'; };
+        }
+        SwapDialog.open(u, o);
+      }
+    };
   }
 
   // The Commander step: one button per deployed named pilot, which is their pilot card itself with a strip joined underneath naming their mech (and player); a
@@ -530,59 +589,6 @@
       ul.appendChild(li);
     });
     review.appendChild(ul);
-  }
-
-  // The force total line under the Configure step and the review.
-  function totalLine() {
-    var p = el('p', 'deploy-review-total' + (over() ? ' over' : ''));
-    p.appendChild(el('span', null, 'Force total: ' + (unitLimit ? totalCount() + ' / ' + unitLimit + ' mechs · ' : '') + fmt(totalBV()) + (limit ? ' / ' + fmt(limit) : '') + ' BV'));
-    return p;
-  }
-
-  // The Configure step: every taken mech that can be reconfigured, grouped by player, each with the variant picker. A change redraws only that mech's rows and
-  // the total, so the box keeps the focus.
-  function renderConfigure() {
-    review.textContent = '';
-    review.appendChild(el('p', 'muted deploy-configure-intro', 'This mission\u2019s omnimechs can be reconfigured to another variant, free of charge. Each starts on its standard configuration: choose another below, or go on to keep it.'));
-    var total = totalLine();
-    for (var i = 0; i < playerCount; i++) {
-      var mine = units.filter(function (u) { return plan(i).selected[u.id] && configurable(u); });
-      if (!mine.length) continue;
-      var sec = el('section', 'deploy-review-player deploy-configure');
-      if (playerCount > 1) sec.appendChild(el('h3', null, 'Player ' + (i + 1)));
-      mine.forEach(function (u) { sec.appendChild(variantPick(u, plan(i).crew[u.id], function () { total.replaceWith(total = totalLine()); renderFooter(); })); });
-      review.appendChild(sec);
-    }
-    review.appendChild(total);
-  }
-
-  function variantPick(u, pilotName, changed) {
-    var free = { price: function () { return 'Free'; } };
-    var block = el('div', 'variant-pick');
-    var head = el('div', 'variant-pick-head');
-    var select = document.createElement('select');
-    select.id = 'variant-' + u.id;
-    var label = el('label', 'variant-pick-name', u.name);
-    label.htmlFor = select.id;
-    head.appendChild(label);
-    var p = pilotName && pilotNamed(pilotName);
-    if (p) head.appendChild(el('span', 'variant-pick-pilot', p.name));
-    block.appendChild(head);
-    VariantPicker.fill(select, u, { onlyAvailable: true, current: 'standard', value: variants[u.id] || '' });
-    block.appendChild(select);
-    var rows = el('div');
-    VariantPicker.flow(rows, u, VariantPicker.option(u, select.value), free);
-    block.appendChild(rows);
-    select.addEventListener('change', function () {
-      if (select.value) variants[u.id] = select.value; else delete variants[u.id];
-      touched = true;
-      error.textContent = '';
-      if (typeof MechRow.hideTip === 'function') MechRow.hideTip();
-      VariantPicker.mark(select);
-      VariantPicker.flow(rows, u, VariantPicker.option(u, select.value), free);
-      changed();
-    });
-    return block;
   }
 
   function planFromState() {
@@ -800,9 +806,10 @@
       progressTrack.setAttribute('aria-valuenow', step + 1);
       count.textContent = 'Step ' + (step + 1) + ' of ' + total;
     }
-    var ok = !busy && !over();
+    // Over the BV limit the force can still go on (the review can reconfigure omnimechs to fit); only Start battle waits for it, and for the drop cost.
+    var ok = !busy && !overUnits();
     if (!last) next.disabled = isPlayerStep() ? !ok || countOf(step) === 0 || unmanned(step) > 0 || countOf(step) > roomFor(step) : !ok || (isCommanderStep() && !effectiveCommander());
-    else { var allHave = true; for (var i = 0; i < playerCount; i++) if (countOf(i) === 0) allHave = false; go.disabled = !ok || !allHave || anyUnmanned() || (needCommander() && !effectiveCommander()); }
+    else { var allHave = true; for (var i = 0; i < playerCount; i++) if (countOf(i) === 0) allHave = false; go.disabled = !ok || overBV() || dropCost() > warchest || !allHave || anyUnmanned() || (needCommander() && !effectiveCommander()); }
   }
 
   function render() {
@@ -810,6 +817,7 @@
     renderPlayers();
     list.textContent = '';
     rows = {};
+    document.getElementById('deploy-rules').hidden = true; // the mech steps' notice (setMeter shows it again there)
     review.hidden = true;
     stepTitle.hidden = true;
     opActions.hidden = !finished;
@@ -825,14 +833,7 @@
       return;
     }
     meter.hidden = false;
-    if (isConfigureStep()) {
-      list.hidden = true;
-      review.hidden = false;
-      stepTitle.hidden = false;
-      stepTitle.textContent = 'Configure your mechs';
-      meter.hidden = true; // the step ends with the force total
-      renderConfigure();
-    } else if (isCommanderStep()) {
+    if (isCommanderStep()) {
       list.hidden = true;
       review.hidden = false;
       stepTitle.hidden = false;
@@ -889,6 +890,8 @@
     }
     provided = !!data.provided;
     swaps = !!data.swaps;
+    paidSwaps = !!data.paidSwaps;
+    warchest = typeof data.warchest === 'number' ? data.warchest : 0;
     // A variant is kept only for a mech still taken that still offers it.
     Object.keys(variants).forEach(function (id) {
       var u = unitById(id), taken = false;

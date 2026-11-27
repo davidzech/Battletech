@@ -1367,6 +1367,8 @@ dialog button.deploy-slot-x:hover:not(:disabled), dialog button.deploy-slot-x:fo
 /* The role label in the Deploy popup is bigger: a wider band and a larger base size (a long role still scales down by --role-scale). */
 .deploy-unit.has-slot .mech-row { grid-template-columns: 2.3rem 5.6rem minmax(0, 1fr); }
 .deploy-unit.has-slot .mr-role { --role-size: 0.68rem; }
+/* A review row with a Reconfigure button keeps it at the right, as the Manage page's rows do. */
+.deploy-unit.has-slot .mech-row.has-actions { grid-template-columns: 2.3rem 5.6rem minmax(0, 1fr) auto; }
 /* The hover card is a popover (see mechrow.js): drop the browser's popover box and keep the card's own look. */
 .unit-tip[popover] { inset: auto; margin: 0; overflow: visible; color: var(--text); }
 
@@ -1416,6 +1418,10 @@ dialog button.deploy-count[aria-pressed="true"] { color: var(--accent-ink); back
 .deploy-review-list { list-style: none; margin: 0; padding: 0; }
 .deploy-review-total { display: flex; flex-wrap: wrap; gap: 0.3rem 1.2rem; font: 700 1rem var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
 .deploy-review-total.over { color: #ff7a59; }
+/* Under the total: how far over the BV limit the force is, and the drop cost (reconfiguring the hangar's omnimechs, paid by Start battle). */
+.deploy-review-note { margin: 0.3rem 0 0; color: #ff7a59; }
+.deploy-drop-cost { margin-top: 0.35rem; color: var(--accent); }
+.deploy-drop-cost.over { color: #ff7a59; }
 .deploy-note { margin: 0; padding: 0.7rem 0.9rem; font-size: 0.9rem; background: var(--bg); border: 1px solid var(--line); border-left: 3px solid var(--accent); }
 .deploy-note.good { border-left-color: #5fc47e; }
 .deploy-note ul { margin: 0.3rem 0 0; padding-left: 1.2rem; }

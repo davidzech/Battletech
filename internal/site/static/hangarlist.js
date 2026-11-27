@@ -140,71 +140,24 @@
     });
   }
 
-  // Reconfigure (omnimechs only): a dialog listing the unit's other variants with their prices, like the repair dialog.
-  var swapDlg = document.getElementById('swap-dialog');
-  var swapUnitRow = null;
-  function swapOption() { return VariantPicker.option(swapUnitRow, document.getElementById('swap-select').value); }
-  // The dialog shows the unit as its full row, then, once another variant is chosen, an arrow with what changes and the variant's own row: a flow from one to the
-  // other, each row with its unit card (the shared VariantPicker, which the Deploy wizard's Configure step uses too).
-  function swapCostText() {
-    var o = swapOption(), u = swapUnitRow, cost = Dom.costLine(o ? o.cost : 0, warchest);
-    VariantPicker.mark(document.getElementById('swap-select'));
-    VariantPicker.flow(document.getElementById('swap-sub'), u, o, { price: function (o) { return o.cost + ' SP'; } });
-    // The price as a short breakdown: half the tonnage, plus half the BV gained (nothing for a variant worth less).
-    var bd = document.getElementById('swap-breakdown');
-    bd.textContent = '';
-    bd.hidden = !o;
-    if (o) {
-      var gained = Math.max(0, o.bv - u.bv);
-      var rows = [
-        ['50% of tonnage', u.tons + 't · ' + Math.ceil(u.tons / 2) + ' SP'],
-        ['50% of BV gained', (gained ? '+' + commas(gained) + ' BV' : 'no BV gained') + ' · ' + Math.floor(gained / 2) + ' SP']
-      ];
-      rows.push(['Cost', o.cost + ' SP']);
-      rows.forEach(function (r) { bd.appendChild(el('dt', null, r[0])); bd.appendChild(el('dd', null, r[1])); });
-    }
-    var text = document.getElementById('swap-cost');
-    text.textContent = o ? cost.text : 'Choose another variant to reconfigure to.';
-    text.classList.toggle('short', !!o && cost.short);
-    document.getElementById('swap-apply').disabled = !o || cost.short;
-  }
-  function swap(u, keep) {
-    if (!swapDlg || typeof swapDlg.showModal !== 'function') return;
-    swapUnitRow = u;
-    var box = document.getElementById('swap-available');
-    if (box && !keep) box.checked = true;
-    var select = document.getElementById('swap-select');
-    document.getElementById('swap-title').textContent = 'Reconfigure ' + u.name;
-    // The current variant comes first and is chosen to begin with: reconfiguring to it would change nothing, so Reconfigure stays disabled until another is
-    // picked. Like Purchase, only the variants the campaign's faction fields in its era are offered while the box is ticked (it is, each time the dialog
-    // opens); unticking it lists them all. A variant still listed stays chosen when the box changes.
-    VariantPicker.fill(select, u, {
-      onlyAvailable: !!(box && box.checked),
+  // Reconfigure (omnimechs only): the shared Reconfigure dialog (swapdialog.js), which lists the unit's other variants with their prices; the change is made
+  // (and paid for) at once.
+  function swap(u) {
+    if (typeof SwapDialog === 'undefined') return;
+    SwapDialog.open(u, {
+      availability: section.dataset.swapAvailability || '',
       price: function (o) { return o.cost + ' SP'; },
-      value: keep ? select.value : ''
-    });
-    document.getElementById('swap-error').textContent = '';
-    swapCostText();
-    if (!swapDlg.open) swapDlg.showModal();
-  }
-  if (swapDlg) {
-    document.getElementById('swap-select').addEventListener('change', swapCostText);
-    var availBox = document.getElementById('swap-available');
-    if (availBox) availBox.addEventListener('change', function () { if (swapUnitRow) swap(swapUnitRow, true); });
-    document.getElementById('swap-cancel').addEventListener('click', function () { swapDlg.close(); });
-    swapDlg.addEventListener('click', function (e) { if (e.target === swapDlg) swapDlg.close(); });
-    document.getElementById('swap-form').addEventListener('submit', function (e) {
-      e.preventDefault();
-      var apply = document.getElementById('swap-apply'), err = document.getElementById('swap-error');
-      err.textContent = '';
-      apply.disabled = true;
-      fetch('/api/hangar/swap', {
-        method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, credentials: 'same-origin',
-        body: 'campaign=' + encodeURIComponent(section.dataset.campaign) + '&unit=' + encodeURIComponent(swapUnitRow.id) + '&to=' + encodeURIComponent(document.getElementById('swap-select').value)
-      }).then(function (res) {
-        if (res.ok) { swapDlg.close(); location.reload(); return; }
-        return res.text().then(function (t) { err.textContent = t.trim() || 'Something went wrong.'; swapCostText(); });
-      }, function () { err.textContent = 'Could not reach the server.'; swapCostText(); });
+      cost: function (o) { return o.cost; },
+      warchest: warchest,
+      submit: function (o) {
+        return fetch('/api/hangar/swap', {
+          method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, credentials: 'same-origin',
+          body: 'campaign=' + encodeURIComponent(section.dataset.campaign) + '&unit=' + encodeURIComponent(u.id) + '&to=' + encodeURIComponent(o ? o.unit : '')
+        }).then(function (res) {
+          if (res.ok) { location.reload(); return; }
+          return res.text().then(function (t) { throw new Error(t.trim() || 'Something went wrong.'); });
+        }, function () { throw new Error('Could not reach the server.'); });
+      }
     });
   }
 
