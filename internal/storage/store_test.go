@@ -108,6 +108,7 @@ func storeContract(t *testing.T, s *Store) {
 	rankStore(t, s, id)
 	hangarCacheStore(t, s, id)
 	abilityStore(t, s, id)
+	hangarClaimStore(t, s, id)
 }
 
 func TestStoreSQLite(t *testing.T) {

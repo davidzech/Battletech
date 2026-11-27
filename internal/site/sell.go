@@ -23,6 +23,12 @@ func (s *Server) sellUnit(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	// A sale edits the hangar force too: one edit at a time, from before the unit's state (and so its price) is read.
+	unlock, ok := s.lockHangarRequest(w, r, pt, c)
+	if !ok {
+		return
+	}
+	defer unlock()
 	h, err := s.mekbay.ReadHangar(r.Context(), run.HangarInstance)
 	if err != nil {
 		log.Printf("read hangar to sell a unit: %v", err)
@@ -45,7 +51,6 @@ func (s *Server) sellUnit(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Only mechs in the catalog can be sold here.", http.StatusBadRequest)
 		return
 	}
-	defer s.hangarEdits.lock(pt.ID + "/" + c.Slug)() // a sale edits the hangar force too: one edit at a time (see keyedMutex)
 	value := hangar.SellValue(cat.BV, hangar.Pristine(hu))
 	ctx := context.WithoutCancel(r.Context())
 	after, err := s.mekbay.SellUnit(ctx, mekbay.SellRequest{OwnerUID: mekbay.AccountUID(currentSeed(r), mekbay.SlotHangar), Instance: run.HangarInstance, UnitID: hu.ID})

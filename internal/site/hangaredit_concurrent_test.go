@@ -3,6 +3,7 @@ package site
 import (
 	"context"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"slices"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	"github.com/davidzech/Battletech/internal/catalog"
 	"github.com/davidzech/Battletech/internal/hangar"
 	"github.com/davidzech/Battletech/internal/mekbay"
+	"github.com/davidzech/Battletech/internal/storage"
 )
 
 // readModifySaveMekBay is a fakeMekBay whose repairs behave like the real client's: the force is read, changed and saved whole, with time in between, so
@@ -138,4 +140,122 @@ func TestConcurrentHangarEdits(t *testing.T) {
 	if funds() != before-ullerCost-dasherCost {
 		t.Errorf("two repairs left %d SP, want %d", funds(), before-ullerCost-dasherCost)
 	}
+}
+
+// Two servers sharing one database (several instances of the site) never edit one run's hangar in MekBay at the same time either: the database claim
+// (lockHangar) serializes them where each server's own mutex can't.
+func TestConcurrentHangarEditsAcrossServers(t *testing.T) {
+	fake := &readModifySaveMekBay{fakeMekBay: &fakeMekBay{hangar: startingHangar()}, meet: make(chan struct{})}
+	srvA, store := newMekBayTestServer(t, fake)
+	srvB := httptest.NewServer(NewHandler(plainScenario001Root(t), store, WithMekBay(fake)))
+	t.Cleanup(srvB.Close)
+	cookie := post(t, srvA, "/api/seed", url.Values{"seed": {"wolfpack2026"}}, nil, "").Cookies()[0]
+	post(t, srvA, "/api/account", url.Values{"account": {"Wolf Pack"}}, cookie, srvA.URL)
+	if r := post(t, srvA, "/api/campaign/start", startForm(goodHangar, "Alrek", "Katarina"), cookie, srvA.URL); r.StatusCode != http.StatusNoContent {
+		t.Fatalf("start: %d", r.StatusCode)
+	}
+	if _, err := store.DB().Exec(`UPDATE campaign_runs SET warchest = 4500`); err != nil {
+		t.Fatal(err)
+	}
+	h := hangarOf("BMUller_J", "BMDasher_Prime", "BMGrizzly")
+	h.Units[0].Locations, h.Units[0].Damaged = map[string]mekbay.LocationLoss{"LA": {Armor: 3, Internal: 1}}, true
+	h.Units[1].Locations, h.Units[1].Damaged = map[string]mekbay.LocationLoss{"RA": {Armor: 2, Internal: 1}}, true
+	fake.setHangar(h, nil)
+
+	var wg sync.WaitGroup
+	got := make([]int, 2)
+	for i, srv := range []*httptest.Server{srvA, srvB} {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			got[i] = repairStatus(t, srv, cookie, []string{"ua", "ub"}[i])
+		}()
+	}
+	wg.Wait()
+	if !slices.Equal(got, []int{http.StatusOK, http.StatusOK}) {
+		t.Errorf("two mechs repaired at once on two servers: %v", got)
+	}
+	after, _ := fake.ReadHangar(context.Background(), "")
+	if len(after.Units[0].Locations) != 0 || len(after.Units[1].Locations) != 0 {
+		t.Errorf("one server's repair undid the other's: %+v / %+v", after.Units[0].Locations, after.Units[1].Locations)
+	}
+}
+
+// While another server holds the hangar's claim, an edit waits for it; if it isn't released in time the edit is refused with 409 and nothing is charged. A
+// claim past its TTL (its server died mid-edit) is taken over.
+func TestHangarEditWaitsForAnotherServersClaim(t *testing.T) {
+	defer func(wait, poll time.Duration) { hangarClaimWait, hangarClaimPoll = wait, poll }(hangarClaimWait, hangarClaimPoll)
+	hangarClaimWait, hangarClaimPoll = 300*time.Millisecond, 10*time.Millisecond
+
+	fake := &fakeMekBay{hangar: startingHangar()}
+	srv, store := newMekBayTestServer(t, fake)
+	ctx := context.Background()
+	cookie := post(t, srv, "/api/seed", url.Values{"seed": {"wolfpack2026"}}, nil, "").Cookies()[0]
+	post(t, srv, "/api/account", url.Values{"account": {"Wolf Pack"}}, cookie, srv.URL)
+	if r := post(t, srv, "/api/campaign/start", startForm(goodHangar, "Alrek", "Katarina"), cookie, srv.URL); r.StatusCode != http.StatusNoContent {
+		t.Fatalf("start: %d", r.StatusCode)
+	}
+	if _, err := store.DB().Exec(`UPDATE campaign_runs SET warchest = 4500`); err != nil {
+		t.Fatal(err)
+	}
+	id := playthroughID("wolfpack2026")
+	funds := func() int { r, _, _ := store.Run(ctx, id, "refusalwar"); return r.Warchest }
+	damage := func() {
+		h := hangarOf("BMUller_J", "BMDasher_Prime", "BMGrizzly")
+		h.Units[0].Locations, h.Units[0].Damaged = map[string]mekbay.LocationLoss{"LA": {Armor: 3, Internal: 1}}, true
+		fake.setHangar(h, nil)
+	}
+	damage()
+
+	// Held for longer than the wait: refused, nothing charged, nothing sent to MekBay.
+	token, ok, err := store.ClaimHangarEdit(ctx, id, "refusalwar")
+	if err != nil || !ok {
+		t.Fatalf("claim: ok=%v err=%v", ok, err)
+	}
+	if got := repairStatus(t, srv, cookie, "ua"); got != http.StatusConflict {
+		t.Errorf("an edit while another server holds the claim: %d, want 409", got)
+	}
+	fake.mu.Lock()
+	calls := len(fake.services)
+	fake.mu.Unlock()
+	if funds() != 4500 || calls != 0 {
+		t.Errorf("a refused edit charged %d SP or reached MekBay (%d calls)", 4500-funds(), calls)
+	}
+
+	// Released during the wait: the edit goes ahead.
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		_ = store.ReleaseHangarEdit(ctx, id, "refusalwar", token)
+	}()
+	if got := repairStatus(t, srv, cookie, "ua"); got != http.StatusOK {
+		t.Errorf("an edit whose claim was released during the wait: %d, want 200", got)
+	}
+
+	// A stale claim is taken over at once, and the edit releases its own claim when done.
+	damage()
+	if _, ok, _ := store.ClaimHangarEdit(ctx, id, "refusalwar"); !ok {
+		t.Fatal("the finished edit should have released its claim")
+	}
+	if _, err := store.DB().Exec(`UPDATE campaign_runs SET hangar_claim = ?`, time.Now().Add(-storage.HangarClaimTTL-time.Minute).Unix()); err != nil {
+		t.Fatal(err)
+	}
+	if got := repairStatus(t, srv, cookie, "ua"); got != http.StatusOK {
+		t.Errorf("an edit over a stale claim: %d, want 200", got)
+	}
+}
+
+// repairStatus asks srv for a structure repair of the unit and answers the status.
+func repairStatus(t *testing.T, srv *httptest.Server, cookie *http.Cookie, unit string) int {
+	form := url.Values{"campaign": {"refusalwar"}, "kind": {"repair"}, "unit": {unit}, "level": {mekbay.RepairStructure}}
+	req, _ := http.NewRequest("POST", srv.URL+"/api/hangar/service", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Origin", srv.URL)
+	req.AddCookie(cookie)
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Error(err)
+		return 0
+	}
+	res.Body.Close()
+	return res.StatusCode
 }

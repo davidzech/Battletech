@@ -287,6 +287,12 @@ func (s *Store) init() error {
 	if err := s.ensureColumn("campaign_runs", "battle_claim_scenario", "TEXT NOT NULL DEFAULT ''"); err != nil {
 		return err
 	}
+	if err := s.ensureColumn("campaign_runs", "hangar_claim", "BIGINT NOT NULL DEFAULT 0"); err != nil { // see ClaimHangarEdit
+		return err
+	}
+	if err := s.ensureColumn("campaign_runs", "hangar_claim_token", "TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
 	if err := s.ensureColumn("scenario_completions", "outcome", "TEXT NOT NULL DEFAULT ''"); err != nil {
 		return err
 	}
