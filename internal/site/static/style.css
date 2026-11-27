@@ -1086,10 +1086,11 @@ a.unit-link.tip-open { color: var(--accent); }
 .rec-warchest { display: flex; flex-wrap: wrap; align-items: end; gap: 0.6rem; margin: 0.8rem 0; padding: 0.6rem 0.5rem; background: var(--bg); border: 1px solid var(--line); }
 .rec-warchest label { display: grid; gap: 0.3rem; font: 700 0.75rem var(--display); letter-spacing: 0.08em; text-transform: uppercase; }
 .rec-warchest input { width: 10rem; }
-.rec-total-form { display: flex; flex-wrap: wrap; align-items: end; gap: 0.6rem; }
-.rec-total-form[hidden] { display: none; }
-.rec-total-form label { display: grid; gap: 0.3rem; font: 700 0.75rem var(--display); letter-spacing: 0.08em; text-transform: uppercase; }
+.rec-total-form, .rec-mvps-form { display: flex; flex-wrap: wrap; align-items: end; gap: 0.6rem; }
+.rec-total-form[hidden], .rec-mvps-form[hidden] { display: none; }
+.rec-total-form label, .rec-mvps-form label { display: grid; gap: 0.3rem; font: 700 0.75rem var(--display); letter-spacing: 0.08em; text-transform: uppercase; }
 .rec-total-form input { width: 8rem; }
+.rec-mvps-form input { width: 5rem; }
 .records-list img { flex: none; width: 2.5rem; height: 2.5rem; object-fit: cover; object-position: top; }
 .rec-name { flex: 1; min-width: 0; font: 700 1rem var(--display); letter-spacing: 0.05em; text-transform: uppercase; overflow-wrap: anywhere; }
 .rec-state { font: 700 0.7rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
@@ -1203,9 +1204,9 @@ button.button.skill-pick { padding: 0.4rem 0.9rem; font-size: 0.75rem; }
 .skill-card.cat-indirect-fire { --cat: #a97be5; }
 .skill-card.cat-melee { --cat: #d46a9c; }
 .skill-card.cat-movement { --cat: #5fc47e; }
-.rec-skills { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.7rem; font-size: 0.85rem; color: var(--muted); }
-.rec-skills-text { flex: 1 1 14rem; }
-.rec-skills-text b { color: var(--text); }
+.rec-skills, .rec-mvps { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.7rem; font-size: 0.85rem; color: var(--muted); }
+.rec-skills-text, .rec-mvps-text { flex: 1 1 14rem; }
+.rec-skills-text b, .rec-mvps-text b { color: var(--text); }
 dialog button.rec-skills-reset:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* The hover card for a learned Edge ability: the picker's ability card in a floating panel. */

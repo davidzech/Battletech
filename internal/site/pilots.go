@@ -455,6 +455,32 @@ func (s *Server) setPilotTotal(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// maxMVPs is the most MVPs a pilot's count can be set to: the card has room for two digits.
+const maxMVPs = 99
+
+// setPilotMVPs overrides how many missions a pilot has been MVP of (Advanced Management).
+func (s *Server) setPilotMVPs(w http.ResponseWriter, r *http.Request) {
+	pt, c, ok := s.pilotRequest(w, r)
+	if !ok {
+		return
+	}
+	mvps, err := strconv.Atoi(strings.TrimSpace(r.PostFormValue("mvps")))
+	if err != nil || mvps < 0 || mvps > maxMVPs {
+		http.Error(w, fmt.Sprintf("The MVP count must be a whole number from 0 to %d.", maxMVPs), http.StatusBadRequest)
+		return
+	}
+	p, found := s.pilotByID(r, pt.ID, c.Slug, r.PostFormValue("pilot"))
+	switch err := s.store.SetPilotMVPs(r.Context(), pt.ID, c.Slug, r.PostFormValue("pilot"), mvps); {
+	case errors.Is(err, sql.ErrNoRows):
+		http.Error(w, "No such pilot.", http.StatusNotFound)
+	case err != nil:
+		http.Error(w, "could not save the MVP count", http.StatusInternalServerError)
+	default:
+		s.logHistory(r, pt.ID, c.Slug, storage.HistoryCorrections, 0, fmt.Sprintf("%s's MVP count was set to %d (Advanced Management).", pilotLabel(p, found), mvps))
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
 // maxWarchest keeps a typo from setting an absurd amount of funds.
 const maxWarchest = 100000000
 

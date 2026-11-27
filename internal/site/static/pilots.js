@@ -616,6 +616,25 @@
         }).then(function (ok) { if (ok) save(); });
       });
 
+      // Override the MVP count (missions won as MVP), 0 to 99.
+      var mvpForm = li.querySelector('.rec-mvps-form');
+      var mvpInput = mvpForm.querySelector('input');
+      li.querySelector('.rec-mvps-set').addEventListener('click', function () {
+        mvpForm.hidden = !mvpForm.hidden;
+        if (!mvpForm.hidden) { mvpInput.value = li.dataset.mvps; mvpInput.focus(); mvpInput.select(); }
+      });
+      mvpForm.querySelector('.rec-mvps-cancel').addEventListener('click', function () { mvpForm.hidden = true; });
+      mvpForm.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var n = Number(mvpInput.value);
+        if (!Number.isInteger(n) || n < 0 || n > 99) { recError.textContent = 'Enter a whole number of MVPs from 0 to 99.'; return; }
+        recAct('/api/pilots/mvps', li, mvpForm.querySelector('button[type=submit]'), 'mvps=' + n, function () {
+          li.dataset.mvps = n;
+          li.querySelector('.rec-n-mvps').textContent = n;
+          mvpForm.hidden = true;
+        });
+      });
+
       // Rank: an advanced correction (promotions come from mission outcomes). The rank button opens the Change rank dialog on top of this one.
       var rankBtn = li.querySelector('.rec-rank-btn');
       if (rankBtn && rankDialog) rankBtn.addEventListener('click', function () { openRank(li); });

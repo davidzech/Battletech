@@ -474,3 +474,15 @@ func (s *Store) ResetEdgeAbilities(ctx context.Context, playthroughID, campaign,
 	_, err := s.db.ExecContext(ctx, s.q(`DELETE FROM pilot_abilities WHERE pilot_id = ?`), pilotID)
 	return err
 }
+
+// SetPilotMVPs overrides how many missions a pilot has been MVP of (Advanced Management). sql.ErrNoRows: no such pilot.
+func (s *Store) SetPilotMVPs(ctx context.Context, playthroughID, campaign, pilotID string, mvps int) error {
+	res, err := s.db.ExecContext(ctx, s.q(`UPDATE named_pilots SET mvps = ? WHERE id = ? AND playthrough_id = ? AND campaign = ?`), mvps, pilotID, playthroughID, campaign)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
