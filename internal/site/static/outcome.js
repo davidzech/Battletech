@@ -83,19 +83,26 @@
       who.appendChild(el('b', null, p.name));
       if (p.rank) who.appendChild(el('span', 'muted', p.rank));
       head.appendChild(who);
+      card.appendChild(head);
+      // The card's checkboxes in one row under the name: Active (unless a battle says who took part), Killed in action, MVP. The mission's inputs for the pilot
+      // (such as Kills) are a row of their own below.
+      var checks = el('div', 'outcome-checks');
       var took, tb = null;
       if (inBattle) {
-        // The battle says who took part (they crew a mech in it), so there is nothing to tick; the card says which it is once the battle has been read.
-        took = el('span', 'outcome-took muted', '');
-        head.appendChild(took);
+        // The battle says who took part (they crew a mech in it), so there is nothing to tick: it is a line under the name once the battle has been read.
+        took = el('span', 'outcome-took', '');
+        who.appendChild(took);
       } else {
         took = el('label', 'outcome-field check themed-check');
         took.title = 'Untick if the pilot sat this one out (benched): they get half the pilot SP, if the mission gives any.';
         tb = document.createElement('input');
         tb.type = 'checkbox'; tb.className = 'themed-box'; tb.checked = true;
         took.appendChild(tb); took.appendChild(el('span', null, 'Active'));
-        head.appendChild(took);
+        checks.appendChild(took);
       }
+      // Every pilot can be killed in action, whatever the scenario asks: a pilot killed gets nothing and is removed from the campaign.
+      var kill = field({ id: 'killed', label: 'Killed in action', type: 'bool' }, st, changed, 'killed');
+      checks.appendChild(kill);
       // Every mission has an MVP: tick the box on one pilot's card (ticking another moves it). Only a pilot who took part and stays in the campaign can be it.
       var mb = null;
       if (hasMVP) {
@@ -104,7 +111,7 @@
         mb = document.createElement('input');
         mb.type = 'checkbox'; mb.className = 'themed-box outcome-mvp-box';
         mvpLabel.appendChild(mb); mvpLabel.appendChild(el('span', null, 'MVP'));
-        head.appendChild(mvpLabel);
+        checks.appendChild(mvpLabel);
         mb.addEventListener('change', function () {
           if (mb.checked) state.mvp = p.id;
           else if (state.mvp === p.id) state.mvp = '';
@@ -112,18 +119,16 @@
           changed();
         });
       }
-      card.appendChild(head);
+      card.appendChild(checks);
       var fields = el('div', 'outcome-fields');
       var boxes = {};
       pilotInputs.forEach(function (i) { var f = field(i, st.values, changed); boxes[i.id] = f.querySelector('input'); fields.appendChild(f); });
-      // Every pilot can be killed in action, whatever the scenario asks: a pilot killed gets nothing and is removed from the campaign.
-      fields.appendChild(field({ id: 'killed', label: 'Killed in action', type: 'bool' }, st, changed, 'killed'));
-      card.appendChild(fields);
-      ui[p.id] = { took: took, tb: tb, mvpBox: mb, fields: fields, killedBox: fields.lastChild.querySelector('input'), boxes: boxes };
+      if (pilotInputs.length) card.appendChild(fields);
+      ui[p.id] = { took: took, tb: tb, mvpBox: mb, fields: fields, kill: kill, killedBox: kill.querySelector('input'), boxes: boxes };
       var preview = el('ul', 'outcome-preview');
       preview.id = 'outcome-preview-' + p.id;
       card.appendChild(preview);
-      if (tb) tb.addEventListener('change', function () { st.tookPart = tb.checked; if (!tb.checked) { st.killed = false; ui[p.id].killedBox.checked = false; } fields.hidden = !tb.checked; changed(); });
+      if (tb) tb.addEventListener('change', function () { st.tookPart = tb.checked; if (!tb.checked) { st.killed = false; ui[p.id].killedBox.checked = false; } part(ui[p.id], tb.checked); changed(); });
       body.appendChild(card);
     });
     var mission = byScope('mission');
@@ -136,6 +141,9 @@
     mvpOptions();
     render(null);
   }
+
+  // Shows a card's Killed in action box and its inputs only while the pilot took part (a benched pilot has nothing to report).
+  function part(u, on) { u.fields.hidden = !on; u.kill.hidden = !on; }
 
   // The pilots who can be the MVP now: active and not killed, and (once the server has worked the result out) not removed by the mission's rules either, such as a
   // pilot who fails the Trial of Position.
@@ -191,7 +199,7 @@
       st.killed = !!(c && c.dead);
       u.took.textContent = c ? (c.dead ? 'Took part \u00b7 dead on the record sheet' : 'Took part') : 'Benched: not in the battle';
       u.took.classList.toggle('outcome-bad', !!(c && c.dead));
-      u.fields.hidden = !c;
+      part(u, !!c);
       if (u.killedBox) u.killedBox.checked = st.killed;
     });
   }
@@ -328,7 +336,7 @@
       if (!inBattle && (s.a === 0 || s.a === 1)) {
         st.tookPart = s.a === 1;
         u.tb.checked = st.tookPart;
-        u.fields.hidden = !st.tookPart;
+        part(u, st.tookPart);
       }
       if (s.k === 0 || s.k === 1) st.killed = st.tookPart && s.k === 1;
       if (!st.tookPart) st.killed = false;
