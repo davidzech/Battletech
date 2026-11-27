@@ -324,3 +324,27 @@ func TestScenario005Outcome(t *testing.T) {
 		}
 	}
 }
+
+// A pilot removed by a kia rule draws no pilot_sp share, like one reported killed: as if never deployed, so their share stays in the pool for the warchest.
+func TestKIARuleDrawsNoShare(t *testing.T) {
+	sc := &Scenario{
+		OutcomePilotSP:    100,
+		OutcomeObjectives: []OutcomeObjective{{ID: "depot", Label: "Destroy the depot", SP: 400}, {ID: "escape", Label: "Escape with the data", SP: 200}},
+		OutcomeInputs:     []OutcomeInput{{ID: "ejected", Type: "bool"}},
+		OutcomeRules:      []OutcomeRule{{When: "ejected", KIA: true}},
+	}
+	sc.CompileOutcomes()
+	if sc.OutcomeError != "" {
+		t.Fatal(sc.OutcomeError)
+	}
+	res, err := sc.EvaluateOutcome(OutcomeInputs{
+		Pilots: []OutcomeEntry{
+			{PilotID: "a", TookPart: true, Values: map[string]any{"ejected": false}},
+			{PilotID: "b", TookPart: true, Values: map[string]any{"ejected": true}},
+		},
+		Mission: map[string]any{"depot": true, "escape": false},
+	}, map[string]string{"a": "Alrek", "b": "Katarina"})
+	if err != nil || !res.Pilots[1].KIA || sps(res) != "Alrek=100,Katarina=0" || res.Pool != 400 || res.Paid != 100 || res.Warchest != 300 {
+		t.Errorf("only the surviving pilot draws from the pool: %+v %v (%s)", res, err, sps(res))
+	}
+}
