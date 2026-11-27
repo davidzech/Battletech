@@ -60,3 +60,28 @@ func TestCloneForceIsPristine(t *testing.T) {
 		}
 	}
 }
+
+// A linked force is cleaned of everything a battle may have left on it: pending hits and their timestamps, the unit's conditions, the inventory's state and the
+// turn's state.
+func TestCleanForceDropsBattleState(t *testing.T) {
+	var src map[string]any
+	if err := json.Unmarshal([]byte(`{"name":"t","groups":[{"name":"","units":[{"id":"u","unit":"BMMadCat_H","state":{
+		"conditions":["shutdown"],"turnState":{"turnCounter":2},"inventory":[{"id":"CLLRM20@LT#0","destroyed":true}],
+		"crits":[{"name":"Hip","loc":"LL","hits":1,"pendingHits":1,"hitTimestamps":[1],"pendingHitTimestamps":[2],"consumed":2}],"crew":[]}}]}]}`), &src); err != nil {
+		t.Fatal(err)
+	}
+	got, err := CleanForce(src, "i", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	st := stateOf(got, "u")
+	for _, k := range []string{"conditions", "turnState", "inventory"} {
+		if st[k] != nil {
+			t.Errorf("%s should be gone: %v", k, st[k])
+		}
+	}
+	cm := st["crits"].([]any)[0].(map[string]any)
+	if cm["pendingHits"] != nil || cm["hitTimestamps"] != nil || cm["pendingHitTimestamps"] != nil || num(cm["hits"]) != 0 || num(cm["consumed"]) != 0 {
+		t.Errorf("the slot should be pristine: %v", cm)
+	}
+}

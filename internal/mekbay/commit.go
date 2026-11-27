@@ -23,9 +23,12 @@ type CommitBattleReport struct {
 }
 
 // CommitState copies what a battle recorded on its units (the state: damage, critical hits, ammunition, rule checks) onto the hangar's units with the same ID and
-// design. The crew is not carried back and the unit's crew is cleared: pilots are assigned during an operation only, so the hangar never holds a named pilot.
+// design. The state is settled as MekBay settles it when a phase ends, so damage still pending counts, and the battle's leftovers (heat, the turn, the unit's
+// battle conditions, NARC pods) are dropped (settleBattleState, unitstate.go). The crew is not carried back and the unit's crew is cleared: pilots are assigned
+// during an operation only, so the hangar never holds a named pilot.
 func CommitState(hangar map[string]any, battle map[string]map[string]any) CommitBattleReport {
 	var rep CommitBattleReport
+	now := time.Now()
 	used := map[string]bool{}
 	groups, _ := hangar["groups"].([]any)
 	for _, g := range groups {
@@ -52,6 +55,7 @@ func CommitState(hangar map[string]any, battle map[string]map[string]any) Commit
 			if old, _ := um["state"].(map[string]any); old != nil && old["crew"] != nil {
 				ns["crew"] = old["crew"]
 			}
+			settleBattleState(ns, um["unit"], now)
 			resetCrew(ns)
 			um["state"] = ns
 			used[id] = true

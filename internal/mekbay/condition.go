@@ -23,10 +23,12 @@ const (
 	CondTruly     Condition = "truly"     // destroyed for good: a mech whose center torso structure is gone can't be repaired or salvaged
 )
 
-// LocationLoss is what a location has lost: armor and internal structure points.
+// LocationLoss is what a location has lost: armor and internal structure points, and whether it is blown off or flooded (MekBay's location conditions
+// blown-off and flooded, which destroy a location whatever its structure: isInternalLocDestroyed in cbt-force-unit.model.ts).
 type LocationLoss struct {
 	Armor    int
 	Internal int
+	Gone     bool
 }
 
 // structureByTons is the standard BattleMech internal structure by tonnage: head, center torso, each side torso, each arm, each leg.
@@ -44,8 +46,11 @@ var (
 	torsoKeys = []string{"LT", "RT"} // the side torsos: a unit whose center torso is gone is truly destroyed before this is asked
 )
 
-// maxStructure is the internal structure a location starts with at a tonnage, 0 if unknown.
+// maxStructure is the internal structure a location starts with at a tonnage, 0 if unknown. Every standard head has 3, whatever the tonnage.
 func maxStructure(loc string, tons float64) int {
+	if loc == "HD" {
+		return 3
+	}
 	t, ok := structureByTons[int(tons)]
 	if !ok {
 		return 0
@@ -63,10 +68,11 @@ func maxStructure(loc string, tons float64) int {
 	return t[4] // legs
 }
 
-// InternalGone reports whether a location has lost all its internal structure.
+// InternalGone reports whether a location is destroyed: it has lost all its internal structure, or it is blown off or flooded.
 func InternalGone(hu HangarUnit, loc string, tons float64) bool {
+	l := hu.Locations[loc]
 	max := maxStructure(loc, tons)
-	return max > 0 && hu.Locations[loc].Internal >= max
+	return l.Gone || (max > 0 && l.Internal >= max)
 }
 
 // structureKeys are the locations whose internal structure counts as structure damage (rear armor locations have none).
@@ -87,7 +93,7 @@ func ConditionOf(hu HangarUnit, tons float64, engine string) (Condition, string)
 	}
 	var hurt []string
 	for _, k := range structureKeys {
-		if hu.Locations[k].Internal > 0 {
+		if l := hu.Locations[k]; l.Internal > 0 || l.Gone {
 			hurt = append(hurt, k)
 		}
 	}
@@ -122,7 +128,8 @@ func ConditionOf(hu HangarUnit, tons float64, engine string) (Condition, string)
 
 // crippledBecause mirrors MekBay's own Mek crippling rule (mek-rules.ts, with forced withdrawal on, its default): two engine hits; two
 // destroyed limbs, at least one a leg; two destroyed torsos; or one destroyed torso when the engine needs no crippling check (anything but
-// Fusion or Compact) or MekBay's stored torso check failed. Returns the reason, or "".
+// Fusion or Compact) or MekBay's stored torso check, made for that torso, failed. A location blown off or flooded counts as destroyed. Returns the
+// reason, or "".
 func crippledBecause(hu HangarUnit, tons float64, engine string) string {
 	if hu.EngineHits >= 2 {
 		return "two engine hits"
@@ -142,18 +149,20 @@ func crippledBecause(hu HangarUnit, tons float64, engine string) string {
 	if limbs >= 2 && legs >= 1 {
 		return fmt.Sprintf("%d limbs destroyed, including a leg", limbs)
 	}
-	torsos := 0
+	var torsos []string
 	for _, k := range torsoKeys {
 		if InternalGone(hu, k, tons) {
-			torsos++
+			torsos = append(torsos, k)
 		}
 	}
 	switch {
-	case torsos >= 2:
+	case len(torsos) >= 2:
 		return "two torsos destroyed"
-	case torsos == 1:
+	case len(torsos) == 1:
+		// MekBay keeps the check with the torso it was asked for (its trigger), as its crippling rule does: a check made for the other torso, since
+		// repaired, says nothing about this one.
 		e := strings.ToLower(strings.TrimSpace(engine))
-		if (e != "fusion" && e != "compact") || hu.TorsoCheckFailed {
+		if (e != "fusion" && e != "compact") || (hu.TorsoCheckFailed && hu.TorsoCheckTrigger == torsos[0]) {
 			return "torso destroyed"
 		}
 	}

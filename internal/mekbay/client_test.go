@@ -3,6 +3,7 @@ package mekbay
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -124,5 +125,51 @@ func TestMekBayClientReportsRefusals(t *testing.T) {
 	}
 	if h, err := ParseForce(raw); err != nil || len(h.Units) == 0 {
 		t.Errorf("read force: %+v %v", h, err)
+	}
+}
+
+// unitFrom reads one unit with this design and state.
+func unitFrom(t *testing.T, design, state string) HangarUnit {
+	t.Helper()
+	h, err := ParseHangarForce(json.RawMessage(`{"data":{"groups":[{"name":"","units":[{"id":"u","unit":"` + design + `","state":` + state + `}]}]}}`))
+	if err != nil || len(h.Units) != 1 {
+		t.Fatalf("parse: %v %+v", err, h)
+	}
+	return h.Units[0]
+}
+
+// MekBay keeps the torso crippling check with the torso it was made for (its trigger): a failed check cripples a fusion-engined mech only while that torso is
+// the destroyed one.
+func TestTorsoCheckTrigger(t *testing.T) {
+	const lt = `{"locations":{"LT":{"internal":5}},"ruleChecks":{"core.torso-crippling":{"token":"x","trigger":"%s","status":"failed"}},"crits":[],"crew":[]}`
+	for trigger, want := range map[string]Condition{"LT": CondCrippled, "RT": CondStructure} {
+		hu := unitFrom(t, "BMBaboon", fmt.Sprintf(lt, trigger))
+		if c, why := ConditionOf(hu, 20, "Fusion"); c != want || hu.TorsoCheckTrigger != trigger {
+			t.Errorf("check made for %s, %s destroyed: %s (%s), want %s", trigger, "LT", c, why, want)
+		}
+	}
+}
+
+// The cockpit is lost with the location that holds it: the head on most mechs, the center torso on one with a torso-mounted cockpit (from the catalog), whose
+// head can be lost without it.
+func TestCockpitLocation(t *testing.T) {
+	const headGone = `{"locations":{"HD":{"internal":3}},"crits":[],"crew":[]}`
+	if hu := unitFrom(t, "BMBaboon", headGone); !hu.CockpitGone || !hu.IsDestroyed() {
+		t.Errorf("a head cockpit goes with the head: %+v", hu)
+	}
+	if hu := unitFrom(t, "BMGreatTurtle_GTR1", headGone); hu.CockpitGone || hu.IsDestroyed() {
+		t.Errorf("a torso-mounted cockpit survives the head: %+v", hu)
+	}
+	if hu := unitFrom(t, "BMGreatTurtle_GTR1", `{"locations":{"HD":{"pendingInternal":3}},"crits":[{"name":"Cockpit","loc":"CT","destroying":1}],"crew":[]}`); !hu.CockpitGone {
+		t.Errorf("a torso-mounted cockpit's own slot being destroyed: %+v", hu)
+	}
+}
+
+// A battle's live force is read as its record sheet shows it, pending damage included.
+func TestParseCountsPendingDamage(t *testing.T) {
+	hu := unitFrom(t, "BMBaboon", `{"locations":{"LL":{"internal":1,"pendingInternal":3},"RA":{"pendingArmor":2}},
+		"crits":[{"name":"Engine","loc":"CT","destroying":5},{"name":"Gyro","loc":"CT","pendingHits":1}],"crew":[]}`)
+	if hu.Locations["LL"].Internal != 4 || hu.Locations["RA"].Armor != 2 || hu.EngineHits != 1 || len(hu.Crits) != 2 || !InternalGone(hu, "LL", 20) {
+		t.Errorf("pending damage counts: %+v", hu)
 	}
 }

@@ -17,9 +17,9 @@ func unnamedCrew() []any {
 	return []any{map[string]any{"id": 0, "name": "", "gunnerySkill": DefaultGunnery, "pilotingSkill": DefaultPiloting, "hits": 0, "state": 0}}
 }
 
-// pristineUnit resets one unit of a saved force (the decoded JSON of a unit) to a clean state: every location's armor and structure restored, every critical
-// hit and the destroyed flag cleared, spent ammunition refilled, heat and the torso-crippling check cleared, and the crew replaced by one unnamed 4/5 pilot with
-// no wounds.
+// pristineUnit resets one unit of a saved force (the decoded JSON of a unit) to a clean state: every location's armor and structure restored (its conditions
+// with it), every critical hit (pending hits and their timestamps too) and the destroyed flag cleared, spent ammunition refilled, the inventory's state, heat, the
+// turn's state, the unit's conditions and the torso-crippling check dropped, and the crew replaced by one unnamed 4/5 pilot with no wounds.
 func pristineUnit(um map[string]any, now time.Time) {
 	state, _ := um["state"].(map[string]any)
 	if state == nil {
@@ -30,7 +30,9 @@ func pristineUnit(um map[string]any, now time.Time) {
 	state["destroyed"] = false
 	delete(state, "ruleChecks")
 	state["heat"] = map[string]any{"current": 0, "previous": 0}
-	state["turnState"] = map[string]any{"applyMovePSR": false}
+	delete(state, "turnState")
+	delete(state, "conditions")
+	delete(state, "inventory") // destroyed equipment, spent ammunition and settings of the unit's inventory: MekBay rebuilds a missing inventory as new
 	crits, _ := state["crits"].([]any)
 	for _, c := range crits {
 		if cm, ok := c.(map[string]any); ok {

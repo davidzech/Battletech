@@ -10,6 +10,8 @@ import (
 	"uuid"
 
 	"github.com/coder/websocket"
+
+	"github.com/davidzech/Battletech/internal/catalog"
 )
 
 // MekBay's server is closed source and has no documented API: this speaks the WebSocket protocol its own web
@@ -70,17 +72,19 @@ type HangarUnit struct {
 	// in it dead then, whatever the crew's stored state says. It stays with the unit (in the hangar too) until it is repaired, so on its own it says
 	// nothing about a pilot: see PilotKilled.
 	CockpitGone bool
-	Damaged     bool // has recorded armor/structure damage or critical hits (spent ammo is not damage: see AmmoBins)
+	Damaged     bool // has recorded armor/structure damage, a blown-off or flooded location, critical hits or destroyed equipment (spent ammo is not damage)
 	Destroyed   bool // MekBay's own destroyed flag; whether the unit counts as destroyed is IsDestroyed
 	// The raw damage MekBay records, from which conditionOf works out the unit's state (see condition.go).
 	Locations  map[string]LocationLoss // armor and internal structure points lost, by location (HD, CT, LT, RT, LA, RA, LL, RL ...)
-	AmmoUsed   int                     // ammo consumed, summed over its ammo bins
-	AmmoBins   int                     // ammo bins with some consumed (each counts as a ton to rearm)
+	AmmoUsed   int                     // ammo consumed, summed over its ammo bins (and inventory items)
+	AmmoBins   int                     // ammo bins (or inventory items) with some consumed (each counts as a ton to rearm)
 	AmmoUsed2  []AmmoUse               // the ammo bins with some used, for the rearm breakdown
-	Crits      []CritDamage            // critical slots that are hit or destroyed (ammo use is not damage), to know what a repair would fix
+	Crits      []CritDamage            // critical slots hit or destroyed, and destroyed inventory items (spent ammo is not damage), to know what a repair fixes
 	EngineHits int                     // destroyed engine slots
-	// TorsoCheckFailed is MekBay's stored result of the torso crippling check (rule check core.torso-crippling).
-	TorsoCheckFailed bool
+	// TorsoCheckFailed is MekBay's stored result of the torso crippling check (rule check core.torso-crippling), and TorsoCheckTrigger the torso it was
+	// made for: it only counts while that torso is the one destroyed (mek-rules.ts).
+	TorsoCheckFailed  bool
+	TorsoCheckTrigger string
 }
 
 // HangarForce is a force as the site reads it: a campaign's hangar, or a battle's force read from MekBay.
@@ -155,6 +159,10 @@ func ParseForce(data []byte) (HangarForce, error) {
 func FormatTime(t time.Time) string { return t.UTC().Format("2006-01-02T15:04:05.000Z") }
 
 // ParseHangarForce reads a getForce reply into a HangarForce.
+//
+// Damage is read as MekBay's record sheet shows it, pending damage included (MekBay's getArmorHits and getInternalHits add a location's pendingArmor and
+// pendingInternal, and its crippling rule counts a slot that is being destroyed): a battle's live force may hold damage whose phase hasn't ended. A hangar holds
+// none pending, since CommitState consolidates it when a battle is written back.
 func ParseHangarForce(raw json.RawMessage) (HangarForce, error) {
 	var reply struct {
 		Data *struct {
@@ -163,32 +171,9 @@ func ParseHangarForce(raw json.RawMessage) (HangarForce, error) {
 			Groups    []struct {
 				Name  string `json:"name"`
 				Units []struct {
-					ID    string `json:"id"`
-					Unit  string `json:"unit"`
-					State struct {
-						Destroyed bool `json:"destroyed"`
-						Locations map[string]struct {
-							Armor    int `json:"armor"`
-							Internal int `json:"internal"`
-						} `json:"locations"`
-						Crits []struct {
-							Name      string `json:"name"`
-							Loc       string `json:"loc"`
-							Hits      int    `json:"hits"`
-							Consumed  int    `json:"consumed"`
-							Destroyed any    `json:"destroyed"`
-						} `json:"crits"`
-						Crew []struct {
-							Name     string `json:"name"`
-							Gunnery  int    `json:"gunnerySkill"`
-							Piloting int    `json:"pilotingSkill"`
-							Hits     int    `json:"hits"`
-							State    int    `json:"state"`
-						} `json:"crew"`
-						RuleChecks map[string]struct {
-							Status string `json:"status"`
-						} `json:"ruleChecks"`
-					} `json:"state"`
+					ID    string    `json:"id"`
+					Unit  string    `json:"unit"`
+					State unitState `json:"state"`
 				} `json:"units"`
 			} `json:"groups"`
 		} `json:"data"`
@@ -202,53 +187,173 @@ func ParseHangarForce(raw json.RawMessage) (HangarForce, error) {
 	h := HangarForce{Name: reply.Data.Name, Timestamp: reply.Data.Timestamp}
 	for _, g := range reply.Data.Groups {
 		for _, u := range g.Units {
-			hu := HangarUnit{ID: u.ID, Unit: u.Unit, Group: g.Name, Destroyed: u.State.Destroyed, Gunnery: DefaultGunnery, Piloting: DefaultPiloting}
-			if len(u.State.Crew) > 0 {
-				c := u.State.Crew[0]
-				hu.Pilot, hu.Gunnery, hu.Piloting = c.Name, c.Gunnery, c.Piloting
-				hu.CrewDead = CrewIsDead(c.State, c.Hits)
-			}
-			hu.Damaged = len(u.State.Locations) > 0
-			for k, l := range u.State.Locations {
-				if hu.Locations == nil {
-					hu.Locations = map[string]LocationLoss{}
-				}
-				hu.Locations[k] = LocationLoss{Armor: l.Armor, Internal: l.Internal}
-			}
-			for _, c := range u.State.Crits {
-				gone := c.Destroyed != nil && c.Destroyed != float64(0)
-				engine := isEngineSlot(c.Name)
-				if c.Hits > 0 || gone { // spent ammunition is not damage: it is Ammo expended (AmmoBins), which a rearm fixes
-					hu.Damaged = true
-					hu.Crits = append(hu.Crits, CritDamage{Loc: c.Loc, Engine: engine})
-				}
-				hu.AmmoUsed += c.Consumed
-				if c.Consumed > 0 {
-					hu.AmmoBins++
-					hu.AmmoUsed2 = append(hu.AmmoUsed2, AmmoUse{Name: c.Name, Loc: c.Loc, Used: c.Consumed})
-				}
-				// Each destroyed slot (or hit) of these components is a critical hit on it, which the crippling rules count.
-				n := c.Hits
-				if gone && n < 1 {
-					n = 1
-				}
-				if engine {
-					hu.EngineHits += n
-				}
-				// The cockpit is gone when its slot is destroyed, or (below) when the head, which holds it, has no internal structure left. Every standard
-				// mech's head has 3 points of internal structure.
-				if name := strings.ToLower(c.Name); gone && strings.Contains(name, "cockpit") && !strings.Contains(name, "command") {
-					hu.CockpitGone = true
-				}
-			}
-			if hd, ok := hu.Locations["HD"]; ok && hd.Internal >= 3 {
-				hu.CockpitGone = true
-			}
-			hu.TorsoCheckFailed = u.State.RuleChecks["core.torso-crippling"].Status == "failed"
-			h.Units = append(h.Units, hu)
+			h.Units = append(h.Units, u.State.view(u.ID, u.Unit, g.Name))
 		}
 	}
 	return h, nil
+}
+
+// unitState is the part of a unit's saved state (MekBay's CBTSerializedState) the site reads.
+type unitState struct {
+	Destroyed bool `json:"destroyed"`
+	Locations map[string]struct {
+		Armor           int               `json:"armor"`
+		Internal        int               `json:"internal"`
+		PendingArmor    int               `json:"pendingArmor"`
+		PendingInternal int               `json:"pendingInternal"`
+		Conditions      []json.RawMessage `json:"conditions"`
+	} `json:"locations"`
+	Crits []struct {
+		Name        string `json:"name"`
+		Loc         string `json:"loc"`
+		Hits        int    `json:"hits"`
+		PendingHits int    `json:"pendingHits"`
+		Consumed    int    `json:"consumed"`
+		Destroyed   any    `json:"destroyed"`
+		Destroying  any    `json:"destroying"`
+	} `json:"crits"`
+	Inventory []struct {
+		ID         string `json:"id"`
+		Destroyed  *bool  `json:"destroyed"`
+		Destroying *bool  `json:"destroying"`
+		Consumed   int    `json:"consumed"`
+	} `json:"inventory"`
+	Crew []struct {
+		Name     string `json:"name"`
+		Gunnery  int    `json:"gunnerySkill"`
+		Piloting int    `json:"pilotingSkill"`
+		Hits     int    `json:"hits"`
+		State    int    `json:"state"`
+	} `json:"crew"`
+	RuleChecks map[string]json.RawMessage `json:"ruleChecks"`
+}
+
+// isSet says whether a crit's saved destroyed or destroying (a timestamp) is set: MekBay leaves it out (undefined) when it isn't. 0 counts as set, as in
+// MekBay (a slot destroyed with its location may carry 0).
+func isSet(v any) bool { return v != nil && v != false }
+
+// view reads one unit's state as the site sees it.
+func (st unitState) view(id, unit, group string) HangarUnit {
+	hu := HangarUnit{ID: id, Unit: unit, Group: group, Destroyed: st.Destroyed, Gunnery: DefaultGunnery, Piloting: DefaultPiloting}
+	if len(st.Crew) > 0 {
+		c := st.Crew[0]
+		hu.Pilot, hu.Gunnery, hu.Piloting = c.Name, c.Gunnery, c.Piloting
+		hu.CrewDead = CrewIsDead(c.State, c.Hits)
+	}
+	for k, l := range st.Locations {
+		loss := LocationLoss{Armor: l.Armor + l.PendingArmor, Internal: l.Internal + l.PendingInternal}
+		for _, c := range l.Conditions {
+			if destroysLocation(conditionKey(c)) {
+				loss.Gone = true
+			}
+		}
+		if loss.Armor > 0 || loss.Internal > 0 || loss.Gone {
+			if hu.Locations == nil {
+				hu.Locations = map[string]LocationLoss{}
+			}
+			hu.Locations[k] = loss
+			hu.Damaged = true
+		}
+	}
+	for _, c := range st.Crits {
+		gone := isSet(c.Destroyed) || isSet(c.Destroying)
+		hits := c.Hits + c.PendingHits
+		engine := isEngineSlot(c.Name)
+		if hits > 0 || gone { // spent ammunition is not damage: it is Ammo expended (AmmoBins), which a rearm fixes
+			hu.Damaged = true
+			hu.Crits = append(hu.Crits, CritDamage{Loc: c.Loc, Engine: engine})
+		}
+		hu.AmmoUsed += c.Consumed
+		if c.Consumed > 0 {
+			hu.AmmoBins++
+			hu.AmmoUsed2 = append(hu.AmmoUsed2, AmmoUse{Name: c.Name, Loc: c.Loc, Used: c.Consumed})
+		}
+		// Each destroyed slot (or hit) of these components is a critical hit on it, which the crippling rules count.
+		n := hits
+		if gone && n < 1 {
+			n = 1
+		}
+		if engine {
+			hu.EngineHits += n
+		}
+		// The cockpit is gone when its slot is destroyed, or (below) when the location that holds it is destroyed.
+		if name := strings.ToLower(c.Name); gone && strings.Contains(name, "cockpit") && !strings.Contains(name, "command") {
+			hu.CockpitGone = true
+		}
+	}
+	// Equipment MekBay records on the inventory rather than on a critical slot: destroyed is damage like a destroyed slot (a repair fixes it), consumed is
+	// spent ammunition like a bin's (a rearm refills it).
+	for _, it := range st.Inventory {
+		name, loc := inventoryRef(it.ID)
+		destroyed := it.Destroyed != nil && *it.Destroyed
+		if it.Destroying != nil {
+			destroyed = *it.Destroying // pending, as the record sheet shows it
+		}
+		if destroyed {
+			hu.Damaged = true
+			hu.Crits = append(hu.Crits, CritDamage{Loc: loc})
+		}
+		if it.Consumed > 0 {
+			hu.AmmoUsed += it.Consumed
+			hu.AmmoBins++
+			hu.AmmoUsed2 = append(hu.AmmoUsed2, AmmoUse{Name: name, Loc: loc, Used: it.Consumed})
+		}
+	}
+	// A mech's cockpit is in its head unless the catalog says the design has it elsewhere (a torso-mounted cockpit); a unit the catalog doesn't know is taken to
+	// have it in the head (every standard head has 3 points of internal structure).
+	cockpitLoc, tons := "HD", 0.0
+	if cu, ok := catalog.ByName(unit); ok {
+		tons = cu.Tons
+		if cu.CockpitLoc != "" {
+			cockpitLoc = cu.CockpitLoc
+		}
+	}
+	if InternalGone(hu, cockpitLoc, tons) {
+		hu.CockpitGone = true
+	}
+	if raw, ok := st.RuleChecks[torsoCheckKey]; ok {
+		var check struct {
+			Status  string `json:"status"`
+			Trigger string `json:"trigger"`
+		}
+		if json.Unmarshal(raw, &check) == nil {
+			hu.TorsoCheckFailed, hu.TorsoCheckTrigger = check.Status == "failed", check.Trigger
+		}
+	}
+	return hu
+}
+
+// torsoCheckKey is the rule check MekBay stores for the torso crippling check (TORSO_CRIPPLE_CHECK_KEY in mek-rules.ts).
+const torsoCheckKey = "core.torso-crippling"
+
+// destroysLocation says whether a location condition destroys the location whatever its structure: blown off or flooded (MekBay's isLocationDestroyedByCondition).
+func destroysLocation(key string) bool { return key == "blown-off" || key == "flooded" }
+
+// conditionKey reads one saved condition (MekBay's SerializedCondition: a key, or {key, value, pending}); "" for anything else.
+func conditionKey(raw json.RawMessage) string {
+	var key string
+	if json.Unmarshal(raw, &key) == nil {
+		return strings.TrimSpace(key)
+	}
+	var obj struct {
+		Key string `json:"key"`
+	}
+	if json.Unmarshal(raw, &obj) == nil {
+		return strings.TrimSpace(obj.Key)
+	}
+	return ""
+}
+
+// inventoryRef reads an inventory item's ID (MekBay's "<name>@<location>#<index>", see inventory-component-reference.model.ts) as its name and location.
+func inventoryRef(id string) (name, loc string) {
+	name = id
+	if at := strings.LastIndex(id, "@"); at >= 0 {
+		name, loc = id[:at], id[at+1:]
+		if hash := strings.Index(loc, "#"); hash >= 0 {
+			loc = loc[:hash]
+		}
+	}
+	return name, strings.TrimSpace(loc)
 }
 
 // PilotKilled says whether the crew in a battle force's unit died in that battle, as MekBay's record sheet shows it: their own record says so, or the cockpit
@@ -257,8 +362,9 @@ func ParseHangarForce(raw json.RawMessage) (HangarForce, error) {
 func (u HangarUnit) PilotKilled() bool { return u.CrewDead || u.CockpitGone }
 
 // IsDestroyed says whether the unit counts as destroyed: MekBay's destroyed flag, or its cockpit gone. MekBay's record sheet sets the flag itself when every
-// cockpit is lost (evaluateDestroyed in mek-rules.ts), so the second is a defensive check for damage written without MekBay's app. A repair that restores
-// the head and the cockpit (see ServiceUnitState) clears both. Only the crew's cockpit counts, never CrewDead: a hangar's crew is reset after every battle.
+// cockpit is lost (evaluateDestroyed in mek-rules.ts), and so does the battle write-back (CommitState), so the second is a defensive check for damage written
+// otherwise. Either way only the destroyed-level repair brings the unit back (see ServiceUnitState). Only the crew's cockpit counts, never CrewDead: a hangar's
+// crew is reset after every battle. Where the catalog doesn't know a design, its cockpit is taken to be in the head.
 func (u HangarUnit) IsDestroyed() bool { return u.Destroyed || u.CockpitGone }
 
 // isEngineSlot reports whether a critical slot with this name belongs to the engine.
