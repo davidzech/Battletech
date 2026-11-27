@@ -265,9 +265,11 @@
       e.dataTransfer.setData('text/plain', 'pilot:' + name);
       e.dataTransfer.effectAllowed = 'move';
       node.classList.add('dragging');
+      dialog.classList.add('pilot-dragging'); // while a pilot is dragged, only the slot it would go in lights up (style.css)
     });
     node.addEventListener('dragend', function () {
       node.classList.remove('dragging');
+      dialog.classList.remove('pilot-dragging');
       // A drag given up (Escape, or let go elsewhere) leaves no drop target lit. Only the drop targets: the BV meter and the totals use .over too, for over the limit.
       dialog.querySelectorAll('.deploy-slot.over, .deploy-pilots.over').forEach(function (o) { o.classList.remove('over'); });
     });
@@ -348,17 +350,37 @@
     putBtn.addEventListener('keydown', function (e) { if (held && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); put(); } });
     box.insertBefore(putBtn, box.firstChild); // first, so it comes before the × in the tab order
     // The pilot's card shows on hovering or focusing the button, which covers the slot (style.css lights the slot while it is open).
-    if (p && typeof PilotCard !== 'undefined') PilotCard.attach(putBtn, p);
-    box.addEventListener('dragover', function (e) { e.preventDefault(); box.classList.add('over'); });
-    // Moving onto the slot's own text fires dragleave on the slot too: only leaving the slot itself takes the highlight off.
-    box.addEventListener('dragleave', function (e) { if (!e.relatedTarget || !box.contains(e.relatedTarget)) box.classList.remove('over'); });
-    box.addEventListener('drop', function (e) {
+    if (p && typeof PilotCard !== 'undefined') PilotCard.attach(putBtn, p); // dropping a pilot is taken by the whole row (dropOnRow)
+    return box;
+  }
+
+  // A pilot can be dropped anywhere on a mech's row, its mech as well as its slot: the slot is what lights up, as it is where the pilot goes. A row whose slot
+  // can't take one (an unavailable mech, or the mech limit reached) takes no drop.
+  function dropOnRow(li, u) {
+    function target() {
+      var s = li.querySelector(':scope > .deploy-slot');
+      return s && !s.classList.contains('unavailable') && !s.classList.contains('disabled') ? s : null;
+    }
+    li.addEventListener('dragover', function (e) {
+      var s = target();
+      if (!s) return;
       e.preventDefault();
-      box.classList.remove('over');
+      s.classList.add('over');
+    });
+    // Moving between the row's parts fires dragleave on the row too: only leaving the row itself takes the highlight off.
+    li.addEventListener('dragleave', function (e) {
+      if (e.relatedTarget && li.contains(e.relatedTarget)) return;
+      var s = li.querySelector(':scope > .deploy-slot');
+      if (s) s.classList.remove('over');
+    });
+    li.addEventListener('drop', function (e) {
+      var s = target();
+      if (!s) return;
+      e.preventDefault();
+      s.classList.remove('over');
       var name = dragName(e);
       if (name) assign(u.id, name);
     });
-    return box;
   }
 
   // Hovering (or focusing) a mech row of the review or the Operation in progress view shows the unit's card, as the Manage page's Hangar rows do: under the row,
@@ -402,6 +424,7 @@
       li.classList.add('has-slot');
       place = slot(u, unavailable);
       li.appendChild(place);
+      dropOnRow(li, u);
     }
     rows[u.id] = { u: u, li: li, box: box, mech: mech, slot: place, unavailable: unavailable };
     return li;
@@ -456,6 +479,7 @@
     renderTray();
     renderFooter();
     saveState();
+    updateMore();
   }
 
   // ---- Showing a step
@@ -501,11 +525,15 @@
     var line = el('span', 'bv-line');
     parts.forEach(function (p, i) {
       if (typeof p === 'string') { line.appendChild(document.createTextNode(p)); return; }
-      var slot = el('span', 'bv-fig');
-      slot.dataset.widest = p.bv ? '99,999' : '99'; // drawn by the stylesheet, invisibly, to give the slot its width
       var value = el('span', null);
-      slot.appendChild(value);
-      line.appendChild(slot);
+      if (p.free) { // a figure the line may grow and shrink around: no slot, it still counts
+        line.appendChild(value);
+      } else {
+        var slot = el('span', 'bv-fig');
+        slot.dataset.widest = p.bv ? '99,999' : '99'; // drawn by the stylesheet, invisibly, to give the slot its width
+        slot.appendChild(value);
+        line.appendChild(slot);
+      }
       countTo(value, key + '#' + i, p.n);
     });
     return line;
@@ -545,7 +573,8 @@
     var mechs = function (n) { return unitLimit ? [{ n: n }, ' / ' + unitLimit + ' mechs'] : [{ n: n }, ' selected']; };
     meter.textContent = '';
     if (playerCount > 1) {
-      meter.appendChild(el('span', null, countOf(step) + ' selected · ' + fmt(bvOf(step)) + ' BV')); // this player's share: plain text, it has no bar to keep still
+      // This player's share: its figures count like the total's, but in no slots (it has no bar to keep still, so it may change length).
+      meter.appendChild(figures('player', [{ n: countOf(step), free: true }, ' selected · ', { n: bvOf(step), bv: true, free: true }, ' BV']));
       meter.appendChild(withBar('meter', ['Force total: '].concat(unitLimit ? mechs(totalCount()).concat([' · ']) : [], [{ n: total, bv: true }, limitText]), total, total - bvOf(step)));
     } else {
       meter.appendChild(withBar('meter', mechs(countOf(0)).concat([' · ', { n: total, bv: true }, limitText]), total, 0));
@@ -938,6 +967,29 @@
     else { var allHave = true; for (var i = 0; i < playerCount; i++) if (countOf(i) === 0) allHave = false; go.disabled = !ok || overBV() || dropCost() > warchest || !allHave || anyUnmanned() || (needCommander() && !effectiveCommander()); }
   }
 
+  // ---- More mechs past the edge
+  // The mech list scrolls without a frame, and macOS hides scrollbars, so it says when there is more to see: an edge with mechs hidden past it shows a soft
+  // shadow, as if the list slid under it (the wrapper's shadow-above and shadow-below), and while mechs are hidden below it a "▾ N more" button under it says
+  // how many (a mech cut off at the edge counts) and, clicked, scrolls down by most of the list's height. Each goes once the list reaches that end.
+  var listWrap = document.getElementById('deploy-list-wrap');
+  var moreBtn = document.getElementById('deploy-more');
+  function updateMore() {
+    var shown = !list.hidden;
+    if (listWrap) {
+      listWrap.classList.toggle('shadow-below', shown && list.scrollTop + list.clientHeight < list.scrollHeight - 1);
+      listWrap.classList.toggle('shadow-above', shown && list.scrollTop > 1);
+    }
+    if (!moreBtn) return;
+    var bottom = list.scrollTop + list.clientHeight;
+    var hidden = 0;
+    if (shown) for (var i = 0; i < list.children.length; i++) if (list.children[i].offsetTop + list.children[i].offsetHeight > bottom + 1) hidden++;
+    moreBtn.hidden = hidden === 0;
+    moreBtn.textContent = '\u25BE ' + hidden + ' more';
+  }
+  if (moreBtn) moreBtn.addEventListener('click', function () { list.scrollBy({ top: list.clientHeight * 0.8, behavior: 'smooth' }); });
+  list.addEventListener('scroll', updateMore, { passive: true });
+  window.addEventListener('resize', updateMore);
+
   // ---- The plan in the URL
   // The wizard's plan lives in the page's fragment (#deploy=...), so a reload brings the player back to where they were: the step, the number of players,
   // each player's mechs and pilots, the proposed variants and the commander. A fragment never reaches the server and is replaced, not added to the history.
@@ -994,6 +1046,7 @@
 
   function render() {
     if (typeof MechRow.hideTip === 'function') MechRow.hideTip(); // the pilot elements are about to be replaced, so a card open on one would point at nothing
+    dialog.classList.remove('pilot-dragging'); // a drop redraws the card that was dragged, which may then never hear its dragend
     renderPlayers();
     list.textContent = '';
     rows = {};
@@ -1042,6 +1095,7 @@
     renderTray();
     renderFooter();
     saveState();
+    updateMore();
   }
 
   // Shows a hangar (cached or live). A choice the player has already made is kept for the units that are still there; before that, the units already in the

@@ -74,7 +74,8 @@
 <p class="muted">Drag a pilot onto a mech to assign them, or click a pilot and then a mech. Only pilots no other player has taken are listed.</p>
 <div class="deploy-pilots-list" id="deploy-pilots-list"></div>
 </section>
-<ul class="deploy-list" id="deploy-list"></ul>
+<div class="deploy-list-wrap" id="deploy-list-wrap"><ul class="deploy-list" id="deploy-list"></ul></div>
+<button type="button" class="deploy-more" id="deploy-more" hidden></button>
 <div class="deploy-review" id="deploy-review" hidden></div>
 <div class="op-actions" id="op-actions" hidden>
 {{if and .Scenario.HasOutcome (ne .ScenarioState "locked") (ne .ScenarioState "completed")}}<button type="button" class="button button-outline button-large" id="outcome-open">Complete mission</button>

@@ -498,3 +498,51 @@ test('a reload brings the wizard back where it was', async ({ page }) => {
   await page.reload();
   await expect(dlg).toBeHidden();
 });
+
+// A pilot can be dropped on a mech's row, not only its slot: the slot is what lights up while the pilot is over the row, and the pilot goes in it. A row whose
+// slot can't take a pilot (the mech limit reached) takes no drop.
+test('a pilot dropped on a mech goes in its slot', async ({ page }) => {
+  await newAccount(page);
+  await startCampaign(page, 'refusalwar', ['Alrek', 'Katarina']);
+  const dlg = await openDeploy(page);
+  const rows = dlg.locator('#deploy-list .deploy-unit');
+  const tray = dlg.locator('#deploy-pilots-list .deploy-pilot');
+  // Drag Katarina by hand, so the highlight can be seen half-way.
+  await tray.filter({ hasText: 'Katarina' }).hover();
+  await page.mouse.down();
+  await rows.nth(1).locator('.mr-name').hover();
+  await rows.nth(1).locator('.mr-name').hover({ position: { x: 5, y: 5 } });
+  await expect(rows.nth(1).locator('.deploy-slot')).toHaveClass(/over/);
+  await page.mouse.up();
+  await expect(rows.nth(1).locator('.deploy-slot')).toContainText('Katarina');
+  await expect(rows.nth(1).locator('.deploy-slot')).not.toHaveClass(/over/);
+  await expect(rows.nth(1).locator('input[type=checkbox]')).toBeChecked();
+
+  // With the limit of two reached, a row with no room takes no drop.
+  await rows.nth(0).locator('input[type=checkbox]').check();
+  await tray.filter({ hasText: 'Alrek' }).dragTo(rows.nth(3).locator('.mr-name'));
+  await expect(rows.nth(3).locator('input[type=checkbox]')).not.toBeChecked();
+  await expect(tray.filter({ hasText: 'Alrek' })).not.toContainText('in ');
+});
+
+// Under a list that scrolls, "▾ N more" says how many mechs are hidden below it; a click scrolls down, and it hides once the end is in sight.
+test('the mech list says how many more mechs are below it', async ({ page }) => {
+  await newAccount(page);
+  await startCampaign(page, 'muster', ['Alrek', 'Katarina']);
+  await setHangar(page, ['BMMadCat_Prime', 'BMMadCat_Prime', 'BMDasher_Prime', 'BMVulture_Prime', 'BMGrizzly', 'BMKoshi_E', 'BMUller_J'].map((u, i) => unit('u' + i, u)), 'muster');
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/muster/scenario_000/');
+  await page.locator('#deploy-open').click();
+  const more = page.locator('#deploy-more');
+  await expect(more).toHaveText(/^▾ \d+ more$/);
+  await expect(page.locator('#deploy-list-wrap')).toHaveClass(/shadow-below/);
+  await more.click();
+  await expect(async () => {
+    if (await more.isVisible()) await more.click();
+    await expect(more).toBeHidden();
+  }).toPass({ timeout: 5000 });
+  await expect(page.locator('#deploy-list-wrap')).not.toHaveClass(/shadow-below/);
+  await expect(page.locator('#deploy-list-wrap')).toHaveClass(/shadow-above/);
+  await page.locator('#deploy-list').evaluate((l) => { l.scrollTop = 0; });
+  await expect(more).toBeVisible();
+});
