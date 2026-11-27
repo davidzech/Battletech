@@ -14,8 +14,8 @@ import (
 // follow the BattleTech: Aces model:
 //
 //  1. SP are granted to the force for the objectives that were met: the mission's POOL.
-//  2. The mission gives a flat amount of SP to each active pilot (`pilot_sp`); a benched pilot (one who did not take part) gets half, and a pilot killed gets none and
-//     is killed in action. These shares are drawn from the pool.
+//  2. The mission gives a flat amount of SP to each active pilot (`pilot_sp`); a benched pilot (one who did not take part) gets half, and a pilot killed (reported
+//     killed, or removed by a `kia` rule) gets none and is killed in action, as if never deployed. These shares are drawn from the pool.
 //  3. What is left of the pool goes to the warchest.
 //  4. Objectives met (or missed) grant KEYWORDS, which go into the campaign's ledger (Keywords.md is the registry).
 //
@@ -602,8 +602,8 @@ func (sc *Scenario) EvaluateOutcome(in OutcomeInputs, names map[string]string) (
 			res.MVPCandidates = append(res.MVPCandidates, p.PilotID)
 		}
 	}
-	// The pilots' shares come out of the pool: the pilot SP to each active pilot, half to each benched one, nothing to a pilot who was killed. What is left goes to
-	// the warchest. A pool that can't pay every share in full is split in proportion to the shares.
+	// The pilots' shares come out of the pool: the pilot SP to each active pilot, half to each benched one, nothing to a pilot who was killed or removed by a kia
+	// rule (they don't draw, as if never deployed). What is left goes to the warchest. A pool that can't pay every share in full is split in proportion to the shares.
 	if sc.pilotShare != nil {
 		v, err := sc.pilotShare.Number(mission)
 		if err != nil {
@@ -615,7 +615,9 @@ func (sc *Scenario) EvaluateOutcome(in OutcomeInputs, names map[string]string) (
 		for i, p := range res.Pilots {
 			switch p.Status {
 			case "active":
-				due[i] = share
+				if !p.KIA {
+					due[i] = share
+				}
 			case "benched":
 				due[i] = share / 2
 			}
