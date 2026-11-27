@@ -4,7 +4,8 @@ title: Cold Crescent
 planet: Karetah
 map: ""   # TBD
 forces: {}   # OpFor .mul files TBD
-images: []
+images:
+  - images/karetah.png
 readout_title: Lunar survey
 readout:   # Morges' star and recharge as on its survey; the moon itself is invented: small, cold, its thin air being worked by the Falcons' terraformer (MechWarrior 2)
   - Planet: Morges
