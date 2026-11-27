@@ -195,6 +195,19 @@
     units.forEach(function (u) { if (plan(i).selected[u.id]) n++; });
     return n;
   }
+  // Whether players 1 to i+1 between them leave fewer mechs than there are players after them: each later player needs one to take (a destroyed mech, or
+  // one the catalog doesn't know, can't be). It holds that player's Next back.
+  function leavesTooFew(i) {
+    var later = playerCount - 1 - i;
+    if (later <= 0) return false;
+    var left = 0;
+    units.forEach(function (u) {
+      if (u.destroyed || u.unknown) return;
+      for (var j = 0; j <= i; j++) if (plan(j).selected[u.id]) return;
+      left++;
+    });
+    return left < later;
+  }
   function totalBV() { var t = 0; for (var i = 0; i < playerCount; i++) t += bvOf(i); return t; }
   function totalCount() { var t = 0; for (var i = 0; i < playerCount; i++) t += countOf(i); return t; }
   function overBV() { return limit > 0 && totalBV() > limit; }
@@ -465,15 +478,19 @@
     if (needPilots) parts.push('every mech needs a named pilot');
     // Over the BV limit, the force can still go on to the review, where omnimechs can be reconfigured to bring it under.
     var overText = overBV() ? 'The force is over the BV limit: take fewer mechs, or reconfigure omnimechs on the review. Start battle waits until it fits.' : '';
-    rules.hidden = !parts.length && !overText;
+    // Every later player needs a mech to take (this holds Next back).
+    var leaveText = countOf(step) > roomFor(step) || leavesTooFew(step) ? 'Leave a mech for each other player.' : '';
+    rules.hidden = !parts.length && !overText && !leaveText;
     rules.textContent = '';
+    var lines = [];
     if (parts.length) {
       var text = parts.join(', ') + '.';
       if (anyUnmanned()) text += ' Assign a named pilot to each mech you take.';
-      if (countOf(step) > roomFor(step)) text += ' Leave a mech for each other player.';
-      rules.textContent = text.charAt(0).toUpperCase() + text.slice(1);
+      lines.push(text.charAt(0).toUpperCase() + text.slice(1));
     }
-    if (overText) rules.textContent = (rules.textContent ? rules.textContent + ' ' : '') + overText;
+    if (leaveText) lines.push(leaveText);
+    if (overText) lines.push(overText);
+    rules.textContent = lines.join(' ');
   }
 
   var showPlayers = Dom.players(playersPick, minPlayers, maxPlayers, function (n) {
@@ -835,7 +852,7 @@
     }
     // Over the BV limit the force can still go on (the review can reconfigure omnimechs to fit); only Start battle waits for it, and for the drop cost.
     var ok = !busy && !overUnits();
-    if (!last) next.disabled = isPlayerStep() ? !ok || countOf(step) === 0 || unmanned(step) > 0 || countOf(step) > roomFor(step) : !ok || (isCommanderStep() && !effectiveCommander());
+    if (!last) next.disabled = isPlayerStep() ? !ok || countOf(step) === 0 || unmanned(step) > 0 || countOf(step) > roomFor(step) || leavesTooFew(step) : !ok || (isCommanderStep() && !effectiveCommander());
     else { var allHave = true; for (var i = 0; i < playerCount; i++) if (countOf(i) === 0) allHave = false; go.disabled = !ok || overBV() || dropCost() > warchest || !allHave || anyUnmanned() || (needCommander() && !effectiveCommander()); }
   }
 

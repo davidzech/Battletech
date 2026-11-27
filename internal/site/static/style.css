@@ -1205,9 +1205,10 @@ dialog button.rec-skills-reset:disabled { opacity: 0.4; cursor: not-allowed; }
 .mech-row.has-actions { grid-template-columns: 1.6rem 3.4rem minmax(0, 1fr) auto; }
 .mech-list .mech-row.has-actions { grid-template-columns: 1.7rem 4.4rem minmax(0, 1fr) auto; }
 .mr-actions { align-self: center; display: flex; gap: 0.4rem; margin-right: 0.8rem; }
-.mr-action { padding: 0.4rem 0.8rem; font: 700 0.72rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--text); background: var(--bg); border: 1px solid var(--line); cursor: pointer; }
-.mr-action:hover:not(:disabled), .mr-action:focus-visible { color: var(--accent); border-color: var(--accent); outline: none; }
-.mr-action:disabled { opacity: 0.4; cursor: not-allowed; }
+/* The dialog forms (dialog button.mr-action) keep a row's buttons the same in a dialog (the Deploy wizard) as on the Manage page, over the dialogs' own buttons. */
+.mr-action, dialog button.mr-action { padding: 0.4rem 0.8rem; font: 700 0.72rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--text); background: var(--bg); border: 1px solid var(--line); cursor: pointer; }
+.mr-action:hover:not(:disabled), .mr-action:focus-visible, dialog button.mr-action:hover:not(:disabled), dialog button.mr-action:focus-visible { color: var(--accent); border-color: var(--accent); outline: none; }
+.mr-action:disabled, dialog button.mr-action:disabled, dialog button.mr-action:disabled:hover { opacity: 0.4; color: var(--text); border-color: var(--line); cursor: not-allowed; }
 @media (max-width: 640px) { .mr-actions { flex-direction: column; margin-right: 0.5rem; } }
 /* Truly destroyed: gone for good, darker than a plain destroyed unit. */
 .mr-chip.cond-truly { color: #ff9c8f; background: #3b0f0c; border: 1px solid #c0392b; text-transform: uppercase; font-size: 0.62rem; letter-spacing: 0.08em; }
@@ -1346,29 +1347,27 @@ dialog button.deploy-slot-x:hover:not(:disabled), dialog button.deploy-slot-x:fo
 .deploy-pilot-card .edge-skills { margin: 0; }
 .dpc-none { font-size: 0.8rem; color: var(--muted); }
 
-/* Every mech row in the Deploy popup is as tall as a row with a pilot in its slot, empty or not, and the mech row fills that height. */
-.deploy-slot { min-height: 5.85rem; }
+/* Every mech row in the Deploy popup is the Manage page's Hangar row: 5.2rem (83px) tall, with its icon, name and chips, and the pilot slot beside it is the
+   same height, its pilot card compacted to fit (the tray's cards match it, so a pilot looks the same in the tray and in a mech). */
+.deploy-slot { min-height: 5.2rem; }
+.deploy-unit.has-slot > .deploy-slot { height: 5.2rem; }
+.deploy-unit.has-slot > .deploy-slot.filled { width: auto; } /* a pilot card fills its slot's column, like an empty slot */
 .deploy-unit.has-slot > label { align-items: stretch; }
 .deploy-unit.has-slot > label input.themed-box { align-self: center; }
 .deploy-unit.has-slot > label .mech-row { height: 100%; }
-
-/* The Deploy popup's mech rows are tall (they match a row with a pilot in its slot), so their content is scaled up to fill them. */
-.deploy-unit.has-slot .mech-row { grid-template-columns: 1.7rem 5.6rem minmax(0, 1fr); }
-.deploy-unit.has-slot .mr-icon { width: 4.8rem; max-height: 5rem; }
-.deploy-unit.has-slot .mr-main { gap: 0.15rem; padding: 0.5rem 0.9rem 0.5rem 0.3rem; }
-.deploy-unit.has-slot .mr-model { font-size: 0.95rem; }
-.deploy-unit.has-slot .mr-name { font-size: 1.5rem; }
-.deploy-unit.has-slot .mr-ext svg { width: 1.1rem; height: 1.1rem; }
-.deploy-unit.has-slot .mr-chips { gap: 0.4rem; margin-top: 0.3rem; }
-.deploy-unit.has-slot .mr-chip { padding: 0.14rem 0.6rem; font-size: 0.95rem; }
-.deploy-unit.has-slot .mr-chip.cond-armor, .deploy-unit.has-slot .mr-chip.cond-structure, .deploy-unit.has-slot .mr-chip.cond-crippled, .deploy-unit.has-slot .mr-chip.cond-destroyed, .deploy-unit.has-slot .mr-chip.cond-truly, .deploy-unit.has-slot .mr-chip.ammo, .deploy-unit.has-slot .mr-chip.warn, .deploy-unit.has-slot .mr-chip.bad { font-size: 0.74rem; }
-.deploy-unit.has-slot .mr-chip svg { width: 0.95rem; height: 0.95rem; }
-
-/* The role label in the Deploy popup is bigger: a wider band and a larger base size (a long role still scales down by --role-scale). */
-.deploy-unit.has-slot .mech-row { grid-template-columns: 2.3rem 5.6rem minmax(0, 1fr); }
-.deploy-unit.has-slot .mr-role { --role-size: 0.68rem; }
-/* A review row with a Reconfigure button keeps it at the right, as the Manage page's rows do. */
-.deploy-unit.has-slot .mech-row.has-actions { grid-template-columns: 2.3rem 5.6rem minmax(0, 1fr) auto; }
+.deploy-unit.has-slot .mech-row { grid-template-columns: 1.7rem 4.4rem minmax(0, 1fr); min-height: 5.2rem; }
+.deploy-unit.has-slot .mech-row.has-actions { grid-template-columns: 1.7rem 4.4rem minmax(0, 1fr) auto; }
+.deploy-unit.has-slot .mr-icon { width: 3.8rem; max-height: 4rem; }
+.deploy-unit.has-slot .mr-main { gap: 0.1rem; padding: 0.45rem 0.8rem 0.45rem 0.25rem; }
+.deploy-unit.has-slot .mr-model { font-size: 0.77rem; }
+.deploy-unit.has-slot .mr-name { font-size: 1.15rem; }
+.deploy-unit.has-slot .mr-chips { gap: 0.35rem; margin-top: 0.25rem; }
+.deploy-unit.has-slot .mr-chip { padding: 0.09rem 0.48rem; font-size: 0.77rem; }
+.deploy-pilot, .deploy-slot.filled { gap: 0.3rem; padding: 0.3rem 0.45rem 0.35rem; }
+.deploy-pilot .deploy-portrait, .deploy-slot.filled .deploy-portrait { width: 1.7rem; height: 1.7rem; }
+.deploy-pilot-text b { font-size: 0.85rem; }
+.deploy-stat { padding: 0.1rem 0 0.15rem; }
+.deploy-stat-value { margin-top: 0.08rem; font-size: 1rem; }
 /* The hover card is a popover (see mechrow.js): drop the browser's popover box and keep the card's own look. */
 .unit-tip[popover] { inset: auto; margin: 0; overflow: visible; color: var(--text); }
 
@@ -1613,7 +1612,7 @@ dialog.qr-dialog { padding: 0; max-width: min(92vw, 24rem); }
 /* A completed mission's aftermath: the same transmission block as the briefing, under the Outcome. */
 .briefing.aftermath { margin-top: 2rem; }
 .deploy-unit.has-slot.wide { grid-template-columns: minmax(0, 1fr); }
-.deploy-unit.has-slot.wide .mech-row { min-height: 5.85rem; height: 100%; }
+.deploy-unit.has-slot.wide .mech-row { min-height: 5.2rem; height: 100%; }
 /* In progress: a yellow LED, and the state is a button that opens the operation. */
 .mission-log.in-progress { border-left-color: var(--accent); }
 .mission-log.in-progress .mission-led { background: var(--accent); box-shadow: 0 0 0.3rem 0.05rem rgba(255, 200, 0, 0.65), 0 0 0.75rem 0.15rem rgba(255, 200, 0, 0.25); }

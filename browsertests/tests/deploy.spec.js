@@ -377,3 +377,44 @@ test('reconfigures an omnimech on the mech step', async ({ page }) => {
   await expect(dlg.locator('.deploy-drop-cost')).toHaveText('Drop cost: Cost 38 SP. Warchest 1,000 → 962 SP.');
   await expect(dlg.locator('#deploy-go')).toBeEnabled();
 });
+
+// With several players, a player who leaves no mech for a player after them can't go on: Next waits, and the step says why.
+test('a player must leave a mech for each player after them', async ({ page }) => {
+  await newAccount(page);
+  await startCampaign(page, 'muster', ['Alrek', 'Katarina']);
+  await setHangar(page, [unit('ua', 'BMMadCat_Prime'), unit('ub', 'BMDasher_Prime'), unit('uc', 'BMGrizzly', { Destroyed: true })]);
+  await page.goto('/muster/scenario_000/');
+  await page.locator('#deploy-open').click();
+  const dlg = page.locator('#deploy-dialog');
+  await dlg.locator('#deploy-players-pick').getByRole('button', { name: '2 players' }).click();
+  const rows = dlg.locator('#deploy-list .deploy-unit');
+  await rows.nth(0).locator('input[type=checkbox]').check();
+  await rows.nth(1).locator('input[type=checkbox]').check();
+  // The destroyed Grizzly is no mech to take, so Player 2 would have nothing.
+  await expect(dlg.locator('#deploy-next')).toBeDisabled();
+  await expect(dlg.locator('#deploy-rules')).toContainText('Leave a mech for each other player.');
+  await rows.nth(1).locator('input[type=checkbox]').uncheck();
+  await expect(dlg.locator('#deploy-next')).toBeEnabled();
+  await expect(dlg.locator('#deploy-rules')).toBeHidden();
+  await dlg.locator('#deploy-next').click();
+  await expect(dlg.locator('#deploy-step')).toHaveText('Player 2 of 2');
+});
+
+// A row's buttons look the same in the Deploy wizard (a dialog, with buttons of its own) as on the Manage page.
+test('the Reconfigure button looks the same in the wizard as on the Manage page', async ({ page }) => {
+  await newAccount(page);
+  await startCampaign(page, 'muster', ['Alrek', 'Katarina']);
+  await setHangar(page, [unit('ua', 'BMMadCat_Prime')]);
+  const look = (b) => b.evaluate((e) => {
+    const c = getComputedStyle(e);
+    return ['font-size', 'font-weight', 'letter-spacing', 'color', 'background-color', 'border', 'padding'].map((p) => c.getPropertyValue(p)).join(' | ');
+  });
+  await page.goto('/muster/manage/');
+  await page.waitForLoadState('networkidle');
+  const manage = await look(page.locator('#hangar-units-list').getByRole('button', { name: 'Reconfigure' }).first());
+  await page.goto('/muster/scenario_000/');
+  await page.locator('#deploy-open').click();
+  await page.waitForLoadState('networkidle');
+  await expect(page.locator('#deploy-list').getByRole('button', { name: 'Reconfigure' }).first()).toBeVisible();
+  expect(await look(page.locator('#deploy-list').getByRole('button', { name: 'Reconfigure' }).first())).toEqual(manage);
+});
