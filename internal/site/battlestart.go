@@ -98,6 +98,14 @@ func (s *Server) startBattle(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, battleLockMessage(bp.c, sc), http.StatusConflict)
 		return
 	}
+	// The omnimechs the plan reconfigures are paid for and changed in the hangar first, so the battle is built from them. Ones made stay made if the battle
+	// then fails to build: they are paid for and in the History, and Start battle can just be tried again.
+	if len(bp.swaps) > 0 {
+		if msg, status := s.reconfigureForBattle(ctx, r, bp); msg != "" {
+			http.Error(w, msg, status)
+			return
+		}
+	}
 	seed := currentSeed(r)
 	account := mekbay.AccountUID(seed, mekbay.SlotHangar)
 	draft, err := opForDraft(bp.c, bp.sc)

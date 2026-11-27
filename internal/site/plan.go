@@ -60,6 +60,8 @@ type planResult struct {
 	Deployed bool         `json:"deployed"` // always false for now: nothing was sent to MekBay
 	// Commander is the named pilot who commands the force (marked on their mech in MekBay); "" when the scenario has none or no named pilot is deployed.
 	Commander string `json:"commander,omitempty"`
+	// SwapCost is what reconfiguring the plan's hangar omnimechs costs, paid by Start battle (0 when none is, and for a scenario's own mechs, which are free).
+	SwapCost int `json:"swapCost"`
 }
 
 // planProblem checks a whole plan against the hangar and returns the first problem as a sentence, or "". units[i] is player i+1's mech IDs.
@@ -89,6 +91,8 @@ type builtPlan struct {
 	res   planResult
 	// commander is the deployed named pilot who commands the force, and where: their player (0-based) and mech. nil when there is none.
 	commander *deployedPilot
+	// swaps are the hangar omnimechs the plan reconfigures, which Start battle pays for and makes in the hangar before building the battle.
+	swaps []plannedSwap
 }
 
 // deployedPilot is a named pilot in one of the plan's mechs.
@@ -99,8 +103,9 @@ type deployedPilot struct {
 }
 
 // checkPlan reads and checks a deployment plan from a request, and answers the request itself when it is not good. Fields: campaign, scenario, players, and for each player i the repeated
-// p<i>_units and the paired p<i>_assign_unit and p<i>_assign_pilot; for a scenario whose provided mechs can be reconfigured, the paired variant_unit and
-// variant_to (see reconfigureProvided), which every check after them sees. It needs a started campaign and writes nothing.
+// p<i>_units and the paired p<i>_assign_unit and p<i>_assign_pilot; and the paired variant_unit and variant_to, the omnimechs to reconfigure: free for a
+// scenario's provided mechs (reconfigureProvided), paid for a hangar's (reconfigureHangar, made by Start battle). Every check after them sees the mechs as
+// reconfigured, so the BV limit counts the variants. It needs a started campaign and writes nothing.
 func (s *Server) checkPlan(w http.ResponseWriter, r *http.Request) (*builtPlan, bool) {
 	if !sameOrigin(r) {
 		http.Error(w, "cross-origin request refused", http.StatusForbidden)
@@ -131,7 +136,13 @@ func (s *Server) checkPlan(w http.ResponseWriter, r *http.Request) (*builtPlan, 
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return nil, false
 	}
-	h, msg := reconfigureProvided(h, c, sc, r.PostForm["variant_unit"], r.PostForm["variant_to"])
+	var swaps []plannedSwap
+	var msg string
+	if sc.Provides() {
+		h, msg = reconfigureProvided(h, c, sc, r.PostForm["variant_unit"], r.PostForm["variant_to"])
+	} else {
+		h, swaps, msg = reconfigureHangar(h, run.Owned(), r.PostForm["variant_unit"], r.PostForm["variant_to"])
+	}
 	if msg != "" {
 		http.Error(w, msg, http.StatusBadRequest)
 		return nil, false
@@ -149,11 +160,28 @@ func (s *Server) checkPlan(w http.ResponseWriter, r *http.Request) (*builtPlan, 
 		http.Error(w, msg, http.StatusBadRequest)
 		return nil, false
 	}
+	// A mech is only reconfigured to be deployed, and the warchest has to cover it.
+	taken := map[string]bool{}
+	for _, ids := range units {
+		for _, id := range ids {
+			taken[id] = true
+		}
+	}
+	for _, sw := range swaps {
+		if !taken[sw.unitID] {
+			http.Error(w, sw.name+" is reconfigured but isn't being deployed.", http.StatusBadRequest)
+			return nil, false
+		}
+	}
+	if cost := swapsCost(swaps); cost > run.Warchest {
+		http.Error(w, fmt.Sprintf("Not enough in the warchest: reconfiguring costs %d SP and you have %d.", cost, run.Warchest), http.StatusConflict)
+		return nil, false
+	}
 	views := map[string]hangarUnitView{}
 	for _, v := range hangarViews(h) {
 		views[v.ID] = v
 	}
-	res := planResult{Players: []planPlayer{}, Limit: sc.BVLimit}
+	res := planResult{Players: []planPlayer{}, Limit: sc.BVLimit, SwapCost: swapsCost(swaps)}
 	pilotUsed := map[string]int{}
 	crews := make([][]mekbay.CrewAssignment, n)
 	for i := 0; i < n; i++ {
@@ -203,7 +231,7 @@ func (s *Server) checkPlan(w http.ResponseWriter, r *http.Request) (*builtPlan, 
 	if commander != nil {
 		res.Commander = commander.name
 	}
-	return &builtPlan{pt: pt, run: run, c: c, sc: sc, h: h, views: views, units: units, crews: crews, res: res, commander: commander}, true
+	return &builtPlan{pt: pt, run: run, c: c, sc: sc, h: h, views: views, units: units, crews: crews, res: res, commander: commander, swaps: swaps}, true
 }
 
 // deployedPilots lists the living named pilots the plan puts in a mech, in player and mech order: a mech's pilot is the one assigned to it, or the one the force

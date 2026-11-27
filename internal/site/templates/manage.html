@@ -85,7 +85,7 @@
     </div>
   </form>
 </dialog>
-<section class="hangar-units" id="hangar-units" data-campaign="{{.Campaign.Slug}}" data-can-modify="{{if .Run.Owned}}1{{end}}" data-warchest="{{.Run.Warchest}}" data-cached="{{.ForceJSON}}">
+<section class="hangar-units" id="hangar-units" data-campaign="{{.Campaign.Slug}}" data-can-modify="{{if .Run.Owned}}1{{end}}" data-warchest="{{.Run.Warchest}}"{{if and .Campaign.AvailabilityFaction .Campaign.AvailabilityEra}} data-swap-availability="Only variants {{.Campaign.AvailabilityFaction}} fields in the {{.Campaign.AvailabilityEra}} era"{{end}} data-cached="{{.ForceJSON}}">
 <h2 class="section-title">Hangar</h2>
 <div class="hangar-units-summary" id="hangar-units-summary"></div>
 <p class="muted">{{.Run.ForceLabel}}&rsquo;s hangar holds your mechs, and scenarios deploy from it.</p>
@@ -132,22 +132,6 @@
     </div>
   </form>
 </dialog>
-<dialog id="swap-dialog" class="wizard" aria-labelledby="swap-title">
-  <form id="swap-form" autocomplete="off">
-    <h2 id="swap-title">Reconfigure</h2>
-    <label for="swap-select">Variant</label>
-    <select id="swap-select"></select>
-    {{if and .Campaign.AvailabilityFaction .Campaign.AvailabilityEra}}<label class="themed-check swap-available"><input type="checkbox" id="swap-available" checked><span>Only variants {{.Campaign.AvailabilityFaction}} fields in the {{.Campaign.AvailabilityEra}} era</span></label>{{end}}
-    <div id="swap-sub" class="swap-unit"></div>
-    <dl id="swap-breakdown" class="confirm-items" hidden></dl>
-    <p id="swap-cost" class="repair-cost"></p>
-    <p id="swap-error" class="form-error" role="alert"></p>
-    <div class="form-actions">
-      <button type="submit" class="button" id="swap-apply">Reconfigure</button>
-      <button type="button" id="swap-cancel">Cancel</button>
-    </div>
-  </form>
-</dialog>
 {{if .Ranks}}<dialog id="rank-dialog" class="wizard" aria-labelledby="rank-title">
   <form id="rank-form" autocomplete="off">
     <h2 id="rank-title">Change rank</h2>
@@ -186,6 +170,7 @@
 <script src="/static/unitcard.js" defer></script>
 <script src="/static/forcesummary.js" defer></script>
 <script src="/static/variantpicker.js" defer></script>
+<script src="/static/swapdialog.js" defer></script>
 <script src="/static/hangarlist.js" defer></script>
 <script src="/static/unitsearch.js" defer></script>
 <script src="/static/purchase.js" defer></script>

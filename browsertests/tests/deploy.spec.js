@@ -1,7 +1,7 @@
 // The Deploy wizard (mekbay.js) on Refusal War's Trial of Position: the scenario provides its own omnimechs (two at most, each with a named pilot) and lets
 // them be reconfigured for free, so the wizard has the pilot tray, the unit limit, the Configure step and Start battle; then the Operation in progress view,
 // the Complete mission dialog reading the battle (outcome.js) and Abort mission.
-const { test, expect, newAccount, startCampaign, setBattle, recruit } = require('./helpers');
+const { test, expect, newAccount, startCampaign, setBattle, setHangar, setWarchest, recruit, unit } = require('./helpers');
 
 const SCENARIO = '/refusalwar/scenario_000/';
 
@@ -111,15 +111,24 @@ test('deploys two pilots, reconfigures a mech, starts the battle and completes t
   await expect(dlg.locator('#deploy-next')).toBeEnabled();
   await dlg.locator('#deploy-next').click();
 
-  // The Configure step: a free variant for each omnimech taken.
-  await expect(dlg.locator('#deploy-step')).toHaveText('Configure your mechs');
-  const picks = dlg.locator('.variant-pick');
-  await expect(picks).toHaveCount(2);
-  const select = picks.first().locator('select');
-  const options = await select.locator('option:not([disabled])').evaluateAll((os) => os.map((o) => o.value).filter(Boolean));
+  // The review: each omnimech taken has a Reconfigure button, free for the Trial's own mechs, and with no drop cost.
+  await expect(dlg.locator('#deploy-step')).toHaveText('Review your plan');
+  const reviewed = dlg.locator('.deploy-review .deploy-unit');
+  await expect(reviewed).toHaveCount(2);
+  await reviewed.first().getByRole('button', { name: 'Reconfigure' }).click();
+  const swap = page.locator('#swap-dialog');
+  await expect(swap).toBeVisible();
+  await expect(swap.locator('#swap-available')).toBeHidden(); // only the variants Clan Wolf fields, without a box
+  const options = await swap.locator('#swap-select option').evaluateAll((os) => os.map((o) => o.value).filter(Boolean));
   expect(options.length).toBeGreaterThan(0);
-  await select.selectOption(options[0]);
-  await expect(picks.first()).toContainText('Free');
+  await swap.locator('#swap-select').selectOption(options[0]);
+  await expect(swap.locator('.swap-flow')).toContainText('Free');
+  await expect(swap.locator('#swap-breakdown')).toBeHidden();
+  await swap.locator('#swap-apply').click();
+  await expect(swap).toBeHidden();
+  await expect(reviewed.first()).toContainText('Prime → ');
+  await expect(reviewed.first().getByRole('button', { name: 'Reconfigured' })).toBeVisible();
+  await expect(dlg.locator('.deploy-drop-cost')).toHaveCount(0);
 
   await expect(dlg.locator('#deploy-go')).toBeEnabled();
   await dlg.locator('#deploy-go').click();
@@ -176,8 +185,9 @@ test('aborts a battle and rolls the campaign back', async ({ page }) => {
   await expect(dlg.locator('#deploy-rules')).toContainText('Assign a named pilot to each mech you take.');
   await dlg.locator('#deploy-pilots-list .deploy-pilot', { hasText: 'Alrek' }).dragTo(rows.nth(0).locator('.deploy-slot'));
   await dlg.locator('#deploy-next').click();
-  // With one mech there is nobody else to configure for, but the step is still offered for its omnimech: keep its own variant.
-  await expect(dlg.locator('#deploy-step')).toHaveText('Configure your mechs');
+  // One player also reviews the plan before Start battle.
+  await expect(dlg.locator('#deploy-step')).toHaveText('Review your plan');
+  await expect(dlg.locator('.deploy-review-player h3')).toContainText('Your force');
   await dlg.locator('#deploy-go').click();
   await expect(dlg.locator('#deploy-title')).toHaveText('Operation in progress');
 
@@ -228,13 +238,11 @@ test('divides the force between two players and reviews the plan', async ({ page
   await rows.nth(0).locator('.deploy-slot').click();
   await dlg.locator('#deploy-next').click();
 
-  await expect(dlg.locator('#deploy-step')).toHaveText('Configure your mechs');
-  await dlg.locator('#deploy-next').click();
   await expect(dlg.locator('#deploy-step')).toHaveText('Review your plan');
   await expect(dlg.locator('.deploy-review-player')).toHaveCount(2);
   await expect(dlg.locator('.deploy-review-player').nth(0)).toContainText('Alrek');
   await expect(dlg.locator('.deploy-review-player').nth(1)).toContainText('Katarina');
-  await expect(dlg.locator('#deploy-count')).toHaveText('Step 4 of 4');
+  await expect(dlg.locator('#deploy-count')).toHaveText('Step 3 of 3');
 
   // The review's rows show their unit cards on hover.
   await dlg.locator('.deploy-review .mech-row').first().locator('.mr-name').hover();
@@ -244,4 +252,185 @@ test('divides the force between two players and reviews the plan', async ({ page
   await expect(dlg.locator('#deploy-title')).toHaveText('Operation in progress');
   await dlg.locator('.op-force .mech-row').first().locator('.mr-name').hover();
   await expect(dlg.locator('#pill-tip .tip-head')).toBeVisible();
+});
+
+// A force over the BV limit can go on to the review, where reconfiguring a hangar omnimech brings it under: the review adds up the drop cost, and Start battle
+// waits until the force fits and the warchest can pay. Muster's Scenario 000 (a test campaign) is deployed from the hangar, with a 7,500 BV limit.
+test('reconfigures an omnimech on the review to fit the BV limit', async ({ page }) => {
+  await newAccount(page);
+  await startCampaign(page, 'muster', ['Alrek', 'Katarina']);
+  // Two Timber Wolf Primes (2,737 BV) and two Fire Moth Primes (1,251): 7,976 BV. The Timber Wolf B (2,224 BV, 38 SP) brings it to 7,463. The fifth mech,
+  // a Timber Wolf with spent ammunition, can't be reconfigured.
+  await setHangar(page, [unit('ua', 'BMMadCat_Prime'), unit('ub', 'BMMadCat_Prime'), unit('uc', 'BMDasher_Prime'), unit('ud', 'BMDasher_Prime'),
+    unit('ue', 'BMMadCat_Prime', { Damaged: true, AmmoBins: 1, AmmoUsed: 3 })]);
+  await setWarchest(page, 'muster', 1000);
+  await page.goto('/muster/scenario_000/');
+  await page.locator('#deploy-open').click();
+  const dlg = page.locator('#deploy-dialog');
+  const rows = dlg.locator('#deploy-list .deploy-unit');
+  await expect(rows).toHaveCount(5);
+  for (let i = 0; i < 4; i++) await rows.nth(i).locator('input[type=checkbox]').check();
+
+  // Over the limit, the step says so but lets the force go on.
+  await expect(dlg.locator('#deploy-meter')).toHaveClass(/over/);
+  await expect(dlg.locator('#deploy-rules')).toContainText('over the BV limit');
+  await expect(dlg.locator('#deploy-next')).toBeEnabled();
+  await dlg.locator('#deploy-next').click();
+  await expect(dlg.locator('#deploy-step')).toHaveText('Review your plan');
+  // The totals come first, so what holds Start battle back is in sight without scrolling.
+  await expect(dlg.locator('#deploy-review > *').first()).toHaveClass(/deploy-review-total/);
+  await expect(dlg.locator('.deploy-review-total').first()).toHaveClass(/over/);
+  await expect(dlg.locator('.deploy-review-total').first()).toContainText('7,976 / 7,500 BV');
+  await expect(dlg.locator('#deploy-go')).toBeDisabled();
+
+  // Reconfigure the first Timber Wolf to the B: the Manage page's dialog, with its price, breakdown and the box for the faction's variants.
+  const reviewed = dlg.locator('.deploy-review .deploy-unit');
+  await reviewed.first().getByRole('button', { name: 'Reconfigure' }).click();
+  const swap = page.locator('#swap-dialog');
+  await expect(swap.locator('#swap-title')).toHaveText('Reconfigure Timber Wolf');
+  await expect(swap.locator('#swap-apply')).toBeDisabled();
+  await swap.locator('#swap-available').uncheck();
+  await swap.locator('#swap-select').selectOption('BMMadCat_B');
+  await expect(swap.locator('#swap-cost')).toHaveText('Cost 38 SP. Warchest 1,000 → 962 SP.');
+  await expect(swap.locator('#swap-breakdown')).toContainText('50% of tonnage');
+  await swap.locator('#swap-apply').click();
+  await expect(swap).toBeHidden();
+
+  // The force fits now; the drop cost is what Start battle will pay.
+  await expect(reviewed.first()).toContainText('Prime → B');
+  await expect(dlg.locator('.deploy-review-total').first()).toContainText('7,463 / 7,500 BV');
+  await expect(dlg.locator('.deploy-drop-cost')).toHaveText('Drop cost: Cost 38 SP. Warchest 1,000 → 962 SP.');
+  await expect(dlg.locator('#deploy-go')).toBeEnabled();
+
+  // Choosing the current variant again takes the proposal back.
+  await reviewed.first().getByRole('button', { name: 'Reconfigured' }).click();
+  await expect(swap.locator('#swap-select')).toHaveValue('BMMadCat_B');
+  await swap.locator('#swap-select').selectOption('');
+  await swap.locator('#swap-apply').click();
+  await expect(dlg.locator('.deploy-drop-cost')).toHaveCount(0);
+  await expect(dlg.locator('#deploy-go')).toBeDisabled();
+  await reviewed.first().getByRole('button', { name: 'Reconfigure' }).click();
+  await swap.locator('#swap-available').uncheck();
+  await swap.locator('#swap-select').selectOption('BMMadCat_B');
+  await swap.locator('#swap-apply').click();
+
+  // Start battle pays for the swap, then builds the battle; the warchest shows it once the page reloads.
+  await dlg.locator('#deploy-go').click();
+  await expect(dlg.locator('#deploy-title')).toHaveText('Operation in progress');
+  await page.goto('/muster/manage/');
+  await expect(page.locator('#overview')).toContainText('962 SP');
+});
+
+// A hangar omnimech that isn't fully repaired and rearmed can't be reconfigured on the review, as on the Manage page.
+test('a damaged omnimech cannot be reconfigured on the review', async ({ page }) => {
+  await newAccount(page);
+  await startCampaign(page, 'muster', ['Alrek', 'Katarina']);
+  await setHangar(page, [unit('ua', 'BMMadCat_Prime', { Damaged: true, AmmoBins: 1, AmmoUsed: 3 }), unit('ub', 'BMGrizzly')]);
+  await page.goto('/muster/scenario_000/');
+  await page.locator('#deploy-open').click();
+  const dlg = page.locator('#deploy-dialog');
+  await dlg.locator('#deploy-list .deploy-unit').nth(0).locator('input[type=checkbox]').check();
+  await dlg.locator('#deploy-list .deploy-unit').nth(1).locator('input[type=checkbox]').check();
+  await dlg.locator('#deploy-next').click();
+  const reviewed = dlg.locator('.deploy-review .deploy-unit');
+  await expect(reviewed.first().getByRole('button', { name: 'Reconfigure' })).toBeDisabled();
+  await expect(reviewed.first().getByRole('button', { name: 'Reconfigure' })).toHaveAttribute('title', /fully repaired and rearmed/);
+  await expect(reviewed.nth(1).getByRole('button', { name: 'Reconfigure' })).toHaveCount(0); // the Grizzly isn't an omnimech
+});
+
+// The mech steps offer Reconfigure too: a click on it doesn't tick or untick the mech, and choosing a variant for a mech not taken yet takes it, with the
+// meter following.
+test('reconfigures an omnimech on the mech step', async ({ page }) => {
+  await newAccount(page);
+  await startCampaign(page, 'muster', ['Alrek', 'Katarina']);
+  await setHangar(page, [unit('ua', 'BMMadCat_Prime'), unit('ub', 'BMMadCat_Prime'), unit('uc', 'BMDasher_Prime'), unit('ud', 'BMDasher_Prime')]);
+  await setWarchest(page, 'muster', 1000);
+  await page.goto('/muster/scenario_000/');
+  await page.locator('#deploy-open').click();
+  const dlg = page.locator('#deploy-dialog');
+  const rows = dlg.locator('#deploy-list .deploy-unit');
+  const box = (i) => rows.nth(i).locator('input[type=checkbox]');
+  for (let i = 1; i < 4; i++) await box(i).check();
+  await expect(dlg.locator('#deploy-meter')).toContainText('3 selected · 5,239 / 7,500 BV');
+
+  // Opening the dialog from a taken mech and cancelling leaves it taken.
+  const swap = page.locator('#swap-dialog');
+  await rows.nth(1).getByRole('button', { name: 'Reconfigure' }).click();
+  await expect(swap).toBeVisible();
+  await swap.locator('#swap-cancel').click();
+  await expect(box(1)).toBeChecked();
+
+  // Choosing the B for the first Timber Wolf, not taken yet, takes it as the B.
+  await expect(box(0)).not.toBeChecked();
+  await rows.nth(0).getByRole('button', { name: 'Reconfigure' }).click();
+  await swap.locator('#swap-available').uncheck();
+  await swap.locator('#swap-select').selectOption('BMMadCat_B');
+  await swap.locator('#swap-apply').click();
+  await expect(box(0)).toBeChecked();
+  await expect(rows.nth(0)).toContainText('Prime → B');
+  await expect(rows.nth(0).getByRole('button', { name: 'Reconfigured' })).toBeVisible();
+  await expect(dlg.locator('#deploy-meter')).toContainText('4 selected · 7,463 / 7,500 BV');
+  await expect(dlg.locator('#deploy-meter')).not.toHaveClass(/over/);
+
+  // The review carries it, with its drop cost, and Start battle can go.
+  await dlg.locator('#deploy-next').click();
+  await expect(dlg.locator('.deploy-drop-cost')).toHaveText('Drop cost: Cost 38 SP. Warchest 1,000 → 962 SP.');
+  await expect(dlg.locator('#deploy-go')).toBeEnabled();
+});
+
+// With several players, a player who leaves no mech for a player after them can't go on: Next waits, and the step says why.
+test('a player must leave a mech for each player after them', async ({ page }) => {
+  await newAccount(page);
+  await startCampaign(page, 'muster', ['Alrek', 'Katarina']);
+  await setHangar(page, [unit('ua', 'BMMadCat_Prime'), unit('ub', 'BMDasher_Prime'), unit('uc', 'BMGrizzly', { Destroyed: true })]);
+  await page.goto('/muster/scenario_000/');
+  await page.locator('#deploy-open').click();
+  const dlg = page.locator('#deploy-dialog');
+  await dlg.locator('#deploy-players-pick').getByRole('button', { name: '2 players' }).click();
+  const rows = dlg.locator('#deploy-list .deploy-unit');
+  await rows.nth(0).locator('input[type=checkbox]').check();
+  await rows.nth(1).locator('input[type=checkbox]').check();
+  // The destroyed Grizzly is no mech to take, so Player 2 would have nothing.
+  await expect(dlg.locator('#deploy-next')).toBeDisabled();
+  await expect(dlg.locator('#deploy-rules')).toContainText('Leave a mech for each other player.');
+  await rows.nth(1).locator('input[type=checkbox]').uncheck();
+  await expect(dlg.locator('#deploy-next')).toBeEnabled();
+  await expect(dlg.locator('#deploy-rules')).toBeHidden();
+  await dlg.locator('#deploy-next').click();
+  await expect(dlg.locator('#deploy-step')).toHaveText('Player 2 of 2');
+});
+
+// A row's buttons look the same in the Deploy wizard (a dialog, with buttons of its own) as on the Manage page.
+test('the Reconfigure button looks the same in the wizard as on the Manage page', async ({ page }) => {
+  await newAccount(page);
+  await startCampaign(page, 'muster', ['Alrek', 'Katarina']);
+  await setHangar(page, [unit('ua', 'BMMadCat_Prime')]);
+  const look = (b) => b.evaluate((e) => {
+    const c = getComputedStyle(e);
+    return ['font-size', 'font-weight', 'letter-spacing', 'color', 'background-color', 'border', 'padding'].map((p) => c.getPropertyValue(p)).join(' | ');
+  });
+  await page.goto('/muster/manage/');
+  await page.waitForLoadState('networkidle');
+  const manage = await look(page.locator('#hangar-units-list').getByRole('button', { name: 'Reconfigure' }).first());
+  await page.goto('/muster/scenario_000/');
+  await page.locator('#deploy-open').click();
+  await page.waitForLoadState('networkidle');
+  await expect(page.locator('#deploy-list').getByRole('button', { name: 'Reconfigure' }).first()).toBeVisible();
+  expect(await look(page.locator('#deploy-list').getByRole('button', { name: 'Reconfigure' }).first())).toEqual(manage);
+});
+
+// Dragging a pilot onto a mech doesn't take the meter's red off while the force is over the BV limit (the drag's clean-up once cleared every .over).
+test('the meter stays red over the limit after dragging a pilot', async ({ page }) => {
+  await newAccount(page);
+  await startCampaign(page, 'muster', ['Alrek', 'Katarina']);
+  await setHangar(page, [unit('ua', 'BMMadCat_Prime'), unit('ub', 'BMMadCat_Prime'), unit('uc', 'BMMadCat_Prime')]);
+  await page.goto('/muster/scenario_000/');
+  await page.locator('#deploy-open').click();
+  const dlg = page.locator('#deploy-dialog');
+  const rows = dlg.locator('#deploy-list .deploy-unit');
+  for (let i = 0; i < 3; i++) await rows.nth(i).locator('input[type=checkbox]').check();
+  await expect(dlg.locator('#deploy-meter')).toHaveClass(/over/);
+  await dlg.locator('#deploy-pilots-list .deploy-pilot', { hasText: 'Alrek' }).dragTo(rows.nth(0).locator('.deploy-slot'));
+  await expect(rows.nth(0).locator('.deploy-slot')).toContainText('Alrek');
+  await expect(dlg.locator('#deploy-meter')).toHaveClass(/over/);
 });

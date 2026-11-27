@@ -13,6 +13,7 @@ import (
 	"github.com/davidzech/Battletech/internal/content"
 	"github.com/davidzech/Battletech/internal/hangar"
 	"github.com/davidzech/Battletech/internal/mekbay"
+	"github.com/davidzech/Battletech/internal/storage"
 )
 
 // Scenario 000 hands every cadet one of four standard machines instead of letting them bring their own.
@@ -227,7 +228,7 @@ func TestReconfigureProvidedMechs(t *testing.T) {
 		t.Error("reconfiguring leaves the scenario's own force alone")
 	}
 	// The deploy data offers the swaps, with each variant marked as fielded or not.
-	data := deployData(h, c, s0, false)
+	data := deployData(h, c, s0, storage.CampaignRun{})
 	if data["swaps"] != true || data["provided"] != true {
 		t.Errorf("the deploy data offers the swaps: %v %v", data["swaps"], data["provided"])
 	}
