@@ -201,7 +201,7 @@ func (s *Server) battleStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	out := battleStatusResponse{URL: link, Operation: op.OperationID, Forces: []statusForce{}, UpdatedAt: time.Now().Unix()}
 	for _, f := range got.Forces {
-		out.Forces = append(out.Forces, statusForce{Name: f.Force.Name, Alignment: f.Alignment, Allies: op.AlliesInstance != "" && f.InstanceID == op.AlliesInstance, Units: hangarViews(f.Force)})
+		out.Forces = append(out.Forces, statusForce{Name: f.Force.Name, Alignment: f.Alignment, Allies: op.AlliesInstance != "" && f.InstanceID == op.AlliesInstance, Units: battleViews(f.Force)})
 	}
 	if b, err := json.Marshal(out.Forces); err == nil { // kept so the next visit paints at once (the link is never stored: it is built from the request)
 		if err := s.store.SaveBattleStatus(r.Context(), pt.ID, c.Slug, sc.ID, string(b), out.UpdatedAt); err != nil {

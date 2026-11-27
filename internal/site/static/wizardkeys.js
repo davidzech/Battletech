@@ -2,7 +2,8 @@
 // and enabled). A wizard opts in by marking its buttons data-wizard-next and data-wizard-back (the start wizard, the Deploy wizard, the account popup).
 //
 // The keys are left alone where they already mean something: Enter on a button, link, select or text area, or wherever a handler of its own took the key (the
-// Deploy wizard's pilot slots do, while a pilot is held), and Backspace in a field that takes text. With a modifier held, or a dialog stacked over the wizard (a
+// Deploy wizard's pilot slots do, while a pilot is held), and Backspace in a field that takes text. A button marked data-wizard-enter has nothing to do on
+// Enter unless its own handler takes the key (a pilot slot with no pilot held), so Enter on it presses Next as anywhere else on the step. With a modifier held, or a dialog stacked over the wizard (a
 // confirmation, the portrait picker), nothing happens.
 (function () {
   var TEXT_INPUTS = /^(text|search|email|url|tel|password|number|date|datetime-local|month|time|week)$/;
@@ -33,7 +34,7 @@
     if (!d) return;
     var b;
     if (e.key === 'Enter') {
-      if (t && t !== d && t.closest('button, a[href], summary, select, textarea, [contenteditable="true"]')) return;
+      if (t && t !== d && t.closest('button:not([data-wizard-enter]), a[href], summary, select, textarea, [contenteditable="true"]')) return;
       b = d.querySelector('[data-wizard-next]');
     } else {
       if (takesText(t)) return;

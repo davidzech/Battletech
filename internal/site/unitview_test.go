@@ -34,6 +34,24 @@ func TestConditionsOfTheLiveHangar(t *testing.T) {
 	}
 }
 
+// A hangar mech whose head was shot off keeps that damage until it is repaired, but its crew was reset to an unnamed 4/5 when the battle was written back: the
+// hangar shows no dead pilot. The same unit in a battle's force (its crew the one that fought) shows its pilot dead, as MekBay's record sheet does.
+func TestHangarShowsNoDeadPilotForAResetCrew(t *testing.T) {
+	const reply = `{"data":{"name":"t","groups":[{"name":"","units":[
+{"id":"a","unit":"BMKoshi_E","state":{"locations":{"HD":{"armor":9,"internal":3}},"crits":[{"name":"Cockpit","loc":"HD","slot":2,"destroyed":1}],
+ "crew":[{"name":"","gunnerySkill":4,"pilotingSkill":5,"hits":0,"state":0}]}}]}]}}`
+	h, err := mekbay.ParseHangarForce(json.RawMessage(reply))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v := hangarViews(h)[0]; v.PilotDead {
+		t.Errorf("the hangar shows a dead pilot for a reset crew: %+v", v)
+	}
+	if v := battleViews(h)[0]; !v.PilotDead {
+		t.Errorf("a battle's force shows the pilot of a gone cockpit dead: %+v", v)
+	}
+}
+
 func TestHangarViewsAndDeployProblem(t *testing.T) {
 	h := hangarFixture()
 	views := hangarViews(h)

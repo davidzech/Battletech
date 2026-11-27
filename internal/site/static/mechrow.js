@@ -246,18 +246,19 @@
       row.classList.add('has-actions');
       row.appendChild(box);
     }
-    // onPick makes the whole row a button, for choosing it from a list: a click or Enter or Space calls it (the (i) link and the action buttons keep their
-    // own meaning), and picked tints it like a chosen unit in the deploy popup. badge is a small label at its right end ("Selected", "x2").
+    // onPick makes the row something to choose from a list: a click anywhere on it, or Enter or Space, calls it, and picked tints it like a chosen unit in the
+    // deploy popup. badge is a small label at its right end ("Selected", "x2"). The row itself stays a plain box: a real button (.mr-pick), stretched over
+    // the whole row, takes the click and the keyboard focus, and the external link and the action buttons sit above it beside it rather than inside it, so
+    // nothing interactive is nested in a button.
     if (u.picked) row.classList.add('picked');
     if (u.onPick) {
       row.classList.add('has-pick');
-      row.tabIndex = 0;
-      row.setAttribute('role', 'button');
-      row.setAttribute('aria-pressed', u.picked ? 'true' : 'false');
-      row.addEventListener('click', function (e) { if (!e.target.closest('.mr-ext, .mr-actions button')) u.onPick(); });
-      row.addEventListener('keydown', function (e) {
-        if ((e.key === 'Enter' || e.key === ' ') && e.target === row) { e.preventDefault(); u.onPick(); }
-      });
+      var pick = el('button', 'mr-pick');
+      pick.type = 'button';
+      pick.setAttribute('aria-label', (u.name + ' ' + (u.model || '')).trim());
+      pick.setAttribute('aria-pressed', u.picked ? 'true' : 'false');
+      pick.addEventListener('click', function () { u.onPick(); });
+      row.insertBefore(pick, row.firstChild); // first, so it is the row's first tab stop, before its link and actions
     }
     return row;
   }

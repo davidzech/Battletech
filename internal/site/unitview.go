@@ -21,7 +21,7 @@ type hangarUnitView struct {
 	Tons       float64 `json:"tons"`
 	BV         int     `json:"bv"` // base battle value; pilot skills never change it in this campaign
 	Pilot      string  `json:"pilot"`
-	PilotDead  bool    `json:"pilotDead"` // the record sheet shows the pilot dead
+	PilotDead  bool    `json:"pilotDead"` // the crew is dead: its own record says so, and in a battle's forces also a gone cockpit (see battleViews)
 	Gunnery    int     `json:"gunnery"`
 	Piloting   int     `json:"piloting"`
 	Damaged    bool    `json:"damaged"`
@@ -60,7 +60,7 @@ const deployedGroup = "Deployed"
 func hangarViews(h mekbay.HangarForce) []hangarUnitView {
 	views := make([]hangarUnitView, 0, len(h.Units))
 	for _, hu := range h.Units {
-		v := hangarUnitView{MekBayURL: catalog.PageURL(hu.Unit), ID: hu.ID, Pilot: hu.Pilot, PilotDead: hu.PilotDead, Gunnery: hu.Gunnery, Piloting: hu.Piloting, Damaged: hu.Damaged, Destroyed: hu.Destroyed, InDeployed: mekbay.SameGroupName(hu.Group, deployedGroup)}
+		v := hangarUnitView{MekBayURL: catalog.PageURL(hu.Unit), ID: hu.ID, Pilot: hu.Pilot, PilotDead: hu.CrewDead, Gunnery: hu.Gunnery, Piloting: hu.Piloting, Damaged: hu.Damaged, Destroyed: hu.Destroyed, InDeployed: mekbay.SameGroupName(hu.Group, deployedGroup)}
 		u, known := catalog.ByName(hu.Unit)
 		if known {
 			v.Name, v.Model = catalog.Names(u)
@@ -80,6 +80,17 @@ func hangarViews(h mekbay.HangarForce) []hangarUnitView {
 			v.SwapOptions = hangar.SwapOptions(u)
 		}
 		views = append(views, v)
+	}
+	return views
+}
+
+// battleViews describes the units of a battle's force, for its live status: as hangarViews does, except that a pilot whose cockpit is gone is dead
+// (mekbay.HangarUnit.PilotKilled), as MekBay's record sheet shows them, which pre-ticks Killed in action when the mission is completed. A hangar's crews are
+// reset after every battle, so only here does a gone cockpit mean a dead pilot.
+func battleViews(h mekbay.HangarForce) []hangarUnitView {
+	views := hangarViews(h)
+	for i, hu := range h.Units {
+		views[i].PilotDead = hu.PilotKilled()
 	}
 	return views
 }

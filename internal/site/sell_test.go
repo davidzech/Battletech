@@ -2,6 +2,7 @@ package site
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/url"
 	"strings"
@@ -10,6 +11,19 @@ import (
 	"github.com/davidzech/Battletech/internal/catalog"
 	"github.com/davidzech/Battletech/internal/mekbay"
 )
+
+// A sale answers with the warchest its payment made, even when another request changed the warchest after this one loaded the run.
+func TestSellRepliesWithTheWarchestPaid(t *testing.T) {
+	srv, fake, cookie, setTo := startedWithHookedMekBay(t)
+	fake.setHangar(hangarOf("BMMadCat_H"), nil)
+	madCat, _ := catalog.ByName("BMMadCat_H")
+	fake.onRead = setTo(1000)
+	res := post(t, srv, "/api/hangar/sell", url.Values{"campaign": {"refusalwar"}, "unit": {"ua"}}, cookie, srv.URL)
+	var got struct{ Value, Warchest int }
+	if err := json.NewDecoder(res.Body).Decode(&got); err != nil || res.StatusCode != http.StatusOK || got.Value != madCat.BV/2 || got.Warchest != 1000+madCat.BV/2 {
+		t.Errorf("a sale after another request left 1,000 SP: %d %+v %v (want %d)", res.StatusCode, got, err, 1000+madCat.BV/2)
+	}
+}
 
 func TestSellUnitEndpoint(t *testing.T) {
 	fake := &fakeMekBay{hangar: startingHangar()}

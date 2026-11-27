@@ -476,22 +476,28 @@ func (s *Store) SetWarchest(ctx context.Context, playthroughID, campaign string,
 // ErrInsufficientFunds is returned when the warchest can't cover a charge.
 var ErrInsufficientFunds = errors.New("not enough funds in the warchest")
 
-// SpendWarchest takes funds out of the warchest in one statement, so two charges can't overspend it.
-func (s *Store) SpendWarchest(ctx context.Context, playthroughID, campaign string, amount int) error {
-	res, err := s.db.ExecContext(ctx, s.q(`UPDATE campaign_runs SET warchest = warchest - ? WHERE playthrough_id = ? AND campaign = ? AND warchest >= ?`), amount, playthroughID, campaign, amount)
-	if err != nil {
-		return err
+// SpendWarchest takes funds out of the warchest in one statement, so two charges can't overspend it, and returns the warchest the charge left. When the
+// warchest can't cover it nothing is taken, and it returns ErrInsufficientFunds with the warchest as it is (0 for a campaign not started), so a reply can say
+// what there is even when another request changed it since this one loaded the run.
+func (s *Store) SpendWarchest(ctx context.Context, playthroughID, campaign string, amount int) (left int, err error) {
+	err = s.db.QueryRowContext(ctx, s.q(`UPDATE campaign_runs SET warchest = warchest - ? WHERE playthrough_id = ? AND campaign = ? AND warchest >= ? RETURNING warchest`),
+		amount, playthroughID, campaign, amount).Scan(&left)
+	if !errors.Is(err, sql.ErrNoRows) {
+		return left, err
 	}
-	if n, err := res.RowsAffected(); err == nil && n == 0 {
-		return ErrInsufficientFunds
+	err = s.db.QueryRowContext(ctx, s.q(`SELECT warchest FROM campaign_runs WHERE playthrough_id = ? AND campaign = ?`), playthroughID, campaign).Scan(&left)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return 0, err
 	}
-	return nil
+	return left, ErrInsufficientFunds
 }
 
-// RefundWarchest puts funds back, when a charge's work failed.
-func (s *Store) RefundWarchest(ctx context.Context, playthroughID, campaign string, amount int) error {
-	_, err := s.db.ExecContext(ctx, s.q(`UPDATE campaign_runs SET warchest = warchest + ? WHERE playthrough_id = ? AND campaign = ?`), amount, playthroughID, campaign)
-	return err
+// RefundWarchest puts funds in (back, when a charge's work failed, or a sale's price) and returns the warchest it made. sql.ErrNoRows if the campaign hasn't
+// been started.
+func (s *Store) RefundWarchest(ctx context.Context, playthroughID, campaign string, amount int) (warchest int, err error) {
+	err = s.db.QueryRowContext(ctx, s.q(`UPDATE campaign_runs SET warchest = warchest + ? WHERE playthrough_id = ? AND campaign = ? RETURNING warchest`),
+		amount, playthroughID, campaign).Scan(&warchest)
+	return warchest, err
 }
 
 // Run loads a playthrough's run through a campaign; ok is false if the campaign hasn't been started.

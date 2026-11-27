@@ -57,15 +57,21 @@ type AmmoUse struct {
 
 // HangarUnit is one unit of a player's hangar force as MekBay stores it.
 type HangarUnit struct {
-	ID        string // the unit's own ID inside the force
-	Unit      string // MekBay unit ID, e.g. BMMadCat_H
-	Group     string // name of the group it currently sits in
-	Pilot     string
-	Gunnery   int
-	Piloting  int
-	PilotDead bool // the record sheet shows the pilot dead (see crewIsDead)
-	Damaged   bool // has recorded armor/structure damage or critical hits (spent ammo is not damage: see AmmoBins)
-	Destroyed bool
+	ID       string // the unit's own ID inside the force
+	Unit     string // MekBay unit ID, e.g. BMMadCat_H
+	Group    string // name of the group it currently sits in
+	Pilot    string
+	Gunnery  int
+	Piloting int
+	// CrewDead is the crew's own record: its stored state is dead, or it has taken the hits that kill (see CrewIsDead). A crew reset to an unnamed 4/5
+	// when a battle is written back into the hangar is alive.
+	CrewDead bool
+	// CockpitGone is the unit's damage: its cockpit slot is destroyed, or its head has no internal structure left. MekBay's record sheet shows whoever sits
+	// in it dead then, whatever the crew's stored state says. It stays with the unit (in the hangar too) until it is repaired, so on its own it says
+	// nothing about a pilot: see PilotKilled.
+	CockpitGone bool
+	Damaged     bool // has recorded armor/structure damage or critical hits (spent ammo is not damage: see AmmoBins)
+	Destroyed   bool
 	// The raw damage MekBay records, from which conditionOf works out the unit's state (see condition.go).
 	Locations  map[string]LocationLoss // armor and internal structure points lost, by location (HD, CT, LT, RT, LA, RA, LL, RL ...)
 	AmmoUsed   int                     // ammo consumed, summed over its ammo bins
@@ -198,7 +204,7 @@ func ParseHangarForce(raw json.RawMessage) (HangarForce, error) {
 			if len(u.State.Crew) > 0 {
 				c := u.State.Crew[0]
 				hu.Pilot, hu.Gunnery, hu.Piloting = c.Name, c.Gunnery, c.Piloting
-				hu.PilotDead = CrewIsDead(c.State, c.Hits)
+				hu.CrewDead = CrewIsDead(c.State, c.Hits)
 			}
 			hu.Damaged = len(u.State.Locations) > 0
 			for k, l := range u.State.Locations {
@@ -227,14 +233,14 @@ func ParseHangarForce(raw json.RawMessage) (HangarForce, error) {
 				if engine {
 					hu.EngineHits += n
 				}
-				// MekBay also counts a pilot dead when their cockpit is gone, whatever the crew's stored state says: the cockpit slot destroyed, or (below) the head,
-				// which holds it, with no internal structure left. Every standard mech's head has 3 points of internal structure.
+				// The cockpit is gone when its slot is destroyed, or (below) when the head, which holds it, has no internal structure left. Every standard
+				// mech's head has 3 points of internal structure.
 				if name := strings.ToLower(c.Name); gone && strings.Contains(name, "cockpit") && !strings.Contains(name, "command") {
-					hu.PilotDead = true
+					hu.CockpitGone = true
 				}
 			}
-			if hd, ok := hu.Locations["HD"]; ok && hd.Internal >= 3 && len(u.State.Crew) > 0 {
-				hu.PilotDead = true
+			if hd, ok := hu.Locations["HD"]; ok && hd.Internal >= 3 {
+				hu.CockpitGone = true
 			}
 			hu.TorsoCheckFailed = u.State.RuleChecks["core.torso-crippling"].Status == "failed"
 			h.Units = append(h.Units, hu)
@@ -242,6 +248,11 @@ func ParseHangarForce(raw json.RawMessage) (HangarForce, error) {
 	}
 	return h, nil
 }
+
+// PilotKilled says whether the crew in a battle force's unit died in that battle, as MekBay's record sheet shows it: their own record says so, or the cockpit
+// they sit in is gone. It is only for a battle's forces, whose crews are the ones that fought: a hangar unit's crew is reset to an unnamed 4/5 after every
+// battle, so there only CrewDead speaks for its crew, and a cockpit left unrepaired is the unit's damage, not a dead pilot.
+func (u HangarUnit) PilotKilled() bool { return u.CrewDead || u.CockpitGone }
 
 // isEngineSlot reports whether a critical slot with this name belongs to the engine.
 func isEngineSlot(name string) bool { return strings.Contains(strings.ToLower(name), "engine") }

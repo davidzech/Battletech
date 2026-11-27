@@ -81,9 +81,11 @@
       // The same results as on screen (a pick changed a badge): each row is swapped where it stands, so the list never leaves the page. Rebuilding it would
       // collapse the dialog for a moment, which moves its scroll position and makes the rows jump under the pointer.
       if (list && painted === last && list.children.length === units.length) {
-        var focused = Array.prototype.indexOf.call(list.children, document.activeElement);
+        // The focus is on a row's pick button (or its link): it goes back to the same row's pick button.
+        var active = document.activeElement;
+        var focused = Array.prototype.findIndex.call(list.children, function (r) { return r.contains(active); });
         units.forEach(function (u, i) { list.replaceChild(rowFor(u), list.children[i]); });
-        if (focused >= 0) list.children[focused].focus({ preventScroll: true });
+        if (focused >= 0) (list.children[focused].querySelector('.mr-pick') || list.children[focused]).focus({ preventScroll: true });
         return;
       }
       var keep = list ? list.scrollTop : 0;

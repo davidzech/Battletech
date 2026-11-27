@@ -109,6 +109,38 @@ func storeContract(t *testing.T, s *Store) {
 	hangarCacheStore(t, s, id)
 	abilityStore(t, s, id)
 	hangarClaimStore(t, s, id)
+	warchestStore(t, s, id)
+}
+
+// warchestStore: a charge and a payment each return the warchest they left, so a reply can show it even when another request changed it since the run was
+// loaded; a charge the warchest can't cover takes nothing and returns what there is.
+func warchestStore(t *testing.T, s *Store, id string) {
+	t.Helper()
+	ctx := context.Background()
+	if err := s.SetWarchest(ctx, id, "refusalwar", 100); err != nil {
+		t.Fatal(err)
+	}
+	if left, err := s.SpendWarchest(ctx, id, "refusalwar", 30); err != nil || left != 70 {
+		t.Errorf("spend 30 of 100: left %d, %v", left, err)
+	}
+	if left, err := s.SpendWarchest(ctx, id, "refusalwar", 71); !errors.Is(err, ErrInsufficientFunds) || left != 70 {
+		t.Errorf("spend 71 of 70: left %d, %v", left, err)
+	}
+	if left, err := s.SpendWarchest(ctx, id, "refusalwar", 70); err != nil || left != 0 {
+		t.Errorf("spend all 70: left %d, %v", left, err)
+	}
+	if got, err := s.RefundWarchest(ctx, id, "refusalwar", 45); err != nil || got != 45 {
+		t.Errorf("refund 45: warchest %d, %v", got, err)
+	}
+	if left, err := s.SpendWarchest(ctx, id, "not-started", 1); !errors.Is(err, ErrInsufficientFunds) || left != 0 {
+		t.Errorf("a campaign not started has nothing to spend: %d, %v", left, err)
+	}
+	if _, err := s.RefundWarchest(ctx, id, "not-started", 1); !errors.Is(err, sql.ErrNoRows) {
+		t.Errorf("a campaign not started can't be paid: %v", err)
+	}
+	if r, _, _ := s.Run(ctx, id, "refusalwar"); r.Warchest != 45 {
+		t.Errorf("the warchest stored: %d", r.Warchest)
+	}
 }
 
 func TestStoreSQLite(t *testing.T) {

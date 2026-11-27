@@ -310,19 +310,25 @@
       top.appendChild(x);
       box.appendChild(top);
       box.appendChild(statStrip(p));
-      if (typeof PilotCard !== 'undefined') PilotCard.attach(box, p);
       makeDraggable(box, p.name);
     } else {
       box.appendChild(el('span', 'deploy-slot-empty', held ? 'Put ' + held + ' here' : 'Drop a pilot here'));
     }
-    // A click puts the pilot being held in this mech (this is also how it works by keyboard or on a touch screen).
-    box.tabIndex = 0;
-    box.setAttribute('role', 'button');
-    box.setAttribute('aria-label', 'Pilot for ' + u.name + (p ? ': ' + p.name + ', ' + statSummary(p) : picked ? '' : ' (not taken yet: a pilot placed here takes it)'));
+    // A click puts the pilot being held in this mech (this is also how it works by keyboard or on a touch screen). The slot itself stays a plain box (the drop
+    // target, and the drag source of the pilot in it): a real button (.deploy-slot-put), stretched over the whole slot, takes the click and the keyboard focus,
+    // and the × sits above it beside it rather than inside it, so no button is nested in another.
+    var putBtn = el('button', 'deploy-slot-put');
+    putBtn.type = 'button';
+    putBtn.setAttribute('aria-label', 'Pilot for ' + u.name + (p ? ': ' + p.name + ', ' + statSummary(p) : picked ? '' : ' (not taken yet: a pilot placed here takes it)'));
+    // Enter with no pilot held is left to the wizard (Next, wizardkeys.js), as on the rest of the step.
+    putBtn.setAttribute('data-wizard-enter', '');
     function put() { if (held) assign(u.id, held); }
-    box.addEventListener('click', put);
-    // Only while a pilot is held: otherwise Enter is left to the wizard (Next, wizardkeys.js).
-    box.addEventListener('keydown', function (e) { if (held && (e.key === 'Enter' || e.key === ' ') && e.target === box) { e.preventDefault(); put(); } });
+    putBtn.addEventListener('click', put);
+    // While a pilot is held, Enter and Space put them here (and the wizard leaves Enter alone).
+    putBtn.addEventListener('keydown', function (e) { if (held && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); put(); } });
+    box.insertBefore(putBtn, box.firstChild); // first, so it comes before the × in the tab order
+    // The pilot's card shows on hovering or focusing the button, which covers the slot (style.css lights the slot while it is open).
+    if (p && typeof PilotCard !== 'undefined') PilotCard.attach(putBtn, p);
     box.addEventListener('dragover', function (e) { e.preventDefault(); box.classList.add('over'); });
     // Moving onto the slot's own text fires dragleave on the slot too: only leaving the slot itself takes the highlight off.
     box.addEventListener('dragleave', function (e) { if (!e.relatedTarget || !box.contains(e.relatedTarget)) box.classList.remove('over'); });
