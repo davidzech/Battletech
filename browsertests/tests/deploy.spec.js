@@ -281,6 +281,9 @@ test('reconfigures an omnimech on the review to fit the BV limit', async ({ page
   await expect(dlg.locator('#deploy-review > *').first()).toHaveClass(/deploy-review-total/);
   await expect(dlg.locator('.deploy-review-total').first()).toHaveClass(/over/);
   await expect(dlg.locator('.deploy-review-total').first()).toContainText('7,976 / 7,500 BV');
+  // The BV bar under the total: full and red over the limit.
+  await expect(dlg.locator('.deploy-review-total .bv-bar').first()).toHaveClass(/over/);
+  await expect(dlg.locator('.deploy-review-total .bv-bar').first()).toHaveAttribute('aria-valuenow', '7976');
   await expect(dlg.locator('#deploy-go')).toBeDisabled();
 
   // Reconfigure the first Timber Wolf to the B: the Manage page's dialog, with its price, breakdown and the box for the faction's variants.
@@ -299,6 +302,8 @@ test('reconfigures an omnimech on the review to fit the BV limit', async ({ page
   // The force fits now; the drop cost is what Start battle will pay.
   await expect(reviewed.first()).toContainText('Prime → B');
   await expect(dlg.locator('.deploy-review-total').first()).toContainText('7,463 / 7,500 BV');
+  await expect(dlg.locator('.deploy-review-total .bv-bar').first()).not.toHaveClass(/over/);
+  await expect(dlg.locator('.deploy-review-total .bv-bar').first()).toHaveAttribute('aria-valuenow', '7463');
   await expect(dlg.locator('.deploy-drop-cost')).toHaveText('Drop cost: Cost 38 SP. Warchest 1,000 → 962 SP.');
   await expect(dlg.locator('#deploy-go')).toBeEnabled();
 
@@ -370,6 +375,7 @@ test('reconfigures an omnimech on the mech step', async ({ page }) => {
   await expect(rows.nth(0)).toContainText('Prime → B');
   await expect(rows.nth(0).getByRole('button', { name: 'Reconfigured' })).toBeVisible();
   await expect(dlg.locator('#deploy-meter')).toContainText('4 selected · 7,463 / 7,500 BV');
+  await expect(dlg.locator('#deploy-meter .bv-bar')).toHaveAttribute('aria-valuemax', '7500');
   await expect(dlg.locator('#deploy-meter')).not.toHaveClass(/over/);
 
   // The review carries it, with its drop cost, and Start battle can go.

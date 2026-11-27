@@ -605,7 +605,7 @@ dialog .link-field .refresh:disabled { opacity: 0.35; cursor: not-allowed; }
 dialog.deploy { width: min(68rem, calc(100vw - 2rem)); }
 .deploy-meter { margin: 0.5rem 0 0; font: 700 1.1rem var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
 .deploy-meter.over { color: #ff7a59; }
-.deploy-list { list-style: none; margin: 0.75rem 0; padding: 0; max-height: 50vh; overflow-y: auto; border-top: 1px solid var(--line); }
+.deploy-list { list-style: none; margin: 0.75rem 0; padding: 0; max-height: 42vh; overflow-y: auto; border-top: 1px solid var(--line); }
 .deploy-unit { margin-bottom: 0.5rem; }
 dialog .deploy-unit label {
   display: grid;
@@ -1333,6 +1333,8 @@ dialog button.deploy-slot-x:hover:not(:disabled), dialog button.deploy-slot-x:fo
 .deploy-stat-label { font: 700 0.55rem var(--display); letter-spacing: 0.1em; color: var(--muted); }
 .deploy-stat-value { margin-top: 0.12rem; font: 700 1.15rem/1 var(--display); color: var(--accent); }
 .deploy-unit.has-slot { grid-template-columns: minmax(0, 1fr) 15rem; }
+/* On a narrow screen the pilot slot goes under its mech (this comes after the rule above, which would otherwise win). */
+@media (max-width: 640px) { .deploy-unit.has-slot { grid-template-columns: 1fr; } }
 
 /* The hover card for a pilot in the Deploy popup: the Manage page's pilot card, in small. */
 .deploy-pilot-card { display: grid; gap: 0.55rem; }
@@ -1397,10 +1399,26 @@ dialog input.themed-box:focus, dialog .themed-check input:focus { outline: none;
 /* A named pilot shown in the review and the Operation in progress view lights its border as soon as the pointer is on it; the hover card follows after its delay. */
 .deploy-slot.static.filled:hover { border-color: var(--accent); }
 
-/* The Company details dialog's MekBay user ID rows: Player 1 to 4 and the OpFor. */
-fieldsetfieldset
 /* The Deploy wizard: a player picker on the first step, a title for the player whose turn it is, a progress bar at the bottom, and a review of the plan. */
+/* The wizard's head is one line: the title, the Players picker and the BV meter (pushed right), wrapping on a narrow screen. */
+.deploy-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1.5rem; }
+.deploy-head h2 { margin: 0; }
+.deploy-head .deploy-meter { margin: 0 0 0 auto; }
+/* The BV bar under the force total (mekbay.js bvBar): the force's BV against the limit, this player's share bright and the other players' dimmer; red when over. */
+/* A meter line (mekbay.js figures): each figure in a slot as wide as its widest value (data-widest, drawn invisibly), digits tabular and right-aligned, so the
+   words never move. A force total (withBar) is that line with its bar under it, as wide as the line. */
+.bv-line { white-space: nowrap; }
+.bv-fig { display: inline-grid; font-variant-numeric: tabular-nums; }
+.bv-fig::before { content: attr(data-widest); grid-area: 1 / 1; visibility: hidden; }
+.bv-fig > span { grid-area: 1 / 1; justify-self: end; }
+.bv-total { display: inline-grid; }
+.bv-bar { display: flex; width: 100%; height: 0.4rem; margin-top: 0.3rem; overflow: hidden; background: var(--bg); border: 1px solid var(--line); }
+.bv-bar-others { background: color-mix(in srgb, var(--accent) 40%, var(--bg)); transition: width 0.3s ease; }
+.bv-bar-fill { background: var(--accent); transition: width 0.3s ease, background-color 0.3s ease; }
+@media (prefers-reduced-motion: reduce) { .bv-bar-others, .bv-bar-fill { transition: none; } }
+.bv-bar.over .bv-bar-fill { background: #ff7a59; }
 .deploy-players { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; margin: 0.6rem 0 0.2rem; }
+.deploy-head .deploy-players { margin: 0; }
 .deploy-players[hidden], .deploy-step[hidden], .deploy-review[hidden], .deploy-progress[hidden] { display: none; }
 .deploy-players-label, .deploy-step-label { font: 700 0.8rem var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
 .deploy-players-pick { display: inline-flex; }
