@@ -144,7 +144,7 @@ func (s *Session) saveOperation(ctx context.Context, op map[string]any, opID str
 			return ctx.Err()
 		case <-time.After(400 * time.Millisecond):
 		}
-		got, err := s.Call(ctx, map[string]any{"action": "getOperation", "operationId": opID})
+		got, err := s.Call(ctx, operationMessage("getOperation", opID))
 		if err != nil {
 			return err
 		}
@@ -310,13 +310,13 @@ func (c *Client) discardBattle(ctx context.Context, account string, instances []
 		}
 	}
 	if operationID != "" {
-		if err := s.Send(ctx, map[string]any{"action": "delOperation", "operationId": operationID}); err != nil {
+		if err := s.Send(ctx, operationMessage("delOperation", operationID)); err != nil {
 			return
 		}
 	}
 	// A read on the same connection comes back after the deletions have been handled, so closing the connection does not cut them off.
 	if operationID != "" {
-		_, _ = s.Call(ctx, map[string]any{"action": "getOperation", "operationId": operationID})
+		_, _ = s.Call(ctx, operationMessage("getOperation", operationID))
 		return
 	}
 	_, _ = s.Call(ctx, getForceMessage(account, instances[len(instances)-1], true))
@@ -344,7 +344,7 @@ func (c *Client) ReadBattle(ctx context.Context, operationID string) (BattleStat
 		return BattleStatus{}, err
 	}
 	defer s.Close()
-	raw, err := s.Call(ctx, map[string]any{"action": "getOperation", "operationId": operationID})
+	raw, err := s.Call(ctx, operationMessage("getOperation", operationID))
 	if err != nil {
 		return BattleStatus{}, err
 	}
@@ -390,7 +390,7 @@ func (c *Client) DeleteBattle(ctx context.Context, owner, operationID string) er
 		return err
 	}
 	defer s.Close()
-	raw, err := s.Call(ctx, map[string]any{"action": "getOperation", "operationId": operationID})
+	raw, err := s.Call(ctx, operationMessage("getOperation", operationID))
 	if err != nil {
 		return err
 	}
@@ -409,9 +409,9 @@ func (c *Client) DeleteBattle(ctx context.Context, owner, operationID string) er
 			return err
 		}
 	}
-	if err := s.Send(ctx, map[string]any{"action": "delOperation", "operationId": operationID}); err != nil {
+	if err := s.Send(ctx, operationMessage("delOperation", operationID)); err != nil {
 		return err
 	}
-	_, _ = s.Call(ctx, map[string]any{"action": "getOperation", "operationId": operationID}) // after this the deletions have been handled
+	_, _ = s.Call(ctx, operationMessage("getOperation", operationID)) // after this the deletions have been handled
 	return nil
 }

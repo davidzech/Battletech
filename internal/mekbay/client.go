@@ -581,3 +581,9 @@ func BuildForce(instanceID string, now time.Time, d ForceDraft) serializedForce 
 // CrewIsDead says whether MekBay's record of a crew member shows them dead: its stored state is dead (2) or killed (4), or they have taken the six hits that kill.
 // (The other states are healthy 0, unconscious 1, ejected 3 and stunned 5.)
 func CrewIsDead(state, hits int) bool { return state == 2 || state == 4 || hits >= 6 }
+
+// operationMessage reads or deletes an operation. MekBay refuses either for an operation holding a version 2 force unless it carries the persistence
+// revision, as it does for the force itself.
+func operationMessage(action, operationID string) map[string]any {
+	return map[string]any{"action": action, "forcePersistenceRevision": PersistenceRevision, "operationId": operationID}
+}

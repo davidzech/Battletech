@@ -98,7 +98,7 @@ func (c *Client) ReadBattleUnits(ctx context.Context, account, operationID strin
 		return nil, err
 	}
 	defer s.Close()
-	raw, err := s.Call(ctx, map[string]any{"action": "getOperation", "operationId": operationID})
+	raw, err := s.Call(ctx, operationMessage("getOperation", operationID))
 	if err != nil {
 		return nil, err
 	}
