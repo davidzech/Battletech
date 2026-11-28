@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/davidzech/Battletech/internal/catalog"
 	"testing"
 	"time"
 )
@@ -209,7 +210,7 @@ func TestV2SubsetAndCrew(t *testing.T) {
 	if _, err := v2Subset(h, []string{"nope"}, "x", "x", time.Now()); err == nil {
 		t.Error("took a unit the hangar doesn't have")
 	}
-	if err := applyCrew(f, []CrewAssignment{{UnitID: loki, Name: "Natasha", Gunnery: 2, Piloting: 3}}); err != nil {
+	if err := applyCrew(f, []CrewAssignment{{UnitID: loki, Name: "Natasha", Gunnery: 2, Piloting: 3, Edge: 2}}); err != nil {
 		t.Fatal(err)
 	}
 	setCommander(f, loki)
@@ -217,8 +218,25 @@ func TestV2SubsetAndCrew(t *testing.T) {
 	if len(v.Units) != 1 || v.Units[0].Pilot != "Natasha" || v.Units[0].Gunnery != 2 || v.Name != "Player 1" {
 		t.Errorf("battle force: %+v", v)
 	}
-	if p := v2Pilot(v2Units(f)[0]); p["commander"] != true {
-		t.Errorf("commander: %v", p)
+	if p := v2Pilot(v2Units(f)[0]); p["commander"] != true || p["edge"] != 2 {
+		t.Errorf("pilot: %v", p)
+	}
+	// Taking the pilot off the unit takes their Edge with them; Edge past MekBay's cap is capped.
+	if err := applyCrew(f, []CrewAssignment{{UnitID: loki}}); err != nil {
+		t.Fatal(err)
+	}
+	if p := v2Pilot(v2Units(f)[0]); p["edge"] != nil || p["name"] != nil {
+		t.Errorf("cleared pilot: %v", p)
+	}
+	if err := applyCrew(f, []CrewAssignment{{UnitID: loki, Name: "Natasha", Gunnery: 2, Piloting: 3, Edge: 150}}); err != nil {
+		t.Fatal(err)
+	}
+	if p := v2Pilot(v2Units(f)[0]); p["edge"] != maxEdge {
+		t.Errorf("capped edge: %v", p["edge"])
+	}
+	v2Pristine(v2Units(f)[0])
+	if p := v2Pilot(v2Units(f)[0]); p["edge"] != nil {
+		t.Errorf("pristine pilot kept Edge: %v", p)
 	}
 	if err := applyCrew(f, []CrewAssignment{{UnitID: "nope", Name: "X"}}); err == nil {
 		t.Error("crewed a unit the force doesn't have")
@@ -231,13 +249,17 @@ func TestV2SubsetAndCrew(t *testing.T) {
 
 func TestBuildForceV2(t *testing.T) {
 	f, err := BuildForceV2("opfor-1", time.Now(), ForceDraft{Name: "OpFor", Groups: []GroupDraft{{Name: "Star", Units: []UnitDraft{
-		{Unit: "BMGrizzly", BV: 1500, Pilot: "Drusus", Gunnery: 3, Piloting: 4, Commander: true}, {Unit: "BMLoki_Prime", BV: 2000, Gunnery: 4, Piloting: 5}}}}})
+		{Unit: "BMGrizzly", BV: 1500, Pilot: "Drusus", Gunnery: 3, Piloting: 4, Edge: 3, Commander: true}, {Unit: "BMLoki_Prime", BV: 2000, Gunnery: 4, Piloting: 5, Edge: 1}}}}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	v := view(t, f)
 	if len(v.Units) != 2 || v.Units[0].Pilot != "Drusus" || v.Units[0].Group != "Star" || v.Units[1].Gunnery != 4 || f["bv"] != 3500 {
 		t.Errorf("built: %+v", v)
+	}
+	// A named pilot brings their Edge; an unnamed crew has none.
+	if us := v2Units(f); v2Pilot(us[0])["edge"] != 3 || v2Pilot(us[1])["edge"] != nil {
+		t.Errorf("edge: %v, %v", v2Pilot(us[0]), v2Pilot(us[1]))
 	}
 	if _, err := BuildForceV2("x", time.Now(), ForceDraft{Groups: []GroupDraft{{Units: []UnitDraft{{Unit: "NoSuchMech"}}}}}); err == nil {
 		t.Error("built a mech the catalog doesn't have")
@@ -386,5 +408,68 @@ func TestStartAndCommitBattleV2(t *testing.T) {
 	w := unitByID(view(t, h), wolf)
 	if ForceVersion(h) != 2 || w.Locations["RT"].Internal != 3 || w.EngineHits != 1 || w.Pilot != "" {
 		t.Errorf("hangar after the battle: version %d, %+v", ForceVersion(h), w)
+	}
+}
+
+// Each kind of unit gets the entity type MekBay reads from its design file; a Mek and an aerospace fighter get none.
+func TestV2EntityType(t *testing.T) {
+	for name, want := range map[string]string{
+		"BMMadCat_Prime": "", "CVAC2Carrier": "Tank", "CVArmoredPersonnelCarrier_Hover": "Tank", "CVFensalirCombatWiGE": "Tank",
+		"SVSaviorRepairVehicle": "SupportTank", "SVBoreasCavalryHovercraft_A": "SupportTank", "SVAdelantePassengerCargoTrain": "LargeSupportTank",
+		"CVAeronStrikeVTOL": "VTOL", "SVAppleChurchillSurveillanceVTOL": "SupportVTOL", "SVBishopTransportVTOL": "SupportVTOL",
+		"CVMaunaKeaCommandVessel": "Naval", "CVKoryuSubmarine_Civilian": "Naval", "SVAtlantiaLuxuryYacht": "SupportNaval",
+		"BAElementalBattleArmor_APGaussSqd5": "BattleArmor", "CIAAJumpInfantry_292ndLeagueRegulars": "Infantry", "PMBasilisk": "ProtoMek",
+	} {
+		cu, ok := catalog.ByName(name)
+		if !ok {
+			t.Fatalf("%s is not in the catalog", name)
+		}
+		if got := v2EntityType(cu); got != want {
+			t.Errorf("%s: %q, want %q", name, got, want)
+		}
+	}
+}
+
+// A non-Mek's row always carries its family and entity type, or MekBay reads it as a Mek and resets it: built, made pristine, and swapped.
+func TestV2NonMekRowsCarryTheirFamily(t *testing.T) {
+	family := func(um map[string]any) string {
+		st, _ := um["state"].(map[string]any)
+		k, _ := st[v2FamilyField].(string)
+		ty, _ := st[v2EntityTypeField].(string)
+		return k + "/" + ty
+	}
+	f, err := BuildForceV2("allies", time.Now(), ForceDraft{Name: "Allies", Groups: []GroupDraft{{Name: "Allies", Units: []UnitDraft{
+		{Unit: "BMKoshi_C", Pilot: "Vesna", Gunnery: 3, Piloting: 2}, {Unit: "SVSaviorRepairVehicle", Pilot: "Savior crew", Gunnery: 4, Piloting: 5},
+		{Unit: "BAElementalBattleArmor_APGaussSqd5", Gunnery: 4, Piloting: 5}}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	us := v2Units(f)
+	if us[0]["state"] != nil || family(us[1]) != "e/SupportTank" || family(us[2]) != "e/BattleArmor" {
+		t.Errorf("built rows: %v / %v / %v", us[0]["state"], us[1]["state"], us[2]["state"])
+	}
+	v2Pristine(us[1])
+	if family(us[1]) != "e/SupportTank" {
+		t.Errorf("pristine: %v", us[1]["state"])
+	}
+	// Swapping a vehicle for a mech leaves no family behind; a mech for a vehicle gains one.
+	if err := v2Swap(f, v2UnitID(us[1]), "BMKoshi_A"); err != nil {
+		t.Fatal(err)
+	}
+	if us[1]["state"] != nil {
+		t.Errorf("a mech kept a vehicle's family: %v", us[1]["state"])
+	}
+	if err := v2Swap(f, v2UnitID(us[0]), "CVAC2Carrier"); err != nil {
+		t.Fatal(err)
+	}
+	if family(us[0]) != "e/Tank" {
+		t.Errorf("swapped to a tank: %v", us[0]["state"])
+	}
+	// Settling a vehicle after a battle drops a Mek's turn ("t"), but not the vehicle's entity type.
+	v2State(us[0])["l"] = []any{[]any{"i:fr", 1}}
+	v2Settle(us[0])
+	v2MarkFamily(us[0])
+	if family(us[0]) != "e/Tank" {
+		t.Errorf("settled: %v", us[0]["state"])
 	}
 }

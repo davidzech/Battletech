@@ -36,7 +36,7 @@ func playerDraft(name string, h mekbay.HangarForce, units []string, crews []mekb
 		u := byID[id]
 		ud := mekbay.UnitDraft{Unit: u.Unit, BV: views[id].BV, Pilot: u.Pilot, Gunnery: u.Gunnery, Piloting: u.Piloting, Commander: id == commander}
 		if a, ok := crew[id]; ok {
-			ud.Pilot, ud.Gunnery, ud.Piloting = a.Name, a.Gunnery, a.Piloting
+			ud.Pilot, ud.Gunnery, ud.Piloting, ud.Edge = a.Name, a.Gunnery, a.Piloting, a.Edge
 		}
 		if ud.Pilot == "" {
 			ud.Gunnery, ud.Piloting = mekbay.DefaultGunnery, mekbay.DefaultPiloting

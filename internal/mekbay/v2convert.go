@@ -121,6 +121,7 @@ func v1UnitToV2(um map[string]any) (map[string]any, error) {
 		st := v1StateToV2(state, rev.layout)
 		if len(st) > 0 {
 			row["state"] = st
+			v2MarkFamily(row)
 		}
 		if d, _ := state["destroyed"].(bool); d {
 			row["destroyed"] = true
@@ -366,6 +367,7 @@ func v2CommitState(hangar map[string]any, battle map[string]map[string]any) Comm
 			um["sourceHash"] = s
 		}
 		v2Settle(um)
+		v2MarkFamily(um) // after settling, which drops a Mek's turn ("t", a non-Mek's entity type)
 		p := v2Pilot(um)
 		setPerson(p, "", DefaultGunnery, DefaultPiloting, false)
 		um["crew"] = []any{p}

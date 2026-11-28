@@ -2,11 +2,12 @@
 // the warchest.
 const { test, expect, newAccount, startCampaign, setHangar, setWarchest, unit, STARTING } = require('./helpers');
 
-// Fire Moth: crippled, with spent ammunition. Mist Lynx: truly destroyed. Kit Fox: structure damage. Hellbringer: a pristine omnimech.
+// Fire Moth: crippled, with spent ammunition. Mist Lynx: truly destroyed. Grizzly: undamaged, but with spent ammunition. Kit Fox: structure damage.
+// Hellbringer: a pristine omnimech.
 const HANGAR = [
   unit('ua', 'BMDasher_Prime', { EngineHits: 2, AmmoBins: 2, AmmoUsed: 8 }),
   unit('ub', 'BMKoshi_E', { Destroyed: true, Locations: { CT: { Internal: 8 } } }),
-  unit('uc', 'BMGrizzly'),
+  unit('uc', 'BMGrizzly', { AmmoBins: 1, AmmoUsed: 2 }),
   unit('ud', 'BMUller_J', { Locations: { LA: { Armor: 3, Internal: 1 } } }),
   unit('ue', 'BMLoki_Prime')
 ];
@@ -21,6 +22,10 @@ async function managePage(page, warchest) {
   // The page shows the hangar set above, which replaced the one the campaign started with.
   await expect(list.locator('.mech-row')).toHaveCount(5);
   await expect(list.locator('.mech-row', { hasText: 'Fire Moth' }).locator('.mr-chip', { hasText: 'Crippled' })).toBeVisible();
+  // An undamaged mech with spent ammunition has no condition pill, but still the ammo one.
+  const grizzly = list.locator('.mech-row', { hasText: 'Grizzly' });
+  await expect(grizzly.locator('.mr-chip', { hasText: 'Ammo expended' })).toBeVisible();
+  await expect(grizzly.locator('.mr-chip.cond-armor, .mr-chip.cond-structure, .mr-chip.cond-crippled')).toHaveCount(0);
   return list;
 }
 

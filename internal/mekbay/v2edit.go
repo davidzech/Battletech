@@ -61,7 +61,7 @@ func v2Person(name string, gunnery, piloting int, commander bool) map[string]any
 }
 
 func setPerson(p map[string]any, name string, gunnery, piloting int, commander bool) {
-	for _, k := range []string{"name", "g", "p", "commander", "health"} {
+	for _, k := range []string{"name", "g", "p", "commander", "edge", "health"} {
 		delete(p, k)
 	}
 	if name != "" {
@@ -75,6 +75,16 @@ func setPerson(p map[string]any, name string, gunnery, piloting int, commander b
 	}
 	if commander {
 		p["commander"] = true
+	}
+}
+
+// maxEdge is the most Edge MekBay accepts on a person (FORCE_PERSON_EDGE_MAX).
+const maxEdge = 99
+
+// setEdge gives a person Edge tokens; MekBay leaves the field out for none. setPerson clears it.
+func setEdge(p map[string]any, edge int) {
+	if edge > 0 {
+		p["edge"] = min(edge, maxEdge)
 	}
 }
 
@@ -97,7 +107,64 @@ func v2UnitRow(id, design string, pilot map[string]any) (map[string]any, error) 
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"id": packInstanceID(id), "uuid": p, "crew": []any{pilot}}, nil
+	row := map[string]any{"id": packInstanceID(id), "uuid": p, "crew": []any{pilot}}
+	v2MarkFamily(row)
+	return row, nil
+}
+
+// A version 2 unit's state says which family of unit it is: a non-Mek's carries "k": "e" and its entity type ("t"), and a state without them is read as
+// a Mek's (force-storage-codec.ts). MekBay can't restore a vehicle saved as a Mek, so it resets it to pristine with an "unreadable saved state" warning.
+const (
+	v2FamilyField     = "k"
+	v2EntityTypeField = "t"
+	v2NonMekFamily    = "e"
+)
+
+// v2EntityType is the entity type MekBay gives a non-Mek design, which it reads from the design's .blk file (blk-vehicle-parser.ts and the like), here
+// worked out from the catalog; this matches every vehicle, battle armor, infantry and ProtoMek in MekBay's unit archive. It is "" for a Mek, and for the
+// aerospace units and the rest, which no campaign puts in a force.
+func v2EntityType(cu catalog.Unit) string {
+	support := strings.Contains(cu.Class, "Support")
+	switch cu.Type {
+	case "Tank":
+		switch {
+		case !support:
+			return "Tank"
+		case strings.HasPrefix(cu.Class, "Large"):
+			return "LargeSupportTank"
+		}
+		return "SupportTank"
+	case "VTOL":
+		if support {
+			return "SupportVTOL"
+		}
+		return "VTOL"
+	case "Naval":
+		if support {
+			return "SupportNaval"
+		}
+		return "Naval"
+	case "Infantry":
+		if cu.Subtype == "Battle Armor" {
+			return "BattleArmor"
+		}
+		return "Infantry"
+	case "ProtoMek":
+		return "ProtoMek"
+	}
+	return ""
+}
+
+// v2MarkFamily gives a non-Mek unit row the family and entity type its state must carry, keeping the rest of its state; a Mek's row is left alone.
+func v2MarkFamily(um map[string]any) {
+	cu, ok := catalog.ByUUID(v2Design(um))
+	if !ok {
+		return
+	}
+	if t := v2EntityType(cu); t != "" {
+		st := v2State(um)
+		st[v2FamilyField], st[v2EntityTypeField] = v2NonMekFamily, t
+	}
 }
 
 // designUUID is a catalog unit's MegaMek UUID.
@@ -136,7 +203,11 @@ func BuildForceV2(instanceID string, now time.Time, d ForceDraft) (map[string]an
 			if err != nil {
 				return nil, err
 			}
-			row, err := v2UnitRow(NewID(), design, v2Person(u.Pilot, u.Gunnery, u.Piloting, u.Commander))
+			pilot := v2Person(u.Pilot, u.Gunnery, u.Piloting, u.Commander)
+			if u.Pilot != "" {
+				setEdge(pilot, u.Edge)
+			}
+			row, err := v2UnitRow(NewID(), design, pilot)
 			if err != nil {
 				return nil, err
 			}
@@ -252,10 +323,11 @@ func dropForceHistory(force map[string]any) {
 	force["cbt"] = map[string]any{"r": r}
 }
 
-// v2Pristine makes a unit row as new: no state, not destroyed, an unnamed 4/5 pilot (keeping the pilot's ID).
+// v2Pristine makes a unit row as new: no state (but a non-Mek's family), not destroyed, an unnamed 4/5 pilot (keeping the pilot's ID).
 func v2Pristine(um map[string]any) {
 	delete(um, "state")
 	delete(um, "destroyed")
+	v2MarkFamily(um)
 	p := v2Pilot(um)
 	setPerson(p, "", DefaultGunnery, DefaultPiloting, false)
 	um["crew"] = []any{p}
@@ -275,8 +347,8 @@ func v2Swap(force map[string]any, unitID, newName string) error {
 		return ErrNoChange
 	}
 	p, _ := packUUID(design)
+	um["uuid"] = p // first, so the pristine unit has the new design's family
 	v2Pristine(um)
-	um["uuid"] = p
 	delete(um, "sourceHash")
 	delete(um, "customDesign")
 	return nil
@@ -482,6 +554,7 @@ func v2ApplyCrew(force map[string]any, crew []CrewAssignment) error {
 				setPerson(p, "", DefaultGunnery, DefaultPiloting, commander)
 			} else {
 				setPerson(p, a.Name, a.Gunnery, a.Piloting, commander)
+				setEdge(p, a.Edge)
 			}
 			continue
 		}
