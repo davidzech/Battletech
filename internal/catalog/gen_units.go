@@ -31,6 +31,7 @@ type entry struct {
 	Class   string  `json:"weightClass"`
 	Role    string  `json:"role"`
 	Type    string  `json:"type"`
+	Subtype string  `json:"subtype,omitempty"` // e.g. "Battle Armor", "Support Vehicle"; MekBay's version 2 forces need the entity type it implies (mekbay.v2EntityType)
 	Tech    string  `json:"techBase"`
 	Omni    int     `json:"omni,omitempty"`   // 1 for an omnimech, whose variants can be swapped (see swap.go)
 	Engine  string  `json:"engine,omitempty"` // Fusion, XL (Clan), ...; the crippling rule needs to know Fusion from the rest
