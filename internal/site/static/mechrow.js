@@ -203,13 +203,16 @@
       if (u.pilot) pilot.title = u.pilot;
       chips.appendChild(pilot);
     }
-    // A unit with a worked-out condition (the hangar's) shows its worst state, one of armor / structure / crippled / destroyed, and a separate
-    // pill when its ammo is spent; the note says why. Rows without one (the deploy popup) keep the plain Destroyed / Damaged tags.
-    var cond = u.condition && !u.unknown && !u.notMech ? CONDITIONS[u.condition] : null;
-    if (cond) {
-      var cp = chip(cond.cls, cond.label);
-      attachTip(cp, { title: cond.label, cls: cond.cls, text: conditionText(u.conditionNote) });
-      chips.appendChild(cp);
+    // A unit with a worked-out condition (the hangar's) shows its worst state, one of armor / structure / crippled / destroyed (none when it is ok),
+    // and a separate pill when its ammo is spent, damaged or not; the note says why. Rows without one (the deploy popup) keep the plain Destroyed /
+    // Damaged tags.
+    if (u.condition && !u.unknown && !u.notMech) {
+      var cond = CONDITIONS[u.condition];
+      if (cond) {
+        var cp = chip(cond.cls, cond.label);
+        attachTip(cp, { title: cond.label, cls: cond.cls, text: conditionText(u.conditionNote) });
+        chips.appendChild(cp);
+      }
       if (u.ammoExpended) {
         var ap = chip('ammo', 'Ammo expended');
         var lines = (u.ammoBreakdown || []).map(function (a) {
