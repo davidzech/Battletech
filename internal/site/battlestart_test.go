@@ -113,7 +113,7 @@ func TestStartBattleEndpoint(t *testing.T) {
 	if len(req.Players[0].Units) != 1 || req.Players[0].Units[0] != "ua" || len(req.Players[1].Units) != 1 || req.Players[1].Units[0] != "ub" {
 		t.Errorf("each player's mechs: %+v", req.Players)
 	}
-	if c := req.Players[0].Crew; len(c) != 1 || c[0].UnitID != "ua" || c[0].Name != "Alrek" || c[0].Gunnery != alrek.Gunnery() || c[0].Piloting != alrek.Piloting() {
+	if c := req.Players[0].Crew; len(c) != 1 || c[0].UnitID != "ua" || c[0].Name != "Alrek" || c[0].Gunnery != alrek.Gunnery() || c[0].Piloting != alrek.Piloting() || c[0].Edge != alrek.EdgeTokens() || c[0].Edge == 0 {
 		t.Errorf("Player 1's pilot: %+v", c)
 	}
 	// Alrek is the only named pilot deployed, so he commands the force: his mech is the commander's, and Player 2's force has none.
@@ -266,7 +266,7 @@ func TestStartBattleWithProvidedMechs(t *testing.T) {
 	}
 	for i, u := range d.Groups[0].Units {
 		name := []string{"Alrek", "Katarina"}[i]
-		if u.Unit != []string{"BMBlackHawk_Prime", "BMRyoken_Prime"}[i] || u.Pilot != name || u.Gunnery != levels[name].Gunnery() || u.Piloting != levels[name].Piloting() || u.BV == 0 {
+		if u.Unit != []string{"BMBlackHawk_Prime", "BMRyoken_Prime"}[i] || u.Pilot != name || u.Gunnery != levels[name].Gunnery() || u.Piloting != levels[name].Piloting() || u.Edge != levels[name].EdgeTokens() || u.Edge == 0 || u.BV == 0 {
 			t.Errorf("unit %d: %+v", i, u)
 		}
 	}

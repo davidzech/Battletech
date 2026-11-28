@@ -11,6 +11,7 @@ type CrewAssignment struct {
 	Name     string
 	Gunnery  int
 	Piloting int
+	Edge     int // Edge tokens the pilot starts the battle with; only version 2 forces carry it
 }
 
 const (

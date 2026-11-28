@@ -61,7 +61,7 @@ func v2Person(name string, gunnery, piloting int, commander bool) map[string]any
 }
 
 func setPerson(p map[string]any, name string, gunnery, piloting int, commander bool) {
-	for _, k := range []string{"name", "g", "p", "commander", "health"} {
+	for _, k := range []string{"name", "g", "p", "commander", "edge", "health"} {
 		delete(p, k)
 	}
 	if name != "" {
@@ -75,6 +75,16 @@ func setPerson(p map[string]any, name string, gunnery, piloting int, commander b
 	}
 	if commander {
 		p["commander"] = true
+	}
+}
+
+// maxEdge is the most Edge MekBay accepts on a person (FORCE_PERSON_EDGE_MAX).
+const maxEdge = 99
+
+// setEdge gives a person Edge tokens; MekBay leaves the field out for none. setPerson clears it.
+func setEdge(p map[string]any, edge int) {
+	if edge > 0 {
+		p["edge"] = min(edge, maxEdge)
 	}
 }
 
@@ -136,7 +146,11 @@ func BuildForceV2(instanceID string, now time.Time, d ForceDraft) (map[string]an
 			if err != nil {
 				return nil, err
 			}
-			row, err := v2UnitRow(NewID(), design, v2Person(u.Pilot, u.Gunnery, u.Piloting, u.Commander))
+			pilot := v2Person(u.Pilot, u.Gunnery, u.Piloting, u.Commander)
+			if u.Pilot != "" {
+				setEdge(pilot, u.Edge)
+			}
+			row, err := v2UnitRow(NewID(), design, pilot)
 			if err != nil {
 				return nil, err
 			}
@@ -482,6 +496,7 @@ func v2ApplyCrew(force map[string]any, crew []CrewAssignment) error {
 				setPerson(p, "", DefaultGunnery, DefaultPiloting, commander)
 			} else {
 				setPerson(p, a.Name, a.Gunnery, a.Piloting, commander)
+				setEdge(p, a.Edge)
 			}
 			continue
 		}

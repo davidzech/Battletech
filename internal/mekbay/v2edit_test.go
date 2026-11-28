@@ -209,7 +209,7 @@ func TestV2SubsetAndCrew(t *testing.T) {
 	if _, err := v2Subset(h, []string{"nope"}, "x", "x", time.Now()); err == nil {
 		t.Error("took a unit the hangar doesn't have")
 	}
-	if err := applyCrew(f, []CrewAssignment{{UnitID: loki, Name: "Natasha", Gunnery: 2, Piloting: 3}}); err != nil {
+	if err := applyCrew(f, []CrewAssignment{{UnitID: loki, Name: "Natasha", Gunnery: 2, Piloting: 3, Edge: 2}}); err != nil {
 		t.Fatal(err)
 	}
 	setCommander(f, loki)
@@ -217,8 +217,25 @@ func TestV2SubsetAndCrew(t *testing.T) {
 	if len(v.Units) != 1 || v.Units[0].Pilot != "Natasha" || v.Units[0].Gunnery != 2 || v.Name != "Player 1" {
 		t.Errorf("battle force: %+v", v)
 	}
-	if p := v2Pilot(v2Units(f)[0]); p["commander"] != true {
-		t.Errorf("commander: %v", p)
+	if p := v2Pilot(v2Units(f)[0]); p["commander"] != true || p["edge"] != 2 {
+		t.Errorf("pilot: %v", p)
+	}
+	// Taking the pilot off the unit takes their Edge with them; Edge past MekBay's cap is capped.
+	if err := applyCrew(f, []CrewAssignment{{UnitID: loki}}); err != nil {
+		t.Fatal(err)
+	}
+	if p := v2Pilot(v2Units(f)[0]); p["edge"] != nil || p["name"] != nil {
+		t.Errorf("cleared pilot: %v", p)
+	}
+	if err := applyCrew(f, []CrewAssignment{{UnitID: loki, Name: "Natasha", Gunnery: 2, Piloting: 3, Edge: 150}}); err != nil {
+		t.Fatal(err)
+	}
+	if p := v2Pilot(v2Units(f)[0]); p["edge"] != maxEdge {
+		t.Errorf("capped edge: %v", p["edge"])
+	}
+	v2Pristine(v2Units(f)[0])
+	if p := v2Pilot(v2Units(f)[0]); p["edge"] != nil {
+		t.Errorf("pristine pilot kept Edge: %v", p)
 	}
 	if err := applyCrew(f, []CrewAssignment{{UnitID: "nope", Name: "X"}}); err == nil {
 		t.Error("crewed a unit the force doesn't have")
@@ -231,13 +248,17 @@ func TestV2SubsetAndCrew(t *testing.T) {
 
 func TestBuildForceV2(t *testing.T) {
 	f, err := BuildForceV2("opfor-1", time.Now(), ForceDraft{Name: "OpFor", Groups: []GroupDraft{{Name: "Star", Units: []UnitDraft{
-		{Unit: "BMGrizzly", BV: 1500, Pilot: "Drusus", Gunnery: 3, Piloting: 4, Commander: true}, {Unit: "BMLoki_Prime", BV: 2000, Gunnery: 4, Piloting: 5}}}}})
+		{Unit: "BMGrizzly", BV: 1500, Pilot: "Drusus", Gunnery: 3, Piloting: 4, Edge: 3, Commander: true}, {Unit: "BMLoki_Prime", BV: 2000, Gunnery: 4, Piloting: 5, Edge: 1}}}}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	v := view(t, f)
 	if len(v.Units) != 2 || v.Units[0].Pilot != "Drusus" || v.Units[0].Group != "Star" || v.Units[1].Gunnery != 4 || f["bv"] != 3500 {
 		t.Errorf("built: %+v", v)
+	}
+	// A named pilot brings their Edge; an unnamed crew has none.
+	if us := v2Units(f); v2Pilot(us[0])["edge"] != 3 || v2Pilot(us[1])["edge"] != nil {
+		t.Errorf("edge: %v, %v", v2Pilot(us[0]), v2Pilot(us[1]))
 	}
 	if _, err := BuildForceV2("x", time.Now(), ForceDraft{Groups: []GroupDraft{{Units: []UnitDraft{{Unit: "NoSuchMech"}}}}}); err == nil {
 		t.Error("built a mech the catalog doesn't have")

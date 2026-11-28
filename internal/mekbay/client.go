@@ -44,6 +44,7 @@ type UnitDraft struct {
 	Pilot     string
 	Gunnery   int
 	Piloting  int
+	Edge      int  // the pilot's Edge tokens; only version 2 forces carry it
 	Commander bool // the force's commander (MekBay's formation commander, shown on the record sheet)
 }
 

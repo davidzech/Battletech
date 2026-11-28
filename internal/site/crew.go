@@ -56,7 +56,7 @@ func parseCrewPairs(units, names []string, h mekbay.HangarForce, pilots []pilot.
 			return nil, fmt.Errorf("%s was assigned to two mechs.", p.Name)
 		}
 		seenPilot[strings.ToLower(p.Name)] = true
-		out = append(out, mekbay.CrewAssignment{UnitID: id, Name: p.Name, Gunnery: p.Gunnery(), Piloting: p.Piloting()})
+		out = append(out, mekbay.CrewAssignment{UnitID: id, Name: p.Name, Gunnery: p.Gunnery(), Piloting: p.Piloting(), Edge: p.EdgeTokens()})
 	}
 	return out, nil
 }
