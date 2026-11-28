@@ -22,6 +22,9 @@ const (
 // applyCrew writes assignments into a saved force (the decoded JSON of its `data`). Every assigned pilot is first taken off any other unit
 // they were crewing, so a pilot is never in two mechs; a unit named in the assignments but missing from the force is an error.
 func applyCrew(force map[string]any, crew []CrewAssignment) error {
+	if ForceVersion(force) == 2 {
+		return v2ApplyCrew(force, crew)
+	}
 	if len(crew) == 0 {
 		return nil
 	}
@@ -94,6 +97,10 @@ func applyCrew(force map[string]any, crew []CrewAssignment) error {
 // setCommander marks one unit of a saved force (the decoded JSON of its `data`) as MekBay's commander (`commander: true` on the unit, which the record sheet
 // shows) and takes the mark off every other unit, so a force copied from the hangar never keeps an old one. An empty unitID only clears it.
 func setCommander(force map[string]any, unitID string) {
+	if ForceVersion(force) == 2 {
+		v2SetCommander(force, unitID)
+		return
+	}
 	groups, _ := force["groups"].([]any)
 	for _, g := range groups {
 		gm, _ := g.(map[string]any)

@@ -481,9 +481,6 @@ func (s *Session) getForce(ctx context.Context, instance string, ownedOnly bool)
 	if err := json.Unmarshal(raw, &reply); err != nil {
 		return nil, fmt.Errorf("could not read MekBay's reply: %w", err)
 	}
-	if v, _ := reply.Data["version"].(float64); v == 2 {
-		return nil, ErrForceV2
-	}
 	return reply.Data, nil
 }
 
@@ -497,13 +494,15 @@ func delForceMessage(uid, instance string) map[string]any {
 	return map[string]any{"action": "delForce", "forcePersistenceRevision": PersistenceRevision, "uuid": uid, "instanceId": instance}
 }
 
-// ErrForceV2 is the answer for a force saved in MekBay's version 2 format (what MekBay's next release, next.mekbay.com, saves), which the site can't read
-// yet: reading it as version 1 would find no units at all.
-var ErrForceV2 = errors.New("MekBay saved this force in its new format, which the site can't read yet")
-
-// saveData saves a force (anything that encodes as one) as the session's account; only the account that owns a force may save it.
+// saveData saves a force (anything that encodes as one) as the session's account; only the account that owns a force may save it. A version 2 force is saved
+// as MekBay's version 2 writer saves one (force-persistence.service.ts).
 func (s *Session) saveData(ctx context.Context, force any) error {
-	_, err := s.Call(ctx, map[string]any{"action": "saveForce", "uuid": s.uuid, "data": force, "savedForceCount": 1})
+	msg := map[string]any{"action": "saveForce", "uuid": s.uuid, "data": force, "savedForceCount": 1}
+	if f, ok := force.(map[string]any); ok && ForceVersion(f) == 2 {
+		msg["forcePersistenceRevision"] = PersistenceRevision
+		msg["cbtPersistence"] = map[string]any{"writerVersion": 2, "expectedRevision": nil}
+	}
+	_, err := s.Call(ctx, msg)
 	return err
 }
 

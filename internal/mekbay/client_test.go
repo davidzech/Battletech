@@ -3,7 +3,6 @@ package mekbay
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -176,8 +175,8 @@ func TestParseCountsPendingDamage(t *testing.T) {
 }
 
 // MekBay's server refuses to read a force saved in its version 2 format unless the request carries the persistence revision; with it, a version 2 force comes
-// back in that format, which a hangar import refuses plainly rather than taking it as a version 1 force with no units.
-func TestReadForceAsksForRevisionAndRefusesV2(t *testing.T) {
+// back in that format, and reads as the hangar it is.
+func TestReadForceAsksForRevisionAndReadsV2(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		c, _ := websocket.Accept(w, r, nil)
 		defer c.CloseNow()
@@ -204,9 +203,11 @@ func TestReadForceAsksForRevisionAndRefusesV2(t *testing.T) {
 		}
 	}))
 	defer ts.Close()
-	_, err := (&Client{URL: "ws" + strings.TrimPrefix(ts.URL, "http")}).ReadForce(context.Background(), goodInstance)
-	if !errors.Is(err, ErrForceV2) {
-		t.Fatalf("ReadForce of a version 2 force = %v, want ErrForceV2", err)
+	raw, err := (&Client{URL: "ws" + strings.TrimPrefix(ts.URL, "http")}).ReadForce(context.Background(), goodInstance)
+	if err != nil {
+		t.Fatal(err)
 	}
-
+	if h, err := ParseForce(raw); err != nil || len(h.Units) != 1 || h.Units[0].Unit != "BMMadCat_A" {
+		t.Errorf("read force = %+v, %v", h, err)
+	}
 }

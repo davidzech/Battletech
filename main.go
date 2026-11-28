@@ -12,6 +12,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/davidzech/Battletech/internal/layouts"
+	"github.com/davidzech/Battletech/internal/mekbay"
 	"github.com/davidzech/Battletech/internal/mekbayproxy"
 	"github.com/davidzech/Battletech/internal/site"
 	"github.com/davidzech/Battletech/internal/storage"
@@ -55,6 +57,16 @@ func main() {
 	web := ""
 	if *next {
 		web = mekbayproxy.NextWebURL
+	}
+	// MekBay's version 2 forces: the layouts that reading their damage needs, kept up to date from MekBay's unit files, and the format the site writes,
+	// which turns to version 2 by itself on the day MekBay's release does (or at once, with -mekbay-next).
+	background, stopBackground := context.WithCancel(context.Background())
+	defer stopBackground()
+	go layouts.Keep(background, *next)
+	if *next {
+		mekbay.SetV2(true)
+	} else {
+		go mekbay.WatchRelease(background, 15*time.Minute)
 	}
 	go func() { // a MekBay release that changes what the proxy relies on shows here, not as a player's broken table link
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)

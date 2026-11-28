@@ -113,6 +113,17 @@ func subsetForce(hangar map[string]any, units []string, instance, name string, n
 	return f, nil
 }
 
+// forceTimestamp is a saved force's timestamp as an operation records it: version 1 keeps it as such, version 2 as milliseconds.
+func forceTimestamp(force map[string]any) string {
+	switch ts := force["timestamp"].(type) {
+	case string:
+		return ts
+	case float64:
+		return FormatTime(time.UnixMilli(int64(ts)))
+	}
+	return ""
+}
+
 func deepCopy(m map[string]any) (map[string]any, error) {
 	b, err := json.Marshal(m)
 	if err != nil {
@@ -124,7 +135,7 @@ func deepCopy(m map[string]any) (map[string]any, error) {
 
 // saveOperation saves an operation and reads it back to confirm it (MekBay doesn't acknowledge saveOperation).
 func (s *Session) saveOperation(ctx context.Context, op map[string]any, opID string) error {
-	if err := s.Send(ctx, map[string]any{"action": "saveOperation", "data": op}); err != nil {
+	if err := s.Send(ctx, map[string]any{"action": "saveOperation", "forcePersistenceRevision": PersistenceRevision, "data": op}); err != nil {
 		return err
 	}
 	for attempt := 0; attempt < 6; attempt++ {
@@ -185,12 +196,16 @@ func (c *Client) StartBattle(ctx context.Context, req BattleRequest) (BattleResu
 		if d == nil {
 			return BattleResult{}, errors.New("the OpFor force from the last start of this battle is gone from MekBay; reset the OpFor to build a new one")
 		}
-		opforTS, _ = d["timestamp"].(string)
+		opforTS = forceTimestamp(d)
 	} else {
 		res.OpForInstance = NewID()
-		f := BuildForce(res.OpForInstance, time.Now().UTC(), req.OpFor.Draft)
-		opforTS = f.Timestamp
-		toSave = append(toSave, built{res.OpForInstance, f.Timestamp, f})
+		now := time.Now().UTC()
+		f, err := buildDraft(res.OpForInstance, now, req.OpFor.Draft)
+		if err != nil {
+			return BattleResult{}, err
+		}
+		opforTS = FormatTime(now)
+		toSave = append(toSave, built{res.OpForInstance, opforTS, f})
 	}
 
 	// Each player's force, from the hangar or built from their draft.
@@ -199,16 +214,31 @@ func (c *Client) StartBattle(ctx context.Context, req BattleRequest) (BattleResu
 		if err := json.Unmarshal(req.Hangar, &hangar); err != nil || hangar == nil {
 			return BattleResult{}, errors.New("your hangar could not be read")
 		}
+		// Writing version 2: a hangar still in version 1 goes into the battle converted (it is converted for good the next time it is changed).
+		if err := UpgradeHangar(hangar); err != nil {
+			return BattleResult{}, fmt.Errorf("your hangar could not be converted for MekBay: %w", err)
+		}
 	}
 	forces := []map[string]any{}
 	for _, p := range req.Players {
 		instance, ts := NewID(), ""
 		var force any
+		now := time.Now().UTC()
+		ts = FormatTime(now)
 		if req.Provided {
-			f := BuildForce(instance, time.Now().UTC(), p.Draft)
-			force, ts = f, f.Timestamp
+			f, err := buildDraft(instance, now, p.Draft)
+			if err != nil {
+				return BattleResult{}, err
+			}
+			force = f
 		} else {
-			f, err := subsetForce(hangar, p.Units, instance, p.Name, time.Now().UTC())
+			var f map[string]any
+			var err error
+			if ForceVersion(hangar) == 2 {
+				f, err = v2Subset(hangar, p.Units, instance, p.Name, now)
+			} else {
+				f, err = subsetForce(hangar, p.Units, instance, p.Name, now)
+			}
 			if err != nil {
 				return BattleResult{}, err
 			}
@@ -216,7 +246,7 @@ func (c *Client) StartBattle(ctx context.Context, req BattleRequest) (BattleResu
 				return BattleResult{}, err
 			}
 			setCommander(f, p.Commander)
-			force, ts = f, f["timestamp"].(string)
+			force = f
 		}
 		toSave = append(toSave, built{instance, ts, force})
 		res.PlayerInstances = append(res.PlayerInstances, instance)
@@ -226,9 +256,13 @@ func (c *Client) StartBattle(ctx context.Context, req BattleRequest) (BattleResu
 	// The scenario's allies: one more force on the players' side, after theirs.
 	if len(req.Allies.Groups) > 0 {
 		res.AlliesInstance = NewID()
-		f := BuildForce(res.AlliesInstance, time.Now().UTC(), req.Allies)
-		toSave = append(toSave, built{res.AlliesInstance, f.Timestamp, f})
-		forces = append(forces, map[string]any{"instanceId": res.AlliesInstance, "alignment": "friendly", "timestamp": f.Timestamp})
+		now := time.Now().UTC()
+		f, err := buildDraft(res.AlliesInstance, now, req.Allies)
+		if err != nil {
+			return BattleResult{}, err
+		}
+		toSave = append(toSave, built{res.AlliesInstance, FormatTime(now), f})
+		forces = append(forces, map[string]any{"instanceId": res.AlliesInstance, "alignment": "friendly", "timestamp": FormatTime(now)})
 	}
 
 	// Everything could be built, so it is saved: the forces, then the operation with every player's force (and the allies') on the friendly side and the OpFor
@@ -335,9 +369,6 @@ func (c *Client) ReadBattle(ctx context.Context, operationID string) (BattleStat
 			return BattleStatus{}, err
 		}
 		h, err := ParseHangarForce(got)
-		if errors.Is(err, ErrForceV2) {
-			return BattleStatus{}, err
-		}
 		if err != nil {
 			continue // a force deleted from MekBay since: the others are still worth showing
 		}

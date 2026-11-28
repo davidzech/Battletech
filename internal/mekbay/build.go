@@ -18,5 +18,17 @@ func DraftHangar(ids []string) HangarForce {
 // NewHangar builds a new hangar force from a draft (the starting hangar built on the site, see internal/site/buildforce.go): its saved data as JSON, every unit
 // pristine.
 func NewHangar(d ForceDraft, now time.Time) ([]byte, error) {
-	return json.Marshal(BuildForce(NewID(), now.UTC(), d))
+	f, err := buildDraft(NewID(), now.UTC(), d)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(f)
+}
+
+// buildDraft builds a pristine force from a draft in the format the site writes (see V2).
+func buildDraft(instance string, now time.Time, d ForceDraft) (any, error) {
+	if V2() {
+		return BuildForceV2(instance, now, d)
+	}
+	return BuildForce(instance, now, d), nil
 }

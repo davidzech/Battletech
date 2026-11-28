@@ -14,8 +14,11 @@ func SameGroupName(name, want string) bool {
 }
 
 // AddUnitsToForce adds a fresh, undamaged unit for each ID to the "Hangar" group of a saved force (the decoded JSON of its `data`), creating the
-// group if it doesn't exist. Everything else in the force is left as it was.
-func AddUnitsToForce(force map[string]any, unitIDs []string, now time.Time) {
+// group if it doesn't exist. Everything else in the force is left as it was. Only a version 2 force can fail (a unit with no UUID in the catalog).
+func AddUnitsToForce(force map[string]any, unitIDs []string, now time.Time) error {
+	if ForceVersion(force) == 2 {
+		return v2AddUnits(force, unitIDs)
+	}
 	groups, _ := force["groups"].([]any)
 	var hangar map[string]any
 	for _, g := range groups {
@@ -46,4 +49,5 @@ func AddUnitsToForce(force map[string]any, unitIDs []string, now time.Time) {
 		})
 	}
 	hangar["units"] = units
+	return nil
 }

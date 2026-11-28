@@ -35,6 +35,9 @@ var ErrNoChange = errors.New("That has already been done to the unit (it may hav
 //
 // A rearm refills the ammunition and leaves the damage. A service that changes nothing in the unit's state is ErrNoChange.
 func ServiceUnitState(force map[string]any, unitID, kind, level string, tons float64, crippled bool, now time.Time) error {
+	if ForceVersion(force) == 2 {
+		return v2Service(force, unitID, kind, level, tons, crippled)
+	}
 	groups, _ := force["groups"].([]any)
 	for _, g := range groups {
 		gm, _ := g.(map[string]any)
