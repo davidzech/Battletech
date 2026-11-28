@@ -217,6 +217,9 @@ type hangarChange func(force map[string]any, h mekbay.HangarForce) (sp int, hist
 func (s *Server) changeHangar(w http.ResponseWriter, r *http.Request, pt storage.Playthrough, c *content.Campaign, change hangarChange) (warchest, sp int, ok bool) {
 	var history string
 	warchest, err := s.store.EditHangarGuarded(r.Context(), pt.ID, c.Slug, hangarGuard(c, ""), func(force map[string]any) (int, error) {
+		if err := mekbay.UpgradeHangar(force); err != nil {
+			return 0, err
+		}
 		h, err := parseHangarMap(force)
 		if err != nil {
 			return 0, err

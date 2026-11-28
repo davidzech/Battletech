@@ -20,6 +20,9 @@ import (
 const (
 	mekbayWS = "wss://mekbay.com/ws"
 	Protocol = 2 // PROTOCOL_VERSION in ws.service.ts
+	// PersistenceRevision is FORCE_PERSISTENCE_REVISION in ws.service.ts. MekBay's server refuses to read or delete a force saved in its version 2
+	// format for a request that doesn't carry it; with it, a version 1 force still reads as version 1.
+	PersistenceRevision = 2
 )
 
 // ForceDraft is a force to create in MekBay: groups of units, with their pilots.
@@ -60,7 +63,8 @@ type AmmoUse struct {
 // HangarUnit is one unit of a force, read from MekBay's save format.
 type HangarUnit struct {
 	ID       string // the unit's own ID inside the force
-	Unit     string // MekBay unit ID, e.g. BMMadCat_H
+	Unit     string // MekBay unit ID, e.g. BMMadCat_H ("" for a design the catalog doesn't know)
+	UUID     string // MegaMek's UUID for the design, which version 2 forces name units by ("" in a version 1 force)
 	Group    string // name of the group it currently sits in
 	Pilot    string
 	Gunnery  int
@@ -164,6 +168,20 @@ func FormatTime(t time.Time) string { return t.UTC().Format("2006-01-02T15:04:05
 // pendingInternal, and its crippling rule counts a slot that is being destroyed): a battle's live force may hold damage whose phase hasn't ended. A hangar holds
 // none pending, since CommitState consolidates it when a battle is written back.
 func ParseHangarForce(raw json.RawMessage) (HangarForce, error) {
+	var head struct {
+		Data *struct {
+			Version int `json:"version"`
+		} `json:"data"`
+	}
+	if json.Unmarshal(raw, &head) == nil && head.Data != nil && head.Data.Version == 2 {
+		var v2 struct {
+			Data map[string]any `json:"data"`
+		}
+		if err := json.Unmarshal(raw, &v2); err != nil {
+			return HangarForce{}, fmt.Errorf("could not read MekBay's reply: %w", err)
+		}
+		return parseV2Force(v2.Data)
+	}
 	var reply struct {
 		Data *struct {
 			Name      string `json:"name"`
@@ -453,7 +471,7 @@ func (s *Session) Call(ctx context.Context, msg map[string]any) (json.RawMessage
 // getForce reads one force's saved data (the decoded JSON of its `data`) as the session's account. It returns nil, nil when MekBay has no such force (or, with
 // ownedOnly, when the account doesn't own it).
 func (s *Session) getForce(ctx context.Context, instance string, ownedOnly bool) (map[string]any, error) {
-	raw, err := s.Call(ctx, map[string]any{"action": "getForce", "uuid": s.uuid, "instanceId": instance, "ownedOnly": ownedOnly})
+	raw, err := s.Call(ctx, getForceMessage(s.uuid, instance, ownedOnly))
 	if err != nil {
 		return nil, err
 	}
@@ -466,9 +484,25 @@ func (s *Session) getForce(ctx context.Context, instance string, ownedOnly bool)
 	return reply.Data, nil
 }
 
-// saveData saves a force (anything that encodes as one) as the session's account; only the account that owns a force may save it.
+// getForceMessage asks for one force's saved data as the account uid.
+func getForceMessage(uid, instance string, ownedOnly bool) map[string]any {
+	return map[string]any{"action": "getForce", "forcePersistenceRevision": PersistenceRevision, "uuid": uid, "instanceId": instance, "ownedOnly": ownedOnly}
+}
+
+// delForceMessage deletes one force the account uid owns. MekBay does not acknowledge it.
+func delForceMessage(uid, instance string) map[string]any {
+	return map[string]any{"action": "delForce", "forcePersistenceRevision": PersistenceRevision, "uuid": uid, "instanceId": instance}
+}
+
+// saveData saves a force (anything that encodes as one) as the session's account; only the account that owns a force may save it. A version 2 force is saved
+// as MekBay's version 2 writer saves one (force-persistence.service.ts).
 func (s *Session) saveData(ctx context.Context, force any) error {
-	_, err := s.Call(ctx, map[string]any{"action": "saveForce", "uuid": s.uuid, "data": force, "savedForceCount": 1})
+	msg := map[string]any{"action": "saveForce", "uuid": s.uuid, "data": force, "savedForceCount": 1}
+	if f, ok := force.(map[string]any); ok && ForceVersion(f) == 2 {
+		msg["forcePersistenceRevision"] = PersistenceRevision
+		msg["cbtPersistence"] = map[string]any{"writerVersion": 2, "expectedRevision": nil}
+	}
+	_, err := s.Call(ctx, msg)
 	return err
 }
 
@@ -547,3 +581,9 @@ func BuildForce(instanceID string, now time.Time, d ForceDraft) serializedForce 
 // CrewIsDead says whether MekBay's record of a crew member shows them dead: its stored state is dead (2) or killed (4), or they have taken the six hits that kill.
 // (The other states are healthy 0, unconscious 1, ejected 3 and stunned 5.)
 func CrewIsDead(state, hits int) bool { return state == 2 || state == 4 || hits >= 6 }
+
+// operationMessage reads or deletes an operation. MekBay refuses either for an operation holding a version 2 force unless it carries the persistence
+// revision, as it does for the force itself.
+func operationMessage(action, operationID string) map[string]any {
+	return map[string]any{"action": action, "forcePersistenceRevision": PersistenceRevision, "operationId": operationID}
+}

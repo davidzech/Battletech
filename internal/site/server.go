@@ -174,6 +174,12 @@ type Option func(*Server)
 // WithMekBay replaces the MekBay client (tests use a fake one).
 func WithMekBay(m mekbay.MekBay) Option { return func(s *Server) { s.mekbay = m } }
 
+// WithMekBayWeb makes the MekBay proxy serve the MekBay web app from web (e.g. mekbayproxy.NextWebURL, for development against MekBay's next release)
+// instead of mekbay.com. The WebSocket stays mekbay.com's, which every MekBay web app speaks to.
+func WithMekBayWeb(web string) Option {
+	return func(s *Server) { s.upstream = &[3]string{web, mekbayproxy.UpstreamWS, web} }
+}
+
 // NewHandler returns the site's HTTP handler. Campaign files are re-read on every request,
 // so edits show up on refresh.
 func NewHandler(contentRoot string, store *storage.Store, opts ...Option) http.Handler {

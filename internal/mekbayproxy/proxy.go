@@ -26,7 +26,9 @@ import (
 )
 
 const (
-	mekbayWebURL    = "https://mekbay.com"
+	mekbayWebURL = "https://mekbay.com"
+	// NextWebURL is MekBay's next release, the web app built from its `next` branch. It speaks to the same server (UpstreamWS) as mekbay.com.
+	NextWebURL      = "https://next.mekbay.com"
 	UpstreamWS      = "wss://mekbay.com/ws"
 	mekbayOriginURL = mekbayWebURL
 
@@ -450,10 +452,14 @@ func swapUUID(b []byte, account string) []byte {
 	return out
 }
 
-// CheckMekBay runs the proxy's Check against the live mekbay.com (see Check). main runs it once at startup, so a MekBay release that breaks the proxy shows in the
-// server's log.
-func CheckMekBay(ctx context.Context) error {
-	return New(nil).Check(ctx)
+// CheckMekBay runs the proxy's Check against the live MekBay web app at web (mekbay.com when empty; see Check). main runs it once at startup, so a MekBay
+// release that breaks the proxy shows in the server's log.
+func CheckMekBay(ctx context.Context, web string) error {
+	p := New(nil)
+	if web != "" {
+		p.Web, p.Origin = web, web
+	}
+	return p.Check(ctx)
 }
 
 var scriptAsset = regexp.MustCompile(`^/[A-Za-z0-9._-]+\.js$`)

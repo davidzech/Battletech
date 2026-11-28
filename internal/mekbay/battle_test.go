@@ -27,11 +27,13 @@ type fakeForceServer struct {
 	saves  int
 	// failRead is the instance of a force the server fails to read, as on a transient error (none when "").
 	failRead string
+	// saveMsgs is the last saveForce message for each instance, as it came.
+	saveMsgs map[string]map[string]any
 }
 
 func newFakeForceServer(t *testing.T) *fakeForceServer {
 	t.Helper()
-	f := &fakeForceServer{forces: map[string]map[string]any{}, owners: map[string]string{}, ops: map[string]map[string]any{}}
+	f := &fakeForceServer{forces: map[string]map[string]any{}, owners: map[string]string{}, ops: map[string]map[string]any{}, saveMsgs: map[string]map[string]any{}}
 	f.Server = httptest.NewServer(http.HandlerFunc(f.serve))
 	t.Cleanup(f.Close)
 	return f
@@ -78,6 +80,7 @@ func (f *fakeForceServer) serve(w http.ResponseWriter, r *http.Request) {
 				break
 			}
 			f.forces[inst], f.owners[inst] = data, account
+			f.saveMsgs[inst] = m
 			f.saves++
 			reply(map[string]any{"action": "forceSaved", "instanceId": inst})
 		case "delForce": // not acknowledged, like the real one

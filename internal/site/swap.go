@@ -161,6 +161,9 @@ func (s *Server) reconfigureForBattle(ctx context.Context, r *http.Request, bp *
 	cost := 0
 	// The start holds its claim for this scenario while it reconfigures (Store.ClaimBattle), which the guard allows; any other battle refuses it.
 	left, err := s.store.EditHangarGuarded(ctx, bp.pt.ID, bp.c.Slug, hangarGuard(bp.c, bp.sc.ID), func(force map[string]any) (int, error) {
+		if err := mekbay.UpgradeHangar(force); err != nil {
+			return 0, err
+		}
 		h, err := parseHangarMap(force)
 		if err != nil {
 			return 0, err

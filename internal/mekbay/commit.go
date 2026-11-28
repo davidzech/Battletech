@@ -27,6 +27,24 @@ type CommitBattleReport struct {
 // battle conditions, NARC pods) are dropped (settleBattleState, unitstate.go). The crew is not carried back and the unit's crew is cleared: pilots are assigned
 // during an operation only, so the hangar never holds a named pilot.
 func CommitState(hangar map[string]any, battle map[string]map[string]any) CommitBattleReport {
+	// A battle that came back in version 2 makes the hangar version 2: its rows go into the hangar as MekBay saved them.
+	if ForceVersion(hangar) == 1 {
+		for _, bu := range battle {
+			if bu[v2Marker] == true {
+				if err := upgradeInPlace(hangar); err != nil {
+					var rep CommitBattleReport
+					for id := range battle {
+						rep.Skipped = append(rep.Skipped, fmt.Sprintf("%s (the hangar could not be converted: %v)", id, err))
+					}
+					return rep
+				}
+				break
+			}
+		}
+	}
+	if ForceVersion(hangar) == 2 {
+		return v2CommitState(hangar, battle)
+	}
 	var rep CommitBattleReport
 	now := time.Now()
 	used := map[string]bool{}
@@ -80,7 +98,7 @@ func (c *Client) ReadBattleUnits(ctx context.Context, account, operationID strin
 		return nil, err
 	}
 	defer s.Close()
-	raw, err := s.Call(ctx, map[string]any{"action": "getOperation", "operationId": operationID})
+	raw, err := s.Call(ctx, operationMessage("getOperation", operationID))
 	if err != nil {
 		return nil, err
 	}
@@ -106,6 +124,13 @@ func (c *Client) ReadBattleUnits(ctx context.Context, account, operationID strin
 		}
 		if force == nil {
 			return nil, fmt.Errorf("MekBay has no force %s", f.InstanceID)
+		}
+		if ForceVersion(force) == 2 {
+			for _, um := range v2Units(force) {
+				um[v2Marker] = true
+				battle[v2UnitID(um)] = um
+			}
+			continue
 		}
 		groups, _ := force["groups"].([]any)
 		for _, g := range groups {

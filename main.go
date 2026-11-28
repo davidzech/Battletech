@@ -12,6 +12,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/davidzech/Battletech/internal/layouts"
+	"github.com/davidzech/Battletech/internal/mekbay"
 	"github.com/davidzech/Battletech/internal/mekbayproxy"
 	"github.com/davidzech/Battletech/internal/site"
 	"github.com/davidzech/Battletech/internal/storage"
@@ -32,6 +34,7 @@ func main() {
 	dbPath := flag.String("db", "playthroughs.db", "SQLite database file for playthrough state (used when no PostgreSQL URL is set)")
 	pgURL := flag.String("postgres", os.Getenv("DATABASE_URL"), "PostgreSQL connection URL; defaults to $DATABASE_URL, and when set it is used instead of -db")
 	devReload := flag.Bool("dev-reload", false, "reload open pages when the server restarts (for air; never in production)")
+	next := flag.Bool("mekbay-next", os.Getenv("MEKBAY_NEXT") == "1", "serve MekBay's next release (next.mekbay.com) through the MekBay proxy instead of mekbay.com; defaults to $MEKBAY_NEXT=1 (for development)")
 	flag.Parse()
 
 	var (
@@ -51,11 +54,25 @@ func main() {
 	}
 	defer store.Close()
 
+	web := ""
+	if *next {
+		web = mekbayproxy.NextWebURL
+	}
+	// MekBay's version 2 forces: the layouts that reading their damage needs, kept up to date from MekBay's unit files, and the format the site writes,
+	// which turns to version 2 by itself on the day MekBay's release does (or at once, with -mekbay-next).
+	background, stopBackground := context.WithCancel(context.Background())
+	defer stopBackground()
+	go layouts.Keep(background, *next)
+	if *next {
+		mekbay.SetV2(true)
+	} else {
+		go mekbay.WatchRelease(background, 15*time.Minute)
+	}
 	go func() { // a MekBay release that changes what the proxy relies on shows here, not as a player's broken table link
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
-		if err := mekbayproxy.CheckMekBay(ctx); err != nil {
-			log.Printf("warning: the MekBay proxy may not work with the current mekbay.com: %v", err)
+		if err := mekbayproxy.CheckMekBay(ctx, web); err != nil {
+			log.Printf("warning: the MekBay proxy may not work with the current MekBay web app: %v", err)
 		} else {
 			log.Printf("MekBay proxy check: ok")
 		}
@@ -66,6 +83,10 @@ func main() {
 	if *devReload {
 		opts = append(opts, site.WithDevReload())
 		log.Printf("live reload on: open pages reload when the server restarts")
+	}
+	if web != "" {
+		opts = append(opts, site.WithMekBayWeb(web))
+		log.Printf("MekBay proxy serves %s", web)
 	}
 	// Only the wait for a request's headers and an idle keep-alive connection are timed. A read or write timeout would cut the MekBay relay's
 	// WebSocket, the live-reload stream and requests that wait on MekBay.

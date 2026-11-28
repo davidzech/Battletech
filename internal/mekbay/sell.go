@@ -2,6 +2,9 @@ package mekbay
 
 // RemoveUnitFromForce takes the unit with this ID out of a saved force (the decoded JSON of its `data`); false if it isn't there.
 func RemoveUnitFromForce(force map[string]any, unitID string) bool {
+	if ForceVersion(force) == 2 {
+		return v2RemoveUnit(force, unitID)
+	}
 	groups, _ := force["groups"].([]any)
 	for _, g := range groups {
 		gm, _ := g.(map[string]any)

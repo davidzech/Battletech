@@ -162,6 +162,9 @@ func (s *Server) battleWriteBack(w http.ResponseWriter, r *http.Request, pt stor
 		return nil, false
 	}
 	return func(hangar map[string]any) (int, error) {
+		if err := mekbay.UpgradeHangar(hangar); err != nil {
+			return 0, err
+		}
 		if rep := mekbay.CommitState(hangar, battle); len(rep.Skipped) > 0 {
 			log.Printf("battle write-back: %d units written, no match in the hangar for %v", rep.Matched, rep.Skipped)
 		}

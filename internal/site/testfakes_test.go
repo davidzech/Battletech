@@ -3,6 +3,7 @@ package site
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
@@ -13,7 +14,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/davidzech/Battletech/internal/catalog"
+	"github.com/davidzech/Battletech/internal/layouts"
 	"github.com/davidzech/Battletech/internal/mekbay"
+	"github.com/davidzech/Battletech/internal/mtf"
 	"github.com/davidzech/Battletech/internal/storage"
 )
 
@@ -117,8 +121,9 @@ func (f *fakeMekBay) ReadBattle(_ context.Context, operationID string) (mekbay.B
 }
 
 // forceOf is a hangar as MekBay saves it (and the site stores it), built so that it reads back as h: groups, crews, damage, critical hits, spent ammunition, the
-// destroyed flag and the torso check. A unit marked Damaged with no damage recorded gets one point of armor lost on its left arm; engine hits and spent
-// ammunition with no slots of their own get slots in the center torso.
+// destroyed flag and the torso check. A unit marked Damaged with no damage recorded gets one point of armor lost on its left arm. Hits, engine hits, spent
+// ammunition and a lost cockpit go on real slots of the design's layout (its engine slots, its ammunition bins, its cockpit) as MekBay would record them, so the
+// hangar converts to version 2 as a real one does; a design without such slots gets made-up ones (engine and ammunition in the center torso).
 func forceOf(h mekbay.HangarForce) []byte {
 	var groups []any
 	byName := map[string]map[string]any{}
@@ -137,23 +142,75 @@ func forceOf(h mekbay.HangarForce) []byte {
 		for k, l := range u.Locations {
 			locs[k] = map[string]any{"armor": l.Armor, "internal": l.Internal}
 		}
+		lay := layoutOfUnit(u.Unit)
+		taken := map[string]bool{}
+		// slot finds a free real slot in loc ("" for any location) that ok accepts, and its row's name.
+		slot := func(loc string, ok func(s mtf.Slot) bool) (string, int, string) {
+			if lay == nil {
+				return "", -1, ""
+			}
+			locsToTry := []string{loc}
+			if loc == "" {
+				locsToTry = []string{"CT", "LT", "RT", "LA", "RA", "HD", "LL", "RL"}
+			}
+			for _, l := range locsToTry {
+				for i, sl := range lay.Slots[l] {
+					key := fmt.Sprintf("%s:%d", l, i)
+					if taken[key] || !ok(sl) {
+						continue
+					}
+					taken[key] = true
+					name := sl.System
+					if sl.Mount > 0 {
+						name = lay.Mounts[sl.Mount-1].Equipment
+					}
+					return l, i, name
+				}
+			}
+			return "", -1, ""
+		}
+		isEngine := func(s mtf.Slot) bool { return s.System == "Engine" }
 		crits := []any{}
 		engines := 0
 		for _, c := range u.Crits {
-			name := "Upper Arm Actuator"
 			if c.Engine {
-				name, engines = "Engine", engines+1
+				engines++
+				if l, i, _ := slot(c.Loc, isEngine); i >= 0 {
+					crits = append(crits, map[string]any{"name": "Engine", "loc": l, "slot": i, "hits": 1})
+					continue
+				}
+				crits = append(crits, map[string]any{"name": "Engine", "loc": c.Loc, "hits": 1})
+				continue
 			}
-			crits = append(crits, map[string]any{"name": name, "loc": c.Loc, "hits": 1})
+			if l, i, name := slot(c.Loc, func(s mtf.Slot) bool {
+				return (s.System != "" || s.Mount > 0) && s.System != "Engine" && s.System != "Cockpit" && (s.Mount == 0 || lay.Mounts[s.Mount-1].Type != "ammo")
+			}); i >= 0 {
+				crits = append(crits, map[string]any{"name": name, "loc": l, "slot": i, "hits": 1})
+				continue
+			}
+			crits = append(crits, map[string]any{"name": "Upper Arm Actuator", "loc": c.Loc, "hits": 1})
 		}
 		for ; engines < u.EngineHits; engines++ {
+			if l, i, _ := slot("CT", isEngine); i >= 0 {
+				crits = append(crits, map[string]any{"name": "Engine", "loc": l, "slot": i, "hits": 1})
+				continue
+			}
 			crits = append(crits, map[string]any{"name": "Engine", "loc": "CT", "hits": 1})
 		}
 		if u.Damaged && len(locs) == 0 && len(crits) == 0 {
 			locs["LA"] = map[string]any{"armor": 1, "internal": 0}
 		}
+		isAmmo := func(name string) func(s mtf.Slot) bool {
+			return func(s mtf.Slot) bool {
+				return s.Mount > 0 && lay.Mounts[s.Mount-1].Type == "ammo" && (name == "" || lay.Mounts[s.Mount-1].Equipment == name)
+			}
+		}
 		if len(u.AmmoUsed2) > 0 {
 			for _, a := range u.AmmoUsed2 {
+				if l, i, name := slot(a.Loc, isAmmo(a.Name)); i >= 0 {
+					crits = append(crits, map[string]any{"name": name, "loc": l, "slot": i, "consumed": a.Used})
+					continue
+				}
 				crits = append(crits, map[string]any{"name": a.Name, "loc": a.Loc, "consumed": a.Used})
 			}
 		} else {
@@ -162,11 +219,19 @@ func forceOf(h mekbay.HangarForce) []byte {
 				if i == 0 {
 					used += u.AmmoUsed % u.AmmoBins
 				}
+				if l, n, name := slot("", isAmmo("")); n >= 0 {
+					crits = append(crits, map[string]any{"name": name, "loc": l, "slot": n, "consumed": max(used, 1)})
+					continue
+				}
 				crits = append(crits, map[string]any{"name": "Ammo", "loc": "CT", "consumed": max(used, 1)})
 			}
 		}
 		if u.CockpitGone {
-			crits = append(crits, map[string]any{"name": "Cockpit", "loc": "HD", "destroyed": 1})
+			if l, i, _ := slot("", func(s mtf.Slot) bool { return s.System == "Cockpit" }); i >= 0 {
+				crits = append(crits, map[string]any{"name": "Cockpit", "loc": l, "slot": i, "destroyed": 1})
+			} else {
+				crits = append(crits, map[string]any{"name": "Cockpit", "loc": "HD", "destroyed": 1})
+			}
 		}
 		state := map[string]any{
 			"crew":      []any{map[string]any{"id": 0, "name": u.Pilot, "gunnerySkill": u.Gunnery, "pilotingSkill": u.Piloting, "hits": 0, "state": crewState}},
@@ -334,4 +399,23 @@ func eventually(t *testing.T, what string, done func() (bool, any)) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
+}
+
+// layoutOfUnit is a catalog design's layout (nil when it has none).
+func layoutOfUnit(unit string) *mtf.Layout {
+	cu, ok := catalog.ByName(unit)
+	if !ok {
+		return nil
+	}
+	l, _ := layouts.Lookup(cu.UUID, "")
+	return l
+}
+
+// TestMain runs the site's tests as the site runs once MekBay's release is version 2 (every force written in version 2, hangars converted when changed) when
+// MEKBAY_TEST_V2 is set; CI runs them both ways.
+func TestMain(m *testing.M) {
+	if os.Getenv("MEKBAY_TEST_V2") != "" {
+		mekbay.SetV2(true)
+	}
+	os.Exit(m.Run())
 }

@@ -83,7 +83,7 @@ func TestStartBattleLive(t *testing.T) {
 
 	// The operation lists both players' forces as friendly and the OpFor as the enemy.
 	forces := func(operation string) map[string]string {
-		raw, err := hs.Call(ctx, map[string]any{"action": "getOperation", "operationId": operation})
+		raw, err := hs.Call(ctx, operationMessage("getOperation", operation))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -200,4 +200,17 @@ func TestDeleteBattleLive(t *testing.T) {
 	if _, err := cl.ReadBattle(ctx, res.OperationID); err == nil {
 		t.Error("the operation is gone")
 	}
+}
+
+// TestBattleLiveV2 runs the live battle tests again as the site runs once MekBay's release is version 2: every force written in version 2. It runs only when
+// MEKBAY_LIVE_BATTLE is set.
+func TestBattleLiveV2(t *testing.T) {
+	if os.Getenv("MEKBAY_LIVE_BATTLE") == "" {
+		t.Skip("set MEKBAY_LIVE_BATTLE=1 to start a battle on mekbay.com")
+	}
+	SetV2(true)
+	t.Cleanup(func() { SetV2(false) })
+	t.Run("start", TestStartBattleLive)
+	t.Run("commit", TestCommitBattleLive)
+	t.Run("delete", TestDeleteBattleLive)
 }

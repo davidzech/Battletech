@@ -68,6 +68,10 @@ func CleanForce(data map[string]any, instance string, now time.Time) (map[string
 			}
 		}
 	}
+	if ForceVersion(force) == 2 {
+		v2Clean(force, instance, now)
+		return force, nil
+	}
 	force["instanceId"] = instance
 	force["timestamp"] = FormatTime(now)
 	delete(force, "owned")

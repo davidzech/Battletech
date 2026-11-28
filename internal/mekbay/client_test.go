@@ -173,3 +173,41 @@ func TestParseCountsPendingDamage(t *testing.T) {
 		t.Errorf("pending damage counts: %+v", hu)
 	}
 }
+
+// MekBay's server refuses to read a force saved in its version 2 format unless the request carries the persistence revision; with it, a version 2 force comes
+// back in that format, and reads as the hangar it is.
+func TestReadForceAsksForRevisionAndReadsV2(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		c, _ := websocket.Accept(w, r, nil)
+		defer c.CloseNow()
+		for {
+			_, b, err := c.Read(r.Context())
+			if err != nil {
+				return
+			}
+			var m map[string]any
+			_ = json.Unmarshal(b, &m)
+			if m["action"] != "getForce" {
+				continue
+			}
+			out := map[string]any{"action": "error", "requestId": m["requestId"], "message": "This force requires force persistence revision 2."}
+			if m["forcePersistenceRevision"] == float64(PersistenceRevision) {
+				out = map[string]any{"action": "forceData", "requestId": m["requestId"], "data": map[string]any{
+					"version": 2, "type": "cbt", "name": "New", "instanceId": goodInstance, "timestamp": 1795854031147,
+					"units":  []any{map[string]any{"id": "~uAaIhPdkrcVSs3bTl7hAMCg", "uuid": "AZ9YPsXdeLqfxfFLr233VA"}},
+					"groups": []any{map[string]any{"id": "~AaIhPdkrcVWvCDacfzwhwg", "unitIndices": []int{0}}}, "cbt": map[string]any{"r": 0},
+				}}
+			}
+			bb, _ := json.Marshal(out)
+			_ = c.Write(r.Context(), websocket.MessageText, bb)
+		}
+	}))
+	defer ts.Close()
+	raw, err := (&Client{URL: "ws" + strings.TrimPrefix(ts.URL, "http")}).ReadForce(context.Background(), goodInstance)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h, err := ParseForce(raw); err != nil || len(h.Units) != 1 || h.Units[0].Unit != "BMMadCat_A" {
+		t.Errorf("read force = %+v, %v", h, err)
+	}
+}

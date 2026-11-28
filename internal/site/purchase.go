@@ -37,7 +37,9 @@ func (s *Server) purchaseUnits(w http.ResponseWriter, r *http.Request) {
 	}
 	history := fmt.Sprintf("Bought %s for %s SP.", strings.Join(names, ", "), format.Commas(cost))
 	warchest, _, ok := s.changeHangar(w, r, pt, c, func(force map[string]any, _ mekbay.HangarForce) (int, string, error) {
-		mekbay.AddUnitsToForce(force, ids, time.Now())
+		if err := mekbay.AddUnitsToForce(force, ids, time.Now()); err != nil {
+			return 0, "", hangarError{http.StatusBadRequest, err.Error()}
+		}
 		return -cost, history, nil
 	})
 	if ok {

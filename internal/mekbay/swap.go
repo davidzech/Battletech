@@ -8,6 +8,9 @@ import (
 // SwapUnitState reconfigures the unit with this ID inside a force in MekBay's save format: its design becomes newName and its state is reset (a fresh unit has no
 // damage, no critical hits and full ammunition, and the old variant's slots mean nothing to the new one). A unit that already is that design is ErrNoChange.
 func SwapUnitState(force map[string]any, unitID, newName string, now time.Time) error {
+	if ForceVersion(force) == 2 {
+		return v2Swap(force, unitID, newName)
+	}
 	groups, _ := force["groups"].([]any)
 	for _, g := range groups {
 		gm, _ := g.(map[string]any)

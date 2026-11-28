@@ -23,6 +23,7 @@ import (
 
 type entry struct {
 	Name    string  `json:"name"`
+	UUID    string  `json:"uuid"` // MegaMek's own ID for the design, which MekBay's version 2 forces name units by
 	Chassis string  `json:"chassis"`
 	Model   string  `json:"model"`
 	BV      int     `json:"bv"`
