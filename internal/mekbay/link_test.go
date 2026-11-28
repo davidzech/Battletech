@@ -15,6 +15,7 @@ func TestParseHangar(t *testing.T) {
 		"tracking and other parameters":  "https://mekbay.com/?utm_source=x&instance=" + goodInstance + "&operation=abc&tab=Sheet",
 		"a fragment":                     "https://mekbay.com/?instance=" + goodInstance + "#top",
 		"the www host":                   "https://www.mekbay.com/?instance=" + goodInstance,
+		"MekBay's next release":          "https://next.mekbay.com/?instance=" + goodInstance,
 		"a path":                         "https://mekbay.com/units/?instance=" + goodInstance,
 		"friendly and enemy forces":      "https://mekbay.com/?instance=" + goodInstance + ",enemy:01a12f98-8a21-7d12-b43d-52bb70872376&sel=" + goodSel,
 		"the enemy listed first":         "https://mekbay.com/?instance=enemy:01a12f98-8a21-7d12-b43d-52bb70872376," + goodInstance,

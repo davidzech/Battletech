@@ -15,7 +15,7 @@ func TestCheckMekBayLive(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	if err := CheckMekBay(ctx); err != nil {
+	if err := CheckMekBay(ctx, ""); err != nil {
 		t.Fatal(err)
 	}
 }

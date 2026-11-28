@@ -20,6 +20,9 @@ import (
 const (
 	mekbayWS = "wss://mekbay.com/ws"
 	Protocol = 2 // PROTOCOL_VERSION in ws.service.ts
+	// PersistenceRevision is FORCE_PERSISTENCE_REVISION in ws.service.ts. MekBay's server refuses to read or delete a force saved in its version 2
+	// format for a request that doesn't carry it; with it, a version 1 force still reads as version 1.
+	PersistenceRevision = 2
 )
 
 // ForceDraft is a force to create in MekBay: groups of units, with their pilots.
@@ -164,6 +167,14 @@ func FormatTime(t time.Time) string { return t.UTC().Format("2006-01-02T15:04:05
 // pendingInternal, and its crippling rule counts a slot that is being destroyed): a battle's live force may hold damage whose phase hasn't ended. A hangar holds
 // none pending, since CommitState consolidates it when a battle is written back.
 func ParseHangarForce(raw json.RawMessage) (HangarForce, error) {
+	var head struct {
+		Data *struct {
+			Version int `json:"version"`
+		} `json:"data"`
+	}
+	if json.Unmarshal(raw, &head) == nil && head.Data != nil && head.Data.Version == 2 {
+		return HangarForce{}, ErrForceV2
+	}
 	var reply struct {
 		Data *struct {
 			Name      string `json:"name"`
@@ -453,7 +464,7 @@ func (s *Session) Call(ctx context.Context, msg map[string]any) (json.RawMessage
 // getForce reads one force's saved data (the decoded JSON of its `data`) as the session's account. It returns nil, nil when MekBay has no such force (or, with
 // ownedOnly, when the account doesn't own it).
 func (s *Session) getForce(ctx context.Context, instance string, ownedOnly bool) (map[string]any, error) {
-	raw, err := s.Call(ctx, map[string]any{"action": "getForce", "uuid": s.uuid, "instanceId": instance, "ownedOnly": ownedOnly})
+	raw, err := s.Call(ctx, getForceMessage(s.uuid, instance, ownedOnly))
 	if err != nil {
 		return nil, err
 	}
@@ -463,8 +474,25 @@ func (s *Session) getForce(ctx context.Context, instance string, ownedOnly bool)
 	if err := json.Unmarshal(raw, &reply); err != nil {
 		return nil, fmt.Errorf("could not read MekBay's reply: %w", err)
 	}
+	if v, _ := reply.Data["version"].(float64); v == 2 {
+		return nil, ErrForceV2
+	}
 	return reply.Data, nil
 }
+
+// getForceMessage asks for one force's saved data as the account uid.
+func getForceMessage(uid, instance string, ownedOnly bool) map[string]any {
+	return map[string]any{"action": "getForce", "forcePersistenceRevision": PersistenceRevision, "uuid": uid, "instanceId": instance, "ownedOnly": ownedOnly}
+}
+
+// delForceMessage deletes one force the account uid owns. MekBay does not acknowledge it.
+func delForceMessage(uid, instance string) map[string]any {
+	return map[string]any{"action": "delForce", "forcePersistenceRevision": PersistenceRevision, "uuid": uid, "instanceId": instance}
+}
+
+// ErrForceV2 is the answer for a force saved in MekBay's version 2 format (what MekBay's next release, next.mekbay.com, saves), which the site can't read
+// yet: reading it as version 1 would find no units at all.
+var ErrForceV2 = errors.New("MekBay saved this force in its new format, which the site can't read yet")
 
 // saveData saves a force (anything that encodes as one) as the session's account; only the account that owns a force may save it.
 func (s *Session) saveData(ctx context.Context, force any) error {

@@ -8,7 +8,7 @@ Custom tabletop BattleTech campaigns, one folder per campaign under `campaigns/`
 
 ## Running and checks
 
-- Run from the repo root: `go run .` (flags `-addr` (defaults to `localhost:8080` under `go run`), `-content campaigns`, `-db playthroughs.db`, `-postgres <url>` (defaults to `$DATABASE_URL`; used instead of `-db` when set)).
+- Run from the repo root: `go run .` (flags `-addr` (defaults to `localhost:8080` under `go run`), `-content campaigns`, `-db playthroughs.db`, `-postgres <url>` (defaults to `$DATABASE_URL`; used instead of `-db` when set), `-mekbay-next` (defaults to `$MEKBAY_NEXT=1`; the MekBay proxy serves MekBay's next release from `next.mekbay.com`, for development)).
 - Live reload: Air (`go install github.com/air-verse/air@v1.67.4`, then `air`; `.air.toml` passes `-dev-reload`, which makes pages reload via an EventSource on `/dev/reload`). Don't enable Air's browser-reload proxy (it breaks the same-origin check, `mekbay-<id>` hosts and the WebSocket relay).
 - Checks (all run in `.github/workflows/ci.yml`, plus `docker build`): `gofmt -l .` (prints nothing), `go build ./...`, `go vet ./...`, `go run honnef.co/go/tools/cmd/staticcheck@v0.8.2 ./...` (`staticcheck.conf` disables ST1005), `go test ./...`.
 - Postgres tests run only with `TEST_DATABASE_URL`, e.g. `docker run -d -e POSTGRES_PASSWORD=pw -e POSTGRES_DB=bt -p 55432:5432 postgres:17-alpine` then `TEST_DATABASE_URL=postgres://postgres:pw@localhost:55432/bt?sslmode=disable go test ./...`.
@@ -112,7 +112,7 @@ MegaMek's XML force format, one `<entity>` per unit with `<pilot>` skills. Prefe
 ## Data
 
 - `data/units.json` is MekBay's unit catalog (`https://db.mekbay.com/units.json`, with `factions.json` and `eras.json`, downloaded 2026-11-16, ~27 MB). Refresh with `curl --compressed -o data/units.json https://db.mekbay.com/units.json`; search it with grep/Python, don't read it whole. Then run `go generate ./internal/catalog` to rebuild the embedded `internal/catalog/units_index.json` and `availability.json` (also needed when a campaign names a new faction or era).
-- MekBay's front-end source is at `../mekbay`; its server is closed source and reached only over `wss://mekbay.com/ws`, so the integration is unofficial and may break. Anyone can read a force by ID; writes need the owner's UUID. MekBay stores no "crippled" flag; `internal/mekbay/condition.go` recomputes it like MekBay's client. Damage in a unit's `state.locations[loc].armor`/`.internal` is points *lost*.
+- MekBay's front-end source is at `../mekbay`; its server is closed source and reached only over `wss://mekbay.com/ws`, so the integration is unofficial and may break. Anyone can read a force by ID; writes need the owner's UUID. `next.mekbay.com` (MekBay's `next` branch) is only another web app on the same server. Its forces are saved in a compact version 2 format (`force-storage-codec.ts`: units by catalog `uuid`, sparse damage rows, custom designs embedded); the server refuses to read or delete one unless the request carries `forcePersistenceRevision: 2` (we always send it). The site reads and writes only version 1 so far and answers `mekbay.ErrForceV2` for a version 2 force. MekBay stores no "crippled" flag; `internal/mekbay/condition.go` recomputes it like MekBay's client. Damage in a unit's `state.locations[loc].armor`/`.internal` is points *lost*.
 - Portraits: 79 MechWarrior 5 busts in `internal/pilot/portraits/` (refresh with `go run gen_portraits.go -src <folder>` there).
 
 ## Long-term direction

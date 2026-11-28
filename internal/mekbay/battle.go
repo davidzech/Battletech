@@ -271,7 +271,7 @@ func (c *Client) discardBattle(ctx context.Context, account string, instances []
 	}
 	defer s.Close()
 	for _, in := range instances {
-		if err := s.Send(ctx, map[string]any{"action": "delForce", "uuid": account, "instanceId": in}); err != nil {
+		if err := s.Send(ctx, delForceMessage(account, in)); err != nil {
 			return
 		}
 	}
@@ -285,7 +285,7 @@ func (c *Client) discardBattle(ctx context.Context, account string, instances []
 		_, _ = s.Call(ctx, map[string]any{"action": "getOperation", "operationId": operationID})
 		return
 	}
-	_, _ = s.Call(ctx, map[string]any{"action": "getForce", "uuid": account, "instanceId": instances[len(instances)-1], "ownedOnly": true})
+	_, _ = s.Call(ctx, getForceMessage(account, instances[len(instances)-1], true))
 }
 
 // BattleForce is one force of a battle as MekBay has it now.
@@ -330,11 +330,14 @@ func (c *Client) ReadBattle(ctx context.Context, operationID string) (BattleStat
 		if f.Alignment != "friendly" {
 			continue
 		}
-		got, err := s.Call(ctx, map[string]any{"action": "getForce", "uuid": s.uuid, "instanceId": f.InstanceID, "ownedOnly": false})
+		got, err := s.Call(ctx, getForceMessage(s.uuid, f.InstanceID, false))
 		if err != nil {
 			return BattleStatus{}, err
 		}
 		h, err := ParseHangarForce(got)
+		if errors.Is(err, ErrForceV2) {
+			return BattleStatus{}, err
+		}
 		if err != nil {
 			continue // a force deleted from MekBay since: the others are still worth showing
 		}
@@ -371,7 +374,7 @@ func (c *Client) DeleteBattle(ctx context.Context, owner, operationID string) er
 		return nil // already gone
 	}
 	for _, f := range op.Data.Forces {
-		if err := s.Send(ctx, map[string]any{"action": "delForce", "uuid": owner, "instanceId": f.InstanceID}); err != nil {
+		if err := s.Send(ctx, delForceMessage(owner, f.InstanceID)); err != nil {
 			return err
 		}
 	}

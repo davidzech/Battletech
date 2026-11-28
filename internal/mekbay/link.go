@@ -37,7 +37,7 @@ func friendlyInstance(list string) string {
 }
 
 // ParseHangarLink accepts any MekBay link to a hangar and reduces it to https://mekbay.com/?instance=<id>. The link must be
-// https, on mekbay.com, with an instance ID. Extra parameters are harmless and are dropped, the unit selection
+// https, on mekbay.com (or next.mekbay.com, MekBay's next release, which shares its server), with an instance ID. Extra parameters are harmless and are dropped, the unit selection
 // (&sel=) among them; a list of forces ("<mine>,enemy:<theirs>") gives its friendly force.
 func ParseHangarLink(raw string) (Hangar, error) {
 	raw = strings.TrimSpace(raw)
@@ -46,7 +46,7 @@ func ParseHangarLink(raw string) (Hangar, error) {
 	if err == nil {
 		host = strings.ToLower(u.Hostname())
 	}
-	if err != nil || u.Scheme != "https" || u.User != nil || u.Port() != "" || (host != "mekbay.com" && host != "www.mekbay.com") {
+	if err != nil || u.Scheme != "https" || u.User != nil || u.Port() != "" || (host != "mekbay.com" && host != "www.mekbay.com" && host != "next.mekbay.com") {
 		return Hangar{}, errors.New("Paste a MekBay hangar link, like https://mekbay.com/?instance=…")
 	}
 	q := u.Query()
