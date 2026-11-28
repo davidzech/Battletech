@@ -1,0 +1,524 @@
+{
+"version": 1794877821565,
+"equipment": {
+"Autocannon/20": {
+"type": "weapon",
+"id": "Autocannon/20",
+"name": "AC/20",
+"aliases": [
+"IS Auto Cannon/20",
+"Auto Cannon/20",
+"AutoCannon/20",
+"ISAC20",
+"IS Autocannon/20"
+],
+"flags": [
+"F_BALLISTIC",
+"F_DIRECT_FIRE",
+"F_AERO_WEAPON",
+"F_MEK_WEAPON",
+"F_TANK_WEAPON",
+"F_AC"
+],
+"stats": {
+"tonnage": 14,
+"cost": 300000,
+"bv": 178,
+"criticalSlots": 10,
+"explosive": true,
+"tankSlots": 1
+},
+"tech": {
+"base": "All"
+}
+},
+"Large Laser": {
+"type": "weapon",
+"id": "Large Laser",
+"name": "Large Laser",
+"aliases": [
+"IS Large Laser",
+"ISLargeLaser"
+],
+"flags": [
+"F_ENERGY",
+"F_DIRECT_FIRE",
+"F_LASER",
+"F_AERO_WEAPON",
+"F_MEK_WEAPON",
+"F_PROTO_WEAPON",
+"F_TANK_WEAPON",
+"F_RISC_LASER_PULSE_COMPATIBLE"
+],
+"stats": {
+"tonnage": 5,
+"cost": 100000,
+"bv": 123,
+"criticalSlots": 2,
+"tankSlots": 1
+},
+"tech": {
+"base": "IS"
+}
+},
+"CLDoubleHeatSink": {
+"type": "misc",
+"id": "CLDoubleHeatSink",
+"name": "Double Heat Sink",
+"aliases": [
+"Clan Double Heat Sink",
+"CLDouble Heat Sink"
+],
+"flags": [
+"F_DOUBLE_HEAT_SINK"
+],
+"stats": {
+"tonnage": 1,
+"cost": 0,
+"bv": 0,
+"criticalSlots": 2,
+"tankSlots": 1,
+"instantModeSwitch": false
+},
+"tech": {
+"base": "Clan"
+}
+},
+"CLERSmallLaser": {
+"type": "weapon",
+"id": "CLERSmallLaser",
+"name": "ER Small Laser",
+"aliases": [
+"Clan ER Small Laser"
+],
+"flags": [
+"F_ENERGY",
+"F_DIRECT_FIRE",
+"F_NO_FIRES",
+"F_LASER",
+"F_AERO_WEAPON",
+"F_MEK_WEAPON",
+"F_PROTO_WEAPON",
+"F_TANK_WEAPON"
+],
+"stats": {
+"tonnage": 0.5,
+"cost": 11250,
+"bv": 31,
+"criticalSlots": 1,
+"tankSlots": 1
+},
+"tech": {
+"base": "Clan"
+}
+},
+"Clan Ferro-Fibrous": {
+"type": "armor",
+"id": "Clan Ferro-Fibrous",
+"name": "Ferro-Fibrous",
+"aliases": [
+"Clan Ferro-Fibrous armor",
+"Clan Ferro-Fibrous Armor",
+"Clan Ferro Fibre",
+"Clan Ferro Fibre armor"
+],
+"flags": [
+"F_MEK_EQUIPMENT",
+"F_TANK_EQUIPMENT",
+"F_VTOL_EQUIPMENT",
+"F_FERRO_FIBROUS"
+],
+"stats": {
+"tonnage": 0,
+"cost": 20000,
+"bv": 0,
+"criticalSlots": "variable",
+"hittable": false,
+"spreadable": true,
+"tankSlots": 1,
+"svSlots": 1,
+"omniFixedOnly": true
+},
+"tech": {
+"base": "Clan"
+}
+},
+"CLMediumPulseLaser": {
+"type": "weapon",
+"id": "CLMediumPulseLaser",
+"name": "Medium Pulse Laser",
+"aliases": [
+"Clan Pulse Med Laser",
+"Clan Medium Pulse Laser"
+],
+"flags": [
+"F_ENERGY",
+"F_DIRECT_FIRE",
+"F_LASER",
+"F_PULSE",
+"F_AERO_WEAPON",
+"F_MEK_WEAPON",
+"F_PROTO_WEAPON",
+"F_TANK_WEAPON"
+],
+"stats": {
+"tonnage": 2,
+"cost": 60000,
+"bv": 111,
+"criticalSlots": 1,
+"toHitModifier": -2,
+"tankSlots": 1
+},
+"tech": {
+"base": "Clan"
+}
+},
+"Heat Sink": {
+"type": "misc",
+"id": "Heat Sink",
+"name": "Heat Sink",
+"flags": [
+"F_HEAT_SINK"
+],
+"stats": {
+"tonnage": 1,
+"cost": 0,
+"bv": 0,
+"criticalSlots": 1,
+"tankSlots": 0,
+"instantModeSwitch": false
+},
+"tech": {
+"base": "All"
+}
+},
+"Lift Hoist/Arresting Hoist": {
+"type": "misc",
+"id": "Lift Hoist/Arresting Hoist",
+"name": "Lift Hoist/Arresting Hoist",
+"aliases": [
+"Lift Hoist"
+],
+"flags": [
+"F_MEK_EQUIPMENT",
+"F_TANK_EQUIPMENT",
+"F_SUPPORT_TANK_EQUIPMENT",
+"F_LIFT_HOIST"
+],
+"stats": {
+"tonnage": 3,
+"cost": 50000,
+"bv": 0,
+"criticalSlots": 3,
+"tankSlots": 1,
+"svSlots": 1
+},
+"tech": {
+"base": "All"
+}
+},
+"IS Ammo LRM-15": {
+"type": "ammo",
+"id": "IS Ammo LRM-15",
+"name": "LRM 15 Ammo",
+"aliases": [
+"ISLRM15 Ammo",
+"IS LRM 15 Ammo"
+],
+"flags": [
+"F_HOT_LOAD"
+],
+"stats": {
+"tonnage": 1,
+"cost": 30000,
+"bv": 17,
+"criticalSlots": 1,
+"explosive": true,
+"tankSlots": 0,
+"instantModeSwitch": false
+},
+"ammo": {
+"type": "LRM",
+"category": "Missile",
+"rackSize": 15,
+"damagePerShot": 1,
+"shots": 8,
+"munitionType": [
+"M_STANDARD"
+]
+},
+"tech": {
+"base": "All"
+}
+},
+"CLStreakSRM6": {
+"type": "weapon",
+"id": "CLStreakSRM6",
+"name": "Streak SRM 6",
+"aliases": [
+"Clan Streak SRM-6",
+"Clan Streak SRM 6"
+],
+"flags": [
+"F_MISSILE",
+"F_AERO_WEAPON",
+"F_MEK_WEAPON",
+"F_PROTO_WEAPON",
+"F_TANK_WEAPON",
+"F_SRM"
+],
+"stats": {
+"tonnage": 3,
+"cost": 120000,
+"bv": 118,
+"criticalSlots": 2,
+"tankSlots": 1
+},
+"tech": {
+"base": "Clan"
+}
+},
+"Dumper (Rear)": {
+"type": "misc",
+"id": "Dumper (Rear)",
+"name": "Dumper (Rear)",
+"flags": [
+"F_MEK_EQUIPMENT",
+"F_TANK_EQUIPMENT",
+"F_SUPPORT_TANK_EQUIPMENT",
+"F_DUMPER"
+],
+"stats": {
+"tonnage": "variable",
+"cost": 5000,
+"bv": 0,
+"criticalSlots": 1,
+"tankSlots": 1
+},
+"tech": {
+"base": "All"
+}
+},
+"LRM 15": {
+"type": "weapon",
+"id": "LRM 15",
+"name": "LRM 15",
+"aliases": [
+"IS LRM-15",
+"ISLRM15",
+"IS LRM 15"
+],
+"flags": [
+"F_MISSILE",
+"F_ARTEMIS_COMPATIBLE",
+"F_AERO_WEAPON",
+"F_MEK_WEAPON",
+"F_TANK_WEAPON",
+"F_LRM",
+"F_INDIRECT_FIRE"
+],
+"stats": {
+"tonnage": 7,
+"cost": 175000,
+"bv": 136,
+"criticalSlots": 3,
+"tankSlots": 1
+},
+"tech": {
+"base": "All"
+}
+},
+"Cargo": {
+"type": "misc",
+"id": "Cargo",
+"name": "Cargo",
+"aliases": [
+"Cargo (1 ton)",
+"Cargo (0.5 tons)",
+"Cargo (1.5 tons)",
+"Cargo (2 tons)",
+"Cargo (2.5 tons)",
+"Cargo (3 tons)",
+"Cargo (3.5 tons)",
+"Cargo (4 tons)",
+"Cargo (4.5 tons)",
+"Cargo (5 tons)",
+"Cargo (5.5 tons)",
+"Cargo (6 tons)",
+"Cargo (6.5 tons)",
+"Cargo (7 tons)",
+"Cargo (7.5 tons)",
+"Cargo (8 ton)",
+"Cargo (8.5 tons)",
+"Cargo (9 tons)",
+"Cargo (9.5 tons)",
+"Cargo (10 tons)",
+"Cargo (10.5 tons)",
+"Cargo (11 tons)"
+],
+"flags": [
+"F_MEK_EQUIPMENT",
+"F_TANK_EQUIPMENT",
+"F_FIGHTER_EQUIPMENT",
+"F_SUPPORT_TANK_EQUIPMENT",
+"F_CARGO",
+"F_VARIABLE_SIZE"
+],
+"stats": {
+"tonnage": "variable",
+"cost": 0,
+"bv": 0,
+"criticalSlots": "variable",
+"tankSlots": 1
+},
+"tech": {
+"base": "All"
+}
+},
+"Clan Streak SRM 6 Ammo": {
+"type": "ammo",
+"id": "Clan Streak SRM 6 Ammo",
+"name": "Streak SRM 6 Ammo",
+"aliases": [
+"Clan Ammo Streak-6",
+"CLStreakSRM6 Ammo"
+],
+"stats": {
+"tonnage": 1,
+"cost": 54000,
+"bv": 15,
+"criticalSlots": 1,
+"explosive": true,
+"tankSlots": 0,
+"instantModeSwitch": false
+},
+"ammo": {
+"type": "SRM_STREAK",
+"category": "Missile",
+"rackSize": 6,
+"damagePerShot": 2,
+"shots": 15,
+"kgPerShot": 60.0,
+"munitionType": [
+"M_STANDARD"
+]
+},
+"tech": {
+"base": "Clan"
+}
+},
+"IS Ammo AC/20": {
+"type": "ammo",
+"id": "IS Ammo AC/20",
+"name": "AC/20 Ammo",
+"aliases": [
+"ISAC20 Ammo",
+"IS Autocannon/20 Ammo"
+],
+"stats": {
+"tonnage": 1,
+"cost": 10000,
+"bv": 22,
+"criticalSlots": 1,
+"explosive": true,
+"tankSlots": 0,
+"instantModeSwitch": false
+},
+"ammo": {
+"type": "AC",
+"category": "Ballistic",
+"rackSize": 20,
+"damagePerShot": 1,
+"shots": 5,
+"munitionType": [
+"M_STANDARD"
+]
+},
+"tech": {
+"base": "All"
+}
+},
+"Chainsaw": {
+"type": "misc",
+"id": "Chainsaw",
+"name": "Chainsaw",
+"flags": [
+"F_MEK_EQUIPMENT",
+"F_TANK_EQUIPMENT",
+"F_SUPPORT_TANK_EQUIPMENT",
+"F_PHYSICAL_WEAPON",
+"F_CLUB",
+"S_CHAINSAW"
+],
+"stats": {
+"tonnage": 5,
+"cost": 100000,
+"bv": 7,
+"criticalSlots": 5,
+"tankSlots": 1,
+"svSlots": 1
+},
+"tech": {
+"base": "All"
+}
+},
+"Clan Endo Steel": {
+"type": "structure",
+"id": "Clan Endo Steel",
+"name": "Endo Steel",
+"aliases": [
+"Clan Endo Steel structure",
+"Clan Endo-Steel",
+"Clan Endo-Steel structure",
+"Clan EndoSteel",
+"Clan EndoSteel structure",
+"Clan EndoSteel Structure",
+"Clan Endo Steel Structure"
+],
+"flags": [
+"F_ENDO_STEEL"
+],
+"stats": {
+"tonnage": "variable",
+"cost": 0,
+"bv": 0,
+"criticalSlots": "variable",
+"hittable": false,
+"spreadable": true,
+"tankSlots": 1,
+"omniFixedOnly": true
+},
+"tech": {
+"base": "Clan"
+}
+},
+"CLERPPC": {
+"type": "weapon",
+"id": "CLERPPC",
+"name": "ER PPC",
+"aliases": [
+"Clan ER PPC"
+],
+"flags": [
+"F_ENERGY",
+"F_DIRECT_FIRE",
+"F_PPC",
+"F_AERO_WEAPON",
+"F_MEK_WEAPON",
+"F_PROTO_WEAPON",
+"F_TANK_WEAPON",
+"F_PPC_CAPACITOR_COMPATIBLE"
+],
+"stats": {
+"tonnage": 6,
+"cost": 300000,
+"bv": 412,
+"criticalSlots": 2,
+"tankSlots": 1
+},
+"tech": {
+"base": "Clan"
+}
+}
+}
+}
