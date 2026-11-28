@@ -2,6 +2,8 @@ package mtf
 
 import (
 	"bytes"
+	"crypto/sha1"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -158,4 +160,68 @@ func (es *Equipments) Find(name, techBase string) *Equipment {
 		}
 	}
 	return es.aliases[key]
+}
+
+// Describe makes a component of the equipment with this internal name, as Parse would (a name the catalog doesn't know keeps itself as its name).
+func (es *Equipments) Describe(equipment, loc string, slots int) Mount {
+	var e *Equipment
+	if es != nil {
+		e = es.byID[equipment]
+	}
+	return describe(equipment, e, loc, slots)
+}
+
+// WriteEquipments writes the catalog back in MekBay's format, with only what laying out a design reads, in catalog order.
+func WriteEquipments(es *Equipments) ([]byte, error) {
+	var buf bytes.Buffer
+	buf.WriteString(`{"version":"layouts","equipment":{`)
+	for i, e := range es.All() {
+		if i > 0 {
+			buf.WriteByte(',')
+		}
+		key, _ := json.Marshal(e.ID)
+		var flags []string
+		if e.CanSplit && !(e.Type == "weapon" && e.Slots >= 8) {
+			flags = append(flags, "F_CAN_BE_SPlIT_ACROSS_CRITICAL_SLOTS")
+		}
+		if e.TC {
+			flags = append(flags, "F_TARGETING_COMPUTER")
+		}
+		if e.PerTon {
+			flags = append(flags, "F_CARGO")
+		}
+		entry := map[string]any{"type": e.Type, "name": e.Name, "tech": map[string]string{"base": e.TechBase}}
+		stats := map[string]any{"criticalSlots": "variable"}
+		if e.Slots > 0 {
+			stats["criticalSlots"] = e.Slots
+		}
+		if e.Spreadable {
+			stats["spreadable"] = true
+		}
+		entry["stats"] = stats
+		if len(e.Aliases) > 0 {
+			entry["aliases"] = e.Aliases
+		}
+		if len(flags) > 0 {
+			entry["flags"] = flags
+		}
+		if e.Shots > 0 {
+			entry["ammo"] = map[string]int{"shots": e.Shots}
+		}
+		val, err := json.Marshal(entry)
+		if err != nil {
+			return nil, err
+		}
+		buf.Write(key)
+		buf.WriteByte(':')
+		buf.Write(val)
+	}
+	buf.WriteString("}}")
+	return buf.Bytes(), nil
+}
+
+// HashBytes is the SHA-1 of b in unpadded base64url, the form MekBay's manifests give hashes in.
+func HashBytes(b []byte) string {
+	sum := sha1.Sum(b)
+	return base64.RawURLEncoding.EncodeToString(sum[:])
 }
