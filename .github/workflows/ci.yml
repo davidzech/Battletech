@@ -51,6 +51,9 @@ jobs:
         run: go run honnef.co/go/tools/cmd/staticcheck@v0.8.2 ./...
       - name: Test
         run: go test ./...
+      # The site as it runs once MekBay's release is version 2: every force written in version 2, hangars converted when changed.
+      - name: Test (MekBay version 2)
+        run: MEKBAY_TEST_V2=1 go test ./internal/site
 
   browser:
     # The Playwright suite in browsertests/, driving the browser scripts against the site served with the fake MekBay (TestBrowser in internal/site).
@@ -86,6 +89,8 @@ jobs:
         run: npx playwright install-deps chromium
       - name: Browser tests
         run: BROWSER_TESTS=1 go test ./internal/site -run '^TestBrowser$' -count=1 -v
+      - name: Browser tests (MekBay version 2)
+        run: BROWSER_TESTS=1 MEKBAY_TEST_V2=1 go test ./internal/site -run '^TestBrowser$' -count=1 -v
       - name: Upload traces
         if: failure()
         uses: actions/upload-artifact@v4
