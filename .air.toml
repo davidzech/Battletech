@@ -15,8 +15,9 @@ tmp_dir = "tmp"
   # .exe on every platform: Windows needs it to run the binary, and macOS and Linux don't mind it.
   cmd = "go build -o ./tmp/battletech.exe ."
   entrypoint = ["./tmp/battletech.exe"]
-  # The binary isn't in a go-build temp folder, so say localhost explicitly (no firewall prompt on Windows).
-  args_bin = ["-addr", "localhost:8080", "-dev-reload"]
+  # The binary isn't in a go-build temp folder, so say localhost explicitly (no firewall prompt on Windows). -mekbay-next: development runs against
+  # MekBay's next release (version 2 forces); `air -- -mekbay-next=false` runs against mekbay.com instead (a later flag wins).
+  args_bin = ["-addr", "localhost:8080", "-dev-reload", "-mekbay-next"]
   include_ext = ["go", "html", "css", "js", "json"]
   exclude_dir = ["tmp", "campaigns", "data", "Pages", "node_modules", ".git", ".github"]
   exclude_regex = ["_test\\.go$"]
