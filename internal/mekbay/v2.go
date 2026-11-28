@@ -6,9 +6,36 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/davidzech/Battletech/internal/catalog"
+	"github.com/davidzech/Battletech/internal/layouts"
+	"github.com/davidzech/Battletech/internal/mtf"
 )
+
+// layoutOf finds a design's layout: a custom design's, registered by the campaign that brings it (RegisterLayout), else the catalog design's
+// (package layouts), for the revision with this canary.
+func layoutOf(design, canary string) (*mtf.Layout, bool) {
+	customMu.RLock()
+	l, ok := custom[design]
+	customMu.RUnlock()
+	if ok {
+		return l, true
+	}
+	return layouts.Lookup(design, canary)
+}
+
+var (
+	customMu sync.RWMutex
+	custom   = map[string]*mtf.Layout{}
+)
+
+// RegisterLayout makes a custom design's layout known (a campaign's own .mtf, by the UUID it gives the design).
+func RegisterLayout(design string, l *mtf.Layout) {
+	customMu.Lock()
+	custom[design] = l
+	customMu.Unlock()
+}
 
 // MekBay's version 2 force format, as its next release saves forces (force-storage-codec.ts, force-personnel-storage.ts and
 // force-storage-vocabulary.ts in MekBay's client; its server stores the record as it is sent).
@@ -223,8 +250,9 @@ func parseV2Force(data map[string]any) (HangarForce, error) {
 // v2UnitView reads one version 2 unit row as the site sees it, like unitState.view does a version 1 unit. Damage still pending counts, as on MekBay's record
 // sheet.
 //
-// What a damaged critical slot or component holds (an engine slot, the cockpit) is not in the force: it takes the design's layout, which the site doesn't
-// know yet, so for now a version 2 unit counts no engine hits and loses its cockpit only with its head's internal structure.
+// What a damaged critical slot or component holds (an engine slot, the cockpit, an ammunition bin) is not in the force: it comes from the design's layout
+// (package layouts), for the revision the unit was saved against. A design with no layout still has its damage counted, without knowing what was hit: no
+// engine hits, a cockpit lost only with its location's structure, ammunition unnamed.
 func v2UnitView(um map[string]any, group string) (HangarUnit, error) {
 	id, _ := um["id"].(string)
 	packed, _ := um["uuid"].(string)
@@ -237,6 +265,8 @@ func v2UnitView(um map[string]any, group string) (HangarUnit, error) {
 		hu.Unit = cu.Name
 	}
 	hu.Destroyed, _ = um["destroyed"].(bool)
+	canary, _ := um["sourceHash"].(string)
+	layout, _ := layoutOf(design, canary)
 	if crew, _ := um["crew"].([]any); len(crew) > 0 {
 		if c, ok := crew[0].(map[string]any); ok {
 			hu.Pilot, _ = c["name"].(string)
@@ -279,31 +309,59 @@ func v2UnitView(um map[string]any, group string) (HangarUnit, error) {
 			}
 		}
 		for _, row := range v2Rows(src, v2SlotState) {
-			_, loc, _ := v2Target(rowText(row, 0))
-			destroyed := len(row) > 2 && row[2] != nil
-			if rowInt(row, 1) > 0 || destroyed {
-				hu.Damaged = true
-				hu.Crits = append(hu.Crits, CritDamage{Loc: loc})
+			_, loc, index := v2Target(rowText(row, 0))
+			hits := rowInt(row, 1)
+			gone := len(row) > 2 && row[2] != nil
+			if hits <= 0 && !gone {
+				continue
+			}
+			hu.Damaged = true
+			var slot mtf.Slot
+			if layout != nil {
+				slot, _ = layout.SlotAt(loc, index)
+			}
+			engine := slot.System == "Engine"
+			hu.Crits = append(hu.Crits, CritDamage{Loc: loc, Engine: engine})
+			if n := max(hits, 1); engine {
+				hu.EngineHits += n
+			}
+			if slot.System == "Cockpit" {
+				hu.CockpitGone = true
 			}
 		}
+	}
+	// A component's own status: destroyed equipment (most of it is destroyed by its slots' hits, above; this is what has no slot, or was marked so).
+	componentLoc := func(target string) string {
+		if layout != nil {
+			if m, ok := layout.MountByID(strings.TrimPrefix(target, "c:")); ok {
+				return m.Loc
+			}
+		}
+		return ""
 	}
 	for _, row := range v2Rows(state, v2ComponentState) {
 		if st, _ := row[1].(map[string]any); st != nil && st["s"] == "destroyed" {
 			hu.Damaged = true
-			hu.Crits = append(hu.Crits, CritDamage{})
+			hu.Crits = append(hu.Crits, CritDamage{Loc: componentLoc(rowText(row, 0))})
 		}
 	}
 	for _, row := range v2Rows(pending, v2ComponentState) {
 		if rowText(row, 1) == "destroyed" {
 			hu.Damaged = true
-			hu.Crits = append(hu.Crits, CritDamage{})
+			hu.Crits = append(hu.Crits, CritDamage{Loc: componentLoc(rowText(row, 0))})
 		}
 	}
 	for _, row := range v2Rows(state, v2AmmoState) {
 		if used := rowInt(row, 1); used > 0 {
 			hu.AmmoUsed += used
 			hu.AmmoBins++
-			hu.AmmoUsed2 = append(hu.AmmoUsed2, AmmoUse{Name: strings.TrimPrefix(rowText(row, 0), "m:"), Used: used})
+			use := AmmoUse{Name: strings.TrimPrefix(rowText(row, 0), "m:"), Used: used}
+			if layout != nil {
+				if m, ok := layout.MountByID(use.Name); ok {
+					use.Name, use.Loc = m.Equipment, m.Loc // the catalog's ammunition ID, as the rearm breakdown finds it
+				}
+			}
+			hu.AmmoUsed2 = append(hu.AmmoUsed2, use)
 		}
 	}
 	tons, cockpitLoc := 0.0, "HD"
@@ -311,6 +369,15 @@ func v2UnitView(um map[string]any, group string) (HangarUnit, error) {
 		tons = cu.Tons
 		if cu.CockpitLoc != "" {
 			cockpitLoc = cu.CockpitLoc
+		}
+	}
+	if layout != nil {
+		for loc, slots := range layout.Slots {
+			for _, sl := range slots {
+				if sl.System == "Cockpit" {
+					cockpitLoc = loc
+				}
+			}
 		}
 	}
 	if InternalGone(hu, cockpitLoc, tons) {

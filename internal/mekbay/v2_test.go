@@ -34,7 +34,7 @@ func TestParseV2Force(t *testing.T) {
 	raw := []byte(`{"data":{"version":2,"type":"cbt","name":"Alpha","instanceId":"f","timestamp":1795854031147,
 	 "units":[
 	  {"id":"~AZ9YPsXdeLqfxfFLr233VA","uuid":"AZ9YPsXdeLqfxfFLr233VA","crew":[{"id":"p1","name":"Aidan","g":3,"p":4,"health":{"wounds":6}}],
-	   "state":{"l":[["f:ct",5],["r:ct",2],["i:lt",3]],"n":[["i:la","blown-off",1]],"s":[["s:rt:2",1]],"a":[["m:m12",4],["m:m13",0]],
+	   "state":{"l":[["f:ct",5],["r:ct",2],["i:lt",3]],"n":[["i:la","blown-off",1]],"s":[["s:rt:2",1]],"a":[["m:m14",4],["m:m13",0]],
 	            "c":[["c:m3",{"s":"destroyed"}]],"rC":[["core.torso-crippling","tok","i:lt",3,"failed"]],
 	            "p":{"l":[["i:hd",3]],"s":[["s:ct:0",1]]}}},
 	  {"id":"~uAaIhPdkrcVSs3bTl7hAMCg","uuid":"AAAAAAAAAAAAAAAAAAAAAA","destroyed":true}],
@@ -65,6 +65,20 @@ func TestParseV2Force(t *testing.T) {
 	}
 	if len(u.Crits) != 3 || u.AmmoBins != 1 || u.AmmoUsed != 4 || !u.Damaged {
 		t.Errorf("crits %+v, ammo bins %d used %d", u.Crits, u.AmmoBins, u.AmmoUsed)
+	}
+	// The layout says what was hit: CT slot 0 is the engine, m14 the Streak SRM 6 ammunition in the right torso, m3 an ER PPC in the left arm.
+	if u.EngineHits != 1 {
+		t.Errorf("engine hits = %d, want 1", u.EngineHits)
+	}
+	if len(u.AmmoUsed2) != 1 || u.AmmoUsed2[0].Name != "Clan Streak SRM 6 Ammo" || u.AmmoUsed2[0].Loc != "RT" {
+		t.Errorf("ammo used = %+v", u.AmmoUsed2)
+	}
+	locs := map[string]bool{}
+	for _, c := range u.Crits {
+		locs[c.Loc] = true
+	}
+	if !locs["LA"] || !locs["RT"] || !locs["CT"] {
+		t.Errorf("crits = %+v", u.Crits)
 	}
 	if !u.TorsoCheckFailed || u.TorsoCheckTrigger != "LT" {
 		t.Errorf("torso check = %v %q", u.TorsoCheckFailed, u.TorsoCheckTrigger)
