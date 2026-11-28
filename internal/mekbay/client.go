@@ -63,7 +63,8 @@ type AmmoUse struct {
 // HangarUnit is one unit of a force, read from MekBay's save format.
 type HangarUnit struct {
 	ID       string // the unit's own ID inside the force
-	Unit     string // MekBay unit ID, e.g. BMMadCat_H
+	Unit     string // MekBay unit ID, e.g. BMMadCat_H ("" for a design the catalog doesn't know)
+	UUID     string // MegaMek's UUID for the design, which version 2 forces name units by ("" in a version 1 force)
 	Group    string // name of the group it currently sits in
 	Pilot    string
 	Gunnery  int
@@ -173,7 +174,13 @@ func ParseHangarForce(raw json.RawMessage) (HangarForce, error) {
 		} `json:"data"`
 	}
 	if json.Unmarshal(raw, &head) == nil && head.Data != nil && head.Data.Version == 2 {
-		return HangarForce{}, ErrForceV2
+		var v2 struct {
+			Data map[string]any `json:"data"`
+		}
+		if err := json.Unmarshal(raw, &v2); err != nil {
+			return HangarForce{}, fmt.Errorf("could not read MekBay's reply: %w", err)
+		}
+		return parseV2Force(v2.Data)
 	}
 	var reply struct {
 		Data *struct {

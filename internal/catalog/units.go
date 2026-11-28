@@ -29,6 +29,7 @@ type AmmoBin struct {
 // stores in each unit's `unit` field.
 type Unit struct {
 	Name     string    `json:"name"`
+	UUID     string    `json:"uuid"` // MegaMek's ID for the design, which MekBay's version 2 forces name units by
 	Chassis  string    `json:"chassis"`
 	Model    string    `json:"model"`
 	BV       int       `json:"bv"` // base battle value, before pilot skills
@@ -69,6 +70,7 @@ var (
 	unitsOnce   sync.Once
 	unitsByCM   map[[2]string]Unit
 	unitsByName map[string]Unit
+	unitsByUUID map[string]Unit
 )
 
 func loadUnits() {
@@ -79,12 +81,16 @@ func loadUnits() {
 		}
 		unitsByCM = make(map[[2]string]Unit, len(all))
 		unitsByName = make(map[string]Unit, len(all))
+		unitsByUUID = make(map[string]Unit, len(all))
 		for _, u := range all {
 			k := [2]string{u.Chassis, u.Model}
 			if _, dup := unitsByCM[k]; !dup {
 				unitsByCM[k] = u
 			}
 			unitsByName[u.Name] = u
+			if u.UUID != "" {
+				unitsByUUID[u.UUID] = u
+			}
 		}
 	})
 }
@@ -101,6 +107,13 @@ func Lookup(chassis, model string) (Unit, bool) {
 func ByName(name string) (Unit, bool) {
 	loadUnits()
 	u, ok := unitsByName[name]
+	return u, ok
+}
+
+// ByUUID finds a unit by MegaMek's ID for its design (lowercase, as MekBay writes it), which is how MekBay's version 2 forces name their units.
+func ByUUID(uuid string) (Unit, bool) {
+	loadUnits()
+	u, ok := unitsByUUID[uuid]
 	return u, ok
 }
 

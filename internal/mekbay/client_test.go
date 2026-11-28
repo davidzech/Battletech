@@ -176,7 +176,7 @@ func TestParseCountsPendingDamage(t *testing.T) {
 }
 
 // MekBay's server refuses to read a force saved in its version 2 format unless the request carries the persistence revision; with it, a version 2 force comes
-// back in that format, which the site refuses plainly rather than reading as a force with no units.
+// back in that format, which a hangar import refuses plainly rather than taking it as a version 1 force with no units.
 func TestReadForceAsksForRevisionAndRefusesV2(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		c, _ := websocket.Accept(w, r, nil)
@@ -208,7 +208,5 @@ func TestReadForceAsksForRevisionAndRefusesV2(t *testing.T) {
 	if !errors.Is(err, ErrForceV2) {
 		t.Fatalf("ReadForce of a version 2 force = %v, want ErrForceV2", err)
 	}
-	if _, err := ParseHangarForce([]byte(`{"data":{"version":2,"units":[],"groups":[]}}`)); !errors.Is(err, ErrForceV2) {
-		t.Errorf("ParseHangarForce of a version 2 force = %v, want ErrForceV2", err)
-	}
+
 }
